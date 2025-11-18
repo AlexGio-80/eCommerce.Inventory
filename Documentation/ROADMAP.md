@@ -21,9 +21,27 @@
   - 5 InventoryItems di esempio con prezzi realistici
   - Tutti gli indici e FK configurati con cascade delete
 
-🔨 **In Progress**: Phase 2 - Card Trader API Integration
+- **Phase 2 Part 1: Card Trader Sync Integration** ✅
+  - CardTraderDtoMapper con mapping completo (Games, Expansions, Blueprints, Products, Orders)
+  - InventorySyncService con logica INSERT/UPDATE/DELETE
+  - CardTraderSyncWorker completo (3-step orchestration)
+  - CardTraderApiClient refactored per DTOs
+  - Tutti i servizi registrati in DI container
 
-⏳ **TODO**: Tutti i prossimi passi (Phase 2+)
+- **Phase 2 Part 2: Webhook Processing** ✅
+  - WebhookSignatureVerificationService (HMAC SHA256 verification)
+  - WebhookDto per payload deserialization
+  - ProcessCardTraderWebhookCommand (MediatR)
+  - ProcessCardTraderWebhookHandler (order.create, order.update, order.destroy)
+  - CardTraderWebhooksController con endpoint POST /api/cardtraderwèbhooks/events
+  - MediatR registration nel DI container
+  - appsettings.json aggiornato con SharedSecret
+  - JSON deserialization con System.Text.Json
+  - Build completato con successo (28 warnings, 0 errori)
+
+🔨 **In Progress**: Phase 2 Part 3 - Backend Testing
+
+⏳ **TODO**: Phase 3 Angular Frontend, Phase 2 Part 3 Tests, Phase 4+
 
 ---
 
@@ -176,7 +194,243 @@ public class ProcessCardTraderWebhookHandler : IRequestHandler<ProcessCardTrader
 
 ---
 
-## Phase 3: API Controller Enhancement (PRIORITY: MEDIUM)
+## Phase 2.3: Backend Testing (PRIORITY: HIGH)
+
+### 2.5 Unit Tests for Handlers
+
+Testare i MediatR handlers per webhook processing:
+
+```csharp
+[TestClass]
+public class ProcessCardTraderWebhookHandlerTests
+{
+    private IApplicationDbContext _context;
+    private InventorySyncService _syncService;
+    private ProcessCardTraderWebhookHandler _handler;
+
+    [TestInitialize]
+    public void Setup()
+    {
+        // Setup mocks e in-memory database
+    }
+
+    [TestMethod]
+    public async Task HandleOrderCreated_InsertOrder_Success()
+    {
+        var command = new ProcessCardTraderWebhookCommand(...);
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        Assert.AreEqual(Unit.Value, result);
+        // Verify order was inserted
+    }
+}
+```
+
+**Framework**: xUnit, Moq, FluentAssertions
+
+**Timeline**: 2 ore
+
+### 2.6 Integration Tests for Webhook Endpoint
+
+Testare l'endpoint completo:
+
+```csharp
+[TestClass]
+public class CardTraderWebhooksControllerTests
+{
+    private WebApplicationFactory<Program> _factory;
+    private HttpClient _client;
+
+    [TestMethod]
+    public async Task HandleWebhookEvent_ValidSignature_Returns204()
+    {
+        var request = new WebhookDto { ... };
+        var response = await _client.PostAsJsonAsync("/api/cardtraderwèbhooks/events", request);
+
+        Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task HandleWebhookEvent_InvalidSignature_Returns401()
+    {
+        // Test with wrong signature header
+    }
+}
+```
+
+**Timeline**: 2 ore
+
+### 2.7 Sync Worker Integration Tests
+
+Testare la sincronizzazione completa:
+
+```csharp
+[TestClass]
+public class CardTraderSyncWorkerTests
+{
+    [TestMethod]
+    public async Task SyncCardTraderData_FetchesAndSyncs_Successfully()
+    {
+        // Setup mock API responses
+        // Run sync worker
+        // Verify database state
+    }
+}
+```
+
+**Timeline**: 1.5 ore
+
+---
+
+## Phase 3: Angular Frontend (PRIORITY: HIGH)
+
+### Overview
+
+Sviluppare un'interfaccia utente moderna in Angular per:
+- Visualizzare l'inventario sincronizzato da Card Trader
+- Gestire listing di prodotti
+- Monitorare ordini in arrivo
+- Testare l'API backend in scenari realistici
+
+### 3.1 Project Setup
+
+```bash
+ng new ecommerce-inventory-ui --routing --skip-git
+cd ecommerce-inventory-ui
+ng add @angular/material
+npm install axios @auth0/angular-jwt
+```
+
+**Timeline**: 30 minuti
+
+### 3.2 Core Components
+
+**1. Dashboard Component**
+- Cards con statistiche (Total Products, Recent Orders, Sync Status)
+- Real-time sync status monitor
+- Quick action buttons
+
+**2. Inventory List Component**
+- Tabella con infinite scroll / pagination
+- Filtri (Game, Condition, Price range)
+- Search / full-text search
+- Sort (by price, date added, quantity)
+
+**3. Order Management Component**
+- Lista ordini da Card Trader
+- Status timeline (pending → shipped → delivered)
+- Order detail modal
+- Export functionality (CSV)
+
+**4. Product Detail Component**
+- Full product info
+- Listing history on Card Trader
+- Sales analytics
+- Webhook activity log
+
+**5. Settings Component**
+- API endpoint configuration
+- Authentication setup
+- Sync frequency settings
+- Webhook test endpoint
+
+**Timeline**: 6 ore
+
+### 3.3 Services
+
+```typescript
+// services/cardtrader-api.service.ts
+@Injectable({ providedIn: 'root' })
+export class CardTraderApiService {
+  constructor(private http: HttpClient) {}
+
+  getInventoryItems(page = 1, pageSize = 10) {
+    return this.http.get('/api/cardtrader/inventory', {
+      params: { page, pageSize }
+    });
+  }
+
+  getOrders() {
+    return this.http.get('/api/cardtrader/orders');
+  }
+
+  syncNow() {
+    return this.http.post('/api/cardtrader/sync', {});
+  }
+
+  testWebhook() {
+    return this.http.post('/api/cardtrader/webhooks/test', {});
+  }
+}
+```
+
+**Timeline**: 2 ore
+
+### 3.4 Authentication (JWT)
+
+```typescript
+// guards/auth.guard.ts
+@Injectable()
+export class AuthGuard implements CanActivate {
+  constructor(private auth: AuthService, private router: Router) {}
+
+  canActivate(): boolean {
+    if (this.auth.isAuthenticated()) {
+      return true;
+    }
+    this.router.navigate(['/login']);
+    return false;
+  }
+}
+```
+
+**Timeline**: 1.5 ore
+
+### 3.5 State Management (NgRx)
+
+```typescript
+// store/inventory.actions.ts
+export const loadInventory = createAction(
+  '[Inventory] Load Inventory',
+  props<{ page: number }>()
+);
+
+export const loadInventorySuccess = createAction(
+  '[Inventory] Load Inventory Success',
+  props<{ items: InventoryItem[] }>()
+);
+```
+
+**Timeline**: 2 ore (optional, can use simple services)
+
+### 3.6 Styling & Material
+
+- Material Theme customization
+- Responsive layout (mobile-first)
+- Dark mode support
+- Custom color scheme (matching brand)
+
+**Timeline**: 3 ore
+
+### 3.7 Unit & E2E Tests
+
+**Karma/Jasmine Unit Tests**:
+- Component tests
+- Service tests
+- Pipe tests
+
+**Protractor/Cypress E2E Tests**:
+- User workflows
+- Form submissions
+- Navigation
+
+**Timeline**: 4 ore
+
+**Total Phase 3 Estimate**: ~20-22 ore
+
+---
+
+## Phase 4: API Controller Enhancement (PRIORITY: MEDIUM)
 
 ### 3.1 Response Envelopes
 
@@ -539,38 +793,42 @@ app.UseHealthChecks("/health");
 
 ## Summary Timeline
 
-| Phase | Tasks | Estimated Hours | Priority |
-|-------|-------|-----------------|----------|
-| 1 | Database & Migrations | 1.5 | HIGH |
-| 2 | Card Trader API Integration | 7 | HIGH |
-| 3 | API Enhancement | 3.5 | MEDIUM |
-| 4 | Testing | 7 | MEDIUM |
-| 5 | Advanced Features | 7 | LOW |
-| 6 | Marketplace Expansion | 6-8 | LOW |
-| 7 | DevOps & Deployment | 4.5 | MEDIUM |
-| 8 | Monitoring | 1.5 | LOW |
-| **TOTAL** | | **~38-40 ore** | |
+| Phase | Tasks | Estimated Hours | Priority | Status |
+|-------|-------|-----------------|----------|--------|
+| 1 | Database & Migrations | 1.5 | HIGH | ✅ DONE |
+| 2.1 | Card Trader Sync Integration | 7 | HIGH | ✅ DONE |
+| 2.2 | Webhook Processing | 5 | HIGH | ✅ DONE |
+| 2.3 | Backend Testing | 5.5 | HIGH | 🔨 IN PROGRESS |
+| 3 | Angular Frontend | 20-22 | HIGH | ⏳ NEXT |
+| 4 | API Enhancement | 3.5 | MEDIUM | ⏳ TODO |
+| 5 | Advanced Features | 7 | LOW | ⏳ TODO |
+| 6 | Marketplace Expansion | 6-8 | LOW | ⏳ TODO |
+| 7 | DevOps & Deployment | 4.5 | MEDIUM | ⏳ TODO |
+| 8 | Monitoring | 1.5 | LOW | ⏳ TODO |
+| **TOTAL** | | **~60-65 ore** | | |
 
 ---
 
 ## Recommended Development Order
 
-1. **Week 1**:
-   - Phase 1: Database (1.5h)
-   - Phase 2: Card Trader API (7h)
-   - Phase 3: API Controllers (3.5h)
-   - **Total**: ~12h
+1. **Week 1 - COMPLETED ✅**:
+   - Phase 1: Database (1.5h) ✅
+   - Phase 2.1: Card Trader Sync (7h) ✅
+   - Phase 2.2: Webhooks (5h) ✅
+   - **Total**: ~13.5h ✅
 
-2. **Week 2**:
-   - Phase 4: Testing (7h)
+2. **Week 2 - CURRENT 🔨**:
+   - Phase 2.3: Backend Testing (5.5h) - IN PROGRESS
+   - Phase 3: Angular Frontend (20-22h) - NEXT
+   - **Total**: ~25.5h
+
+3. **Week 3+**:
+   - Phase 4: API Controllers (3.5h)
    - Phase 5: Advanced Features (7h)
-   - **Total**: ~14h
-
-3. **Week 3**:
    - Phase 6: Marketplace Expansion (6-8h)
    - Phase 7: DevOps (4.5h)
    - Phase 8: Monitoring (1.5h)
-   - **Total**: ~12-13.5h
+   - **Total**: ~22.5-23.5h
 
 ---
 
@@ -587,19 +845,23 @@ app.UseHealthChecks("/health");
 
 ✅ **Phase 1 Complete**: Database creato e migrazioni funzionanti
 
-✅ **Phase 2 Complete**: Sync da Card Trader funzionante, data in DB
+✅ **Phase 2.1 Complete**: Sync da Card Trader funzionante, data in DB
 
-✅ **Phase 3 Complete**: API endpoints rispondono correttamente, pagination attiva
+✅ **Phase 2.2 Complete**: Webhook processing con signature verification, handlers funzionanti
 
-✅ **Phase 4 Complete**: 80%+ test coverage
+🔨 **Phase 2.3 In Progress**: Unit + Integration tests per webhook handlers e endpoints
 
-✅ **Phase 5 Complete**: API resiliente con retry e caching
+⏳ **Phase 3 Complete**: Angular UI funzionante, integrazione API completa, testabile in browser
 
-✅ **Phase 6 Complete**: Almeno 1 marketplace aggiunto (eBay o Wallapop)
+⏳ **Phase 4 Complete**: API endpoints rispondono correttamente, pagination attiva
 
-✅ **Phase 7 Complete**: CI/CD pipeline attiva, deployable su cloud
+⏳ **Phase 5 Complete**: API resiliente con retry e caching
 
-✅ **Phase 8 Complete**: Monitoring e health checks funzionanti
+⏳ **Phase 6 Complete**: Almeno 1 marketplace aggiunto (eBay o Wallapop)
+
+⏳ **Phase 7 Complete**: CI/CD pipeline attiva, deployable su cloud
+
+⏳ **Phase 8 Complete**: Monitoring e health checks funzionanti
 
 ---
 

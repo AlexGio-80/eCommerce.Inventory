@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using eCommerce.Inventory.Application.Interfaces;
+using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.DTOs;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Mappers;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
 
@@ -67,7 +68,8 @@ public class CardTraderSyncWorker : BackgroundService
             {
                 // ========== STEP 1: Sync Games & Expansions ==========
                 _logger.LogInformation("Step 1: Syncing games from Card Trader API");
-                var gameDtos = (await cardTraderApiService.SyncGamesAsync(cancellationToken)).ToList();
+                var gameDtos = (await cardTraderApiService.SyncGamesAsync(cancellationToken))
+                    .Cast<CardTraderGameDto>().ToList();
                 if (gameDtos.Any())
                 {
                     var games = mapper.MapGames(gameDtos);
@@ -75,7 +77,8 @@ public class CardTraderSyncWorker : BackgroundService
                 }
 
                 _logger.LogInformation("Step 1: Syncing expansions from Card Trader API");
-                var expansionDtos = (await cardTraderApiService.SyncExpansionsAsync(cancellationToken)).ToList();
+                var expansionDtos = (await cardTraderApiService.SyncExpansionsAsync(cancellationToken))
+                    .Cast<CardTraderExpansionDto>().ToList();
                 if (expansionDtos.Any())
                 {
                     var expansions = mapper.MapExpansions(expansionDtos);
@@ -84,7 +87,8 @@ public class CardTraderSyncWorker : BackgroundService
 
                 // ========== STEP 2: Fetch and Sync Products/Inventory ==========
                 _logger.LogInformation("Step 2: Fetching my products from Card Trader API");
-                var productDtos = await cardTraderApiService.FetchMyProductsAsync(cancellationToken);
+                var productDtos = (await cardTraderApiService.FetchMyProductsAsync(cancellationToken))
+                    .Cast<CardTraderProductDto>().ToList();
 
                 if (productDtos.Any())
                 {
@@ -102,7 +106,8 @@ public class CardTraderSyncWorker : BackgroundService
 
                 // ========== STEP 3: Fetch and Sync Orders ==========
                 _logger.LogInformation("Step 3: Fetching orders from Card Trader API");
-                var orderDtos = await cardTraderApiService.FetchNewOrdersAsync(cancellationToken);
+                var orderDtos = (await cardTraderApiService.FetchNewOrdersAsync(cancellationToken))
+                    .Cast<CardTraderOrderDto>().ToList();
 
                 if (orderDtos.Any())
                 {

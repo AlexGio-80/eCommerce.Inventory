@@ -6,6 +6,7 @@ using eCommerce.Inventory.Infrastructure.Persistence.Repositories;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Mappers;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
+using MediatR;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -40,6 +41,11 @@ builder.Services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<Ap
 // Register Card Trader mappers and sync services
 builder.Services.AddScoped<CardTraderDtoMapper>();
 builder.Services.AddScoped<InventorySyncService>();
+builder.Services.AddScoped<WebhookSignatureVerificationService>();
+
+// Register MediatR for CQRS command handling
+builder.Services.AddMediatR(config =>
+    config.RegisterServicesFromAssembly(typeof(eCommerce.Inventory.Application.Commands.ProcessCardTraderWebhookCommand).Assembly));
 
 // Configure HttpClient for Card Trader API with Bearer Token authentication
 var cardTraderApiConfig = builder.Configuration.GetSection("CardTraderApi");

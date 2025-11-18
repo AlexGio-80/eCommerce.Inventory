@@ -162,15 +162,31 @@ public async Task<IActionResult> ProcessWebhook([FromBody] WebhookPayload payloa
 - Seed data for test games, expansions, blueprints
 - All relationships configured with cascade delete
 
-### 🔄 Phase 2: Card Trader API Integration (IN PROGRESS)
-- Parse DTOs → Domain Entities (Mappers)
-- Database merge logic (INSERT/UPDATE/DELETE)
-- Complete CardTraderSyncWorker implementation
-- Webhook processing with MediatR
+### ✅ Phase 2.1: Card Trader Sync Integration (COMPLETED)
+- DTOs → Domain Entities Mappers (CardTraderDtoMapper)
+- Advanced database merge logic (INSERT/UPDATE/DELETE via InventorySyncService)
+- Complete CardTraderSyncWorker with 3-step orchestration
+- Asynchronous operations with CancellationToken support
+- Scoped DI and service injection in background worker
+
+### ✅ Phase 2.2: Webhook Processing (COMPLETED)
+- MediatR CQRS command pattern implementation
+- ProcessCardTraderWebhookCommand & ProcessCardTraderWebhookHandler
+- Webhook signature verification (HMAC SHA256)
+- REST endpoint: `POST /api/cardtraderwèbhooks/events`
+- Support for order.create, order.update, order.destroy events
+- Data retention: Orders preserved locally when deleted on Card Trader
+- WebhookSignatureVerificationService with constant-time comparison
+
+### 🔄 Phase 2.3: Backend Testing (IN PROGRESS)
+- Unit tests for MediatR handlers
+- Integration tests for webhook endpoints
+- Sync worker integration tests
+- Test coverage target: 80%+
 
 ### ⏳ Upcoming Phases
-- Phase 3: API Controller Enhancement (Pagination, Response Envelopes, Error Handling)
-- Phase 4: Testing (Unit, Integration, E2E)
+- Phase 3: Angular Frontend (20-22 hours) - NEXT PRIORITY
+- Phase 4: API Controller Enhancement (Pagination, Response Envelopes, Error Handling)
 - Phase 5: Advanced Features (Polly Resilience, Caching, Rate Limiting)
 - Phase 6: Marketplace Expansion (eBay, Wallapop)
 - Phase 7: DevOps & Deployment (Docker, CI/CD)
@@ -184,11 +200,14 @@ See [ROADMAP.md](./Documentation/ROADMAP.md) for detailed timeline and technical
 |-------|--------------|
 | **Framework** | .NET 10, ASP.NET Core |
 | **Database** | SQL Server, Entity Framework Core 10 |
-| **Logging** | Serilog with structured logging |
+| **Logging** | Serilog 4.2.0 with structured logging |
 | **API** | RESTful with OpenAPI/Swagger |
+| **CQRS** | MediatR 12.3.0 for command handling |
+| **Webhooks** | HMAC SHA256 signature verification |
 | **DI** | Microsoft.Extensions.DependencyInjection |
 | **Background Tasks** | BackgroundService (HostedService) |
 | **Async** | Task-based async/await |
+| **JSON** | System.Text.Json for deserialization |
 
 ## 📝 Configuration
 
@@ -200,7 +219,8 @@ See [ROADMAP.md](./Documentation/ROADMAP.md) for detailed timeline and technical
   },
   "CardTraderApi": {
     "BaseUrl": "https://api.cardtrader.com/api/v2",
-    "BearerToken": "YOUR_TOKEN_HERE"
+    "BearerToken": "YOUR_TOKEN_HERE",
+    "SharedSecret": "YOUR_WEBHOOK_SHARED_SECRET_HERE"
   },
   "Serilog": {
     "MinimumLevel": "Debug",
@@ -289,6 +309,6 @@ For issues, questions, or suggestions:
 
 ---
 
-**Last Updated**: November 18, 2024
-**Version**: 0.1 (Architecture & Database Schema)
-**Status**: Active Development
+**Last Updated**: November 18, 2024 (Evening)
+**Version**: 0.2 (Webhook Processing & Integration Complete)
+**Status**: Active Development - Phase 2.3 Testing In Progress

@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using eCommerce.Inventory.Application.Interfaces;
 using eCommerce.Inventory.Domain.Entities;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.DTOs;
@@ -34,7 +35,8 @@ public class CardTraderApiClient : ICardTraderApiService
             var response = await _httpClient.GetAsync("games", cancellationToken);
             response.EnsureSuccessStatusCode();
 
-            var dtos = await response.Content.ReadAsAsync<List<CardTraderGameDto>>(cancellationToken)
+            var jsonContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            var dtos = JsonSerializer.Deserialize<List<CardTraderGameDto>>(jsonContent)
                 ?? new List<CardTraderGameDto>();
 
             _logger.LogInformation("Fetched {GameCount} games from Card Trader API", dtos.Count);
@@ -59,7 +61,8 @@ public class CardTraderApiClient : ICardTraderApiService
             var response = await _httpClient.GetAsync("expansions", cancellationToken);
             response.EnsureSuccessStatusCode();
 
-            var dtos = await response.Content.ReadAsAsync<List<CardTraderExpansionDto>>(cancellationToken)
+            var jsonContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            var dtos = JsonSerializer.Deserialize<List<CardTraderExpansionDto>>(jsonContent)
                 ?? new List<CardTraderExpansionDto>();
 
             _logger.LogInformation("Fetched {ExpansionCount} expansions from Card Trader API", dtos.Count);
@@ -84,7 +87,8 @@ public class CardTraderApiClient : ICardTraderApiService
             var response = await _httpClient.GetAsync($"expansions/{expansionId}/cards", cancellationToken);
             response.EnsureSuccessStatusCode();
 
-            var dtos = await response.Content.ReadAsAsync<List<CardTraderBlueprintDto>>(cancellationToken)
+            var jsonContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            var dtos = JsonSerializer.Deserialize<List<CardTraderBlueprintDto>>(jsonContent)
                 ?? new List<CardTraderBlueprintDto>();
 
             _logger.LogInformation("Fetched {BlueprintCount} blueprints for expansion {ExpansionId} from Card Trader API", dtos.Count, expansionId);
@@ -195,7 +199,7 @@ public class CardTraderApiClient : ICardTraderApiService
     /// <summary>
     /// Fetch all my products from Card Trader API (returns DTOs for mapping)
     /// </summary>
-    public async Task<List<CardTraderProductDto>> FetchMyProductsAsync(CancellationToken cancellationToken = default)
+    public async Task<List<dynamic>> FetchMyProductsAsync(CancellationToken cancellationToken = default)
     {
         try
         {
@@ -204,11 +208,12 @@ public class CardTraderApiClient : ICardTraderApiService
             var response = await _httpClient.GetAsync("products", cancellationToken);
             response.EnsureSuccessStatusCode();
 
-            var dtos = await response.Content.ReadAsAsync<List<CardTraderProductDto>>(cancellationToken)
+            var jsonContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            var dtos = JsonSerializer.Deserialize<List<CardTraderProductDto>>(jsonContent)
                 ?? new List<CardTraderProductDto>();
 
             _logger.LogInformation("Fetched {ProductCount} products from Card Trader API", dtos.Count);
-            return dtos;
+            return dtos.Cast<dynamic>().ToList();
         }
         catch (Exception ex)
         {
@@ -220,7 +225,7 @@ public class CardTraderApiClient : ICardTraderApiService
     /// <summary>
     /// Fetch all new orders from Card Trader API (returns DTOs for mapping)
     /// </summary>
-    public async Task<List<CardTraderOrderDto>> FetchNewOrdersAsync(CancellationToken cancellationToken = default)
+    public async Task<List<dynamic>> FetchNewOrdersAsync(CancellationToken cancellationToken = default)
     {
         try
         {
@@ -229,11 +234,12 @@ public class CardTraderApiClient : ICardTraderApiService
             var response = await _httpClient.GetAsync("orders", cancellationToken);
             response.EnsureSuccessStatusCode();
 
-            var dtos = await response.Content.ReadAsAsync<List<CardTraderOrderDto>>(cancellationToken)
+            var jsonContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            var dtos = JsonSerializer.Deserialize<List<CardTraderOrderDto>>(jsonContent)
                 ?? new List<CardTraderOrderDto>();
 
             _logger.LogInformation("Fetched {OrderCount} orders from Card Trader API", dtos.Count);
-            return dtos;
+            return dtos.Cast<dynamic>().ToList();
         }
         catch (Exception ex)
         {
