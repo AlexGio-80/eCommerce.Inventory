@@ -50,6 +50,9 @@
   - Key coverage: signature verification, tampering detection, payload validation
 
 🔨 **In Progress**: Phase 3 - Angular Frontend
+  - Phase 3.0: Project Setup ✅ DONE
+  - Phase 3.1: Database Consultation UI ✅ DONE (Dashboard & Inventory List)
+  - Phase 3.2-3.7: ⏳ TODO
 
 ⏳ **TODO**: Phase 4 Advanced Features, Phase 5 Deployment
 
@@ -1740,8 +1743,8 @@ app.UseHealthChecks("/health");
 | 2.2 | Webhook Processing | 5 | HIGH | ✅ DONE |
 | 2.3 | Backend Testing | 5.5 | HIGH | 🔨 IN PROGRESS |
 | 3.0 | Angular Project Setup | 1.25 | HIGH | ✅ DONE |
-| 3.1 | Database Consultation UI | 7.5 | HIGH | 🔨 NEXT |
-| 3.2 | Card Trader Data Initial Sync | 3.5 | HIGH | ⏳ TODO |
+| 3.1 | Database Consultation UI | 7.5 | HIGH | ✅ DONE |
+| 3.2 | Card Trader Data Initial Sync | 3.5 | HIGH | 🔨 NEXT |
 | 3.3 | Product Listing Creation | 10.5 | HIGH | ⏳ TODO |
 | 3.4 | Webhook Integration (Frontend) | 5.5 | HIGH | ⏳ TODO |
 | 3.5 | Reporting & BI | 10.5 | HIGH | ⏳ TODO |
@@ -1771,8 +1774,8 @@ app.UseHealthChecks("/health");
 
 3. **Week 3 - CURRENT 🔨**:
    - Phase 3.0: Angular Project Setup (1.25h) ✅ DONE
-   - Phase 3.1: Database Consultation UI (7.5h) - NEXT
-   - Phase 3.2: Card Trader Data Initial Sync (3.5h)
+   - Phase 3.1: Database Consultation UI (7.5h) ✅ DONE
+   - Phase 3.2: Card Trader Data Initial Sync (3.5h) - NEXT
    - **Total**: ~12.25h
 
 4. **Week 4 - COMPLEX ⏳**:
@@ -1810,7 +1813,7 @@ app.UseHealthChecks("/health");
 
 - **v0.1** ✅ COMPLETED: Architecture (Clean Architecture), Domain models, Infrastructure (DbContext, Repository pattern), API skeleton
 - **v0.2** 🔨 IN PROGRESS: Database (Phase 1✅), API client + Sync (Phase 2.1✅), Webhooks (Phase 2.2✅), Backend Testing (Phase 2.3🔨)
-- **v0.3** 🔨 NEXT: Angular Frontend (Phase 3.0✅, 3.1-3.7 incoming)
+- **v0.3** 🔨 IN PROGRESS: Angular Frontend (Phase 3.0✅, Phase 3.1✅, Phase 3.2-3.7 incoming)
 - **v1.0** (Target): Full Card Trader integration, Complete UI, Testing, Monitoring
 - **v2.0** (Future): Multi-marketplace support, Advanced features, AI grading
 
@@ -1828,7 +1831,7 @@ app.UseHealthChecks("/health");
 
 ✅ **Phase 3.0 Complete**: Angular 20 project setup, models, services, folder structure configured
 
-🔨 **Phase 3.1 Next**: Dashboard & Inventory List components for database consultation
+✅ **Phase 3.1 Complete**: Dashboard Component with stats cards & Inventory List Component with Material table, pagination, filtering
 
 ⏳ **Phase 3 Complete**: Angular UI funzionante, integrazione API completa, testabile in browser
 
