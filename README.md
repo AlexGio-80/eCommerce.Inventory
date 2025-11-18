@@ -250,8 +250,25 @@ public async Task<IActionResult> ProcessWebhook([FromBody] WebhookPayload payloa
   - All 42 categories successfully synced from Card Trader API
   - Foreign key constraint resolved through proper ID mapping
 
+### ✅ Phase 3.4: Expansions Synchronization (COMPLETED)
+- **Backend Implementation**:
+  - `CardTraderExpansionDto` with `JsonPropertyName` attributes for snake_case API mapping
+    * Maps JSON fields: id, name, code, game_id
+  - Fixed deserialization to handle API response format correctly
+  - `CardTraderDtoMapper.MapExpansion` with intelligent defaults:
+    * Missing Name: generates "Expansion {id}"
+    * Missing Abbreviation: generates from first 3 letters of expansion name
+  - `CardTraderSyncOrchestrator.UpsertExpansionsAsync` with proper GameId mapping
+    * Loads all games and maps CardTraderId → Database Game.Id
+    * Validates game references before inserting/updating expansions
+    * Gracefully skips expansions with non-existent game references
+  - Error logging with specific warnings for orphaned records
+  - Statistics tracking (Added, Updated, Failed, Skipped counts)
+  - All 42 expansions successfully synced with correct foreign key references
+  - Test data examples stored in `Features/Expansions.Data.Examples.json`
+
 ### ⏳ Upcoming Phases
-- Phase 3.4: Data Validation & Error Handling
+- Phase 3.5: Blueprints & Products Synchronization Testing
 - Phase 4: API Controller Enhancement (Pagination, Response Envelopes, Error Handling)
 - Phase 5: Advanced Features (Polly Resilience, Caching, Rate Limiting)
 - Phase 6: Marketplace Expansion (eBay, Wallapop)
@@ -375,7 +392,7 @@ For issues, questions, or suggestions:
 
 ---
 
-**Last Updated**: November 18, 2024 (Phase 3.3 Complete)
-**Version**: 0.4 (Category & Property Synchronization Complete)
-**Status**: Active Development - Phase 3.3 Complete | Phase 3.4 Next
-**Completed Phases**: Phase 1 ✅ | Phase 2.1 ✅ | Phase 2.2 ✅ | Phase 2.3 ✅ | Phase 3.0 ✅ | Phase 3.1 ✅ | Phase 3.2 ✅ | Phase 3.3 ✅
+**Last Updated**: November 18, 2024 (Phase 3.4 Complete)
+**Version**: 0.5 (Expansions Synchronization Complete)
+**Status**: Active Development - Phase 3.4 Complete | Phase 3.5 Next
+**Completed Phases**: Phase 1 ✅ | Phase 2.1 ✅ | Phase 2.2 ✅ | Phase 2.3 ✅ | Phase 3.0 ✅ | Phase 3.1 ✅ | Phase 3.2 ✅ | Phase 3.3 ✅ | Phase 3.4 ✅
