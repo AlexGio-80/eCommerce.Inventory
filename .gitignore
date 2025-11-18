@@ -361,3 +361,14 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Serena AI Assistant
+.serena/
+
+# Environment-specific configuration files
+appsettings.Development.json
+appsettings.*.json
+!appsettings.json
+
+# Local user secrets
+secrets.json

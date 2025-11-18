@@ -64,6 +64,31 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// Apply migrations and seed data in development
+if (app.Environment.IsDevelopment())
+{
+    using (var scope = app.Services.CreateScope())
+    {
+        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+        try
+        {
+            // Apply pending migrations
+            await dbContext.Database.MigrateAsync();
+            logger.LogInformation("Database migrations applied successfully");
+
+            // Seed initial data
+            await eCommerce.Inventory.Infrastructure.Persistence.SeedData.InitializeAsync(dbContext, logger);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "An error occurred while applying migrations or seeding data");
+            throw;
+        }
+    }
+}
+
 // Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
