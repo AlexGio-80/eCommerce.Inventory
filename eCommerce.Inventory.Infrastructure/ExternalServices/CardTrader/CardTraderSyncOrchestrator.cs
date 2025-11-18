@@ -332,15 +332,32 @@ public class CardTraderSyncOrchestrator
         var updated = 0;
         var failed = 0;
 
+        // Load all games to map CardTraderId -> Database Id
+        var allGames = await _dbContext.Games
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
         foreach (var expansion in expansions)
         {
             try
             {
+                // Map the GameId from CardTraderId to database Game.Id
+                var gameEntity = allGames.FirstOrDefault(g => g.CardTraderId == expansion.GameId);
+                if (gameEntity == null)
+                {
+                    failed++;
+                    _logger.LogWarning("Expansion {ExpansionId} references Game {GameId} which doesn't exist in database. Skipping.",
+                        expansion.CardTraderId, expansion.GameId);
+                    continue;
+                }
+
                 var existingExpansion = await _dbContext.Expansions
                     .FirstOrDefaultAsync(e => e.CardTraderId == expansion.CardTraderId, cancellationToken);
 
                 if (existingExpansion == null)
                 {
+                    // Set the correct GameId (database ID) before inserting
+                    expansion.GameId = gameEntity.Id;
                     _dbContext.Expansions.Add(expansion);
                     added++;
                 }
@@ -348,7 +365,7 @@ public class CardTraderSyncOrchestrator
                 {
                     existingExpansion.Name = expansion.Name;
                     existingExpansion.Code = expansion.Code;
-                    existingExpansion.GameId = expansion.GameId;
+                    existingExpansion.GameId = gameEntity.Id; // Use the database Game Id
                     _dbContext.Expansions.Update(existingExpansion);
                     updated++;
                 }

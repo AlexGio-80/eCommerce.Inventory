@@ -63,13 +63,43 @@ public class CardTraderDtoMapper
             throw new ArgumentNullException(nameof(dto), "ExpansionDto cannot be null");
         }
 
+        // Generate name if not provided by API
+        var name = string.IsNullOrWhiteSpace(dto.Name)
+            ? $"Expansion {dto.Id}"
+            : dto.Name;
+
+        // Generate abbreviation if not provided by API
+        var abbreviation = string.IsNullOrWhiteSpace(dto.Abbreviation)
+            ? GenerateAbbreviation(name)
+            : dto.Abbreviation;
+
         return new Expansion
         {
             CardTraderId = dto.Id,
-            Name = dto.Name,
-            Code = dto.Abbreviation,
+            Name = name,
+            Code = abbreviation,
             GameId = dto.GameId
         };
+    }
+
+    /// <summary>
+    /// Generates an abbreviation from expansion name (first 3 uppercase letters)
+    /// </summary>
+    private string GenerateAbbreviation(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "N/A";
+        }
+
+        // Take first 3 letters, uppercase
+        var abbreviation = new string(name
+            .Where(c => !char.IsWhiteSpace(c))
+            .Take(3)
+            .ToArray())
+            .ToUpper();
+
+        return string.IsNullOrEmpty(abbreviation) ? "N/A" : abbreviation;
     }
 
     /// <summary>
