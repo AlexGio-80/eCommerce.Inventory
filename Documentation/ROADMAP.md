@@ -292,151 +292,1081 @@ public class CardTraderSyncWorkerTests
 
 ---
 
-## Phase 3: Angular Frontend (PRIORITY: HIGH)
+## Phase 3: Angular Frontend - Inventory Management UI (PRIORITY: HIGH)
 
 ### Overview
 
 Sviluppare un'interfaccia utente moderna in Angular per:
-- Visualizzare l'inventario sincronizzato da Card Trader
-- Gestire listing di prodotti
-- Monitorare ordini in arrivo
-- Testare l'API backend in scenari realistici
+- **Step 1**: Consultare il database locale e visualizzare tabelle (Games, Expansions, Blueprints, InventoryItems, Orders)
+- **Step 2**: Sincronizzare dati generici da Card Trader (Games, Expansions, Blueprints)
+- **Step 3**: Creare nuove inserzioni prodotto su Card Trader
+- **Step 4**: Aggiornare il magazzino tramite webhook events
+- **Step 5**: Reporting e BI per analisi vendite
 
-### 3.1 Project Setup
+---
+
+## Phase 3.0: Project Setup (PRIORITY: HIGH)
+
+### 3.0.1 Angular Project Setup
 
 ```bash
 ng new ecommerce-inventory-ui --routing --skip-git
 cd ecommerce-inventory-ui
 ng add @angular/material
 npm install axios @auth0/angular-jwt
+npm install chart.js ng2-charts  # For BI/Reporting
+npm install date-fns              # For date handling
 ```
 
 **Timeline**: 30 minuti
 
-### 3.2 Core Components
+### 3.0.2 Core Project Structure
 
-**1. Dashboard Component**
-- Cards con statistiche (Total Products, Recent Orders, Sync Status)
-- Real-time sync status monitor
-- Quick action buttons
+```
+src/
+├── app/
+│   ├── core/
+│   │   ├── guards/
+│   │   │   └── auth.guard.ts
+│   │   ├── interceptors/
+│   │   │   └── auth.interceptor.ts
+│   │   ├── models/
+│   │   │   ├── inventory-item.ts
+│   │   │   ├── order.ts
+│   │   │   ├── game.ts
+│   │   │   ├── expansion.ts
+│   │   │   └── blueprint.ts
+│   │   └── services/
+│   │       ├── cardtrader-api.service.ts
+│   │       ├── inventory.service.ts
+│   │       ├── auth.service.ts
+│   │       └── notification.service.ts
+│   ├── features/
+│   │   ├── inventory/
+│   │   │   ├── components/
+│   │   │   ├── pages/
+│   │   │   └── inventory.module.ts
+│   │   ├── products/
+│   │   │   ├── components/
+│   │   │   ├── pages/
+│   │   │   └── products.module.ts
+│   │   ├── orders/
+│   │   │   ├── components/
+│   │   │   ├── pages/
+│   │   │   └── orders.module.ts
+│   │   ├── reporting/
+│   │   │   ├── components/
+│   │   │   ├── pages/
+│   │   │   └── reporting.module.ts
+│   │   └── sync/
+│   │       ├── components/
+│   │       └── sync.module.ts
+│   ├── shared/
+│   │   ├── components/ (reusable UI)
+│   │   ├── pipes/
+│   │   └── shared.module.ts
+│   └── app.module.ts
+└── ...
+```
 
-**2. Inventory List Component**
-- Tabella con infinite scroll / pagination
-- Filtri (Game, Condition, Price range)
-- Search / full-text search
-- Sort (by price, date added, quantity)
+**Timeline**: 45 minuti
 
-**3. Order Management Component**
-- Lista ordini da Card Trader
-- Status timeline (pending → shipped → delivered)
-- Order detail modal
-- Export functionality (CSV)
+---
 
-**4. Product Detail Component**
-- Full product info
-- Listing history on Card Trader
-- Sales analytics
-- Webhook activity log
+## Phase 3.1: Database Consultation UI - View Existing Data
 
-**5. Settings Component**
-- API endpoint configuration
-- Authentication setup
-- Sync frequency settings
-- Webhook test endpoint
+### 3.1.1 Create Data Models
 
-**Timeline**: 6 ore
-
-### 3.3 Services
+Creare le interfacce TypeScript per mappare le entità del backend:
 
 ```typescript
-// services/cardtrader-api.service.ts
-@Injectable({ providedIn: 'root' })
-export class CardTraderApiService {
-  constructor(private http: HttpClient) {}
+// core/models/game.ts
+export interface Game {
+  id: number;
+  name: string;
+  code: string;
+  cardTraderId?: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
-  getInventoryItems(page = 1, pageSize = 10) {
-    return this.http.get('/api/cardtrader/inventory', {
-      params: { page, pageSize }
-    });
-  }
+// core/models/expansion.ts
+export interface Expansion {
+  id: number;
+  gameId: number;
+  name: string;
+  code: string;
+  cardTraderEmberId?: string;
+  createdAt: Date;
+}
 
-  getOrders() {
-    return this.http.get('/api/cardtrader/orders');
-  }
+// core/models/blueprint.ts
+export interface Blueprint {
+  id: number;
+  expansionId: number;
+  cardName: string;
+  cardTraderProductId?: number;
+  rarity?: string;
+  condition?: string;
+  createdAt: Date;
+}
 
-  syncNow() {
-    return this.http.post('/api/cardtrader/sync', {});
-  }
+// core/models/inventory-item.ts
+export interface InventoryItem {
+  id: number;
+  blueprintId: number;
+  blueprint?: Blueprint;
+  quantity: number;
+  price: number;
+  cardTraderProductId?: number;
+  status: 'active' | 'inactive' | 'sold';
+  createdAt: Date;
+  updatedAt: Date;
+}
 
-  testWebhook() {
-    return this.http.post('/api/cardtrader/webhooks/test', {});
-  }
+// core/models/order.ts
+export interface Order {
+  id: number;
+  cardTraderOrderId?: string;
+  status: 'pending' | 'paid' | 'shipped' | 'delivered' | 'cancelled';
+  totalPrice: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface OrderItem {
+  id: number;
+  orderId: number;
+  inventoryItemId: number;
+  quantity: number;
+  price: number;
 }
 ```
 
-**Timeline**: 2 ore
+**Timeline**: 1 ora
 
-### 3.4 Authentication (JWT)
+### 3.1.2 Create API Service
 
 ```typescript
-// guards/auth.guard.ts
-@Injectable()
-export class AuthGuard implements CanActivate {
-  constructor(private auth: AuthService, private router: Router) {}
+// core/services/cardtrader-api.service.ts
+@Injectable({ providedIn: 'root' })
+export class CardTraderApiService {
+  private apiUrl = 'http://localhost:5000/api/cardtrader';
 
-  canActivate(): boolean {
-    if (this.auth.isAuthenticated()) {
-      return true;
-    }
-    this.router.navigate(['/login']);
-    return false;
+  constructor(private http: HttpClient) {}
+
+  // Games
+  getGames(): Observable<Game[]> {
+    return this.http.get<Game[]>(`${this.apiUrl}/games`);
+  }
+
+  // Expansions
+  getExpansions(gameId?: number): Observable<Expansion[]> {
+    const params = gameId ? { gameId: gameId.toString() } : {};
+    return this.http.get<Expansion[]>(`${this.apiUrl}/expansions`, { params });
+  }
+
+  // Blueprints
+  getBlueprints(expansionId?: number): Observable<Blueprint[]> {
+    const params = expansionId ? { expansionId: expansionId.toString() } : {};
+    return this.http.get<Blueprint[]>(`${this.apiUrl}/blueprints`, { params });
+  }
+
+  // Inventory Items
+  getInventoryItems(page = 1, pageSize = 20): Observable<PagedResponse<InventoryItem>> {
+    const params = { page: page.toString(), pageSize: pageSize.toString() };
+    return this.http.get<PagedResponse<InventoryItem>>(`${this.apiUrl}/inventory`, { params });
+  }
+
+  // Orders
+  getOrders(page = 1, pageSize = 20): Observable<PagedResponse<Order>> {
+    const params = { page: page.toString(), pageSize: pageSize.toString() };
+    return this.http.get<PagedResponse<Order>>(`${this.apiUrl}/orders`, { params });
+  }
+
+  // Get single item
+  getInventoryItem(id: number): Observable<InventoryItem> {
+    return this.http.get<InventoryItem>(`${this.apiUrl}/inventory/${id}`);
   }
 }
 ```
 
 **Timeline**: 1.5 ore
 
-### 3.5 State Management (NgRx)
+### 3.1.3 Create Inventory List Component
 
 ```typescript
-// store/inventory.actions.ts
-export const loadInventory = createAction(
-  '[Inventory] Load Inventory',
-  props<{ page: number }>()
-);
+// features/inventory/pages/inventory-list/inventory-list.component.ts
+@Component({
+  selector: 'app-inventory-list',
+  templateUrl: './inventory-list.component.html',
+  styleUrls: ['./inventory-list.component.scss']
+})
+export class InventoryListComponent implements OnInit {
+  items$: Observable<InventoryItem[]>;
+  games$: Observable<Game[]>;
+  selectedGame$: Observable<Game | null>;
 
-export const loadInventorySuccess = createAction(
-  '[Inventory] Load Inventory Success',
-  props<{ items: InventoryItem[] }>()
-);
+  page = 1;
+  pageSize = 20;
+  totalItems = 0;
+
+  displayedColumns = ['id', 'cardName', 'game', 'expansion', 'quantity', 'price', 'status', 'actions'];
+
+  constructor(
+    private apiService: CardTraderApiService,
+    private store: Store
+  ) {}
+
+  ngOnInit() {
+    this.items$ = this.apiService.getInventoryItems(this.page, this.pageSize);
+    this.games$ = this.apiService.getGames();
+  }
+
+  onGameSelected(game: Game) {
+    this.store.dispatch(selectGame({ game }));
+  }
+
+  onPageChange(event: PageEvent) {
+    this.page = event.pageIndex + 1;
+    this.pageSize = event.pageSize;
+    this.items$ = this.apiService.getInventoryItems(this.page, this.pageSize);
+  }
+
+  openDetails(item: InventoryItem) {
+    // Open detail modal
+  }
+
+  deleteItem(id: number) {
+    // Delete item
+  }
+}
 ```
 
-**Timeline**: 2 ore (optional, can use simple services)
+**Html Template**:
+```html
+<div class="inventory-container">
+  <mat-toolbar color="primary">
+    <h1>📦 Inventario</h1>
+    <span class="spacer"></span>
+    <button mat-raised-button color="accent" (click)="openCreateDialog()">
+      <mat-icon>add</mat-icon> Nuovo Articolo
+    </button>
+  </mat-toolbar>
 
-### 3.6 Styling & Material
+  <mat-card class="filters-card">
+    <mat-form-field appearance="fill">
+      <mat-label>Gioco</mat-label>
+      <mat-select (selectionChange)="onGameSelected($event.value)">
+        <mat-option *ngFor="let game of games$ | async" [value]="game">
+          {{game.name}}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+  </mat-card>
 
-- Material Theme customization
-- Responsive layout (mobile-first)
-- Dark mode support
-- Custom color scheme (matching brand)
+  <mat-table [dataSource]="items$ | async" class="inventory-table">
+    <ng-container matColumnDef="cardName">
+      <mat-header-cell *matHeaderCellDef>Nome Carta</mat-header-cell>
+      <mat-cell *matCellDef="let item">{{item.blueprint?.cardName}}</mat-cell>
+    </ng-container>
+
+    <ng-container matColumnDef="quantity">
+      <mat-header-cell *matHeaderCellDef>Quantità</mat-header-cell>
+      <mat-cell *matCellDef="let item">{{item.quantity}}</mat-cell>
+    </ng-container>
+
+    <ng-container matColumnDef="price">
+      <mat-header-cell *matHeaderCellDef>Prezzo</mat-header-cell>
+      <mat-cell *matCellDef="let item">€ {{item.price | number:'1.2-2'}}</mat-cell>
+    </ng-container>
+
+    <ng-container matColumnDef="status">
+      <mat-header-cell *matHeaderCellDef>Stato</mat-header-cell>
+      <mat-cell *matCellDef="let item">
+        <mat-chip [color]="item.status === 'active' ? 'primary' : 'warn'" selected>
+          {{item.status}}
+        </mat-chip>
+      </mat-cell>
+    </ng-container>
+
+    <ng-container matColumnDef="actions">
+      <mat-header-cell *matHeaderCellDef>Azioni</mat-header-cell>
+      <mat-cell *matCellDef="let item">
+        <button mat-icon-button (click)="openDetails(item)">
+          <mat-icon>edit</mat-icon>
+        </button>
+        <button mat-icon-button color="warn" (click)="deleteItem(item.id)">
+          <mat-icon>delete</mat-icon>
+        </button>
+      </mat-cell>
+    </ng-container>
+
+    <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
+    <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
+  </mat-table>
+
+  <mat-paginator
+    [length]="totalItems"
+    [pageSize]="pageSize"
+    [pageSizeOptions]="[10, 20, 50]"
+    (page)="onPageChange($event)">
+  </mat-paginator>
+</div>
+```
 
 **Timeline**: 3 ore
 
-### 3.7 Unit & E2E Tests
+### 3.1.4 Create Dashboard Component
 
-**Karma/Jasmine Unit Tests**:
-- Component tests
-- Service tests
-- Pipe tests
+```typescript
+// features/inventory/pages/dashboard/dashboard.component.ts
+@Component({
+  selector: 'app-dashboard',
+  templateUrl: './dashboard.component.html'
+})
+export class DashboardComponent implements OnInit {
+  stats$: Observable<DashboardStats>;
+  recentOrders$: Observable<Order[]>;
 
-**Protractor/Cypress E2E Tests**:
-- User workflows
-- Form submissions
-- Navigation
+  constructor(private apiService: CardTraderApiService) {}
 
-**Timeline**: 4 ore
+  ngOnInit() {
+    this.stats$ = forkJoin({
+      totalItems: this.apiService.getInventoryItems(1, 1).pipe(map(r => r.totalCount)),
+      totalOrders: this.apiService.getOrders(1, 1).pipe(map(r => r.totalCount)),
+      games: this.apiService.getGames().pipe(map(games => games.length))
+    }).pipe(
+      map(data => ({
+        totalProducts: data.totalItems,
+        totalOrders: data.totalOrders,
+        gameCount: data.games,
+        lastSync: new Date()
+      }))
+    );
 
-**Total Phase 3 Estimate**: ~20-22 ore
+    this.recentOrders$ = this.apiService.getOrders(1, 5).pipe(map(r => r.items));
+  }
+}
+```
+
+**Timeline**: 2 ore
+
+**Total Phase 3.1**: ~7.5 ore
+
+---
+
+## Phase 3.2: Card Trader Data Initial Sync
+
+### 3.2.1 Create Sync Service
+
+```typescript
+// core/services/sync.service.ts
+@Injectable({ providedIn: 'root' })
+export class SyncService {
+  syncProgress$ = new BehaviorSubject<SyncProgress>({
+    status: 'idle',
+    currentStep: '',
+    progress: 0
+  });
+
+  constructor(
+    private apiService: CardTraderApiService,
+    private http: HttpClient,
+    private notification: NotificationService
+  ) {}
+
+  syncCardTraderData(): Observable<SyncResult> {
+    this.syncProgress$.next({
+      status: 'running',
+      currentStep: 'Sincronizzazione Giochi...',
+      progress: 20
+    });
+
+    return this.http.post<SyncResult>('/api/cardtrader/sync', {}).pipe(
+      tap(result => {
+        this.syncProgress$.next({
+          status: 'completed',
+          currentStep: 'Sincronizzazione completata!',
+          progress: 100
+        });
+        this.notification.success('Sincronizzazione completata con successo');
+      }),
+      catchError(error => {
+        this.syncProgress$.next({
+          status: 'error',
+          currentStep: 'Errore durante la sincronizzazione',
+          progress: 0
+        });
+        this.notification.error('Errore durante la sincronizzazione');
+        return throwError(error);
+      })
+    );
+  }
+}
+```
+
+**Timeline**: 1 ora
+
+### 3.2.2 Create Sync Page Component
+
+```typescript
+// features/sync/pages/initial-sync/initial-sync.component.ts
+@Component({
+  selector: 'app-initial-sync',
+  templateUrl: './initial-sync.component.html'
+})
+export class InitialSyncComponent {
+  syncProgress$ = this.syncService.syncProgress$;
+  isRunning = false;
+
+  constructor(private syncService: SyncService) {}
+
+  startSync() {
+    this.isRunning = true;
+    this.syncService.syncCardTraderData().subscribe({
+      complete: () => {
+        this.isRunning = false;
+      },
+      error: () => {
+        this.isRunning = false;
+      }
+    });
+  }
+}
+```
+
+**Html**:
+```html
+<mat-card class="sync-container">
+  <mat-card-header>
+    <mat-card-title>🔄 Sincronizzazione Card Trader</mat-card-title>
+    <mat-card-subtitle>Carica i dati iniziali (Giochi, Espansioni, Inventario)</mat-card-subtitle>
+  </mat-card-header>
+
+  <mat-card-content>
+    <div *ngIf="(syncProgress$ | async) as progress">
+      <p>{{progress.currentStep}}</p>
+      <mat-progress-bar
+        mode="determinate"
+        [value]="progress.progress"
+        [color]="progress.status === 'error' ? 'warn' : 'primary'">
+      </mat-progress-bar>
+      <p class="progress-text">{{progress.progress}}%</p>
+    </div>
+  </mat-card-content>
+
+  <mat-card-actions>
+    <button mat-raised-button color="primary" (click)="startSync()" [disabled]="isRunning">
+      <mat-icon *ngIf="!isRunning">sync</mat-icon>
+      <mat-spinner *ngIf="isRunning" diameter="20"></mat-spinner>
+      {{isRunning ? 'Sincronizzazione in corso...' : 'Avvia Sincronizzazione'}}
+    </button>
+  </mat-card-actions>
+</mat-card>
+```
+
+**Timeline**: 2.5 ore
+
+**Total Phase 3.2**: ~3.5 ore
+
+---
+
+## Phase 3.3: Product Listing Creation - Advanced Features
+
+### 3.3.1 Listing Creation Workflow
+
+Un flusso complesso che include:
+
+#### 3.3.1.1 Basic Listing Form
+- Selezionare Blueprint dal database
+- Inserire quantità disponibile
+- Impostare prezzo
+- Selezionare condizione (NM, LP, MP, HP, DMG)
+- Aggiungere commenti custom
+
+```typescript
+// features/products/pages/create-listing/create-listing.component.ts
+@Component({
+  selector: 'app-create-listing',
+  templateUrl: './create-listing.component.html'
+})
+export class CreateListingComponent implements OnInit {
+  listingForm: FormGroup;
+  blueprints$: Observable<Blueprint[]>;
+  conditions = ['NM', 'LP', 'MP', 'HP', 'DMG'];
+
+  constructor(
+    private fb: FormBuilder,
+    private apiService: CardTraderApiService,
+    private productService: ProductService
+  ) {
+    this.listingForm = this.createForm();
+  }
+
+  ngOnInit() {
+    this.blueprints$ = this.apiService.getBlueprints();
+  }
+
+  createForm(): FormGroup {
+    return this.fb.group({
+      blueprintId: ['', Validators.required],
+      quantity: [1, [Validators.required, Validators.min(1)]],
+      price: ['', [Validators.required, Validators.min(0.01)]],
+      condition: ['NM', Validators.required],
+      comments: [''],
+      languageCode: ['ENG'],
+      isFoil: [false],
+      isPlayset: [false]
+    });
+  }
+
+  submit() {
+    if (this.listingForm.valid) {
+      this.productService.createListing(this.listingForm.value).subscribe(
+        result => {
+          // Success
+        },
+        error => {
+          // Error handling
+        }
+      );
+    }
+  }
+}
+```
+
+**Timeline**: 3 ore
+
+#### 3.3.1.2 Price Optimization Helper
+- Suggerimenti di prezzo basati su Card Trader market
+- Storico prezzi della carta
+- Analisi competitiva (prezzi di altre inserzioni)
+- Margine di profitto calcolato
+
+```typescript
+// features/products/services/price-optimizer.service.ts
+@Injectable({ providedIn: 'root' })
+export class PriceOptimizerService {
+  constructor(private apiService: CardTraderApiService) {}
+
+  getPriceSuggestions(productId: number): Observable<PriceSuggestion> {
+    return this.apiService.getPriceAnalytics(productId).pipe(
+      map(analytics => ({
+        recommendedPrice: analytics.avgPrice * 0.95,  // 95% of market
+        minPrice: analytics.minPrice,
+        maxPrice: analytics.maxPrice,
+        avgPrice: analytics.avgPrice,
+        competitorCount: analytics.competitorCount,
+        profit: (analytics.avgPrice * 0.95) - this.getCost(productId)
+      }))
+    );
+  }
+
+  private getCost(productId: number): number {
+    // Calculate base cost from purchase history
+    return 0;
+  }
+}
+```
+
+**Timeline**: 2.5 ore
+
+#### 3.3.1.3 Bulk Listing Creator
+- Upload CSV con multiple carte
+- Template di prezzo applicato a batch
+- Validazione batch prima di pubblicare
+- Progress tracking per bulk operations
+
+```typescript
+// features/products/components/bulk-listing-uploader/bulk-listing-uploader.component.ts
+@Component({
+  selector: 'app-bulk-listing-uploader',
+  templateUrl: './bulk-listing-uploader.component.html'
+})
+export class BulkListingUploaderComponent {
+  uploadProgress = 0;
+  listings: BulkListing[] = [];
+
+  constructor(private productService: ProductService) {}
+
+  onFileSelected(event: Event) {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (file) {
+      this.parseCsvFile(file);
+    }
+  }
+
+  parseCsvFile(file: File) {
+    // Parse CSV
+    // Validate data
+    // Show preview
+  }
+
+  submitBulkListings() {
+    this.productService.createBulkListings(this.listings).subscribe(
+      progress => {
+        this.uploadProgress = progress.percent;
+      },
+      error => {
+        // Error handling
+      }
+    );
+  }
+}
+```
+
+**Timeline**: 3 ore
+
+#### 3.3.1.4 Listing Preview & Validation
+- Anteprima di come apparirà su Card Trader
+- Validazione dei dati obbligatori
+- Avvisi per prezzi anomali
+- Stima di tempo per la vendita
+
+```typescript
+// features/products/components/listing-preview/listing-preview.component.ts
+@Component({
+  selector: 'app-listing-preview',
+  templateUrl: './listing-preview.component.html'
+})
+export class ListingPreviewComponent {
+  @Input() listing: CreateListingDto;
+
+  validationErrors: ValidationError[] = [];
+  estimatedSellTime: string;
+
+  ngOnInit() {
+    this.validate();
+    this.estimateSellTime();
+  }
+
+  validate() {
+    // Validation logic
+    // Price anomaly detection
+    // Required fields check
+  }
+
+  estimateSellTime() {
+    // Based on historical data and similar listings
+  }
+}
+```
+
+**Timeline**: 2 ore
+
+**Total Phase 3.3**: ~10.5 ore
+
+---
+
+## Phase 3.4: Webhook Integration - Live Inventory Updates
+
+### 3.4.1 WebSocket Connection Setup
+
+```typescript
+// core/services/webhook-listener.service.ts
+@Injectable({ providedIn: 'root' })
+export class WebhookListenerService {
+  orderUpdates$ = new Subject<OrderUpdate>();
+  inventoryUpdates$ = new Subject<InventoryUpdate>();
+
+  constructor(private notification: NotificationService) {
+    this.initializeWebSocketConnection();
+  }
+
+  private initializeWebSocketConnection() {
+    // Connect to backend WebSocket endpoint
+    // Listen for webhook events from Card Trader
+    // Emit updates to components
+  }
+
+  private handleOrderUpdate(event: any) {
+    const update: OrderUpdate = {
+      orderId: event.data.id,
+      status: event.data.status,
+      timestamp: new Date()
+    };
+    this.orderUpdates$.next(update);
+    this.notification.info(`Ordine #${event.data.id} - ${event.data.status}`);
+  }
+
+  private handleInventoryUpdate(event: any) {
+    const update: InventoryUpdate = {
+      productId: event.data.productId,
+      quantitySold: event.data.quantity,
+      newPrice: event.data.price,
+      timestamp: new Date()
+    };
+    this.inventoryUpdates$.next(update);
+  }
+}
+```
+
+**Timeline**: 2 ore
+
+### 3.4.2 Real-time Order Status Component
+
+```typescript
+// features/orders/components/order-status-monitor/order-status-monitor.component.ts
+@Component({
+  selector: 'app-order-status-monitor',
+  templateUrl: './order-status-monitor.component.html'
+})
+export class OrderStatusMonitorComponent implements OnInit {
+  recentOrders$ = this.webhookService.orderUpdates$.pipe(
+    scan((acc, update) => [update, ...acc.slice(0, 9)], [] as OrderUpdate[])
+  );
+
+  orderTimeline$ = this.apiService.getOrders(1, 20).pipe(
+    map(response => response.items),
+    shareReplay(1)
+  );
+
+  constructor(
+    private webhookService: WebhookListenerService,
+    private apiService: CardTraderApiService
+  ) {}
+
+  ngOnInit() {
+    // Listen for real-time updates
+  }
+}
+```
+
+**Html**:
+```html
+<mat-card class="monitor-card">
+  <mat-card-header>
+    <mat-card-title>📊 Monitoraggio Ordini</mat-card-title>
+  </mat-card-header>
+
+  <mat-list>
+    <mat-list-item *ngFor="let order of recentOrders$ | async">
+      <mat-icon matListAvatar [color]="getStatusColor(order.status)">
+        {{getStatusIcon(order.status)}}
+      </mat-icon>
+      <div matLine>Ordine #{{order.orderId}}</div>
+      <div matLine>{{order.status}} - {{order.timestamp | date:'short'}}</div>
+    </mat-list-item>
+  </mat-list>
+</mat-card>
+```
+
+**Timeline**: 2 ore
+
+### 3.4.3 Inventory Auto-update on Sales
+
+```typescript
+// features/inventory/services/inventory-sync.service.ts
+@Injectable({ providedIn: 'root' })
+export class InventorySyncService {
+  constructor(
+    private webhookService: WebhookListenerService,
+    private apiService: CardTraderApiService
+  ) {}
+
+  startAutoSync() {
+    this.webhookService.inventoryUpdates$.subscribe(update => {
+      // Decrement inventory quantity
+      // Update local cache
+      // Refresh inventory list if visible
+      this.updateLocalInventory(update);
+    });
+  }
+
+  private updateLocalInventory(update: InventoryUpdate) {
+    // Update component state
+    // No need to refresh from server, webhook already provided the data
+  }
+}
+```
+
+**Timeline**: 1.5 ore
+
+**Total Phase 3.4**: ~5.5 ore
+
+---
+
+## Phase 3.5: Reporting & Business Intelligence
+
+### 3.5.1 Sales Dashboard
+
+Visualizzare metriche chiave:
+- Total revenue (giornaliero, settimanale, mensile)
+- Best selling products
+- Average sale price
+- Sell-through rate
+- Inventory turnover
+
+```typescript
+// features/reporting/pages/sales-dashboard/sales-dashboard.component.ts
+@Component({
+  selector: 'app-sales-dashboard',
+  templateUrl: './sales-dashboard.component.html'
+})
+export class SalesDashboardComponent implements OnInit {
+  salesChart$: Observable<ChartConfiguration>;
+  topProducts$: Observable<ProductSales[]>;
+  metrics$: Observable<SalesMetrics>;
+  dateRange = {
+    start: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    end: new Date()
+  };
+
+  constructor(private reportingService: ReportingService) {}
+
+  ngOnInit() {
+    this.loadData();
+  }
+
+  loadData() {
+    this.metrics$ = this.reportingService.getSalesMetrics(this.dateRange);
+    this.salesChart$ = this.reportingService.getSalesChart(this.dateRange);
+    this.topProducts$ = this.reportingService.getTopProducts(this.dateRange);
+  }
+
+  onDateRangeChange(range: DateRange) {
+    this.dateRange = range;
+    this.loadData();
+  }
+}
+```
+
+**Timeline**: 3 ore
+
+### 3.5.2 Inventory Analytics
+
+- Inventory value over time
+- Stock turnover by game/expansion
+- Aging inventory report
+- Price elasticity analysis
+- Slow movers identification
+
+```typescript
+// features/reporting/pages/inventory-analytics/inventory-analytics.component.ts
+@Component({
+  selector: 'app-inventory-analytics',
+  templateUrl: './inventory-analytics.component.html'
+})
+export class InventoryAnalyticsComponent implements OnInit {
+  inventoryValueChart$: Observable<ChartConfiguration>;
+  turnoverByGame$: Observable<TurnoverMetric[]>;
+  slowMovers$: Observable<SlowMoverProduct[]>;
+  totalInventoryValue$: Observable<number>;
+
+  constructor(private reportingService: ReportingService) {}
+
+  ngOnInit() {
+    this.inventoryValueChart$ = this.reportingService.getInventoryValueChart();
+    this.turnoverByGame$ = this.reportingService.getTurnoverByGame();
+    this.slowMovers$ = this.reportingService.getSlowMovers(90); // 90 days
+    this.totalInventoryValue$ = this.reportingService.getTotalInventoryValue();
+  }
+}
+```
+
+**Timeline**: 3 ore
+
+### 3.5.3 Profitability Analysis
+
+- Cost per product (from purchase history)
+- Profit margin by product/game
+- Cost-adjusted ranking
+- ROI calculation
+
+```typescript
+// features/reporting/services/profitability.service.ts
+@Injectable({ providedIn: 'root' })
+export class ProfitabilityService {
+  getProfitabilityReport(): Observable<ProfitabilityReport> {
+    return forkJoin({
+      sales: this.getSalesData(),
+      costs: this.getCostsData(),
+      inventory: this.getInventoryData()
+    }).pipe(
+      map(data => this.calculateProfitability(data))
+    );
+  }
+
+  private calculateProfitability(data: any): ProfitabilityReport {
+    return {
+      totalRevenue: data.sales.reduce((sum, s) => sum + s.price, 0),
+      totalCosts: data.costs.reduce((sum, c) => sum + c.cost, 0),
+      grossProfit: /* calculated */,
+      profitMargin: /* calculated */,
+      byProduct: /* detailed breakdown */
+    };
+  }
+}
+```
+
+**Timeline**: 2.5 ore
+
+### 3.5.4 Export & Reporting
+
+- Export to Excel/PDF
+- Scheduled email reports
+- Custom report builder
+- Performance benchmarking
+
+```typescript
+// features/reporting/services/export.service.ts
+@Injectable({ providedIn: 'root' })
+export class ExportService {
+  exportToExcel(report: SalesMetrics, filename: string) {
+    // Generate Excel file with charts and data
+    // Use xlsx library
+  }
+
+  exportToPdf(report: SalesMetrics, filename: string) {
+    // Generate PDF report
+    // Use pdfmake library
+  }
+
+  scheduleEmailReport(recipients: string[], frequency: 'daily' | 'weekly' | 'monthly') {
+    // Schedule recurring report delivery
+  }
+}
+```
+
+**Timeline**: 2 ore
+
+**Total Phase 3.5**: ~10.5 ore
+
+---
+
+## Phase 3.X: Future Enhancements - AI Integration (PRIORITY: LOW)
+
+### 3.X.1 AI Card Grading Evaluation
+
+**Idea**: Usare computer vision + ML per valutare automaticamente il grading delle carte:
+
+```typescript
+// features/ai/services/card-grading.service.ts
+@Injectable({ providedIn: 'root' })
+export class CardGradingService {
+  // Future: Integrate with ML model (TensorFlow.js or cloud API)
+
+  analyzeCardImage(image: File): Observable<CardGradingResult> {
+    // 1. Upload image
+    // 2. Send to ML service (Azure ML, GCP Vision, or local TensorFlow)
+    // 3. Receive grading prediction (Gem MT 10, Near Mint 9, Mint 8, etc.)
+    // 4. Return confidence score
+    return this.http.post<CardGradingResult>('/api/ai/grade-card', formData);
+  }
+}
+```
+
+**Possibili implementazioni**:
+- **Local TensorFlow.js**: Processamento nel browser, no server calls
+- **Cloud Vision API**: Google Cloud Vision per analisi immagini
+- **Custom ML Model**: Addestramento con dataset di carte graduate (PSA/BGS)
+- **Hybrid approach**: Local detection + cloud verification
+
+**Timeline**: Future phase, 8-10 ore
+
+---
+
+## Phase 3.6: Authentication & Security
+
+### 3.6.1 JWT Authentication
+
+```typescript
+// core/services/auth.service.ts
+@Injectable({ providedIn: 'root' })
+export class AuthService {
+  private token$ = new BehaviorSubject<string | null>(null);
+
+  constructor(private http: HttpClient) {
+    this.loadTokenFromStorage();
+  }
+
+  login(username: string, password: string): Observable<AuthResponse> {
+    return this.http.post<AuthResponse>('/api/auth/login', { username, password }).pipe(
+      tap(response => {
+        this.token$.next(response.token);
+        localStorage.setItem('auth_token', response.token);
+      })
+    );
+  }
+
+  logout() {
+    this.token$.next(null);
+    localStorage.removeItem('auth_token');
+  }
+
+  isAuthenticated(): boolean {
+    return !!this.token$.value;
+  }
+}
+```
+
+**Timeline**: 1.5 ore
+
+### 3.6.2 HTTP Interceptor
+
+```typescript
+// core/interceptors/auth.interceptor.ts
+@Injectable()
+export class AuthInterceptor implements HttpInterceptor {
+  constructor(private authService: AuthService) {}
+
+  intercept(request: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
+    const token = this.authService.getToken();
+    if (token) {
+      request = request.clone({
+        setHeaders: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+    }
+    return next.handle(request);
+  }
+}
+```
+
+**Timeline**: 1 ora
+
+**Total Phase 3.6**: ~2.5 ore
+
+---
+
+## Phase 3.7: Testing & QA
+
+### 3.7.1 Unit Tests
+- Service tests (API calls, data transformation)
+- Component tests (UI logic, event handling)
+- Pipe tests (data formatting)
+
+**Timeline**: 3 ore
+
+### 3.7.2 E2E Tests (Cypress)
+- User workflows (login → sync → create listing → monitor)
+- Form submission & validation
+- Dashboard interaction
+
+**Timeline**: 2.5 ore
+
+**Total Phase 3.7**: ~5.5 ore
+
+---
+
+## Phase 3: Summary
+
+| Sub-Phase | Tasks | Estimated Hours | Status |
+|-----------|-------|-----------------|--------|
+| 3.0 | Project Setup | 1.25 | ⏳ TODO |
+| 3.1 | Database Consultation UI | 7.5 | ⏳ TODO |
+| 3.2 | Card Trader Data Sync | 3.5 | ⏳ TODO |
+| 3.3 | Product Listing Creation | 10.5 | ⏳ TODO |
+| 3.4 | Webhook Integration | 5.5 | ⏳ TODO |
+| 3.5 | Reporting & BI | 10.5 | ⏳ TODO |
+| 3.6 | Authentication & Security | 2.5 | ⏳ TODO |
+| 3.7 | Testing & QA | 5.5 | ⏳ TODO |
+| 3.X | AI Card Grading (Future) | 8-10 | 📅 FUTURE |
+| **TOTAL** | | **~47 ore** | |
+
+**Timeline**: ~6-7 working days per step
 
 ---
 
@@ -809,13 +1739,21 @@ app.UseHealthChecks("/health");
 | 2.1 | Card Trader Sync Integration | 7 | HIGH | ✅ DONE |
 | 2.2 | Webhook Processing | 5 | HIGH | ✅ DONE |
 | 2.3 | Backend Testing | 5.5 | HIGH | 🔨 IN PROGRESS |
-| 3 | Angular Frontend | 20-22 | HIGH | ⏳ NEXT |
-| 4 | API Enhancement | 3.5 | MEDIUM | ⏳ TODO |
-| 5 | Advanced Features | 7 | LOW | ⏳ TODO |
+| 3.0 | Angular Project Setup | 1.25 | HIGH | ⏳ NEXT |
+| 3.1 | Database Consultation UI | 7.5 | HIGH | ⏳ TODO |
+| 3.2 | Card Trader Data Initial Sync | 3.5 | HIGH | ⏳ TODO |
+| 3.3 | Product Listing Creation | 10.5 | HIGH | ⏳ TODO |
+| 3.4 | Webhook Integration (Frontend) | 5.5 | HIGH | ⏳ TODO |
+| 3.5 | Reporting & BI | 10.5 | HIGH | ⏳ TODO |
+| 3.6 | Authentication & Security | 2.5 | MEDIUM | ⏳ TODO |
+| 3.7 | Testing & QA | 5.5 | MEDIUM | ⏳ TODO |
+| 4 | API Controller Enhancement | 3.5 | MEDIUM | ⏳ TODO |
+| 5 | Advanced Features (Polly, Caching, Rate Limiting) | 7 | LOW | ⏳ TODO |
 | 6 | Marketplace Expansion | 6-8 | LOW | ⏳ TODO |
 | 7 | DevOps & Deployment | 4.5 | MEDIUM | ⏳ TODO |
-| 8 | Monitoring | 1.5 | LOW | ⏳ TODO |
-| **TOTAL** | | **~60-65 ore** | | |
+| 8 | Monitoring & Analytics | 1.5 | LOW | ⏳ TODO |
+| 3.X | AI Card Grading (Future) | 8-10 | LOW | 📅 FUTURE |
+| **TOTAL** | | **~90-95 ore** | | |
 
 ---
 
@@ -829,16 +1767,42 @@ app.UseHealthChecks("/health");
 
 2. **Week 2 - CURRENT 🔨**:
    - Phase 2.3: Backend Testing (5.5h) - IN PROGRESS
-   - Phase 3: Angular Frontend (20-22h) - NEXT
-   - **Total**: ~25.5h
+   - **Total**: 5.5h
 
-3. **Week 3+**:
+3. **Week 3 - NEXT ⏳**:
+   - Phase 3.0: Angular Project Setup (1.25h)
+   - Phase 3.1: Database Consultation UI (7.5h)
+   - Phase 3.2: Card Trader Data Initial Sync (3.5h)
+   - **Total**: ~12.25h
+
+4. **Week 4 - COMPLEX ⏳**:
+   - Phase 3.3: Product Listing Creation (10.5h) - **Most complex step, includes:**
+     - 3.3.1.1: Basic Listing Form (3h)
+     - 3.3.1.2: Price Optimization Helper (2.5h)
+     - 3.3.1.3: Bulk Listing Creator (3h)
+     - 3.3.1.4: Listing Preview & Validation (2h)
+   - **Total**: 10.5h
+
+5. **Week 5 - REAL-TIME INTEGRATION ⏳**:
+   - Phase 3.4: Webhook Integration (5.5h)
+   - Phase 3.5: Reporting & BI (10.5h)
+   - **Total**: ~16h
+
+6. **Week 6 - FINALIZATION ⏳**:
+   - Phase 3.6: Authentication & Security (2.5h)
+   - Phase 3.7: Testing & QA (5.5h)
+   - **Total**: ~8h
+
+7. **Week 7+ - POST-MVP**:
    - Phase 4: API Controllers (3.5h)
    - Phase 5: Advanced Features (7h)
    - Phase 6: Marketplace Expansion (6-8h)
    - Phase 7: DevOps (4.5h)
    - Phase 8: Monitoring (1.5h)
    - **Total**: ~22.5-23.5h
+
+8. **Future - AI Integration**:
+   - Phase 3.X: AI Card Grading (8-10h)
 
 ---
 
