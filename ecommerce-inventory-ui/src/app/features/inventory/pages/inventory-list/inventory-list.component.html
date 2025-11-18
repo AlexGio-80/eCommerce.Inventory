@@ -1,0 +1,146 @@
+<div class="inventory-container">
+  <mat-toolbar color="primary" class="inventory-header">
+    <h1>📦 Inventario</h1>
+    <span class="spacer"></span>
+    <button mat-raised-button color="accent">
+      <mat-icon>add_circle</mat-icon>
+      Nuovo Articolo
+    </button>
+  </mat-toolbar>
+
+  <!-- Filters Card -->
+  <mat-card class="filters-card">
+    <mat-card-content class="filters-content">
+      <mat-form-field appearance="fill" class="filter-field">
+        <mat-label>Gioco</mat-label>
+        <mat-select>
+          <mat-option value="">Tutti i giochi</mat-option>
+          <mat-option *ngFor="let game of games$ | async" [value]="game.id">
+            {{ game.name }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="fill" class="filter-field">
+        <mat-label>Stato</mat-label>
+        <mat-select>
+          <mat-option value="">Tutti</mat-option>
+          <mat-option value="active">Attivo</mat-option>
+          <mat-option value="inactive">Inattivo</mat-option>
+          <mat-option value="sold">Venduto</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="fill" class="filter-field">
+        <mat-label>Cerca...</mat-label>
+        <mat-icon matPrefix>search</mat-icon>
+        <input matInput placeholder="Cerca per nome carta" />
+      </mat-form-field>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Loading Spinner -->
+  <div *ngIf="isLoading" class="spinner-container">
+    <mat-spinner diameter="50"></mat-spinner>
+    <p>Caricamento dati...</p>
+  </div>
+
+  <!-- Inventory Table -->
+  <mat-card class="table-card" *ngIf="!isLoading">
+    <mat-card-content class="table-content">
+      <table mat-table [dataSource]="(items$ | async)!" class="inventory-table">
+        <!-- ID Column -->
+        <ng-container matColumnDef="id">
+          <th mat-header-cell *matHeaderCellDef>ID</th>
+          <td mat-cell *matCellDef="let item">{{ item.id }}</td>
+        </ng-container>
+
+        <!-- Card Name Column -->
+        <ng-container matColumnDef="cardName">
+          <th mat-header-cell *matHeaderCellDef>Nome Carta</th>
+          <td mat-cell *matCellDef="let item">
+            {{ item.blueprint?.cardName || 'N/A' }}
+          </td>
+        </ng-container>
+
+        <!-- Quantity Column -->
+        <ng-container matColumnDef="quantity">
+          <th mat-header-cell *matHeaderCellDef>Quantità</th>
+          <td mat-cell *matCellDef="let item">
+            <span class="quantity-badge">{{ item.quantity }}</span>
+          </td>
+        </ng-container>
+
+        <!-- Price Column -->
+        <ng-container matColumnDef="price">
+          <th mat-header-cell *matHeaderCellDef>Prezzo</th>
+          <td mat-cell *matCellDef="let item">
+            <strong>€ {{ item.price | number: '1.2-2' }}</strong>
+          </td>
+        </ng-container>
+
+        <!-- Status Column -->
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef>Stato</th>
+          <td mat-cell *matCellDef="let item">
+            <mat-chip
+              [color]="getStatusColor(item.status)"
+              selected
+              class="status-chip"
+            >
+              {{ item.status }}
+            </mat-chip>
+          </td>
+        </ng-container>
+
+        <!-- Actions Column -->
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef>Azioni</th>
+          <td mat-cell *matCellDef="let item" class="actions-cell">
+            <button
+              mat-icon-button
+              color="primary"
+              (click)="editItem(item)"
+              matTooltip="Modifica"
+            >
+              <mat-icon>edit</mat-icon>
+            </button>
+            <button
+              mat-icon-button
+              color="warn"
+              (click)="deleteItem(item)"
+              matTooltip="Elimina"
+            >
+              <mat-icon>delete</mat-icon>
+            </button>
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+      </table>
+
+      <!-- Empty State -->
+      <div *ngIf="(items$ | async)?.length === 0" class="empty-state">
+        <mat-icon class="empty-icon">inventory_2</mat-icon>
+        <p>Nessun articolo nel magazzino</p>
+        <button mat-raised-button color="primary">
+          <mat-icon>add_circle</mat-icon>
+          Aggiungi Primo Articolo
+        </button>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Paginator -->
+  <mat-paginator
+    *ngIf="!isLoading && totalItems > 0"
+    [length]="totalItems"
+    [pageSize]="pageSize"
+    [pageSizeOptions]="pageSizeOptions"
+    (page)="onPageChange($event)"
+    class="paginator"
+    showFirstLastButtons
+  >
+  </mat-paginator>
+</div>
