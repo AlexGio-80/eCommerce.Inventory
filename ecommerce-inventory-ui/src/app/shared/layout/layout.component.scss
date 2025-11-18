@@ -1,0 +1,104 @@
+.app-toolbar {
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  height: 64px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+
+  .toggle-sidenav {
+    margin-right: 16px;
+  }
+
+  .toolbar-spacer {
+    flex: 1 1 auto;
+  }
+
+  .app-title {
+    font-size: 20px;
+    font-weight: 500;
+    margin: 0;
+  }
+
+  .notification-btn,
+  .profile-btn {
+    margin-left: 8px;
+  }
+}
+
+.sidenav-container {
+  height: calc(100vh - 64px);
+}
+
+.app-sidenav {
+  width: 256px;
+
+  .nav-list {
+    padding: 16px 0;
+  }
+
+  .nav-item {
+    margin: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+
+    &:hover {
+      background-color: rgba(0, 0, 0, 0.04);
+    }
+
+    &.active {
+      background-color: rgba(63, 81, 181, 0.1);
+      color: #3f51b5;
+
+      mat-icon {
+        color: #3f51b5;
+      }
+    }
+
+    mat-icon {
+      margin-right: 16px;
+    }
+  }
+}
+
+.sidenav-content {
+  overflow-y: auto;
+
+  .content-wrapper {
+    padding: 24px;
+    min-height: 100%;
+  }
+}
+
+// Responsive styles
+@media (max-width: 768px) {
+  .app-sidenav {
+    width: 200px;
+  }
+
+  .sidenav-content {
+    .content-wrapper {
+      padding: 16px;
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .app-toolbar {
+    padding: 0 8px;
+
+    .app-title {
+      display: none;
+    }
+
+    .notification-btn,
+    .profile-btn {
+      display: none;
+    }
+  }
+
+  .app-sidenav {
+    width: 100%;
+  }
+}

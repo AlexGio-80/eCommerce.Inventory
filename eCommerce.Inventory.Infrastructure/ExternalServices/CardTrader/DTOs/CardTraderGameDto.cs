@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.DTOs;
 
 /// <summary>
@@ -5,7 +7,21 @@ namespace eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.DTOs;
 /// </summary>
 public class CardTraderGameDto
 {
+    [JsonPropertyName("id")]
     public int Id { get; set; }
+
+    [JsonPropertyName("name")]
     public string Name { get; set; }
-    public string Abbreviation { get; set; } // Es. "mtg", "ygo"
+
+    [JsonPropertyName("display_name")]
+    public string DisplayName { get; set; }
+}
+
+/// <summary>
+/// Wrapper for Card Trader Games API response
+/// </summary>
+public class CardTraderGamesResponseDto
+{
+    [JsonPropertyName("array")]
+    public List<CardTraderGameDto> Array { get; set; } = new();
 }

@@ -67,7 +67,7 @@ public class InventorySyncService
                 {
                     // UPDATE: Existing game
                     existingGame.Name = dto.Name;
-                    existingGame.Code = dto.Abbreviation;
+                    existingGame.Code = dto.DisplayName;
                     dbContext!.Set<Game>().Update(existingGame);
                     updateCount++;
                 }

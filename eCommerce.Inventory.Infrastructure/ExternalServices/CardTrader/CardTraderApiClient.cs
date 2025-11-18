@@ -36,8 +36,10 @@ public class CardTraderApiClient : ICardTraderApiService
             response.EnsureSuccessStatusCode();
 
             var jsonContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            var dtos = JsonSerializer.Deserialize<List<CardTraderGameDto>>(jsonContent)
-                ?? new List<CardTraderGameDto>();
+
+            // Deserialize into wrapper DTO to extract array
+            var responseWrapper = JsonSerializer.Deserialize<CardTraderGamesResponseDto>(jsonContent);
+            var dtos = responseWrapper?.Array ?? new List<CardTraderGameDto>();
 
             _logger.LogInformation("Fetched {GameCount} games from Card Trader API", dtos.Count);
             return dtos.Cast<dynamic>().ToList();

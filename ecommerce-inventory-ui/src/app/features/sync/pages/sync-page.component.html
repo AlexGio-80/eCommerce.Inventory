@@ -1,0 +1,180 @@
+<div class="sync-container">
+  <!-- Header -->
+  <div class="sync-header">
+    <h1>🔄 Sincronizzazione Card Trader</h1>
+    <p class="subtitle">Sincronizza i dati generici dal database Card Trader</p>
+  </div>
+
+  <!-- Last Sync Info -->
+  <mat-card class="info-card" *ngIf="lastSyncTime() as lastSync">
+    <mat-card-header>
+      <mat-card-title>Ultimo Sincronizzazione</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <p class="last-sync-time">{{ lastSync | date: 'full' }}</p>
+    </mat-card-content>
+  </mat-card>
+
+  <div class="sync-grid">
+    <!-- Entities Selection Card -->
+    <mat-card class="entities-card">
+      <mat-card-header>
+        <mat-card-title>Seleziona Entità da Sincronizzare</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <!-- Select All / Deselect All -->
+        <div class="select-all-row">
+          <mat-checkbox
+            [checked]="getSelectedCount() === entities().length"
+            [indeterminate]="
+              getSelectedCount() > 0 && getSelectedCount() < entities().length
+            "
+            (change)="toggleAllEntities($event.checked)"
+            class="select-all-checkbox"
+          >
+            <strong>Seleziona Tutto / Deseleziona Tutto</strong>
+          </mat-checkbox>
+        </div>
+
+        <mat-divider class="divider"></mat-divider>
+
+        <!-- Entity List -->
+        <div class="entities-list">
+          <mat-list>
+            <mat-list-item *ngFor="let entity of entities()">
+              <mat-icon matListItemIcon>{{ entity.icon }}</mat-icon>
+              <div matLine>
+                <mat-checkbox
+                  [checked]="entity.selected"
+                  (change)="toggleEntity(entity.key)"
+                  class="entity-checkbox"
+                >
+                  {{ entity.label }}
+                </mat-checkbox>
+              </div>
+
+              <!-- Status for each entity -->
+              <div matLine class="entity-status" *ngIf="entity.status !== 'pending'">
+                <mat-icon class="status-icon" [ngClass]="entity.status">
+                  {{ getStatusIcon(entity.status) }}
+                </mat-icon>
+                <span class="status-message">{{ entity.message }}</span>
+              </div>
+
+              <!-- Progress bar if syncing -->
+              <mat-progress-bar
+                *ngIf="entity.status === 'syncing'"
+                mode="indeterminate"
+                class="entity-progress"
+              ></mat-progress-bar>
+            </mat-list-item>
+          </mat-list>
+        </div>
+
+        <!-- Sync Buttons -->
+        <div class="action-buttons">
+          <button
+            mat-raised-button
+            color="primary"
+            (click)="startSync()"
+            [disabled]="isSyncing() || getSelectedCount() === 0"
+            class="sync-button"
+          >
+            <mat-icon *ngIf="!isSyncing()">sync</mat-icon>
+            <mat-spinner
+              *ngIf="isSyncing()"
+              diameter="20"
+              class="sync-spinner"
+            ></mat-spinner>
+            {{
+              isSyncing()
+                ? 'Sincronizzazione in corso...'
+                : 'Sincronizza Selezionati (' + getSelectedCount() + ')'
+            }}
+          </button>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <!-- Sync Stats Card -->
+    <mat-card class="stats-card">
+      <mat-card-header>
+        <mat-card-title>Statistiche Sincronizzazione</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <mat-icon class="stat-icon added">add_circle</mat-icon>
+            <div class="stat-content">
+              <p class="stat-label">Aggiunti</p>
+              <p class="stat-value">{{ syncStats().added }}</p>
+            </div>
+          </div>
+
+          <div class="stat-item">
+            <mat-icon class="stat-icon updated">update</mat-icon>
+            <div class="stat-content">
+              <p class="stat-label">Aggiornati</p>
+              <p class="stat-value">{{ syncStats().updated }}</p>
+            </div>
+          </div>
+
+          <div class="stat-item">
+            <mat-icon class="stat-icon failed">error</mat-icon>
+            <div class="stat-content">
+              <p class="stat-label">Errori</p>
+              <p class="stat-value">{{ syncStats().failed }}</p>
+            </div>
+          </div>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <!-- Sync Log Card -->
+  <mat-card class="log-card">
+    <mat-card-header>
+      <mat-card-title>Log di Sincronizzazione</mat-card-title>
+      <button
+        mat-icon-button
+        (click)="clearLogs()"
+        [disabled]="syncLogs().length === 0"
+        matTooltip="Cancella log"
+      >
+        <mat-icon>clear_all</mat-icon>
+      </button>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="log-list">
+        <div class="log-scroll" *ngIf="syncLogs().length > 0; else noLogs">
+          <div *ngFor="let log of syncLogs() | slice: -20" class="log-item">
+            <div class="log-item-header">
+              <mat-icon class="log-icon" [ngClass]="'log-' + log.type">
+                {{
+                  log.type === 'success'
+                    ? 'check_circle'
+                    : log.type === 'error'
+                      ? 'error'
+                      : log.type === 'warning'
+                        ? 'warning'
+                        : 'info'
+                }}
+              </mat-icon>
+              <span class="log-time">{{ log.timestamp | date: 'HH:mm:ss' }}</span>
+              <mat-chip-set>
+                <mat-chip [color]="getLogChipColor(log.type)" selected>
+                  {{ log.type }}
+                </mat-chip>
+              </mat-chip-set>
+            </div>
+            <div class="log-item-message">{{ log.message }}</div>
+          </div>
+        </div>
+
+        <ng-template #noLogs>
+          <p class="no-logs-text">Nessun log disponibile</p>
+        </ng-template>
+      </div>
+    </mat-card-content>
+  </mat-card>
+</div>

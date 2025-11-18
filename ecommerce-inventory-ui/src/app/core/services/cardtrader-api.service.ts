@@ -10,12 +10,13 @@ import {
   PagedResponse,
   ApiResponse,
 } from '../models';
+import { environment } from '../../../environments/environment';
 
 @Injectable({
   providedIn: 'root',
 })
 export class CardTraderApiService {
-  private apiUrl = 'http://localhost:5000/api/cardtrader';
+  private apiUrl = `${environment.api.baseUrl}/api/cardtrader`;
 
   constructor(private http: HttpClient) {}
 
@@ -105,7 +106,13 @@ export class CardTraderApiService {
   }
 
   // Sync
-  syncCardTraderData(): Observable<ApiResponse<any>> {
-    return this.http.post<ApiResponse<any>>(`${this.apiUrl}/sync`, {});
+  syncCardTraderData(request: {
+    syncGames?: boolean;
+    syncCategories?: boolean;
+    syncExpansions?: boolean;
+    syncBlueprints?: boolean;
+    syncProperties?: boolean;
+  }): Observable<ApiResponse<any>> {
+    return this.http.post<ApiResponse<any>>(`${this.apiUrl}/sync`, request);
   }
 }

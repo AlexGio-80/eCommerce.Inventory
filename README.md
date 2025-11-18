@@ -207,8 +207,36 @@ public async Task<IActionResult> ProcessWebhook([FromBody] WebhookPayload payloa
 - Build successful with 0 TypeScript errors
 - Routes configured: `/dashboard` and `/inventory`
 
+### ✅ Phase 3.2: Card Trader Data Initial Sync (COMPLETED)
+- **Frontend Implementation**:
+  - Sync Page Component with selective entity synchronization (Games, Categories, Expansions, Blueprints, Properties)
+  - Material checkboxes for entity selection with Select All/Deselect All functionality
+  - Real-time sync statistics display (Added, Updated, Failed counts)
+  - Detailed synchronization log with timestamp, type-based color coding, and scrollable history
+  - Auto-hide of success messages after 5 seconds for improved UX
+  - LocalStorage persistence of last sync time
+  - Responsive sidebar layout with navigation integration
+  - Build successful with 0 TypeScript errors
+  - Routes configured: `/sync` page with full Material Design integration
+
+- **Backend Implementation**:
+  - `CardTraderSyncController` with POST `/api/cardtrader/sync` endpoint
+  - `SyncRequestDto` for selective entity synchronization
+  - `SyncResponseDto` with detailed statistics per entity type
+  - `CardTraderSyncOrchestrator` service orchestrating Games → Expansions → Blueprints sync flow
+  - Upsert logic (INSERT new entities, UPDATE existing ones based on CardTraderId)
+  - Dynamic type conversion using JSON serialization for flexible DTO handling
+  - Proper HTTP BaseAddress configuration with trailing slash handling
+  - CORS middleware ordering fix for proper preflight handling
+  - HTTPS redirect disabled in Development environment
+  - `CardTraderGameDto` with JsonPropertyName attributes for proper API response deserialization
+  - `CardTraderGamesResponseDto` wrapper for handling wrapped API responses
+  - Updated DTOs to match Card Trader API response structure
+  - All compilation errors resolved (0 errors, 31 warnings)
+  - Full end-to-end sync flow tested from UI to database
+
 ### ⏳ Upcoming Phases
-- Phase 3.2: Card Trader Data Initial Sync (3.5h) - NEXT PRIORITY
+- Phase 3.3: Data Validation & Error Handling
 - Phase 4: API Controller Enhancement (Pagination, Response Envelopes, Error Handling)
 - Phase 5: Advanced Features (Polly Resilience, Caching, Rate Limiting)
 - Phase 6: Marketplace Expansion (eBay, Wallapop)

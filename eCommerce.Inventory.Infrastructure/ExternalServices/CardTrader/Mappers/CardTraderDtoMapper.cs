@@ -32,7 +32,7 @@ public class CardTraderDtoMapper
         {
             CardTraderId = dto.Id,
             Name = dto.Name,
-            Code = dto.Abbreviation
+            Code = dto.DisplayName
         };
     }
 

@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using eCommerce.Inventory.Application.DTOs;
 using eCommerce.Inventory.Application.Interfaces;
+using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader;
 
 namespace eCommerce.Inventory.Api.Controllers.CardTrader;
 
@@ -8,14 +10,58 @@ namespace eCommerce.Inventory.Api.Controllers.CardTrader;
 public class CardTraderSyncController : ControllerBase
 {
     private readonly ICardTraderApiService _cardTraderApiService;
+    private readonly CardTraderSyncOrchestrator _syncOrchestrator;
     private readonly ILogger<CardTraderSyncController> _logger;
 
     public CardTraderSyncController(
         ICardTraderApiService cardTraderApiService,
+        CardTraderSyncOrchestrator syncOrchestrator,
         ILogger<CardTraderSyncController> logger)
     {
         _cardTraderApiService = cardTraderApiService;
+        _syncOrchestrator = syncOrchestrator;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Perform selective synchronization of Card Trader data
+    /// Allows clients to choose which entities to sync (Games, Categories, Expansions, Blueprints, Properties)
+    /// </summary>
+    /// <param name="request">Sync request with entity selection flags</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Sync response with statistics (added, updated, failed)</returns>
+    [HttpPost]
+    public async Task<IActionResult> Sync(
+        [FromBody] SyncRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Received sync request: Games={Games}, Categories={Categories}, Expansions={Expansions}, Blueprints={Blueprints}, Properties={Properties}",
+            request.SyncGames, request.SyncCategories, request.SyncExpansions, request.SyncBlueprints, request.SyncProperties);
+
+        try
+        {
+            var response = await _syncOrchestrator.SyncAsync(request, cancellationToken);
+
+            if (response.ErrorMessage != null && request.IsEmpty)
+            {
+                return BadRequest(new { message = response.ErrorMessage, data = response });
+            }
+
+            _logger.LogInformation("Sync completed successfully. Added: {Added}, Updated: {Updated}, Failed: {Failed}",
+                response.Added, response.Updated, response.Failed);
+
+            return Ok(new
+            {
+                message = "Synchronization completed successfully",
+                data = response
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during selective sync");
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Error during synchronization", error = ex.Message });
+        }
     }
 
     /// <summary>

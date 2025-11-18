@@ -42,6 +42,7 @@ builder.Services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<Ap
 builder.Services.AddScoped<CardTraderDtoMapper>();
 builder.Services.AddScoped<InventorySyncService>();
 builder.Services.AddScoped<WebhookSignatureVerificationService>();
+builder.Services.AddScoped<CardTraderSyncOrchestrator>();
 
 // Register MediatR for CQRS command handling
 builder.Services.AddMediatR(config =>
@@ -54,14 +55,17 @@ var baseUrl = cardTraderApiConfig["BaseUrl"];
 
 builder.Services.AddHttpClient<ICardTraderApiService, CardTraderApiClient>(client =>
 {
-    client.BaseAddress = new Uri(baseUrl);
+    // Ensure BaseAddress ends with / for proper relative URL concatenation
+    var baseAddressUrl = baseUrl.EndsWith("/") ? baseUrl : baseUrl + "/";
+    client.BaseAddress = new Uri(baseAddressUrl);
     client.DefaultRequestHeaders.Add("Authorization", $"Bearer {bearerToken}");
     client.DefaultRequestHeaders.Add("Accept", "application/json");
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 
 // Register Card Trader background sync worker
-builder.Services.AddHostedService<CardTraderSyncWorker>();
+// NOTE: Temporarily disabled for development. Enable once Card Trader API is properly configured.
+// builder.Services.AddHostedService<CardTraderSyncWorker>();
 
 // Add CORS if needed for future frontend integration
 builder.Services.AddCors(options =>
@@ -91,7 +95,8 @@ if (app.Environment.IsDevelopment())
             logger.LogInformation("Database migrations applied successfully");
 
             // Seed initial data
-            await eCommerce.Inventory.Infrastructure.Persistence.SeedData.InitializeAsync(dbContext, logger);
+            // #Alex - Seeding is currently commented out. Uncomment and implement seed data as needed.
+            // await eCommerce.Inventory.Infrastructure.Persistence.SeedData.InitializeAsync(dbContext, logger);
         }
         catch (Exception ex)
         {
@@ -108,8 +113,13 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+else
+{
+    // Only use HTTPS redirect in production
+    app.UseHttpsRedirection();
+}
 
-app.UseHttpsRedirection();
+// Use CORS before authorization
 app.UseCors("AllowAll");
 
 // Use Serilog middleware for request/response logging

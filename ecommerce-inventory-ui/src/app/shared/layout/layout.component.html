@@ -1,0 +1,41 @@
+<mat-toolbar color="primary" class="app-toolbar">
+  <button mat-icon-button (click)="toggleSidenav()" class="toggle-sidenav">
+    <mat-icon>menu</mat-icon>
+  </button>
+  <span class="toolbar-spacer"></span>
+  <h1 class="app-title">eCommerce Inventory</h1>
+  <span class="toolbar-spacer"></span>
+  <button mat-icon-button class="notification-btn">
+    <mat-icon>notifications</mat-icon>
+  </button>
+  <button mat-icon-button class="profile-btn">
+    <mat-icon>account_circle</mat-icon>
+  </button>
+</mat-toolbar>
+
+<mat-sidenav-container class="sidenav-container">
+  <mat-sidenav
+    #sidenav
+    [opened]="isSidenavOpen()"
+    mode="side"
+    class="app-sidenav"
+  >
+    <mat-nav-list class="nav-list">
+      <mat-list-item
+        *ngFor="let item of navItems"
+        [class.active]="isActive(item.route)"
+        (click)="navigateTo(item.route)"
+        class="nav-item"
+      >
+        <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
+        <span matListItemTitle>{{ item.label }}</span>
+      </mat-list-item>
+    </mat-nav-list>
+  </mat-sidenav>
+
+  <mat-sidenav-content class="sidenav-content">
+    <div class="content-wrapper">
+      <router-outlet></router-outlet>
+    </div>
+  </mat-sidenav-content>
+</mat-sidenav-container>
