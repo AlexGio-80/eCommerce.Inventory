@@ -18,6 +18,7 @@ public interface ICardTraderApiService
     Task<IEnumerable<dynamic>> SyncGamesAsync(CancellationToken cancellationToken = default);
     Task<IEnumerable<dynamic>> SyncExpansionsAsync(CancellationToken cancellationToken = default);
     Task<IEnumerable<dynamic>> SyncBlueprintsForExpansionAsync(int expansionId, CancellationToken cancellationToken = default);
+    Task<IEnumerable<dynamic>> SyncCategoriesAsync(CancellationToken cancellationToken = default);
     Task<List<dynamic>> FetchMyProductsAsync(CancellationToken cancellationToken = default);
     Task<List<dynamic>> FetchNewOrdersAsync(CancellationToken cancellationToken = default);
 

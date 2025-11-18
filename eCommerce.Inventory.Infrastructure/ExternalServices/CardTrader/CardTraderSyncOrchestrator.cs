@@ -1,12 +1,13 @@
-using System.Text.Json;
 using eCommerce.Inventory.Application.DTOs;
 using eCommerce.Inventory.Application.Interfaces;
 using eCommerce.Inventory.Domain.Entities;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.DTOs;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Mappers;
+using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
 using eCommerce.Inventory.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader;
 
@@ -19,17 +20,20 @@ public class CardTraderSyncOrchestrator
     private readonly ICardTraderApiService _cardTraderApiService;
     private readonly CardTraderDtoMapper _dtoMapper;
     private readonly ApplicationDbContext _dbContext;
+    private readonly InventorySyncService _inventorySyncService;
     private readonly ILogger<CardTraderSyncOrchestrator> _logger;
 
     public CardTraderSyncOrchestrator(
         ICardTraderApiService cardTraderApiService,
         CardTraderDtoMapper dtoMapper,
         ApplicationDbContext dbContext,
+        InventorySyncService inventorySyncService,
         ILogger<CardTraderSyncOrchestrator> logger)
     {
         _cardTraderApiService = cardTraderApiService;
         _dtoMapper = dtoMapper;
         _dbContext = dbContext;
+        _inventorySyncService = inventorySyncService;
         _logger = logger;
     }
 
@@ -75,18 +79,17 @@ public class CardTraderSyncOrchestrator
                 await SyncBlueprintsAsync(response, cancellationToken);
             }
 
-            // Categories and Properties are metadata within Games and Blueprints
-            // For now, they are synced as part of the parent entities
+            // Sync Categories (with nested Properties and PropertyValues)
             if (request.SyncCategories)
             {
-                response.Categories.WasRequested = true;
-                _logger.LogInformation("Categories synced as part of Games synchronization");
+                await SyncCategoriesAsync(response, cancellationToken);
             }
 
+            // Properties sync currently handled as part of Categories (since they're nested)
             if (request.SyncProperties)
             {
                 response.Properties.WasRequested = true;
-                _logger.LogInformation("Properties synced as part of Blueprints synchronization");
+                _logger.LogInformation("Properties are synced as part of Categories synchronization");
             }
 
             response.SyncEndTime = DateTime.UtcNow;
@@ -241,6 +244,42 @@ public class CardTraderSyncOrchestrator
             response.Blueprints.ErrorMessage = ex.Message;
             response.Failed++;
             _logger.LogError(ex, "Error syncing blueprints");
+        }
+    }
+
+    /// <summary>
+    /// Syncs categories (with nested properties and property values) from Card Trader API to database
+    /// </summary>
+    private async Task SyncCategoriesAsync(SyncResponseDto response, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogInformation("Starting Categories sync");
+
+            // Fetch categories from API
+            var categoryDtos = await _cardTraderApiService.SyncCategoriesAsync(cancellationToken);
+            var categoryList = ConvertDynamicToList<CardTraderCategoryDto>(categoryDtos);
+
+            _logger.LogInformation("Fetched {CategoryCount} categories from Card Trader API", categoryList.Count);
+
+            // Use InventorySyncService to handle the full upsert logic with properties
+            await _inventorySyncService.SyncCategoriesAsync(categoryList, cancellationToken);
+
+            // Count the synchronized categories (we'll track as "Added" for now since InventorySyncService handles the detail)
+            response.Categories.WasRequested = true;
+            response.Categories.Added = categoryList.Count;
+
+            response.Added += categoryList.Count;
+
+            _logger.LogInformation("Categories sync completed. Synced: {CategoryCount}",
+                categoryList.Count);
+        }
+        catch (Exception ex)
+        {
+            response.Categories.WasRequested = true;
+            response.Categories.ErrorMessage = ex.Message;
+            response.Failed++;
+            _logger.LogError(ex, "Error syncing categories");
         }
     }
 

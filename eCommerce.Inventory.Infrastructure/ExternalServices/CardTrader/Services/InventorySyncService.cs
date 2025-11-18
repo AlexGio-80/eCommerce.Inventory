@@ -215,6 +215,12 @@ public class InventorySyncService
             _logger.LogInformation("Starting sync for {CategoryCount} categories", categoryDtos.Count);
 
             var dbContext = _context as DbContext;
+
+            // Load all games to map CardTraderId -> Id
+            var allGames = await dbContext!.Set<Game>()
+                .AsNoTracking()
+                .ToListAsync(cancellationToken);
+
             var existingCategories = await dbContext!.Set<Category>()
                 .AsNoTracking()
                 .Include(c => c.Properties)
@@ -222,16 +228,40 @@ public class InventorySyncService
                 .Where(c => categoryDtos.Select(d => d.Id).Contains(c.CardTraderId))
                 .ToListAsync(cancellationToken);
 
-            int insertCount = 0, updateCount = 0;
+            int insertCount = 0, updateCount = 0, skippedCount = 0;
 
             foreach (var dto in categoryDtos)
             {
+                // Find the corresponding Game by CardTraderId
+                var gameEntity = allGames.FirstOrDefault(g => g.CardTraderId == dto.GameId);
+                if (gameEntity == null)
+                {
+                    _logger.LogWarning("Category {CategoryId} references Game {GameId} which doesn't exist in database. Skipping.",
+                        dto.Id, dto.GameId);
+                    skippedCount++;
+                    continue;
+                }
+
                 var existingCategory = existingCategories.FirstOrDefault(c => c.CardTraderId == dto.Id);
 
                 if (existingCategory == null)
                 {
                     // INSERT: New category with properties
-                    var newCategory = _mapper.MapCategory(dto);
+                    var newCategory = new Category
+                    {
+                        CardTraderId = dto.Id,
+                        Name = dto.Name,
+                        GameId = gameEntity.Id, // Use the database Game Id
+                        Properties = dto.Properties?.Select(p => new Property
+                        {
+                            Name = p.Name,
+                            Type = p.Type,
+                            PossibleValues = p.PossibleValues?
+                                .Select(v => new PropertyValue { Value = v.ToString() ?? string.Empty })
+                                .ToList() ?? new List<PropertyValue>()
+                        }).ToList() ?? new List<Property>()
+                    };
+
                     dbContext!.Set<Category>().Add(newCategory);
                     insertCount++;
                 }
@@ -239,7 +269,7 @@ public class InventorySyncService
                 {
                     // UPDATE: Existing category
                     existingCategory.Name = dto.Name;
-                    existingCategory.GameId = dto.GameId;
+                    existingCategory.GameId = gameEntity.Id; // Use the database Game Id
 
                     // Update properties (simple approach: delete all and recreate)
                     var propertiesToDelete = existingCategory.Properties.ToList();
@@ -269,8 +299,8 @@ public class InventorySyncService
             }
 
             await dbContext!.SaveChangesAsync(cancellationToken);
-            _logger.LogInformation("Categories synced: {InsertCount} inserted, {UpdateCount} updated",
-                insertCount, updateCount);
+            _logger.LogInformation("Categories synced: {InsertCount} inserted, {UpdateCount} updated, {SkippedCount} skipped",
+                insertCount, updateCount, skippedCount);
         }
         catch (Exception ex)
         {

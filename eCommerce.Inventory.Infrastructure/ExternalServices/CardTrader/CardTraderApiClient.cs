@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using eCommerce.Inventory.Application.Interfaces;
 using eCommerce.Inventory.Domain.Entities;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.DTOs;
@@ -118,9 +119,25 @@ public class CardTraderApiClient : ICardTraderApiService
 
             var jsonContent = await response.Content.ReadAsStringAsync(cancellationToken);
 
-            // Deserialize into wrapper DTO to extract array (same pattern as games)
-            var responseWrapper = JsonSerializer.Deserialize<CardTraderCategoriesResponseDto>(jsonContent);
-            var dtos = responseWrapper?.Array ?? new List<CardTraderCategoryDto>();
+            // Log the actual JSON response for debugging
+            _logger.LogInformation("Categories API Response (first 500 chars): {Response}",
+                jsonContent.Length > 500 ? jsonContent.Substring(0, 500) : jsonContent);
+
+            List<CardTraderCategoryDto> dtos = new();
+
+            try
+            {
+                // First try to deserialize as wrapper with array (same pattern as games)
+                var responseWrapper = JsonSerializer.Deserialize<CardTraderCategoriesResponseDto>(jsonContent);
+                dtos = responseWrapper?.Array ?? new List<CardTraderCategoryDto>();
+            }
+            catch (JsonException)
+            {
+                // If wrapper format fails, try deserializing as direct array
+                _logger.LogInformation("Wrapper format failed, trying direct array deserialization");
+                dtos = JsonSerializer.Deserialize<List<CardTraderCategoryDto>>(jsonContent)
+                    ?? new List<CardTraderCategoryDto>();
+            }
 
             _logger.LogInformation("Fetched {CategoryCount} categories from Card Trader API", dtos.Count);
             return dtos.Cast<dynamic>().ToList();
