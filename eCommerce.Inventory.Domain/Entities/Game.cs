@@ -8,4 +8,5 @@ public class Game
     public string Code { get; set; } // Es. "mtg", "ygo"
 
     public virtual ICollection<Expansion> Expansions { get; set; } = new List<Expansion>();
+    public virtual ICollection<Category> Categories { get; set; } = new List<Category>();
 }

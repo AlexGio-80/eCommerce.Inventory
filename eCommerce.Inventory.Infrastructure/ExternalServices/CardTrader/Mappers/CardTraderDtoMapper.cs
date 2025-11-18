@@ -205,4 +205,77 @@ public class CardTraderDtoMapper
 
         return dtos.Select(MapProductToInventoryItem).ToList();
     }
+
+    /// <summary>
+    /// Maps CardTraderCategoryDto to Category entity
+    /// Includes mapping of properties and their possible values
+    /// </summary>
+    public Category MapCategory(CardTraderCategoryDto dto)
+    {
+        if (dto == null)
+        {
+            _logger.LogWarning("Attempted to map null CategoryDto");
+            throw new ArgumentNullException(nameof(dto), "CategoryDto cannot be null");
+        }
+
+        var category = new Category
+        {
+            CardTraderId = dto.Id,
+            Name = dto.Name,
+            GameId = dto.GameId
+        };
+
+        // Map properties within the category
+        if (dto.Properties != null && dto.Properties.Any())
+        {
+            category.Properties = dto.Properties.Select(p => MapProperty(p)).ToList();
+        }
+
+        return category;
+    }
+
+    /// <summary>
+    /// Maps CardTraderPropertyDto to Property entity
+    /// Includes mapping of possible values
+    /// </summary>
+    private Property MapProperty(CardTraderPropertyDto dto)
+    {
+        if (dto == null)
+        {
+            _logger.LogWarning("Attempted to map null PropertyDto");
+            throw new ArgumentNullException(nameof(dto), "PropertyDto cannot be null");
+        }
+
+        var property = new Property
+        {
+            Name = dto.Name,
+            Type = dto.Type
+        };
+
+        // Map possible values for this property
+        if (dto.PossibleValues != null && dto.PossibleValues.Any())
+        {
+            property.PossibleValues = dto.PossibleValues
+                .Select(v => new PropertyValue { Value = v.ToString() ?? string.Empty })
+                .ToList();
+        }
+
+        return property;
+    }
+
+    /// <summary>
+    /// Maps multiple CardTraderCategoryDto to Category entities
+    /// </summary>
+    public List<Category> MapCategories(List<CardTraderCategoryDto> dtos)
+    {
+        if (dtos == null || !dtos.Any())
+        {
+            _logger.LogInformation("No categories to map");
+            return new List<Category>();
+        }
+
+        _logger.LogInformation("Mapping {CategoryCount} categories from Card Trader", dtos.Count);
+
+        return dtos.Select(MapCategory).ToList();
+    }
 }

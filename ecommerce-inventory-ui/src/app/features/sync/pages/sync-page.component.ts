@@ -51,10 +51,10 @@ export class SyncPageComponent implements OnInit {
   // Entities to sync
   entities = signal<SyncEntity[]>([
     { key: 'games', label: 'Giochi', icon: 'games', selected: true, progress: 0, status: 'pending', message: '' },
-    { key: 'categories', label: 'Categorie', icon: 'category', selected: true, progress: 0, status: 'pending', message: '' },
+    { key: 'categories', label: 'Categorie (Proprietà)', icon: 'category', selected: true, progress: 0, status: 'pending', message: '' },
     { key: 'expansions', label: 'Espansioni', icon: 'extension', selected: true, progress: 0, status: 'pending', message: '' },
-    { key: 'blueprints', label: 'Blueprints', icon: 'dashboard', selected: true, progress: 0, status: 'pending', message: '' },
-    { key: 'properties', label: 'Proprietà', icon: 'tune', selected: true, progress: 0, status: 'pending', message: '' },
+    { key: 'blueprints', label: 'Blueprints (Carte)', icon: 'dashboard', selected: true, progress: 0, status: 'pending', message: '' },
+    { key: 'properties', label: 'Proprietà Aggiuntive', icon: 'tune', selected: false, progress: 0, status: 'pending', message: '' },
   ]);
 
   // Sync state
@@ -118,9 +118,11 @@ export class SyncPageComponent implements OnInit {
 
     try {
       // Build the sync request with selected entities
+      // Note: 'categories' key maps to 'syncCategories' (includes category properties)
+      // Note: 'properties' key currently not used (reserved for future expansion)
       const syncRequest = {
         syncGames: selectedEntities.some((e) => e.key === 'games'),
-        syncCategories: selectedEntities.some((e) => e.key === 'categories'),
+        syncCategories: selectedEntities.some((e) => e.key === 'categories'), // Syncs categories with their properties/values
         syncExpansions: selectedEntities.some((e) => e.key === 'expansions'),
         syncBlueprints: selectedEntities.some((e) => e.key === 'blueprints'),
         syncProperties: selectedEntities.some((e) => e.key === 'properties'),

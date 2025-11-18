@@ -13,6 +13,9 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<Game> Games { get; set; }
     public DbSet<Expansion> Expansions { get; set; }
     public DbSet<Blueprint> Blueprints { get; set; }
+    public DbSet<Category> Categories { get; set; }
+    public DbSet<Property> Properties { get; set; }
+    public DbSet<PropertyValue> PropertyValues { get; set; }
     public DbSet<InventoryItem> InventoryItems { get; set; }
     public DbSet<Order> Orders { get; set; }
     public DbSet<OrderItem> OrderItems { get; set; }
@@ -26,6 +29,27 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             .HasMany(g => g.Expansions)
             .WithOne(e => e.Game)
             .HasForeignKey(e => e.GameId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Game -> Category (One-to-Many)
+        modelBuilder.Entity<Game>()
+            .HasMany(g => g.Categories)
+            .WithOne(c => c.Game)
+            .HasForeignKey(c => c.GameId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Category -> Property (One-to-Many)
+        modelBuilder.Entity<Category>()
+            .HasMany(c => c.Properties)
+            .WithOne(p => p.Category)
+            .HasForeignKey(p => p.CategoryId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Property -> PropertyValue (One-to-Many)
+        modelBuilder.Entity<Property>()
+            .HasMany(p => p.PossibleValues)
+            .WithOne(pv => pv.Property)
+            .HasForeignKey(pv => pv.PropertyId)
             .OnDelete(DeleteBehavior.Cascade);
 
         // Expansion -> Blueprint (One-to-Many)

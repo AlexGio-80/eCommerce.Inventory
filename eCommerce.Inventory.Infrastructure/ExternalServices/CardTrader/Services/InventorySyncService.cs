@@ -199,6 +199,87 @@ public class InventorySyncService
     }
 
     /// <summary>
+    /// Syncs categories from Card Trader API into the database
+    /// Handles INSERT/UPDATE for categories and their properties/values
+    /// </summary>
+    public async Task SyncCategoriesAsync(List<CardTraderCategoryDto> categoryDtos, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (!categoryDtos.Any())
+            {
+                _logger.LogInformation("No categories to sync");
+                return;
+            }
+
+            _logger.LogInformation("Starting sync for {CategoryCount} categories", categoryDtos.Count);
+
+            var dbContext = _context as DbContext;
+            var existingCategories = await dbContext!.Set<Category>()
+                .AsNoTracking()
+                .Include(c => c.Properties)
+                .ThenInclude(p => p.PossibleValues)
+                .Where(c => categoryDtos.Select(d => d.Id).Contains(c.CardTraderId))
+                .ToListAsync(cancellationToken);
+
+            int insertCount = 0, updateCount = 0;
+
+            foreach (var dto in categoryDtos)
+            {
+                var existingCategory = existingCategories.FirstOrDefault(c => c.CardTraderId == dto.Id);
+
+                if (existingCategory == null)
+                {
+                    // INSERT: New category with properties
+                    var newCategory = _mapper.MapCategory(dto);
+                    dbContext!.Set<Category>().Add(newCategory);
+                    insertCount++;
+                }
+                else
+                {
+                    // UPDATE: Existing category
+                    existingCategory.Name = dto.Name;
+                    existingCategory.GameId = dto.GameId;
+
+                    // Update properties (simple approach: delete all and recreate)
+                    var propertiesToDelete = existingCategory.Properties.ToList();
+                    foreach (var prop in propertiesToDelete)
+                    {
+                        dbContext!.Set<Property>().Remove(prop);
+                    }
+
+                    // Add updated properties
+                    if (dto.Properties != null && dto.Properties.Any())
+                    {
+                        var newProperties = dto.Properties.Select(p => new Property
+                        {
+                            Name = p.Name,
+                            Type = p.Type,
+                            PossibleValues = p.PossibleValues?
+                                .Select(v => new PropertyValue { Value = v.ToString() ?? string.Empty })
+                                .ToList() ?? new List<PropertyValue>()
+                        }).ToList();
+
+                        existingCategory.Properties = newProperties;
+                    }
+
+                    dbContext!.Set<Category>().Update(existingCategory);
+                    updateCount++;
+                }
+            }
+
+            await dbContext!.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("Categories synced: {InsertCount} inserted, {UpdateCount} updated",
+                insertCount, updateCount);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error syncing categories from Card Trader");
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Syncs inventory products from Card Trader API into the database
     /// Handles INSERT/UPDATE/DELETE merge logic:
     /// - INSERT: New product not in DB

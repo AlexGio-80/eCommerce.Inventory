@@ -104,6 +104,35 @@ public class CardTraderApiClient : ICardTraderApiService
     }
 
     /// <summary>
+    /// Sync all categories from Card Trader API (returns DTOs for mapping)
+    /// Categories define product attributes and their possible values for each game
+    /// </summary>
+    public async Task<IEnumerable<dynamic>> SyncCategoriesAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Fetching categories from Card Trader API");
+
+            var response = await _httpClient.GetAsync("categories", cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            var jsonContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            // Deserialize into wrapper DTO to extract array (same pattern as games)
+            var responseWrapper = JsonSerializer.Deserialize<CardTraderCategoriesResponseDto>(jsonContent);
+            var dtos = responseWrapper?.Array ?? new List<CardTraderCategoryDto>();
+
+            _logger.LogInformation("Fetched {CategoryCount} categories from Card Trader API", dtos.Count);
+            return dtos.Cast<dynamic>().ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching categories from Card Trader API");
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Create a new product on Card Trader and return the product ID
     /// </summary>
     public async Task<int> CreateProductOnCardTraderAsync(InventoryItem item, CancellationToken cancellationToken = default)
