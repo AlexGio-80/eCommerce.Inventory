@@ -372,3 +372,6 @@ appsettings.*.json
 
 # Local user secrets
 secrets.json
+
+# Nested git repositories (submodule mistakes)
+eCommerce.Inventory/
