@@ -4,6 +4,8 @@ using eCommerce.Inventory.Application.Interfaces;
 using eCommerce.Inventory.Infrastructure.Persistence;
 using eCommerce.Inventory.Infrastructure.Persistence.Repositories;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader;
+using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Mappers;
+using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,6 +36,10 @@ builder.Services.AddScoped<IInventoryItemRepository, InventoryItemRepository>();
 
 // Register DbContext as IApplicationDbContext for dependency injection
 builder.Services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
+
+// Register Card Trader mappers and sync services
+builder.Services.AddScoped<CardTraderDtoMapper>();
+builder.Services.AddScoped<InventorySyncService>();
 
 // Configure HttpClient for Card Trader API with Bearer Token authentication
 var cardTraderApiConfig = builder.Configuration.GetSection("CardTraderApi");

@@ -2,14 +2,27 @@ using eCommerce.Inventory.Domain.Entities;
 
 namespace eCommerce.Inventory.Application.Interfaces;
 
+/// <summary>
+/// Interface for Card Trader API service
+/// Defines contract for fetching and managing data from Card Trader
+/// Following SPECIFICATIONS: Dependency Inversion (depend on abstractions)
+///
+/// Design Note: Returns dynamic objects to support Separation of Concerns
+/// - CardTraderApiService: Fetches raw data from API → returns DTOs (as dynamic)
+/// - CardTraderDtoMapper: Converts DTOs → Domain Entities
+/// - InventorySyncService: Persists entities → saves to database
+/// </summary>
 public interface ICardTraderApiService
 {
-    Task<IEnumerable<Game>> SyncGamesAsync(CancellationToken cancellationToken = default);
-    Task<IEnumerable<Expansion>> SyncExpansionsAsync(CancellationToken cancellationToken = default);
-    Task<IEnumerable<Blueprint>> SyncBlueprintsForExpansionAsync(int expansionId, CancellationToken cancellationToken = default);
+    // Fetch methods - return DTOs (as dynamic) for mapping layer to handle
+    Task<IEnumerable<dynamic>> SyncGamesAsync(CancellationToken cancellationToken = default);
+    Task<IEnumerable<dynamic>> SyncExpansionsAsync(CancellationToken cancellationToken = default);
+    Task<IEnumerable<dynamic>> SyncBlueprintsForExpansionAsync(int expansionId, CancellationToken cancellationToken = default);
+    Task<List<dynamic>> FetchMyProductsAsync(CancellationToken cancellationToken = default);
+    Task<List<dynamic>> FetchNewOrdersAsync(CancellationToken cancellationToken = default);
+
+    // Mutation methods - operate on Card Trader marketplace
     Task<int> CreateProductOnCardTraderAsync(InventoryItem item, CancellationToken cancellationToken = default);
     Task UpdateProductOnCardTraderAsync(InventoryItem item, CancellationToken cancellationToken = default);
     Task DeleteProductOnCardTraderAsync(int cardTraderProductId, CancellationToken cancellationToken = default);
-    Task<IEnumerable<Order>> FetchNewOrdersAsync(CancellationToken cancellationToken = default);
-    Task<IEnumerable<InventoryItem>> FetchMyProductsAsync(CancellationToken cancellationToken = default);
 }

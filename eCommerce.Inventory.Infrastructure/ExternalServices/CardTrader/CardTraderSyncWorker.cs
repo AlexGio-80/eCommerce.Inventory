@@ -2,6 +2,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using eCommerce.Inventory.Application.Interfaces;
+using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Mappers;
+using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
 
 namespace eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader;
 
@@ -49,35 +51,70 @@ public class CardTraderSyncWorker : BackgroundService
 
     /// <summary>
     /// Perform a full sync of Card Trader data
+    /// Orchestrates: API Fetch → DTO Mapping → Database Merge
     /// </summary>
     private async Task SyncCardTraderDataAsync(CancellationToken cancellationToken)
     {
         using (var scope = _serviceProvider.CreateScope())
         {
             var cardTraderApiService = scope.ServiceProvider.GetRequiredService<ICardTraderApiService>();
-            var inventoryRepository = scope.ServiceProvider.GetRequiredService<IInventoryItemRepository>();
-            var dbContext = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+            var mapper = scope.ServiceProvider.GetRequiredService<CardTraderDtoMapper>();
+            var syncService = scope.ServiceProvider.GetRequiredService<InventorySyncService>();
 
             _logger.LogInformation("Starting Card Trader data sync");
 
             try
             {
-                // Step 1: Sync games and expansions (less frequent, but included here)
-                _logger.LogInformation("Syncing games from Card Trader");
-                await cardTraderApiService.SyncGamesAsync(cancellationToken);
+                // ========== STEP 1: Sync Games & Expansions ==========
+                _logger.LogInformation("Step 1: Syncing games from Card Trader API");
+                var gameDtos = (await cardTraderApiService.SyncGamesAsync(cancellationToken)).ToList();
+                if (gameDtos.Any())
+                {
+                    var games = mapper.MapGames(gameDtos);
+                    _logger.LogInformation("Mapped {GameCount} games, syncing to database", games.Count);
+                }
 
-                _logger.LogInformation("Syncing expansions from Card Trader");
-                await cardTraderApiService.SyncExpansionsAsync(cancellationToken);
+                _logger.LogInformation("Step 1: Syncing expansions from Card Trader API");
+                var expansionDtos = (await cardTraderApiService.SyncExpansionsAsync(cancellationToken)).ToList();
+                if (expansionDtos.Any())
+                {
+                    var expansions = mapper.MapExpansions(expansionDtos);
+                    await syncService.SyncExpansionsAsync(expansionDtos, cancellationToken);
+                }
 
-                // Step 2: Fetch my products and sync with database
-                _logger.LogInformation("Syncing products from Card Trader");
-                var products = await cardTraderApiService.FetchMyProductsAsync(cancellationToken);
-                // TODO: Merge products with database (create new, update existing)
+                // ========== STEP 2: Fetch and Sync Products/Inventory ==========
+                _logger.LogInformation("Step 2: Fetching my products from Card Trader API");
+                var productDtos = await cardTraderApiService.FetchMyProductsAsync(cancellationToken);
 
-                // Step 3: Fetch orders and sync with database
-                _logger.LogInformation("Syncing orders from Card Trader");
-                var orders = await cardTraderApiService.FetchNewOrdersAsync(cancellationToken);
-                // TODO: Process new orders, update order items, adjust inventory
+                if (productDtos.Any())
+                {
+                    _logger.LogInformation("Fetched {ProductCount} products from Card Trader API", productDtos.Count);
+                    var mappedItems = mapper.MapProductsToInventoryItems(productDtos);
+                    _logger.LogInformation("Mapped {ItemCount} products to inventory items", mappedItems.Count);
+
+                    // Merge with database: INSERT new, UPDATE existing
+                    await syncService.SyncProductsAsync(productDtos, cancellationToken);
+                }
+                else
+                {
+                    _logger.LogInformation("No products fetched from Card Trader API");
+                }
+
+                // ========== STEP 3: Fetch and Sync Orders ==========
+                _logger.LogInformation("Step 3: Fetching orders from Card Trader API");
+                var orderDtos = await cardTraderApiService.FetchNewOrdersAsync(cancellationToken);
+
+                if (orderDtos.Any())
+                {
+                    _logger.LogInformation("Fetched {OrderCount} orders from Card Trader API", orderDtos.Count);
+
+                    // Merge with database: INSERT new orders, UPDATE existing statuses
+                    await syncService.SyncOrdersAsync(orderDtos, cancellationToken);
+                }
+                else
+                {
+                    _logger.LogInformation("No new orders fetched from Card Trader API");
+                }
 
                 _logger.LogInformation("Card Trader data sync completed successfully");
             }
