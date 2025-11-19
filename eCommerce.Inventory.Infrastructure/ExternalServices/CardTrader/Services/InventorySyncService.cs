@@ -178,11 +178,15 @@ public class InventorySyncService
                 }
                 else
                 {
-                    // UPDATE: Existing blueprint
-                    existingBlueprint.Name = dto.Name;
-                    existingBlueprint.Rarity = dto.Rarity;
-                    existingBlueprint.ExpansionId = dto.ExpansionId;
-                    dbContext!.Set<Blueprint>().Update(existingBlueprint);
+                    // UPDATE: Existing blueprint - map and update all fields
+                    var updatedBlueprint = _mapper.MapBlueprint(dto);
+
+                    // Preserve the ID (local database ID)
+                    updatedBlueprint.Id = existingBlueprint.Id;
+                    updatedBlueprint.CreatedAt = existingBlueprint.CreatedAt;
+                    updatedBlueprint.UpdatedAt = DateTime.UtcNow;
+
+                    dbContext!.Set<Blueprint>().Update(updatedBlueprint);
                     updateCount++;
                 }
             }

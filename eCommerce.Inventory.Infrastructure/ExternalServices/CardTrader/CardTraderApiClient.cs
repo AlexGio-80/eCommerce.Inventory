@@ -80,6 +80,7 @@ public class CardTraderApiClient : ICardTraderApiService
 
     /// <summary>
     /// Sync blueprints for a specific expansion from Card Trader API (returns DTOs for mapping)
+    /// Returns empty list if expansion has no blueprints or API returns 404
     /// </summary>
     public async Task<IEnumerable<dynamic>> SyncBlueprintsForExpansionAsync(int expansionId, CancellationToken cancellationToken = default)
     {
@@ -87,7 +88,15 @@ public class CardTraderApiClient : ICardTraderApiService
         {
             _logger.LogInformation("Fetching blueprints for expansion {ExpansionId} from Card Trader API", expansionId);
 
-            var response = await _httpClient.GetAsync($"expansions/{expansionId}/cards", cancellationToken);
+            var response = await _httpClient.GetAsync($"expansions/{expansionId}", cancellationToken);
+
+            // Handle 404 gracefully - expansion might not have blueprints or endpoint might not exist
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                _logger.LogWarning("No blueprints found for expansion {ExpansionId} (HTTP 404) - continuing with next expansion", expansionId);
+                return new List<dynamic>();
+            }
+
             response.EnsureSuccessStatusCode();
 
             var jsonContent = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -100,7 +109,8 @@ public class CardTraderApiClient : ICardTraderApiService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching blueprints for expansion {ExpansionId} from Card Trader API", expansionId);
-            throw;
+            // Return empty list instead of throwing - don't block other expansions
+            return new List<dynamic>();
         }
     }
 

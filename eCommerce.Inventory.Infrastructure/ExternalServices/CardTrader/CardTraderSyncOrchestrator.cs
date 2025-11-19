@@ -195,9 +195,12 @@ public class CardTraderSyncOrchestrator
         {
             _logger.LogInformation("Starting Blueprints sync");
 
-            // Get all expansions from database
-            var expansions = await _dbContext.Expansions.ToListAsync(cancellationToken);
-            _logger.LogInformation("Found {ExpansionCount} expansions in database", expansions.Count);
+            // Get expansions only for enabled games
+            var expansions = await _dbContext.Expansions
+                .Include(e => e.Game)
+                .Where(e => e.Game.IsEnabled)
+                .ToListAsync(cancellationToken);
+            _logger.LogInformation("Found {ExpansionCount} expansions for enabled games in database", expansions.Count);
 
             var totalAdded = 0;
             var totalUpdated = 0;
@@ -249,6 +252,7 @@ public class CardTraderSyncOrchestrator
 
     /// <summary>
     /// Syncs categories (with nested properties and property values) from Card Trader API to database
+    /// Only syncs categories for enabled games
     /// </summary>
     private async Task SyncCategoriesAsync(SyncResponseDto response, CancellationToken cancellationToken)
     {
@@ -256,14 +260,28 @@ public class CardTraderSyncOrchestrator
         {
             _logger.LogInformation("Starting Categories sync");
 
+            // Load all enabled games for filtering
+            var enabledGames = await _dbContext.Games
+                .AsNoTracking()
+                .Where(g => g.IsEnabled)
+                .ToListAsync(cancellationToken);
+
             // Fetch categories from API
             var categoryDtos = await _cardTraderApiService.SyncCategoriesAsync(cancellationToken);
             var categoryList = ConvertDynamicToList<CardTraderCategoryDto>(categoryDtos);
 
             _logger.LogInformation("Fetched {CategoryCount} categories from Card Trader API", categoryList.Count);
 
+            // Filter categories to only include those for enabled games
+            var filteredCategories = categoryList
+                .Where(c => enabledGames.Any(g => g.CardTraderId == c.GameId))
+                .ToList();
+
+            _logger.LogInformation("Filtered to {FilteredCategoryCount} categories for enabled games (skipped {SkippedCount})",
+                filteredCategories.Count, categoryList.Count - filteredCategories.Count);
+
             // Use InventorySyncService to handle the full upsert logic with properties
-            await _inventorySyncService.SyncCategoriesAsync(categoryList, cancellationToken);
+            await _inventorySyncService.SyncCategoriesAsync(filteredCategories, cancellationToken);
 
             // Count the synchronized categories (we'll track as "Added" for now since InventorySyncService handles the detail)
             response.Categories.WasRequested = true;
@@ -348,6 +366,14 @@ public class CardTraderSyncOrchestrator
                     failed++;
                     _logger.LogWarning("Expansion {ExpansionId} references Game {GameId} which doesn't exist in database. Skipping.",
                         expansion.CardTraderId, expansion.GameId);
+                    continue;
+                }
+
+                // Skip expansions for disabled games
+                if (!gameEntity.IsEnabled)
+                {
+                    _logger.LogDebug("Skipping expansion {ExpansionId} ({ExpansionName}) - Game {GameId} ({GameName}) is not enabled",
+                        expansion.CardTraderId, expansion.Name, gameEntity.Id, gameEntity.Name);
                     continue;
                 }
 

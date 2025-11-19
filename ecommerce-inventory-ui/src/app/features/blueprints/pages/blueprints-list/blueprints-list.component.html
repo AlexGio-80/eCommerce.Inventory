@@ -1,0 +1,166 @@
+<div class="blueprints-container">
+  <mat-toolbar color="primary">
+    <h1>🎴 Blueprints Catalog</h1>
+    <span class="spacer"></span>
+    <span class="blueprint-count" *ngIf="totalBlueprints > 0">
+      {{ totalBlueprints }} blueprints
+    </span>
+  </mat-toolbar>
+
+  <!-- Filters Card -->
+  <mat-card class="filters-card">
+    <mat-card-content>
+      <div class="filter-row">
+        <!-- Search -->
+        <mat-form-field appearance="fill" class="search-field">
+          <mat-label>Search blueprints</mat-label>
+          <input
+            matInput
+            placeholder="Card name..."
+            (keyup)="onSearch($event.target.value)"
+            [(ngModel)]="searchTerm"
+          />
+          <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
+
+        <!-- Game Filter -->
+        <mat-form-field appearance="fill" class="filter-field">
+          <mat-label>Game</mat-label>
+          <mat-select [value]="selectedGame" (selectionChange)="onGameSelected($event.value)">
+            <mat-option [value]="null">All Games</mat-option>
+            <mat-option *ngFor="let game of games$ | async" [value]="game">
+              {{ game.name }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <!-- Expansion Filter -->
+        <mat-form-field appearance="fill" class="filter-field" *ngIf="selectedGame">
+          <mat-label>Expansion</mat-label>
+          <mat-select [value]="selectedExpansion" (selectionChange)="onExpansionSelected($event.value)">
+            <mat-option [value]="null">All Expansions</mat-option>
+            <mat-option *ngFor="let expansion of expansions$ | async" [value]="expansion">
+              {{ expansion.name }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Loading Indicator -->
+  <div *ngIf="isLoading" class="loading-container">
+    <mat-spinner diameter="50"></mat-spinner>
+    <p>Loading blueprints...</p>
+  </div>
+
+  <!-- Blueprints Table -->
+  <div *ngIf="!isLoading" class="table-container">
+    <mat-table [dataSource]="(blueprints$ | async) || []" class="blueprints-table">
+      <!-- ID Column -->
+      <ng-container matColumnDef="id">
+        <mat-header-cell *matHeaderCellDef>ID</mat-header-cell>
+        <mat-cell *matCellDef="let blueprint">
+          <code>{{ blueprint.id }}</code>
+        </mat-cell>
+      </ng-container>
+
+      <!-- Name Column -->
+      <ng-container matColumnDef="name">
+        <mat-header-cell *matHeaderCellDef>Card Name</mat-header-cell>
+        <mat-cell *matCellDef="let blueprint">
+          <div class="card-name">
+            <img
+              *ngIf="blueprint.imageUrl"
+              [src]="blueprint.imageUrl"
+              class="card-image"
+              [alt]="blueprint.name"
+            />
+            <span>{{ blueprint.name }}</span>
+          </div>
+        </mat-cell>
+      </ng-container>
+
+      <!-- Game Column -->
+      <ng-container matColumnDef="game">
+        <mat-header-cell *matHeaderCellDef>Game</mat-header-cell>
+        <mat-cell *matCellDef="let blueprint">
+          {{ blueprint.game?.name || 'N/A' }}
+        </mat-cell>
+      </ng-container>
+
+      <!-- Expansion Column -->
+      <ng-container matColumnDef="expansion">
+        <mat-header-cell *matHeaderCellDef>Expansion</mat-header-cell>
+        <mat-cell *matCellDef="let blueprint">
+          {{ blueprint.expansion?.name || 'N/A' }}
+        </mat-cell>
+      </ng-container>
+
+      <!-- Rarity Column -->
+      <ng-container matColumnDef="rarity">
+        <mat-header-cell *matHeaderCellDef>Rarity</mat-header-cell>
+        <mat-cell *matCellDef="let blueprint">
+          <mat-chip
+            *ngIf="blueprint.rarity"
+            [color]="getRarityColor(blueprint.rarity)"
+            selected
+          >
+            {{ blueprint.rarity }}
+          </mat-chip>
+          <span *ngIf="!blueprint.rarity">-</span>
+        </mat-cell>
+      </ng-container>
+
+      <!-- Version Column -->
+      <ng-container matColumnDef="version">
+        <mat-header-cell *matHeaderCellDef>Version</mat-header-cell>
+        <mat-cell *matCellDef="let blueprint">
+          {{ blueprint.version || 'Regular' }}
+        </mat-cell>
+      </ng-container>
+
+      <!-- Actions Column -->
+      <ng-container matColumnDef="actions">
+        <mat-header-cell *matHeaderCellDef>Actions</mat-header-cell>
+        <mat-cell *matCellDef="let blueprint">
+          <button
+            mat-icon-button
+            matTooltip="View details"
+            (click)="viewBlueprint(blueprint)"
+          >
+            <mat-icon>visibility</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            matTooltip="Copy ID"
+            (click)="copyToClipboard(blueprint.id)"
+          >
+            <mat-icon>content_copy</mat-icon>
+          </button>
+        </mat-cell>
+      </ng-container>
+
+      <!-- Table Rows -->
+      <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
+      <mat-row *matRowDef="let row; columns: displayedColumns"></mat-row>
+    </mat-table>
+
+    <!-- Paginator -->
+    <mat-paginator
+      [length]="totalBlueprints"
+      [pageSize]="pageSize"
+      [pageSizeOptions]="pageSizeOptions"
+      (page)="onPageChange($event)"
+    ></mat-paginator>
+  </div>
+
+  <!-- Empty State -->
+  <mat-card *ngIf="!isLoading && (blueprints$ | async)?.length === 0" class="empty-state">
+    <mat-card-content>
+      <mat-icon class="empty-icon">search_off</mat-icon>
+      <h2>No Blueprints Found</h2>
+      <p>Try adjusting your search or filter criteria</p>
+    </mat-card-content>
+  </mat-card>
+</div>

@@ -558,6 +558,70 @@ public class InventoryItemRepositoryTests
 
 ---
 
+## 14. Game Enabled Filter (OBBLIGATORIO)
+
+### Regola Fondamentale
+**TUTTE le entità importate dalla Card Trader API DEVONO filtrare in base al flag `Games.IsEnabled`**
+
+Questo impedisce di importare dati inutili per games disabilitati e ottimizza le risorse.
+
+### Entità Interessate
+- ✅ **Expansions**: Filtrare durante UpsertExpansionsAsync
+- ✅ **Blueprints**: Filtrare durante SyncBlueprintsAsync (solo expansioni di games abilitati)
+- ✅ **Categories**: Filtrare durante SyncCategoriesAsync (solo categorie di games abilitati)
+- ⚠️ **Future entities**: Deve essere applicato IMMEDIATAMENTE a nuove entità importate
+
+### Implementazione Pattern
+
+Tutte le entità importate DEVONO seguire questo pattern:
+
+```csharp
+private async Task SyncEntitiesAsync(SyncResponseDto response, CancellationToken cancellationToken)
+{
+    // 1. Load enabled games
+    var enabledGames = await _dbContext.Games
+        .AsNoTracking()
+        .Where(g => g.IsEnabled)
+        .ToListAsync(cancellationToken);
+
+    _logger.LogInformation("Found {EnabledGameCount} enabled games", enabledGames.Count);
+
+    // 2. Fetch from API
+    var dtos = await _cardTraderApiService.SyncEntitiesAsync(cancellationToken);
+
+    // 3. Filter by enabled games
+    var filteredEntities = dtos
+        .Where(e => enabledGames.Any(g => g.CardTraderId == e.GameId))
+        .ToList();
+
+    _logger.LogInformation("Filtered to {FilteredCount} entities for enabled games (skipped {SkippedCount})",
+        filteredEntities.Count, dtos.Count - filteredEntities.Count);
+
+    // 4. Continue with sync
+    await UpsertEntitiesAsync(filteredEntities, cancellationToken);
+}
+```
+
+### Logging Obbligatorio
+Loggare SEMPRE:
+- Numero di entità fetched dall'API
+- Numero di entità dopo filtering
+- Numero di entità skippate (disabilitate)
+
+**Esempio log**:
+```
+[INF] Found 14 enabled games
+[INF] Fetched 500 categories from Card Trader API
+[INF] Filtered to 180 categories for enabled games (skipped 320)
+```
+
+### Performance
+- Carica games in memoria (lista piccola, ~14 games max)
+- Usa `AsNoTracking()` per ottimizzare query
+- Filter in-memory con LINQ (meno query al DB)
+
+---
+
 ## Checklist per Nuovo Feature
 
 Prima di fare un commit, verificare:
@@ -575,6 +639,8 @@ Prima di fare un commit, verificare:
 - [ ] Nessun secret hardcodato
 - [ ] Build compila senza errori/warning
 - [ ] Documentazione aggiornata
+- [ ] **[SE IMPORTAZIONE]** Filtro IsEnabled applicato per Games (sezione 14)
+- [ ] **[SE IMPORTAZIONE]** Logging obbligatorio aggiunto (fetched, filtered, skipped counts)
 
 ---
 

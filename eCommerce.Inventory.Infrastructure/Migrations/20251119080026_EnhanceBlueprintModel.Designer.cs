@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using eCommerce.Inventory.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using eCommerce.Inventory.Infrastructure.Persistence;
 namespace eCommerce.Inventory.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251119080026_EnhanceBlueprintModel")]
+    partial class EnhanceBlueprintModel
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -31,9 +34,11 @@ namespace eCommerce.Inventory.Infrastructure.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("BackImageUrl")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("CardMarketIds")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("CardTraderId")
@@ -46,28 +51,33 @@ namespace eCommerce.Inventory.Infrastructure.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("EditableProperties")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("ExpansionId")
                         .HasColumnType("int");
 
                     b.Property<string>("FixedProperties")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("GameId")
                         .HasColumnType("int");
 
                     b.Property<string>("ImageUrl")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Rarity")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScryfallId")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("TcgPlayerId")
@@ -82,21 +92,9 @@ namespace eCommerce.Inventory.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CardTraderId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_Blueprint_CardTraderId");
+                    b.HasIndex("ExpansionId");
 
-                    b.HasIndex("ExpansionId")
-                        .HasDatabaseName("IX_Blueprint_ExpansionId");
-
-                    b.HasIndex("GameId")
-                        .HasDatabaseName("IX_Blueprint_GameId");
-
-                    b.HasIndex("Name")
-                        .HasDatabaseName("IX_Blueprint_Name");
-
-                    b.HasIndex("GameId", "ExpansionId")
-                        .HasDatabaseName("IX_Blueprint_GameId_ExpansionId");
+                    b.HasIndex("GameId");
 
                     b.ToTable("Blueprints");
                 });
@@ -169,9 +167,6 @@ namespace eCommerce.Inventory.Infrastructure.Migrations
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsEnabled")
-                        .HasColumnType("bit");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -355,7 +350,7 @@ namespace eCommerce.Inventory.Infrastructure.Migrations
                     b.HasOne("eCommerce.Inventory.Domain.Entities.Game", "Game")
                         .WithMany()
                         .HasForeignKey("GameId")
-                        .OnDelete(DeleteBehavior.NoAction)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Expansion");

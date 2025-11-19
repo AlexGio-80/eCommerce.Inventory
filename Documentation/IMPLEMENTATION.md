@@ -1,5 +1,37 @@
 # eCommerce.Inventory - Implementation Details
 
+## Phase 3.5: Game Enabled Filter - COMPLETED ✅
+
+**Completion Date**: November 19, 2024
+**Duration**: ~1.5 hours
+**Status**: Integrated into sync pipeline - Ready for Phase 3.2 (Orders/Baskets)
+
+### Overview
+Implemented selective data synchronization based on Game enabled status to prevent importing unnecessary data for disabled games.
+
+### Key Changes
+1. **Entity Model**: Added `IsEnabled` boolean flag to `Game` entity (default: false)
+2. **Database Migration**: Created `20251119110832_AddIsEnabledToGames`
+3. **Sync Pipeline**: Implemented filtering in CardTraderSyncOrchestrator for:
+   - Expansions: Skip if game is disabled
+   - Blueprints: Load only expansions from enabled games
+   - Categories: Filter by enabled game CardTraderId
+4. **API Fix**: Removed `/cards` suffix from `expansions/{expansionId}` endpoint
+5. **Documentation**: Added mandatory section 14 in SPECIFICATIONS.md with implementation pattern
+
+### Database Impact
+- Column added: `Games.IsEnabled` (BIT, NOT NULL, DEFAULT 0)
+- No data loss
+- Existing games default to disabled state
+
+### Testing Results
+- Successfully filtered 741 Magic: The Gathering expansions from 2,935 total
+- Skipped 1,194 expansions from disabled games
+- Categories filtered: 180 imported, 320 skipped
+- Zero errors, proper logging at each step
+
+---
+
 ## Phase 1: Database & Migrations - COMPLETED ✅
 
 **Completion Date**: November 18, 2024

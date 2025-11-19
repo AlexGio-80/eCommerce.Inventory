@@ -1,3 +1,4 @@
+using System.Text.Json;
 using eCommerce.Inventory.Domain.Entities;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.DTOs;
 using Microsoft.Extensions.Logging;
@@ -120,6 +121,7 @@ public class CardTraderDtoMapper
 
     /// <summary>
     /// Maps CardTraderBlueprintDto to Blueprint entity
+    /// Converts complex properties (fixed_properties, editable_properties, card_market_ids) to JSON strings
     /// </summary>
     public Blueprint MapBlueprint(CardTraderBlueprintDto dto)
     {
@@ -129,15 +131,74 @@ public class CardTraderDtoMapper
             throw new ArgumentNullException(nameof(dto), "BlueprintDto cannot be null");
         }
 
-        return new Blueprint
+        try
         {
-            CardTraderId = dto.Id,
-            Name = dto.Name,
-            Version = "Regular", // Default version (can be overridden later)
-            Rarity = dto.Rarity,
-            ExpansionId = dto.ExpansionId
-            // Note: ImageUrl from DTO is not stored in Blueprint entity
-        };
+            var blueprint = new Blueprint
+            {
+                CardTraderId = dto.Id,
+                Name = dto.Name,
+                Version = string.IsNullOrWhiteSpace(dto.Version) ? "Regular" : dto.Version,
+                GameId = dto.GameId,
+                CategoryId = dto.CategoryId,
+                Rarity = ExtractRarityFromFixedProperties(dto.FixedProperties),
+                ExpansionId = dto.ExpansionId,
+                ImageUrl = dto.ImageUrl,
+                BackImageUrl = dto.BackImageUrl,
+                TcgPlayerId = dto.TcgPlayerId,
+                ScryfallId = dto.ScryfallId,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            // Serialize fixed_properties to JSON string
+            if (dto.FixedProperties != null && dto.FixedProperties.Any())
+            {
+                blueprint.FixedProperties = JsonSerializer.Serialize(dto.FixedProperties);
+            }
+
+            // Serialize editable_properties to JSON string
+            if (dto.EditableProperties != null && dto.EditableProperties.Any())
+            {
+                blueprint.EditableProperties = JsonSerializer.Serialize(dto.EditableProperties);
+            }
+
+            // Serialize card_market_ids to JSON string
+            if (dto.CardMarketIds != null && dto.CardMarketIds.Any())
+            {
+                blueprint.CardMarketIds = JsonSerializer.Serialize(dto.CardMarketIds);
+            }
+
+            return blueprint;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error mapping blueprint {BlueprintId} {BlueprintName}", dto.Id, dto.Name);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Extracts rarity from fixed_properties dictionary
+    /// Looks for common rarity property names: mtg_rarity, rarity, etc.
+    /// </summary>
+    private string ExtractRarityFromFixedProperties(Dictionary<string, object> fixedProperties)
+    {
+        if (fixedProperties == null || !fixedProperties.Any())
+        {
+            return null;
+        }
+
+        // Try common rarity property names
+        var rarityKey = fixedProperties.Keys
+            .FirstOrDefault(k => k.Equals("mtg_rarity", StringComparison.OrdinalIgnoreCase) ||
+                                 k.Equals("rarity", StringComparison.OrdinalIgnoreCase));
+
+        if (!string.IsNullOrEmpty(rarityKey) && fixedProperties[rarityKey] != null)
+        {
+            return fixedProperties[rarityKey].ToString();
+        }
+
+        return null;
     }
 
     /// <summary>

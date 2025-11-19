@@ -66,6 +66,35 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             .HasForeignKey(i => i.BlueprintId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // Blueprint -> Game relationship (Many-to-One)
+        modelBuilder.Entity<Blueprint>()
+            .HasOne(b => b.Game)
+            .WithMany()
+            .HasForeignKey(b => b.GameId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // Configure indices for Blueprint for optimal query performance
+        modelBuilder.Entity<Blueprint>()
+            .HasIndex(b => b.CardTraderId)
+            .IsUnique()
+            .HasDatabaseName("IX_Blueprint_CardTraderId");
+
+        modelBuilder.Entity<Blueprint>()
+            .HasIndex(b => b.GameId)
+            .HasDatabaseName("IX_Blueprint_GameId");
+
+        modelBuilder.Entity<Blueprint>()
+            .HasIndex(b => b.ExpansionId)
+            .HasDatabaseName("IX_Blueprint_ExpansionId");
+
+        modelBuilder.Entity<Blueprint>()
+            .HasIndex(b => b.Name)
+            .HasDatabaseName("IX_Blueprint_Name");
+
+        modelBuilder.Entity<Blueprint>()
+            .HasIndex(b => new { b.GameId, b.ExpansionId })
+            .HasDatabaseName("IX_Blueprint_GameId_ExpansionId");
+
         // Order -> OrderItem (One-to-Many)
         modelBuilder.Entity<Order>()
             .HasMany(o => o.OrderItems)

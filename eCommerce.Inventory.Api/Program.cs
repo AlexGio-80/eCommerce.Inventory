@@ -34,6 +34,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 // Register repositories
 builder.Services.AddScoped<IInventoryItemRepository, InventoryItemRepository>();
+builder.Services.AddScoped<IBlueprintRepository, BlueprintRepository>();
 
 // Register DbContext as IApplicationDbContext for dependency injection
 builder.Services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
