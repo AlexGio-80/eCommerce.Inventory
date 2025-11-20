@@ -54,6 +54,7 @@ export class SyncPageComponent implements OnInit {
     { key: 'categories', label: 'Categorie (Proprietà)', icon: 'category', selected: true, progress: 0, status: 'pending', message: '' },
     { key: 'expansions', label: 'Espansioni', icon: 'extension', selected: true, progress: 0, status: 'pending', message: '' },
     { key: 'blueprints', label: 'Blueprints (Carte)', icon: 'dashboard', selected: true, progress: 0, status: 'pending', message: '' },
+    { key: 'inventory', label: 'Magazzino (Prodotti)', icon: 'inventory_2', selected: true, progress: 0, status: 'pending', message: '' },
   ]);
 
   // Sync state
@@ -124,6 +125,7 @@ export class SyncPageComponent implements OnInit {
         syncExpansions: selectedEntities.some((e) => e.key === 'expansions'),
         syncBlueprints: selectedEntities.some((e) => e.key === 'blueprints'),
         syncProperties: false, // Removed from UI, always false
+        syncInventory: selectedEntities.some((e) => e.key === 'inventory'),
       };
 
       // Call the sync API endpoint

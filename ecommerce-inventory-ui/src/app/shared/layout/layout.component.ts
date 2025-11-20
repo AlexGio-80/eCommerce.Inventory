@@ -37,6 +37,7 @@ export class LayoutComponent {
     { label: 'Dashboard', route: '/layout/dashboard', icon: 'dashboard' },
     { label: 'Inventario', route: '/layout/inventory', icon: 'inventory_2' },
     { label: 'Sincronizzazione', route: '/layout/sync', icon: 'sync' },
+    { label: 'Expansions', route: '/layout/expansions', icon: 'extension' },
     { label: 'Prodotti', route: '/layout/products', icon: 'shopping_bag' },
     { label: 'Ordini', route: '/layout/orders', icon: 'shopping_cart' },
     { label: 'Report', route: '/layout/reporting', icon: 'bar_chart' },

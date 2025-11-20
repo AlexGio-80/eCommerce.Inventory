@@ -32,7 +32,12 @@ public class SyncRequestDto
     public bool SyncProperties { get; set; } = false;
 
     /// <summary>
+    /// Sync Inventory (Products) from Card Trader
+    /// </summary>
+    public bool SyncInventory { get; set; } = false;
+
+    /// <summary>
     /// Determine if any sync is requested
     /// </summary>
-    public bool IsEmpty => !SyncGames && !SyncCategories && !SyncExpansions && !SyncBlueprints && !SyncProperties;
+    public bool IsEmpty => !SyncGames && !SyncCategories && !SyncExpansions && !SyncBlueprints && !SyncProperties && !SyncInventory;
 }

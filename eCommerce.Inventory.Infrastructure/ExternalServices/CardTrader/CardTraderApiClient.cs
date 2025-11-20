@@ -101,6 +101,14 @@ public class CardTraderApiClient : ICardTraderApiService
             response.EnsureSuccessStatusCode();
 
             var jsonContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            // Handle empty array responses (some expansions have no blueprints)
+            if (string.IsNullOrWhiteSpace(jsonContent) || jsonContent.Trim() == "[]")
+            {
+                _logger.LogInformation("Expansion {ExpansionId} has no blueprints (empty response)", expansionId);
+                return new List<dynamic>();
+            }
+
             var dtos = JsonSerializer.Deserialize<List<CardTraderBlueprintDto>>(jsonContent)
                 ?? new List<CardTraderBlueprintDto>();
 
@@ -277,6 +285,33 @@ public class CardTraderApiClient : ICardTraderApiService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching products from Card Trader API");
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Fetch all products via Export endpoint (for full sync)
+    /// Endpoint: /api/v2/products/export
+    /// </summary>
+    public async Task<List<dynamic>> GetProductsExportAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Fetching products export from Card Trader API");
+
+            var response = await _httpClient.GetAsync("products/export", cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            var jsonContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            var dtos = JsonSerializer.Deserialize<List<CardTraderProductDto>>(jsonContent)
+                ?? new List<CardTraderProductDto>();
+
+            _logger.LogInformation("Fetched {ProductCount} products from Export API", dtos.Count);
+            return dtos.Cast<dynamic>().ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching products export from Card Trader API");
             throw;
         }
     }

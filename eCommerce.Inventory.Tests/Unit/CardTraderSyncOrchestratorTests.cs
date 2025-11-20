@@ -140,4 +140,103 @@ public class CardTraderSyncOrchestratorTests
         var expansion = await _dbContext.Expansions.FirstOrDefaultAsync(e => e.CardTraderId == 500);
         Assert.Null(expansion);
     }
+    [Fact]
+    public async Task SyncAsync_SyncInventory_ShouldSyncAndHandleDeletions()
+    {
+        // Arrange
+        var game = new Game { Id = 1, CardTraderId = 100, Name = "Magic", Code = "MTG", IsEnabled = true };
+        var expansion = new Expansion { Id = 1, CardTraderId = 200, GameId = 1, Name = "Alpha", Code = "LEA" };
+        var blueprint1 = new Blueprint { Id = 1, CardTraderId = 301, ExpansionId = 1, GameId = 1, Name = "Card 1", Version = "Regular" };
+        var blueprint2 = new Blueprint { Id = 2, CardTraderId = 302, ExpansionId = 1, GameId = 1, Name = "Card 2", Version = "Regular" };
+        var blueprint3 = new Blueprint { Id = 3, CardTraderId = 303, ExpansionId = 1, GameId = 1, Name = "Card 3", Version = "Regular" };
+
+        _dbContext.Games.Add(game);
+        _dbContext.Expansions.Add(expansion);
+        _dbContext.Blueprints.AddRange(blueprint1, blueprint2, blueprint3);
+
+        // Existing item to be UPDATED
+        var itemToUpdate = new InventoryItem
+        {
+            Id = 1,
+            CardTraderProductId = 1001,
+            BlueprintId = 1,
+            Quantity = 1,
+            ListingPrice = 10.0m,
+            Condition = "Played",
+            Language = "en",
+            Location = "Box 1",
+            IsFoil = false,
+            IsSigned = false
+        };
+
+        // Existing item to be DELETED (missing from API)
+        var itemToDelete = new InventoryItem
+        {
+            Id = 2,
+            CardTraderProductId = 1002,
+            BlueprintId = 2,
+            Quantity = 5,
+            ListingPrice = 5.0m,
+            Condition = "Near Mint",
+            Language = "en",
+            Location = "Box 2",
+            IsFoil = false,
+            IsSigned = false
+        };
+
+        _dbContext.InventoryItems.AddRange(itemToUpdate, itemToDelete);
+        await _dbContext.SaveChangesAsync();
+
+        // API Response
+        var productDto1 = new CardTraderProductDto // Update for item 1001
+        {
+            Id = 1001,
+            BlueprintId = 301,
+            PriceCents = 2000, // 20.00
+            Quantity = 2,
+            GameId = 100,
+            Properties = new Dictionary<string, object> { { "condition", "Near Mint" } },
+            UserDataField = "Box A"
+        };
+
+        var productDto2 = new CardTraderProductDto // New item
+        {
+            Id = 1003,
+            BlueprintId = 303, // Matches blueprint3
+            PriceCents = 5000, // 50.00
+            Quantity = 1,
+            GameId = 100,
+            Properties = new Dictionary<string, object> { { "condition", "Mint" } },
+            UserDataField = "Box B"
+        };
+
+        _apiServiceMock.Setup(x => x.GetProductsExportAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<dynamic> { productDto1, productDto2 });
+
+        var request = new SyncRequestDto { SyncInventory = true };
+
+        // Act
+        var result = await _orchestrator.SyncAsync(request);
+
+        // Assert
+        Assert.Equal(1, result.Inventory.Added);   // Item 1003
+        Assert.Equal(1, result.Inventory.Updated); // Item 1001
+        // Deleted count is not in DTO, but we can verify DB state
+
+        var updatedItem = await _dbContext.InventoryItems.FirstOrDefaultAsync(i => i.CardTraderProductId == 1001);
+        Assert.NotNull(updatedItem);
+        Assert.Equal(2, updatedItem.Quantity);
+        Assert.Equal(20.0m, updatedItem.ListingPrice);
+        Assert.Equal("Near Mint", updatedItem.Condition);
+        Assert.Equal("Box A", updatedItem.Location);
+
+        var newItem = await _dbContext.InventoryItems.FirstOrDefaultAsync(i => i.CardTraderProductId == 1003);
+        Assert.NotNull(newItem);
+        Assert.Equal(3, newItem.BlueprintId); // Linked to local Blueprint ID 3
+        Assert.Equal(50.0m, newItem.ListingPrice);
+        Assert.Equal("Box B", newItem.Location);
+
+        var deletedItem = await _dbContext.InventoryItems.FirstOrDefaultAsync(i => i.CardTraderProductId == 1002);
+        Assert.Null(deletedItem);
+    }
 }

@@ -92,6 +92,12 @@ public class CardTraderSyncOrchestrator
                 _logger.LogInformation("Properties are synced as part of Categories synchronization");
             }
 
+            // Sync Inventory (Products)
+            if (request.SyncInventory)
+            {
+                await SyncInventoryAsync(response, cancellationToken);
+            }
+
             response.SyncEndTime = DateTime.UtcNow;
             _logger.LogInformation("Sync completed successfully. Added: {Added}, Updated: {Updated}, Failed: {Failed}, Skipped: {Skipped}, Duration: {Duration}ms",
                 response.Added, response.Updated, response.Failed, response.Skipped, response.Duration.TotalMilliseconds);
@@ -308,6 +314,175 @@ public class CardTraderSyncOrchestrator
             response.Failed++;
             _logger.LogError(ex, "Error syncing categories");
         }
+    }
+
+    /// <summary>
+    /// Syncs inventory (products) from Card Trader API to database
+    /// Uses export endpoint for full sync
+    /// Deletes local items that are missing from API response (for enabled games)
+    /// </summary>
+    private async Task SyncInventoryAsync(SyncResponseDto response, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogInformation("Starting Inventory sync");
+
+            // Load all enabled games for filtering
+            var enabledGames = await _dbContext.Games
+                .AsNoTracking()
+                .Where(g => g.IsEnabled)
+                .ToListAsync(cancellationToken);
+
+            var enabledGameIds = enabledGames.Select(g => g.CardTraderId).ToHashSet();
+
+            // Fetch products from API (Export endpoint)
+            var productDtos = await _cardTraderApiService.GetProductsExportAsync(cancellationToken);
+            var productList = ConvertDynamicToList<CardTraderProductDto>(productDtos);
+
+            _logger.LogInformation("Fetched {ProductCount} products from Card Trader Export API", productList.Count);
+
+            // Filter products to only include those for enabled games
+            var filteredProducts = productList
+                .Where(p => enabledGameIds.Contains(p.GameId))
+                .ToList();
+
+            var skippedCount = productList.Count - filteredProducts.Count;
+            _logger.LogInformation("Filtered to {FilteredProductCount} products for enabled games (skipped {SkippedCount})",
+                filteredProducts.Count, skippedCount);
+
+            // Upsert products into database and handle deletions
+            var result = await UpsertInventoryAsync(filteredProducts, enabledGameIds, cancellationToken);
+
+            response.Inventory.WasRequested = true;
+            response.Inventory.Added = result.Added;
+            response.Inventory.Updated = result.Updated;
+            response.Inventory.Failed = result.Failed;
+            response.Inventory.Skipped = skippedCount; // Items for disabled games are skipped
+
+            response.Added += result.Added;
+            response.Updated += result.Updated;
+            response.Failed += result.Failed;
+            response.Skipped += skippedCount;
+
+            _logger.LogInformation("Inventory sync completed. Added: {Added}, Updated: {Updated}, Failed: {Failed}, Skipped: {Skipped}, Deleted: {Deleted}",
+                result.Added, result.Updated, result.Failed, skippedCount, result.Deleted);
+        }
+        catch (Exception ex)
+        {
+            response.Inventory.WasRequested = true;
+            response.Inventory.ErrorMessage = ex.Message;
+            response.Failed++;
+            _logger.LogError(ex, "Error syncing inventory");
+        }
+    }
+
+    /// <summary>
+    /// Upserts inventory items and deletes missing ones
+    /// </summary>
+    private async Task<(int Added, int Updated, int Failed, int Deleted)> UpsertInventoryAsync(
+        List<CardTraderProductDto> products,
+        HashSet<int> enabledGameIds,
+        CancellationToken cancellationToken)
+    {
+        var added = 0;
+        var updated = 0;
+        var failed = 0;
+        var deleted = 0;
+
+        // 1. Get all existing inventory items for enabled games
+        // We need to filter by Blueprint.Expansion.Game.CardTraderId
+        // This is a bit complex query, so let's fetch items where Blueprint.GameId is in our enabled list
+        // But Blueprint.GameId is local ID. We need to map enabledGameIds (CT IDs) to local IDs.
+
+        var enabledGameLocalIds = await _dbContext.Games
+            .Where(g => enabledGameIds.Contains(g.CardTraderId))
+            .Select(g => g.Id)
+            .ToListAsync(cancellationToken);
+
+        var existingItems = await _dbContext.InventoryItems
+            .Include(i => i.Blueprint)
+            .Where(i => i.Blueprint != null && enabledGameLocalIds.Contains(i.Blueprint.GameId))
+            .ToListAsync(cancellationToken);
+
+        var existingItemsMap = existingItems
+            .Where(i => i.CardTraderProductId.HasValue)
+            .ToDictionary(i => i.CardTraderProductId!.Value);
+
+        var processedProductIds = new HashSet<int>();
+
+        // 2. Upsert (Insert/Update)
+        foreach (var product in products)
+        {
+            try
+            {
+                processedProductIds.Add(product.Id);
+
+                if (existingItemsMap.TryGetValue(product.Id, out var existingItem))
+                {
+                    // Update
+                    _dtoMapper.UpdateInventoryItemFromProduct(existingItem, product);
+                    // Ensure BlueprintId matches (in case it changed, though unlikely for same product ID)
+                    // existingItem.BlueprintId = product.BlueprintId; // Need to check if BlueprintId refers to CT ID or Local ID in DTO?
+                    // DTO has 'blueprint_id' which is Card Trader Blueprint ID.
+                    // InventoryItem.BlueprintId is LOCAL Blueprint ID.
+                    // We need to find the local Blueprint ID for this CT Blueprint ID.
+
+                    // Optimization: Only fetch blueprint if needed or batch fetch. 
+                    // For now, let's assume BlueprintId link is correct if it exists.
+                    // But if we are creating new, we definitely need to resolve it.
+
+                    updated++;
+                }
+                else
+                {
+                    // Insert
+                    // We need to find the local Blueprint ID
+                    var blueprint = await _dbContext.Blueprints
+                        .FirstOrDefaultAsync(b => b.CardTraderId == product.BlueprintId, cancellationToken);
+
+                    if (blueprint == null)
+                    {
+                        _logger.LogWarning("Blueprint {BlueprintId} not found for Product {ProductId} (Expansion {ExpansionId}). Skipping.",
+                            product.BlueprintId, product.Id, product.Expansion?.Id);
+                        failed++;
+                        continue;
+                    }
+
+                    var newItem = _dtoMapper.MapProductToInventoryItem(product);
+                    newItem.BlueprintId = blueprint.Id; // Link to local Blueprint
+
+                    _dbContext.InventoryItems.Add(newItem);
+                    added++;
+                }
+            }
+            catch (Exception ex)
+            {
+                failed++;
+                _logger.LogError(ex, "Error upserting product {ProductId}", product.Id);
+            }
+        }
+
+        // 3. Delete missing items
+        // Items in existingItemsMap that are NOT in processedProductIds should be deleted
+        foreach (var kvp in existingItemsMap)
+        {
+            if (!processedProductIds.Contains(kvp.Key))
+            {
+                try
+                {
+                    _dbContext.InventoryItems.Remove(kvp.Value);
+                    deleted++;
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    _logger.LogError(ex, "Error deleting missing product {ProductId}", kvp.Key);
+                }
+            }
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return (added, updated, failed, deleted);
     }
 
     /// <summary>

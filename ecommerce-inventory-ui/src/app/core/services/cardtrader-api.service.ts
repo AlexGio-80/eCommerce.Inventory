@@ -18,7 +18,7 @@ import { environment } from '../../../environments/environment';
 export class CardTraderApiService {
   private apiUrl = `${environment.api.baseUrl}/api/cardtrader`;
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient) { }
 
   // Games
   getGames(): Observable<Game[]> {
@@ -112,6 +112,7 @@ export class CardTraderApiService {
     syncExpansions?: boolean;
     syncBlueprints?: boolean;
     syncProperties?: boolean;
+    syncInventory?: boolean;
   }): Observable<ApiResponse<any>> {
     return this.http.post<ApiResponse<any>>(`${this.apiUrl}/sync`, request);
   }

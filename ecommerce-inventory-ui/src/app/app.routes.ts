@@ -29,6 +29,11 @@ export const routes: Routes = [
         component: SyncPageComponent,
         data: { title: 'Sincronizzazione' }
       },
+      {
+        path: 'expansions',
+        loadComponent: () => import('./features/expansions/pages/expansions-page.component').then(m => m.ExpansionsPageComponent),
+        data: { title: 'Expansions' }
+      },
       // TODO: Add routes for Phase 3.3-3.5
       // - /layout/products (Product Listing Component)
       // - /layout/orders (Orders Component)

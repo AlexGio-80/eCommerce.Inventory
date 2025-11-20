@@ -67,9 +67,10 @@ public class CardTraderBlueprintDto
 
     /// <summary>
     /// Back image (for double-faced cards)
+    /// Can be either a string URL or an object with image data
     /// </summary>
     [JsonPropertyName("back_image")]
-    public string BackImageUrl { get; set; }
+    public System.Text.Json.JsonElement? BackImageUrl { get; set; }
 }
 
 /// <summary>

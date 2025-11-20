@@ -67,6 +67,7 @@ builder.Services.AddHttpClient<ICardTraderApiService, CardTraderApiClient>(clien
 // Register Card Trader background sync worker
 // NOTE: Temporarily disabled for development. Enable once Card Trader API is properly configured.
 // builder.Services.AddHostedService<CardTraderSyncWorker>();
+builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJobs.ScheduledProductSyncWorker>();
 
 // Add CORS if needed for future frontend integration
 builder.Services.AddCors(options =>

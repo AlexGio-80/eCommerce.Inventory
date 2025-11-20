@@ -34,6 +34,7 @@ public class SyncResponseDto
     public SyncEntityResultDto Expansions { get; set; } = new();
     public SyncEntityResultDto Blueprints { get; set; } = new();
     public SyncEntityResultDto Properties { get; set; } = new();
+    public SyncEntityResultDto Inventory { get; set; } = new();
 
     /// <summary>
     /// Timestamp when sync started

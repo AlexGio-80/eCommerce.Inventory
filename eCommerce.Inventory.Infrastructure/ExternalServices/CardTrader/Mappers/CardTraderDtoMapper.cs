@@ -143,7 +143,7 @@ public class CardTraderDtoMapper
                 Rarity = ExtractRarityFromFixedProperties(dto.FixedProperties),
                 ExpansionId = dto.ExpansionId,
                 ImageUrl = dto.ImageUrl,
-                BackImageUrl = dto.BackImageUrl,
+                BackImageUrl = ExtractBackImageUrl(dto.BackImageUrl),
                 TcgPlayerId = dto.TcgPlayerId,
                 ScryfallId = dto.ScryfallId,
                 CreatedAt = DateTime.UtcNow,
@@ -236,11 +236,11 @@ public class CardTraderDtoMapper
             PurchasePrice = 0m, // Not available in DTO (user maintains purchase price locally)
             DateAdded = DateTime.UtcNow,
             Quantity = dto.Quantity,
-            ListingPrice = dto.Price,
-            Condition = dto.Condition,
-            Language = dto.Language,
-            IsFoil = dto.IsFoil,
-            IsSigned = dto.IsSigned,
+            ListingPrice = dto.PriceCents / 100m, // Convert cents to decimal currency
+            Condition = ExtractCondition(dto.Properties),
+            Language = ExtractLanguage(dto.Properties),
+            IsFoil = ExtractBooleanProperty(dto.Properties, "foil"),
+            IsSigned = ExtractBooleanProperty(dto.Properties, "signed"),
             Location = dto.UserDataField ?? "Unknown" // Default location if not provided
         };
     }
@@ -264,12 +264,12 @@ public class CardTraderDtoMapper
         }
 
         // Update fields that can change on the marketplace
-        item.ListingPrice = dto.Price;
+        item.ListingPrice = dto.PriceCents / 100m; // Convert cents to decimal currency
         item.Quantity = dto.Quantity;
-        item.Condition = dto.Condition;
-        item.Language = dto.Language;
-        item.IsFoil = dto.IsFoil;
-        item.IsSigned = dto.IsSigned;
+        item.Condition = ExtractCondition(dto.Properties);
+        item.Language = ExtractLanguage(dto.Properties);
+        item.IsFoil = ExtractBooleanProperty(dto.Properties, "foil");
+        item.IsSigned = ExtractBooleanProperty(dto.Properties, "signed");
 
         // Update location if provided
         if (!string.IsNullOrWhiteSpace(dto.UserDataField))
@@ -368,5 +368,72 @@ public class CardTraderDtoMapper
         _logger.LogInformation("Mapping {CategoryCount} categories from Card Trader", dtos.Count);
 
         return dtos.Select(MapCategory).ToList();
+    }
+
+    private string ExtractCondition(Dictionary<string, object> properties)
+    {
+        if (properties == null) return "Unknown";
+        if (properties.TryGetValue("condition", out var value)) return value?.ToString() ?? "Unknown";
+        return "Unknown";
+    }
+
+    private string ExtractLanguage(Dictionary<string, object> properties)
+    {
+        if (properties == null) return "Unknown";
+        // Check for common language keys
+        string[] keys = { "language", "mtg_language", "pokemon_language", "yugioh_language" };
+        foreach (var key in keys)
+        {
+            if (properties.TryGetValue(key, out var value)) return value?.ToString() ?? "Unknown";
+        }
+        return "Unknown";
+    }
+
+    private bool ExtractBooleanProperty(Dictionary<string, object> properties, string partialKey)
+    {
+        if (properties == null) return false;
+
+        // Look for keys containing the partial key (e.g. "mtg_foil", "foil")
+        var key = properties.Keys.FirstOrDefault(k => k.Contains(partialKey, StringComparison.OrdinalIgnoreCase));
+
+        if (key != null && properties.TryGetValue(key, out var value))
+        {
+            if (value is bool boolValue) return boolValue;
+            if (bool.TryParse(value?.ToString(), out var parsedBool)) return parsedBool;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Extracts back image URL from JsonElement (can be string or object)
+    /// </summary>
+    private string? ExtractBackImageUrl(System.Text.Json.JsonElement? backImage)
+    {
+        if (!backImage.HasValue)
+            return null;
+
+        try
+        {
+            // If it's a string, return it directly
+            if (backImage.Value.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                return backImage.Value.GetString();
+            }
+            // If it's an object, try to extract 'url' property
+            else if (backImage.Value.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                if (backImage.Value.TryGetProperty("url", out var urlProperty))
+                {
+                    return urlProperty.GetString();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error extracting back image URL");
+        }
+
+        return null;
     }
 }
