@@ -13,7 +13,6 @@ import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSearchModule } from '@angular/material/search';
 import { Observable, BehaviorSubject, Subject } from 'rxjs';
 import { map, tap, switchMap, startWith, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 
@@ -78,7 +77,7 @@ export class BlueprintsListComponent implements OnInit {
   constructor(
     private blueprintsService: BlueprintsService,
     private apiService: CardTraderApiService
-  ) {}
+  ) { }
 
   ngOnInit(): void {
     this.games$ = this.apiService.getGames();

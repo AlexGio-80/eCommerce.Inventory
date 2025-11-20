@@ -20,7 +20,6 @@ interface NavItem {
   imports: [
     CommonModule,
     RouterOutlet,
-    RouterLink,
     MatSidenavModule,
     MatToolbarModule,
     MatListModule,
@@ -43,7 +42,7 @@ export class LayoutComponent {
     { label: 'Report', route: '/layout/reporting', icon: 'bar_chart' },
   ];
 
-  constructor(private router: Router) {}
+  constructor(private router: Router) { }
 
   toggleSidenav(): void {
     this.isSidenavOpen.update((val) => !val);
