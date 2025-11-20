@@ -120,6 +120,14 @@
           </div>
 
           <div class="stat-item">
+            <mat-icon class="stat-icon skipped">help</mat-icon>
+            <div class="stat-content">
+              <p class="stat-label">Saltati</p>
+              <p class="stat-value">{{ syncStats().skipped }}</p>
+            </div>
+          </div>
+
+          <div class="stat-item">
             <mat-icon class="stat-icon failed">error</mat-icon>
             <div class="stat-content">
               <p class="stat-label">Errori</p>

@@ -88,7 +88,8 @@ public class CardTraderApiClient : ICardTraderApiService
         {
             _logger.LogInformation("Fetching blueprints for expansion {ExpansionId} from Card Trader API", expansionId);
 
-            var response = await _httpClient.GetAsync($"expansions/{expansionId}", cancellationToken);
+            // Correct endpoint for fetching blueprints is /blueprints/export?expansion_id={id}
+            var response = await _httpClient.GetAsync($"blueprints/export?expansion_id={expansionId}", cancellationToken);
 
             // Handle 404 gracefully - expansion might not have blueprints or endpoint might not exist
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)

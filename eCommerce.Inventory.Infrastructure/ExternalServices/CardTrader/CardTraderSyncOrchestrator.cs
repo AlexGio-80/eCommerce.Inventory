@@ -93,8 +93,8 @@ public class CardTraderSyncOrchestrator
             }
 
             response.SyncEndTime = DateTime.UtcNow;
-            _logger.LogInformation("Sync completed successfully. Added: {Added}, Updated: {Updated}, Failed: {Failed}, Duration: {Duration}ms",
-                response.Added, response.Updated, response.Failed, response.Duration.TotalMilliseconds);
+            _logger.LogInformation("Sync completed successfully. Added: {Added}, Updated: {Updated}, Failed: {Failed}, Skipped: {Skipped}, Duration: {Duration}ms",
+                response.Added, response.Updated, response.Failed, response.Skipped, response.Duration.TotalMilliseconds);
         }
         catch (Exception ex)
         {
@@ -169,13 +169,15 @@ public class CardTraderSyncOrchestrator
             response.Expansions.Added = result.Added;
             response.Expansions.Updated = result.Updated;
             response.Expansions.Failed = result.Failed;
+            response.Expansions.Skipped = result.Skipped;
 
             response.Added += result.Added;
             response.Updated += result.Updated;
             response.Failed += result.Failed;
+            response.Skipped += result.Skipped;
 
-            _logger.LogInformation("Expansions sync completed. Added: {Added}, Updated: {Updated}, Failed: {Failed}",
-                result.Added, result.Updated, result.Failed);
+            _logger.LogInformation("Expansions sync completed. Added: {Added}, Updated: {Updated}, Failed: {Failed}, Skipped: {Skipped}",
+                result.Added, result.Updated, result.Failed, result.Skipped);
         }
         catch (Exception ex)
         {
@@ -214,6 +216,13 @@ public class CardTraderSyncOrchestrator
                     var blueprintDtos = await _cardTraderApiService.SyncBlueprintsForExpansionAsync(expansion.CardTraderId, cancellationToken);
                     var blueprintList = ConvertDynamicToList<CardTraderBlueprintDto>(blueprintDtos);
                     var blueprints = _dtoMapper.MapBlueprints(blueprintList);
+
+                    // Fix Foreign Keys: Map Card Trader IDs to Local Database IDs
+                    foreach (var bp in blueprints)
+                    {
+                        bp.ExpansionId = expansion.Id;
+                        bp.GameId = expansion.GameId;
+                    }
 
                     var result = await UpsertBlueprintsAsync(blueprints, cancellationToken);
                     totalAdded += result.Added;
@@ -344,11 +353,12 @@ public class CardTraderSyncOrchestrator
     /// <summary>
     /// Upserts expansions into database (insert if not exists, update if exists)
     /// </summary>
-    private async Task<(int Added, int Updated, int Failed)> UpsertExpansionsAsync(List<Expansion> expansions, CancellationToken cancellationToken)
+    private async Task<(int Added, int Updated, int Failed, int Skipped)> UpsertExpansionsAsync(List<Expansion> expansions, CancellationToken cancellationToken)
     {
         var added = 0;
         var updated = 0;
         var failed = 0;
+        var skipped = 0;
 
         // Load all games to map CardTraderId -> Database Id
         var allGames = await _dbContext.Games
@@ -363,7 +373,7 @@ public class CardTraderSyncOrchestrator
                 var gameEntity = allGames.FirstOrDefault(g => g.CardTraderId == expansion.GameId);
                 if (gameEntity == null)
                 {
-                    failed++;
+                    skipped++;
                     _logger.LogWarning("Expansion {ExpansionId} references Game {GameId} which doesn't exist in database. Skipping.",
                         expansion.CardTraderId, expansion.GameId);
                     continue;
@@ -372,6 +382,7 @@ public class CardTraderSyncOrchestrator
                 // Skip expansions for disabled games
                 if (!gameEntity.IsEnabled)
                 {
+                    skipped++;
                     _logger.LogDebug("Skipping expansion {ExpansionId} ({ExpansionName}) - Game {GameId} ({GameName}) is not enabled",
                         expansion.CardTraderId, expansion.Name, gameEntity.Id, gameEntity.Name);
                     continue;
@@ -404,7 +415,7 @@ public class CardTraderSyncOrchestrator
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
-        return (added, updated, failed);
+        return (added, updated, failed, skipped);
     }
 
     /// <summary>

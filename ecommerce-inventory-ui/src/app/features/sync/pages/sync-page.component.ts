@@ -54,7 +54,6 @@ export class SyncPageComponent implements OnInit {
     { key: 'categories', label: 'Categorie (Proprietà)', icon: 'category', selected: true, progress: 0, status: 'pending', message: '' },
     { key: 'expansions', label: 'Espansioni', icon: 'extension', selected: true, progress: 0, status: 'pending', message: '' },
     { key: 'blueprints', label: 'Blueprints (Carte)', icon: 'dashboard', selected: true, progress: 0, status: 'pending', message: '' },
-    { key: 'properties', label: 'Proprietà Aggiuntive', icon: 'tune', selected: false, progress: 0, status: 'pending', message: '' },
   ]);
 
   // Sync state
@@ -62,9 +61,9 @@ export class SyncPageComponent implements OnInit {
   syncLogs = signal<SyncLog[]>([]);
   lastSyncTime = signal<Date | null>(null);
   syncProgress = signal(0);
-  syncStats = signal<{ added: number; updated: number; failed: number }>({ added: 0, updated: 0, failed: 0 });
+  syncStats = signal<{ added: number; updated: number; failed: number; skipped: number }>({ added: 0, updated: 0, failed: 0, skipped: 0 });
 
-  constructor(private apiService: CardTraderApiService) {}
+  constructor(private apiService: CardTraderApiService) { }
 
   ngOnInit(): void {
     this.loadSyncHistory();
@@ -104,7 +103,7 @@ export class SyncPageComponent implements OnInit {
 
     this.isSyncing.set(true);
     this.syncLogs.set([]);
-    this.syncStats.set({ added: 0, updated: 0, failed: 0 });
+    this.syncStats.set({ added: 0, updated: 0, failed: 0, skipped: 0 });
     this.addLog(`Inizio sincronizzazione di ${selectedEntities.length} entità`, 'info');
 
     // Reset progress
@@ -119,13 +118,12 @@ export class SyncPageComponent implements OnInit {
     try {
       // Build the sync request with selected entities
       // Note: 'categories' key maps to 'syncCategories' (includes category properties)
-      // Note: 'properties' key currently not used (reserved for future expansion)
       const syncRequest = {
         syncGames: selectedEntities.some((e) => e.key === 'games'),
         syncCategories: selectedEntities.some((e) => e.key === 'categories'), // Syncs categories with their properties/values
         syncExpansions: selectedEntities.some((e) => e.key === 'expansions'),
         syncBlueprints: selectedEntities.some((e) => e.key === 'blueprints'),
-        syncProperties: selectedEntities.some((e) => e.key === 'properties'),
+        syncProperties: false, // Removed from UI, always false
       };
 
       // Call the sync API endpoint
@@ -165,6 +163,7 @@ export class SyncPageComponent implements OnInit {
       added: data.added || 0,
       updated: data.updated || 0,
       failed: data.failed || 0,
+      skipped: data.skipped || 0,
     };
     this.syncStats.set(stats);
 
@@ -175,7 +174,7 @@ export class SyncPageComponent implements OnInit {
     this.syncProgress.set(100);
 
     this.addLog(
-      `Sincronizzazione completata: ${stats.added} aggiunti, ${stats.updated} aggiornati, ${stats.failed} falliti`,
+      `Sincronizzazione completata: ${stats.added} aggiunti, ${stats.updated} aggiornati, ${stats.skipped} saltati, ${stats.failed} falliti`,
       'success'
     );
 

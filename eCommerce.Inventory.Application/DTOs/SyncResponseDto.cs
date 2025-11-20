@@ -22,6 +22,11 @@ public class SyncResponseDto
     public int Failed { get; set; } = 0;
 
     /// <summary>
+    /// Total number of records skipped
+    /// </summary>
+    public int Skipped { get; set; } = 0;
+
+    /// <summary>
     /// Detailed sync results by entity type
     /// </summary>
     public SyncEntityResultDto Games { get; set; } = new();
@@ -75,6 +80,11 @@ public class SyncEntityResultDto
     /// Number of records that failed for this entity type
     /// </summary>
     public int Failed { get; set; } = 0;
+
+    /// <summary>
+    /// Number of records skipped for this entity type
+    /// </summary>
+    public int Skipped { get; set; } = 0;
 
     /// <summary>
     /// Total records processed for this entity type
