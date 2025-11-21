@@ -17,99 +17,211 @@
                 <app-blueprint-selector (selectionChange)="onBlueprintSelected($event)"></app-blueprint-selector>
             </div>
 
-            <!-- Selected Blueprint Info -->
-            <div class="selected-blueprint-info" *ngIf="selectedBlueprint()">
-                <img [src]="selectedBlueprint()?.imageUrl || 'assets/placeholder-card.png'" alt="Card Image"
-                    class="blueprint-image">
-                <div class="blueprint-details">
-                    <h3>{{ selectedBlueprint()?.name }}</h3>
-                    <p>{{ selectedBlueprint()?.expansion?.name }} - {{ selectedBlueprint()?.rarity }}</p>
-                    <button mat-button color="primary" (click)="selectedBlueprint.set(null)">Change Card</button>
+            <!-- Main Content Area (2 Columns) -->
+            <div class="listing-content" *ngIf="selectedBlueprint()"
+                style="display: flex; gap: 24px; margin-top: 16px;">
+
+                <!-- Left Column: Image -->
+                <div class="image-column" style="flex: 0 0 300px;">
+                    <div class="image-container" style="position: sticky; top: 24px;">
+                        <img [src]="selectedBlueprint()?.imageUrl || 'assets/placeholder-card.png'" alt="Card Image"
+                            style="width: 100%; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+
+                        <div class="blueprint-details" style="margin-top: 16px; text-align: center;">
+                            <h3 style="margin: 0 0 4px 0;">{{ selectedBlueprint()?.name }}</h3>
+                            <p style="margin: 0; color: #666;">{{ selectedBlueprint()?.expansion?.name }}</p>
+                            <p style="margin: 0; color: #666; font-size: 0.9em;">{{ selectedBlueprint()?.rarity }}</p>
+
+                            <button mat-button color="warn" (click)="onResetForm()" style="margin-top: 8px;"
+                                *ngIf="!editingId()">
+                                Change Card
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Form -->
+                <div class="form-column" style="flex: 1;">
+                    <form [formGroup]="listingForm" (ngSubmit)="onSubmit()">
+
+                        <div class="form-row">
+                            <mat-form-field appearance="outline">
+                                <mat-label>Condition</mat-label>
+                                <mat-select formControlName="condition">
+                                    <mat-option *ngFor="let c of conditions" [value]="c">{{c}}</mat-option>
+                                </mat-select>
+                                <mat-error *ngIf="listingForm.get('condition')?.hasError('required')">
+                                    Condition is required
+                                </mat-error>
+                            </mat-form-field>
+
+                            <mat-form-field appearance="outline">
+                                <mat-label>Language</mat-label>
+                                <mat-select formControlName="language">
+                                    <mat-option *ngFor="let l of languages" [value]="l">{{l}}</mat-option>
+                                </mat-select>
+                                <mat-error *ngIf="listingForm.get('language')?.hasError('required')">
+                                    Language is required
+                                </mat-error>
+                            </mat-form-field>
+                        </div>
+
+                        <div class="form-row">
+                            <mat-form-field appearance="outline">
+                                <mat-label>Quantity</mat-label>
+                                <input matInput type="number" formControlName="quantity" min="1">
+                                <mat-error *ngIf="listingForm.get('quantity')?.hasError('min')">
+                                    Quantity must be at least 1
+                                </mat-error>
+                            </mat-form-field>
+
+                            <mat-form-field appearance="outline">
+                                <mat-label>Selling Price (€)</mat-label>
+                                <input matInput type="number" formControlName="sellingPrice" min="0" step="0.01">
+                                <span matPrefix>€&nbsp;</span>
+                                <mat-hint>Price for Card Trader listing</mat-hint>
+                                <mat-error *ngIf="listingForm.get('sellingPrice')?.hasError('required')">
+                                    Selling price is required
+                                </mat-error>
+                            </mat-form-field>
+                        </div>
+
+                        <div class="form-row">
+                            <mat-form-field appearance="outline">
+                                <mat-label>Purchase Price (€)</mat-label>
+                                <input matInput type="number" formControlName="purchasePrice" min="0" step="0.01">
+                                <span matPrefix>€&nbsp;</span>
+                                <mat-hint>Cost of goods sold (internal only)</mat-hint>
+                            </mat-form-field>
+
+                            <mat-form-field appearance="outline">
+                                <mat-label>Location</mat-label>
+                                <input matInput formControlName="location" placeholder="e.g. Box A, Binder 1">
+                            </mat-form-field>
+                        </div>
+
+                        <div class="form-row">
+                            <mat-form-field appearance="outline">
+                                <mat-label>Tag</mat-label>
+                                <input matInput formControlName="tag" placeholder="e.g. #old, #reserved">
+                                <mat-hint>Custom tag for organization</mat-hint>
+                            </mat-form-field>
+                        </div>
+
+                        <div class="checkbox-row">
+                            <mat-checkbox formControlName="isFoil">Foil</mat-checkbox>
+                            <mat-checkbox formControlName="isSigned">Signed</mat-checkbox>
+                        </div>
+
+                        <div class="actions" style="display: flex; gap: 16px;">
+                            <button mat-raised-button color="primary" type="submit"
+                                [disabled]="listingForm.invalid || isSubmitting()" style="flex: 1;">
+                                <mat-spinner *ngIf="isSubmitting()" diameter="20"
+                                    style="display:inline-block; margin-right: 8px"></mat-spinner>
+                                {{ editingId() ? 'Update Queue' : (isSubmitting() ? 'Adding...' : 'Add to Queue') }}
+                            </button>
+
+                            <button mat-stroked-button color="warn" type="button" *ngIf="editingId()"
+                                (click)="onCancelEdit()">
+                                Cancel Edit
+                            </button>
+                        </div>
+
+                    </form>
                 </div>
             </div>
+        </mat-card-content>
+    </mat-card>
 
-            <!-- Listing Form -->
-            <form [formGroup]="listingForm" (ngSubmit)="onSubmit()" *ngIf="selectedBlueprint()">
+    <!-- Pending Listings Grid -->
+    <mat-card style="margin-top: 24px;">
+        <mat-card-header>
+            <mat-card-title>Pending Listings ({{ pendingListings().length }})</mat-card-title>
+            <div style="margin-left: auto; display: flex; gap: 16px; align-items: center;">
+                <mat-button-toggle-group [value]="filterStatus()" (change)="onFilterChange($event.value)">
+                    <mat-button-toggle value="unsynced">To Send</mat-button-toggle>
+                    <mat-button-toggle value="error">Errors</mat-button-toggle>
+                    <mat-button-toggle value="synced">Synced</mat-button-toggle>
+                    <mat-button-toggle value="all">All</mat-button-toggle>
+                </mat-button-toggle-group>
 
-                <div class="form-row">
-                    <mat-form-field appearance="outline">
-                        <mat-label>Condition</mat-label>
-                        <mat-select formControlName="condition">
-                            <mat-option *ngFor="let c of conditions" [value]="c">{{c}}</mat-option>
-                        </mat-select>
-                        <mat-error *ngIf="listingForm.get('condition')?.hasError('required')">
-                            Condition is required
-                        </mat-error>
-                    </mat-form-field>
+                <button mat-raised-button color="accent" (click)="onSyncAll()"
+                    [disabled]="isSyncing() || pendingListings().length === 0">
+                    <mat-spinner *ngIf="isSyncing()" diameter="20"
+                        style="display:inline-block; margin-right: 8px"></mat-spinner>
+                    Sync All to Card Trader
+                </button>
+            </div>
+        </mat-card-header>
+        <mat-card-content>
+            <table mat-table [dataSource]="pendingListings()" class="full-width">
+                <!-- Image Column -->
+                <ng-container matColumnDef="image">
+                    <th mat-header-cell *matHeaderCellDef> Card </th>
+                    <td mat-cell *matCellDef="let element">
+                        <img [src]="element.blueprint?.imageUrl || 'assets/placeholder-card.png'"
+                            style="width: 30px; height: 42px; object-fit: cover; border-radius: 2px;">
+                    </td>
+                </ng-container>
 
-                    <mat-form-field appearance="outline">
-                        <mat-label>Language</mat-label>
-                        <mat-select formControlName="language">
-                            <mat-option *ngFor="let l of languages" [value]="l">{{l}}</mat-option>
-                        </mat-select>
-                        <mat-error *ngIf="listingForm.get('language')?.hasError('required')">
-                            Language is required
-                        </mat-error>
-                    </mat-form-field>
-                </div>
+                <!-- Name Column -->
+                <ng-container matColumnDef="name">
+                    <th mat-header-cell *matHeaderCellDef> Name </th>
+                    <td mat-cell *matCellDef="let element">
+                        {{ element.blueprint?.name }}
+                        <span *ngIf="element.isFoil" style="color: #ffd700; font-weight: bold;">(Foil)</span>
+                        <span *ngIf="element.isSigned" style="color: #ff4081; font-weight: bold;">(Signed)</span>
+                    </td>
+                </ng-container>
 
-                <div class="form-row">
-                    <mat-form-field appearance="outline">
-                        <mat-label>Quantity</mat-label>
-                        <input matInput type="number" formControlName="quantity" min="1">
-                        <mat-error *ngIf="listingForm.get('quantity')?.hasError('min')">
-                            Quantity must be at least 1
-                        </mat-error>
-                    </mat-form-field>
+                <!-- Condition Column -->
+                <ng-container matColumnDef="condition">
+                    <th mat-header-cell *matHeaderCellDef> Cond/Lang </th>
+                    <td mat-cell *matCellDef="let element"> {{ element.condition }} / {{ element.language }} </td>
+                </ng-container>
 
-                    <mat-form-field appearance="outline">
-                        <mat-label>Selling Price (€)</mat-label>
-                        <input matInput type="number" formControlName="sellingPrice" min="0" step="0.01">
-                        <span matPrefix>€&nbsp;</span>
-                        <mat-hint>Price for Card Trader listing</mat-hint>
-                        <mat-error *ngIf="listingForm.get('sellingPrice')?.hasError('required')">
-                            Selling price is required
-                        </mat-error>
-                    </mat-form-field>
-                </div>
+                <!-- Quantity Column -->
+                <ng-container matColumnDef="quantity">
+                    <th mat-header-cell *matHeaderCellDef> Qty </th>
+                    <td mat-cell *matCellDef="let element"> {{ element.quantity }} </td>
+                </ng-container>
 
-                <div class="form-row">
-                    <mat-form-field appearance="outline">
-                        <mat-label>Purchase Price (€)</mat-label>
-                        <input matInput type="number" formControlName="purchasePrice" min="0" step="0.01">
-                        <span matPrefix>€&nbsp;</span>
-                        <mat-hint>Cost of goods sold (internal only)</mat-hint>
-                    </mat-form-field>
+                <!-- Price Column -->
+                <ng-container matColumnDef="price">
+                    <th mat-header-cell *matHeaderCellDef> Price </th>
+                    <td mat-cell *matCellDef="let element"> € {{ element.sellingPrice | number:'1.2-2' }} </td>
+                </ng-container>
 
-                    <mat-form-field appearance="outline">
-                        <mat-label>Location</mat-label>
-                        <input matInput formControlName="location" placeholder="e.g. Box A, Binder 1">
-                    </mat-form-field>
-                </div>
+                <!-- Status Column -->
+                <ng-container matColumnDef="status">
+                    <th mat-header-cell *matHeaderCellDef> Status </th>
+                    <td mat-cell *matCellDef="let element">
+                        <mat-icon *ngIf="element.isSynced" color="primary" matTooltip="Synced">check_circle</mat-icon>
+                        <mat-icon *ngIf="!element.isSynced && !element.syncError" color="accent"
+                            matTooltip="Pending">hourglass_empty</mat-icon>
+                        <mat-icon *ngIf="element.syncError" color="warn"
+                            [matTooltip]="element.syncError">error</mat-icon>
+                    </td>
+                </ng-container>
 
-                <div class="form-row">
-                    <mat-form-field appearance="outline">
-                        <mat-label>Tag</mat-label>
-                        <input matInput formControlName="tag" placeholder="e.g. #old, #reserved">
-                        <mat-hint>Custom tag for organization</mat-hint>
-                    </mat-form-field>
-                </div>
+                <!-- Actions Column -->
+                <ng-container matColumnDef="actions">
+                    <th mat-header-cell *matHeaderCellDef> Actions </th>
+                    <td mat-cell *matCellDef="let element">
+                        <button mat-icon-button color="primary" (click)="onEditPending(element)"
+                            [disabled]="element.isSynced" matTooltip="Edit">
+                            <mat-icon>edit</mat-icon>
+                        </button>
+                        <button mat-icon-button color="warn" (click)="onDeletePending(element.id)"
+                            [disabled]="element.isSynced" matTooltip="Delete">
+                            <mat-icon>delete</mat-icon>
+                        </button>
+                    </td>
+                </ng-container>
 
-                <div class="checkbox-row">
-                    <mat-checkbox formControlName="isFoil">Foil</mat-checkbox>
-                    <mat-checkbox formControlName="isSigned">Signed</mat-checkbox>
-                </div>
-
-                <div class="actions">
-                    <button mat-raised-button color="primary" type="submit"
-                        [disabled]="listingForm.invalid || isSubmitting()" class="full-width">
-                        <mat-spinner *ngIf="isSubmitting()" diameter="20"
-                            style="display:inline-block; margin-right: 8px"></mat-spinner>
-                        {{ isSubmitting() ? 'Creating Listing...' : 'Create Listing' }}
-                    </button>
-                </div>
-
-            </form>
+                <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+            </table>
         </mat-card-content>
     </mat-card>
 </div>

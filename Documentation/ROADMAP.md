@@ -54,7 +54,18 @@
   - Phase 3.1: Database Consultation UI ✅ DONE (Dashboard & Inventory List)
   - Phase 3.2: Card Trader Data Initial Sync ✅ DONE (with improved error reporting)
   - Phase 3.2b: Games Management Page ✅ DONE (View, Toggle Status, Sync Actions)
-  - Phase 3.3: Product Listing Creation ✅ DONE (with image preview, advanced search, default persistence)
+  - **Phase 3.3: Product Listing Creation ✅ DONE**
+    - Pending Listings System (queue-based workflow)
+    - "Save Defaults" toggle with localStorage persistence
+    - Edit/Delete pending listings
+    - Sync to Card Trader with proper error handling
+    - **Bug Fixes & Refinements:**
+      - Fixed Blueprint ID mapping (use CardTraderId instead of local ID)
+      - Fixed API response parsing (handle Card Trader's `resource` wrapper)
+      - Fixed payload structure (use `properties` object with `mtg_foil`, `mtg_language`)
+      - Removed incorrect InventoryItem creation during pending sync
+      - Fixed "Save Defaults" OFF behavior (reset fields, keep blueprint)
+      - Added detailed logging for sync failures
   - Phase 3.4-3.7: ⏳ TODO
 
 ⏳ **TODO**: Phase 4 Advanced Features, Phase 5 Deployment

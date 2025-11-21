@@ -177,25 +177,55 @@ public class CardTraderApiClient : ICardTraderApiService
         {
             _logger.LogInformation("Creating product on Card Trader for inventory item {ItemId}", item.Id);
 
+            var userData = item.Location;
+            if (!string.IsNullOrWhiteSpace(item.Tag))
+            {
+                userData = $"{userData} {item.Tag}".Trim();
+            }
+
             var payload = new
             {
-                blueprint_id = item.BlueprintId,
+                blueprint_id = item.Blueprint?.CardTraderId ?? throw new InvalidOperationException($"Blueprint not loaded for InventoryItem {item.Id}"),
                 price = item.ListingPrice,
                 quantity = item.Quantity,
-                condition = item.Condition,
-                language = item.Language,
-                foil = item.IsFoil,
-                signed = item.IsSigned,
-                user_data_field = item.Location
+                user_data_field = userData,
+                properties = new Dictionary<string, object>
+                {
+                    { "condition", item.Condition },
+                    { "mtg_language", GetLanguageCode(item.Language) },
+                    { "mtg_foil", item.IsFoil },
+                    { "signed", item.IsSigned },
+                    { "altered", false }
+                }
             };
 
             var response = await _httpClient.PostAsJsonAsync("products", payload, cancellationToken);
-            response.EnsureSuccessStatusCode();
+            var jsonResponse = await response.Content.ReadAsStringAsync(cancellationToken);
 
-            // Placeholder: Extract product ID from response
-            var productId = 0; // TODO: Parse from response
-            _logger.LogInformation("Created product {ProductId} on Card Trader for inventory item {ItemId}", productId, item.Id);
-            return productId;
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogError("Failed to create product on Card Trader. Status: {StatusCode}, Response: {Response}",
+                    response.StatusCode, jsonResponse);
+                response.EnsureSuccessStatusCode(); // Will throw
+            }
+
+            using var doc = JsonDocument.Parse(jsonResponse);
+
+            // Card Trader API returns the product in a 'resource' wrapper (or directly for some endpoints)
+            JsonElement productElement = doc.RootElement;
+            if (doc.RootElement.TryGetProperty("resource", out var resourceElement))
+            {
+                productElement = resourceElement;
+            }
+
+            if (productElement.TryGetProperty("id", out var idElement))
+            {
+                var productId = idElement.GetInt32();
+                _logger.LogInformation("Created product {ProductId} on Card Trader for inventory item {ItemId}", productId, item.Id);
+                return productId;
+            }
+
+            throw new Exception($"Failed to parse product ID from response: {jsonResponse}");
         }
         catch (Exception ex)
         {
@@ -340,5 +370,26 @@ public class CardTraderApiClient : ICardTraderApiService
             _logger.LogError(ex, "Error fetching orders from Card Trader API");
             throw;
         }
+    }
+
+    /// <summary>
+    /// Convert language name to Card Trader language code (e.g., "English" -> "en")
+    /// </summary>
+    private static string GetLanguageCode(string languageName)
+    {
+        return languageName?.ToLowerInvariant() switch
+        {
+            "english" => "en",
+            "french" => "fr",
+            "german" => "de",
+            "spanish" => "es",
+            "italian" => "it",
+            "portuguese" => "pt",
+            "japanese" => "ja",
+            "chinese" => "zh",
+            "russian" => "ru",
+            "korean" => "ko",
+            _ => "en" // Default to English
+        };
     }
 }

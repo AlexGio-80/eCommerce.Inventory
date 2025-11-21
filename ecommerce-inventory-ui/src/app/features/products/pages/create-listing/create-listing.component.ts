@@ -11,9 +11,13 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatTableModule } from '@angular/material/table';
+import { MatIconModule } from '@angular/material/icon';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { Router } from '@angular/router';
 import { BlueprintSelectorComponent } from '../../../../shared/components/blueprint-selector/blueprint-selector.component';
-import { ProductsService, CreateInventoryItemDto } from '../../services/products.service';
+import { ProductsService } from '../../services/products.service';
+import { PendingListingsService, PendingListing, CreatePendingListingDto } from '../../services/pending-listings.service';
 import { Blueprint } from '../../../../core/models';
 
 @Component({
@@ -32,13 +36,16 @@ import { Blueprint } from '../../../../core/models';
     MatProgressSpinnerModule,
     MatSlideToggleModule,
     MatTooltipModule,
+    MatTableModule,
+    MatIconModule,
+    MatButtonToggleModule,
     BlueprintSelectorComponent
   ],
   templateUrl: './create-listing.component.html',
   styles: [`
     .create-listing-container {
       padding: 24px;
-      max-width: 800px;
+      max-width: 1200px; /* Increased max-width for side-by-side layout */
       margin: 0 auto;
     }
 
@@ -99,6 +106,13 @@ export class CreateListingComponent {
   selectedBlueprint = signal<Blueprint | null>(null);
   isSubmitting = signal(false);
   saveDefaults = signal(false);
+  editingId = signal<number | null>(null);
+
+  // Pending Listings
+  pendingListings = signal<PendingListing[]>([]);
+  displayedColumns: string[] = ['image', 'name', 'condition', 'quantity', 'price', 'status', 'actions'];
+  filterStatus = signal<'all' | 'synced' | 'unsynced' | 'error'>('unsynced');
+  isSyncing = signal(false);
 
   private readonly STORAGE_KEY = 'listing_defaults';
 
@@ -108,6 +122,7 @@ export class CreateListingComponent {
   constructor(
     private fb: FormBuilder,
     private productsService: ProductsService,
+    private pendingListingsService: PendingListingsService,
     private snackBar: MatSnackBar,
     private router: Router
   ) {
@@ -124,6 +139,7 @@ export class CreateListingComponent {
       purchasePrice: [0, [Validators.required, Validators.min(0)]]
     });
     this.saveDefaults.set(defaults.saveEnabled);
+    this.loadPendingListings();
   }
 
   private loadDefaults() {
@@ -144,6 +160,8 @@ export class CreateListingComponent {
       language: 'English',
       isFoil: false,
       isSigned: false,
+      sellingPrice: null,
+      purchasePrice: 0,
       saveEnabled: false
     };
   }
@@ -165,6 +183,8 @@ export class CreateListingComponent {
       language: this.listingForm.get('language')?.value,
       isFoil: this.listingForm.get('isFoil')?.value,
       isSigned: this.listingForm.get('isSigned')?.value,
+      sellingPrice: this.listingForm.get('sellingPrice')?.value,
+      purchasePrice: this.listingForm.get('purchasePrice')?.value,
       saveEnabled: true
     };
     localStorage.setItem(this.STORAGE_KEY, JSON.stringify(defaults));
@@ -172,6 +192,115 @@ export class CreateListingComponent {
 
   onBlueprintSelected(blueprint: Blueprint) {
     this.selectedBlueprint.set(blueprint);
+  }
+
+  loadPendingListings() {
+    const status = this.filterStatus();
+    let isSynced: boolean | undefined;
+    let hasError: boolean | undefined;
+
+    if (status === 'synced') isSynced = true;
+    if (status === 'unsynced') isSynced = false;
+    if (status === 'error') hasError = true;
+
+    this.pendingListingsService.getPendingListings(1, 100, isSynced, hasError).subscribe({
+      next: (response) => {
+        this.pendingListings.set(response.items);
+      },
+      error: (error) => console.error('Error loading pending listings', error)
+    });
+  }
+
+  onFilterChange(value: string) {
+    this.filterStatus.set(value as any);
+    this.loadPendingListings();
+  }
+
+  onResetForm() {
+    this.selectedBlueprint.set(null);
+    this.editingId.set(null);
+
+    if (this.saveDefaults()) {
+      const defaults = this.loadDefaults();
+      this.listingForm.patchValue({
+        quantity: 1,
+        sellingPrice: defaults.sellingPrice,
+        purchasePrice: defaults.purchasePrice,
+        condition: defaults.condition,
+        language: defaults.language,
+        isFoil: defaults.isFoil,
+        isSigned: defaults.isSigned,
+        location: '',
+        tag: ''
+      });
+    } else {
+      this.listingForm.reset({
+        quantity: 1,
+        sellingPrice: null,
+        purchasePrice: 0,
+        condition: 'Near Mint',
+        language: 'English',
+        isFoil: false,
+        isSigned: false,
+        location: '',
+        tag: ''
+      });
+    }
+  }
+
+  onEditPending(item: PendingListing) {
+    if (item.isSynced) return;
+
+    this.editingId.set(item.id);
+    this.selectedBlueprint.set(item.blueprint || null);
+
+    this.listingForm.patchValue({
+      condition: item.condition,
+      language: item.language,
+      quantity: item.quantity,
+      sellingPrice: item.sellingPrice,
+      purchasePrice: item.purchasePrice || 0,
+      location: item.location,
+      tag: item.tag,
+      isFoil: item.isFoil,
+      isSigned: item.isSigned
+    });
+  }
+
+  onCancelEdit() {
+    this.editingId.set(null);
+    this.onResetForm();
+  }
+
+  onDeletePending(id: number) {
+    if (confirm('Are you sure you want to delete this pending listing?')) {
+      this.pendingListingsService.deletePendingListing(id).subscribe({
+        next: () => {
+          this.snackBar.open('Listing removed from queue', 'Close', { duration: 3000 });
+          this.loadPendingListings();
+          if (this.editingId() === id) {
+            this.onCancelEdit();
+          }
+        },
+        error: () => this.snackBar.open('Failed to delete listing', 'Close', { duration: 3000 })
+      });
+    }
+  }
+
+  onSyncAll() {
+    this.isSyncing.set(true);
+    this.pendingListingsService.syncPendingListings().subscribe({
+      next: (result) => {
+        this.isSyncing.set(false);
+        const message = `Synced: ${result.success}, Errors: ${result.errors}`;
+        this.snackBar.open(message, 'Close', { duration: 5000 });
+        this.loadPendingListings();
+      },
+      error: (error) => {
+        this.isSyncing.set(false);
+        this.snackBar.open('Sync failed', 'Close', { duration: 5000 });
+      }
+    });
   }
 
   onSubmit() {
@@ -182,10 +311,14 @@ export class CreateListingComponent {
     this.isSubmitting.set(true);
     const formValue = this.listingForm.value;
 
-    const dto: CreateInventoryItemDto = {
+    if (this.saveDefaults()) {
+      this.saveCurrentDefaults();
+    }
+
+    const dto: CreatePendingListingDto = {
       blueprintId: this.selectedBlueprint()!.id,
       quantity: formValue.quantity,
-      price: formValue.sellingPrice,
+      price: formValue.sellingPrice, // Map sellingPrice to price
       condition: formValue.condition,
       language: formValue.language,
       isFoil: formValue.isFoil,
@@ -195,39 +328,73 @@ export class CreateListingComponent {
       purchasePrice: formValue.purchasePrice
     };
 
-    this.productsService.createProduct(dto).subscribe({
-      next: (item) => {
-        this.isSubmitting.set(false);
-        this.snackBar.open('Product listing created successfully', 'View Inventory', { duration: 5000 })
-          .onAction().subscribe(() => {
-            this.router.navigate(['/layout/inventory']);
-          });
+    if (this.editingId()) {
+      // Update existing
+      this.pendingListingsService.updatePendingListing(this.editingId()!, dto).subscribe({
+        next: (updated) => {
+          this.snackBar.open('Listing updated', 'Close', { duration: 3000 });
+          this.isSubmitting.set(false);
+          this.editingId.set(null);
+          this.loadPendingListings();
 
-        // Save defaults if toggle is on
-        if (this.saveDefaults()) {
-          this.saveCurrentDefaults();
+          // Logic for "Save Defaults" OFF: Reset fields, keep blueprint
+          if (!this.saveDefaults()) {
+            this.listingForm.reset({
+              quantity: 1,
+              sellingPrice: null,
+              purchasePrice: 0,
+              condition: 'Near Mint',
+              language: 'English',
+              isFoil: false,
+              isSigned: false,
+              location: '',
+              tag: ''
+            });
+          }
+        },
+        error: (err) => {
+          console.error('Error updating listing', err);
+          this.snackBar.open(err.error?.message || 'Error updating listing', 'Close', { duration: 3000 });
+          this.isSubmitting.set(false);
         }
+      });
+    } else {
+      // Create new
+      this.pendingListingsService.createPendingListing(dto).subscribe({
+        next: (item) => {
+          this.isSubmitting.set(false);
+          this.snackBar.open('Added to queue', 'Undo', { duration: 3000 })
+            .onAction().subscribe(() => {
+              this.onDeletePending(item.id);
+            });
 
-        // Reset form but keep saved defaults
-        const defaults = this.loadDefaults();
-        this.listingForm.reset({
-          quantity: 1,
-          sellingPrice: null,
-          condition: defaults.condition,
-          language: defaults.language,
-          isFoil: defaults.isFoil,
-          isSigned: defaults.isSigned,
-          location: '',
-          tag: '',
-          purchasePrice: 0
-        });
-        this.selectedBlueprint.set(null);
-      },
-      error: (error) => {
-        this.isSubmitting.set(false);
-        console.error('Error creating product:', error);
-        this.snackBar.open('Failed to create product listing', 'Close', { duration: 5000 });
-      }
-    });
+          this.loadPendingListings();
+
+          // Logic for "Save Defaults" OFF: Reset fields, keep blueprint
+          if (!this.saveDefaults()) {
+            this.listingForm.reset({
+              quantity: 1,
+              sellingPrice: null,
+              purchasePrice: 0,
+              condition: 'Near Mint',
+              language: 'English',
+              isFoil: false,
+              isSigned: false,
+              location: '',
+              tag: ''
+            });
+          }
+        },
+        error: (error) => {
+          this.isSubmitting.set(false);
+          console.error('Error creating pending listing:', error);
+          if (error.status === 409) {
+            this.snackBar.open('Duplicate listing already in queue', 'Close', { duration: 5000 });
+          } else {
+            this.snackBar.open('Failed to add to queue', 'Close', { duration: 5000 });
+          }
+        }
+      });
+    }
   }
 }

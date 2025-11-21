@@ -136,7 +136,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             .HasOne(pl => pl.Blueprint)
             .WithMany()
             .HasForeignKey(pl => pl.BlueprintId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
 
         // PendingListing -> InventoryItem (Many-to-One, optional)
         modelBuilder.Entity<PendingListing>()

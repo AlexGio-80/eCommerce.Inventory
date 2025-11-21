@@ -1,0 +1,285 @@
+using eCommerce.Inventory.Application.DTOs;
+using eCommerce.Inventory.Application.Interfaces;
+using eCommerce.Inventory.Domain.Entities;
+using eCommerce.Inventory.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace eCommerce.Inventory.Api.Controllers;
+
+[ApiController]
+[Route("api/pending-listings")]
+public class PendingListingsController : ControllerBase
+{
+    private readonly ApplicationDbContext _dbContext;
+    private readonly ICardTraderApiService _cardTraderService;
+    private readonly ILogger<PendingListingsController> _logger;
+
+    public PendingListingsController(
+        ApplicationDbContext dbContext,
+        ICardTraderApiService cardTraderService,
+        ILogger<PendingListingsController> logger)
+    {
+        _dbContext = dbContext;
+        _cardTraderService = cardTraderService;
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Get pending listings with filtering
+    /// </summary>
+    [HttpGet]
+    public async Task<IActionResult> GetPendingListings(
+        [FromQuery] bool? isSynced = null,
+        [FromQuery] bool hasError = false,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var query = _dbContext.PendingListings
+                .Include(p => p.Blueprint)
+                .ThenInclude(b => b.Expansion)
+                .ThenInclude(e => e.Game)
+                .AsNoTracking()
+                .AsQueryable();
+
+            if (isSynced.HasValue)
+            {
+                query = query.Where(p => p.IsSynced == isSynced.Value);
+            }
+
+            if (hasError)
+            {
+                query = query.Where(p => p.SyncError != null);
+            }
+
+            var totalCount = await query.CountAsync(cancellationToken);
+
+            var items = await query
+                .OrderByDescending(p => p.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync(cancellationToken);
+
+            return Ok(new PagedResponse<PendingListing>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching pending listings");
+            return StatusCode(500, new { error = "Failed to fetch pending listings" });
+        }
+    }
+
+    /// <summary>
+    /// Add a listing to the pending queue
+    /// </summary>
+    [HttpPost]
+    public async Task<IActionResult> CreatePendingListing(
+        [FromBody] CreatePendingListingDto dto,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // Verify blueprint exists
+            var blueprint = await _dbContext.Blueprints
+                .FindAsync(new object[] { dto.BlueprintId }, cancellationToken);
+
+            if (blueprint == null)
+            {
+                return BadRequest(new { error = "Blueprint not found" });
+            }
+
+            // Duplicate check (only against unsynced items)
+            var isDuplicate = await _dbContext.PendingListings
+                .AnyAsync(p =>
+                    !p.IsSynced &&
+                    p.BlueprintId == dto.BlueprintId &&
+                    p.Condition == dto.Condition &&
+                    p.Language == dto.Language &&
+                    p.SellingPrice == dto.Price &&
+                    p.IsFoil == dto.IsFoil &&
+                    p.IsSigned == dto.IsSigned,
+                    cancellationToken);
+
+            if (isDuplicate)
+            {
+                return Conflict(new { error = "Duplicate pending listing exists" });
+            }
+
+            var pendingListing = new PendingListing
+            {
+                BlueprintId = dto.BlueprintId,
+                Quantity = dto.Quantity,
+                SellingPrice = dto.Price,
+                PurchasePrice = dto.PurchasePrice,
+                Condition = dto.Condition,
+                Language = dto.Language,
+                IsFoil = dto.IsFoil,
+                IsSigned = dto.IsSigned,
+                Location = dto.Location ?? string.Empty,
+                Tag = dto.Tag,
+                CreatedAt = DateTime.UtcNow,
+                IsSynced = false
+            };
+
+            _dbContext.PendingListings.Add(pendingListing);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            return CreatedAtAction(nameof(GetPendingListing), new { id = pendingListing.Id }, pendingListing);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating pending listing");
+            return StatusCode(500, new { error = "Failed to create pending listing" });
+        }
+    }
+
+    /// <summary>
+    /// Get a single pending listing
+    /// </summary>
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetPendingListing(int id, CancellationToken cancellationToken = default)
+    {
+        var item = await _dbContext.PendingListings
+            .Include(p => p.Blueprint)
+            .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+
+        if (item == null)
+        {
+            return NotFound();
+        }
+
+        return Ok(item);
+    }
+
+    /// <summary>
+    /// Update a pending listing
+    /// </summary>
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdatePendingListing(
+        int id,
+        [FromBody] CreatePendingListingDto dto,
+        CancellationToken cancellationToken = default)
+    {
+        var item = await _dbContext.PendingListings.FindAsync(new object[] { id }, cancellationToken);
+
+        if (item == null)
+        {
+            return NotFound();
+        }
+
+        if (item.IsSynced)
+        {
+            return BadRequest(new { error = "Cannot update a synced listing" });
+        }
+
+        item.BlueprintId = dto.BlueprintId;
+        item.Quantity = dto.Quantity;
+        item.SellingPrice = dto.Price;
+        item.PurchasePrice = dto.PurchasePrice;
+        item.Condition = dto.Condition;
+        item.Language = dto.Language;
+        item.IsFoil = dto.IsFoil;
+        item.IsSigned = dto.IsSigned;
+        item.Location = dto.Location ?? string.Empty;
+        item.Tag = dto.Tag;
+        item.SyncError = null; // Clear error on update
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return Ok(item);
+    }
+
+    /// <summary>
+    /// Delete a pending listing
+    /// </summary>
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeletePendingListing(int id, CancellationToken cancellationToken = default)
+    {
+        var item = await _dbContext.PendingListings.FindAsync(new object[] { id }, cancellationToken);
+
+        if (item == null)
+        {
+            return NotFound();
+        }
+
+        _dbContext.PendingListings.Remove(item);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Sync all pending listings to Card Trader
+    /// </summary>
+    [HttpPost("sync")]
+    public async Task<IActionResult> SyncPendingListings(CancellationToken cancellationToken = default)
+    {
+        var pendingItems = await _dbContext.PendingListings
+            .Include(p => p.Blueprint)
+            .Where(p => !p.IsSynced)
+            .ToListAsync(cancellationToken);
+
+        int successCount = 0;
+        int errorCount = 0;
+
+        foreach (var pending in pendingItems)
+        {
+            try
+            {
+                // Create InventoryItem object for the service
+                // Note: We don't save this yet, the service uses it to send data
+                var inventoryItem = new InventoryItem
+                {
+                    BlueprintId = pending.BlueprintId,
+                    Blueprint = pending.Blueprint, // Service might need navigation property
+                    Quantity = pending.Quantity,
+                    ListingPrice = pending.SellingPrice,
+                    Condition = pending.Condition,
+                    Language = pending.Language,
+                    IsFoil = pending.IsFoil,
+                    IsSigned = pending.IsSigned,
+                    Location = pending.Location,
+                    Tag = pending.Tag,
+                    PurchasePrice = pending.PurchasePrice
+                };
+
+                // Call Card Trader API
+                var cardTraderId = await _cardTraderService.CreateProductOnCardTraderAsync(inventoryItem, cancellationToken);
+
+                // Update PendingListing with sync info
+                // Note: We do NOT create InventoryItems here - they will be created
+                // only when syncing data FROM Card Trader
+                pending.IsSynced = true;
+                pending.SyncedAt = DateTime.UtcNow;
+                pending.CardTraderProductId = cardTraderId;
+                pending.SyncError = null;
+
+                successCount++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error syncing pending listing {Id}", pending.Id);
+                pending.SyncError = ex.Message;
+                errorCount++;
+            }
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return Ok(new
+        {
+            Total = pendingItems.Count,
+            Success = successCount,
+            Errors = errorCount
+        });
+    }
+}
