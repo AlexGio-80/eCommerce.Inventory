@@ -12,6 +12,7 @@ export interface CreateInventoryItemDto {
     isFoil: boolean;
     isSigned: boolean;
     location?: string;
+    tag?: string;
     purchasePrice: number;
 }
 
@@ -25,6 +26,7 @@ export interface InventoryItem {
     isFoil: boolean;
     isSigned: boolean;
     location: string;
+    tag?: string;
     dateAdded: Date;
 }
 

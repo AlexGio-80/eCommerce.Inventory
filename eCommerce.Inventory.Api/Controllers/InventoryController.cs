@@ -99,6 +99,7 @@ public class InventoryController : ControllerBase
                 IsFoil = dto.IsFoil,
                 IsSigned = dto.IsSigned,
                 Location = dto.Location ?? string.Empty,
+                Tag = dto.Tag,
                 PurchasePrice = dto.PurchasePrice,
                 DateAdded = DateTime.UtcNow
             };

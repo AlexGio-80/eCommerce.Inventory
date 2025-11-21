@@ -114,12 +114,13 @@ export class CreateListingComponent {
     const defaults = this.loadDefaults();
     this.listingForm = this.fb.group({
       quantity: [1, [Validators.required, Validators.min(1)]],
-      price: [null, [Validators.required, Validators.min(0)]],
+      sellingPrice: [null, [Validators.required, Validators.min(0)]],
       condition: [defaults.condition, Validators.required],
       language: [defaults.language, Validators.required],
       isFoil: [defaults.isFoil],
       isSigned: [defaults.isSigned],
       location: [''],
+      tag: [''],
       purchasePrice: [0, [Validators.required, Validators.min(0)]]
     });
     this.saveDefaults.set(defaults.saveEnabled);
@@ -184,12 +185,13 @@ export class CreateListingComponent {
     const dto: CreateInventoryItemDto = {
       blueprintId: this.selectedBlueprint()!.id,
       quantity: formValue.quantity,
-      price: formValue.price,
+      price: formValue.sellingPrice,
       condition: formValue.condition,
       language: formValue.language,
       isFoil: formValue.isFoil,
       isSigned: formValue.isSigned,
       location: formValue.location,
+      tag: formValue.tag,
       purchasePrice: formValue.purchasePrice
     };
 
@@ -210,10 +212,13 @@ export class CreateListingComponent {
         const defaults = this.loadDefaults();
         this.listingForm.reset({
           quantity: 1,
+          sellingPrice: null,
           condition: defaults.condition,
           language: defaults.language,
           isFoil: defaults.isFoil,
           isSigned: defaults.isSigned,
+          location: '',
+          tag: '',
           purchasePrice: 0
         });
         this.selectedBlueprint.set(null);

@@ -23,6 +23,7 @@ public class InventoryItem
 
     // Dati personalizzati per la BI
     public string Location { get; set; } // Es. "Scatola A", "Raccoglitore 1"
+    public string? Tag { get; set; } // Tag personalizzato per organizzazione/ricerca (inviato anche a Card Trader)
 
     public virtual ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
 }

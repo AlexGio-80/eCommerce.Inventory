@@ -27,5 +27,7 @@ public class CreateInventoryItemDto
 
     public string? Location { get; set; }
 
+    public string? Tag { get; set; }
+
     public decimal PurchasePrice { get; set; }
 }

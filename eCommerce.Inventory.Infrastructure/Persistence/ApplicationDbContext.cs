@@ -17,6 +17,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<Property> Properties { get; set; }
     public DbSet<PropertyValue> PropertyValues { get; set; }
     public DbSet<InventoryItem> InventoryItems { get; set; }
+    public DbSet<PendingListing> PendingListings { get; set; }
     public DbSet<Order> Orders { get; set; }
     public DbSet<OrderItem> OrderItems { get; set; }
 
@@ -129,5 +130,37 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
         modelBuilder.Entity<OrderItem>()
             .Property(oi => oi.PricePerItem)
             .HasPrecision(18, 2);
+
+        // PendingListing -> Blueprint (Many-to-One)
+        modelBuilder.Entity<PendingListing>()
+            .HasOne(pl => pl.Blueprint)
+            .WithMany()
+            .HasForeignKey(pl => pl.BlueprintId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // PendingListing -> InventoryItem (Many-to-One, optional)
+        modelBuilder.Entity<PendingListing>()
+            .HasOne(pl => pl.InventoryItem)
+            .WithMany()
+            .HasForeignKey(pl => pl.InventoryItemId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // Configure decimal precision for PendingListing prices
+        modelBuilder.Entity<PendingListing>()
+            .Property(pl => pl.SellingPrice)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<PendingListing>()
+            .Property(pl => pl.PurchasePrice)
+            .HasPrecision(18, 2);
+
+        // Index for pending listings queries
+        modelBuilder.Entity<PendingListing>()
+            .HasIndex(pl => pl.IsSynced)
+            .HasDatabaseName("IX_PendingListing_IsSynced");
+
+        modelBuilder.Entity<PendingListing>()
+            .HasIndex(pl => pl.CreatedAt)
+            .HasDatabaseName("IX_PendingListing_CreatedAt");
     }
 }
