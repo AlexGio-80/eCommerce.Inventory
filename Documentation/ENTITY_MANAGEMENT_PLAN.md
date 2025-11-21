@@ -11,7 +11,7 @@ Complete the entity management UI by implementing pages for Games, Categories, a
 
 ## Remaining Pages
 
-### 1. Games Management Page
+### 1. Games Management Page ✅ - Completed
 
 #### Backend
 - `GET /api/games` - List all games
@@ -107,23 +107,7 @@ All pages follow this structure:
    - Mainly for reference
 
 ## Outstanding Issues to Debug
-
-### Blueprint Sync Not Persisting
-**Current behavior**: 
-- API call succeeds (200 OK)
-- Logs show "Fetched X blueprints from API"
-- Database remains empty
-
-**Suspected causes**:
-1. `ExpansionsController.SyncBlueprints` doesn't call mapper/save logic
-2. Transaction not committed
-3. Mapper error silently caught
-
-**Next steps**:
-1. Add mapper call in `ExpansionsController.SyncBlueprints`
-2. Add `UpsertBlueprintsAsync` call from orchestrator
-3. Add detailed logging for each step
-4. Test with Expansion 80
+- None currently. Blueprint sync issue resolved.
 
 ## Verification Plan
 

@@ -636,6 +636,57 @@ public class CardTraderSyncOrchestrator
     }
 
     /// <summary>
+    /// Syncs blueprints for a specific expansion from Card Trader API to database
+    /// </summary>
+    public async Task<(int Added, int Updated, int Failed)> SyncBlueprintsForExpansionAsync(int expansionId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogInformation("Starting Blueprints sync for expansion ID {ExpansionId}", expansionId);
+
+            // Get the expansion
+            var expansion = await _dbContext.Expansions
+                .Include(e => e.Game)
+                .FirstOrDefaultAsync(e => e.Id == expansionId, cancellationToken);
+
+            if (expansion == null)
+            {
+                throw new ArgumentException($"Expansion with ID {expansionId} not found");
+            }
+
+            _logger.LogInformation("Syncing blueprints for expansion {ExpansionName} (CardTraderId: {CardTraderId})",
+                expansion.Name, expansion.CardTraderId);
+
+            // Fetch blueprints from Card Trader API
+            var blueprintDtos = await _cardTraderApiService.SyncBlueprintsForExpansionAsync(expansion.CardTraderId, cancellationToken);
+            var blueprintList = ConvertDynamicToList<CardTraderBlueprintDto>(blueprintDtos);
+            var blueprints = _dtoMapper.MapBlueprints(blueprintList);
+
+            _logger.LogInformation("Fetched {BlueprintCount} blueprints from Card Trader API", blueprints.Count);
+
+            // Fix Foreign Keys: Map Card Trader IDs to Local Database IDs
+            foreach (var bp in blueprints)
+            {
+                bp.ExpansionId = expansion.Id;
+                bp.GameId = expansion.GameId;
+            }
+
+            // Upsert blueprints into database
+            var result = await UpsertBlueprintsAsync(blueprints, cancellationToken);
+
+            _logger.LogInformation("Blueprints sync for expansion {ExpansionId} completed. Added: {Added}, Updated: {Updated}, Failed: {Failed}",
+                expansionId, result.Added, result.Updated, result.Failed);
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error syncing blueprints for expansion {ExpansionId}", expansionId);
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Converts a collection of dynamic objects to a typed list using JSON serialization
     /// </summary>
     private List<T> ConvertDynamicToList<T>(IEnumerable<dynamic> items) where T : class

@@ -123,39 +123,20 @@ public class ExpansionsController : ControllerBase
     {
         try
         {
-            _logger.LogInformation("Starting blueprint sync for expansion {ExpansionId}", id);
+            var result = await _syncOrchestrator.SyncBlueprintsForExpansionAsync(id, cancellationToken);
 
-            // Get the expansion
-            var expansion = await _dbContext.Expansions
-                .Include(e => e.Game)
-                .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
-
-            if (expansion == null)
-            {
-                return NotFound(new { error = "Expansion not found" });
-            }
-
-            _logger.LogInformation("Syncing blueprints for expansion {ExpansionName} (CardTraderId: {CardTraderId})",
-                expansion.Name, expansion.CardTraderId);
-
-            // Fetch blueprints from Card Trader API
-            var blueprintDtos = await _cardTraderApiService.SyncBlueprintsForExpansionAsync(
-                expansion.CardTraderId,
-                cancellationToken);
-
-            _logger.LogInformation("Fetched {Count} blueprints from API for expansion {ExpansionId}",
-                blueprintDtos.Count(), expansion.CardTraderId);
-
-            // TODO: Map and save blueprints
-            // For now, just return the count
             return Ok(new
             {
                 expansionId = id,
-                expansionName = expansion.Name,
-                cardTraderId = expansion.CardTraderId,
-                blueprintsFetched = blueprintDtos.Count(),
-                message = $"Fetched {blueprintDtos.Count()} blueprints from Card Trader API"
+                blueprintsAdded = result.Added,
+                blueprintsUpdated = result.Updated,
+                blueprintsFailed = result.Failed,
+                message = $"Sync completed. Added: {result.Added}, Updated: {result.Updated}, Failed: {result.Failed}"
             });
+        }
+        catch (ArgumentException ex)
+        {
+            return NotFound(new { error = ex.Message });
         }
         catch (Exception ex)
         {

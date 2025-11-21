@@ -1,0 +1,69 @@
+<div class="games-container">
+  <h1>Games Management</h1>
+
+  <!-- Header Card with Selected Game Details -->
+  <mat-card class="header-card" *ngIf="selectedGame()">
+    <mat-card-header>
+      <mat-card-title>{{ selectedGame()?.name }}</mat-card-title>
+      <mat-card-subtitle>{{ selectedGame()?.code }}</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="game-details">
+        <div class="detail-row">
+          <label>ID:</label>
+          <span>{{ selectedGame()?.id }}</span>
+        </div>
+        <div class="detail-row">
+          <label>Card Trader ID:</label>
+          <span>{{ selectedGame()?.cardTraderId }}</span>
+        </div>
+        <div class="detail-row">
+          <label>Status:</label>
+          <mat-slide-toggle
+            [checked]="selectedGame()?.isEnabled ?? false"
+            (change)="toggleGameEnabled($event.checked)"
+            color="primary">
+            {{ selectedGame()?.isEnabled ? 'Enabled' : 'Disabled' }}
+          </mat-slide-toggle>
+        </div>
+      </div>
+    </mat-card-content>
+    <mat-card-actions>
+      <button 
+        mat-raised-button 
+        color="primary" 
+        (click)="syncExpansions()"
+        [disabled]="isSyncingExpansions() || isSyncingAll()">
+        <mat-spinner *ngIf="isSyncingExpansions()" diameter="20"></mat-spinner>
+        {{ isSyncingExpansions() ? 'Syncing Expansions...' : 'Sync Expansions' }}
+      </button>
+      
+      <button 
+        mat-raised-button 
+        color="accent" 
+        (click)="syncAll()"
+        [disabled]="isSyncingExpansions() || isSyncingAll()">
+        <mat-spinner *ngIf="isSyncingAll()" diameter="20"></mat-spinner>
+        {{ isSyncingAll() ? 'Syncing All...' : 'Sync All (Expansions + Blueprints)' }}
+      </button>
+    </mat-card-actions>
+  </mat-card>
+
+  <!-- AG-Grid Table -->
+  <mat-card class="grid-card">
+    <mat-card-content>
+      <ag-grid-angular
+        class="ag-theme-material"
+        [rowData]="games()"
+        [columnDefs]="columnDefs"
+        [defaultColDef]="defaultColDef"
+        [pagination]="true"
+        [paginationPageSize]="20"
+        [rowSelection]="'single'"
+        (gridReady)="onGridReady($event)"
+        (selectionChanged)="onSelectionChanged($event)"
+        style="height: 600px; width: 100%;">
+      </ag-grid-angular>
+    </mat-card-content>
+  </mat-card>
+</div>

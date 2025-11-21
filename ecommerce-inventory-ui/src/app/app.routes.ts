@@ -34,6 +34,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/expansions/pages/expansions-page.component').then(m => m.ExpansionsPageComponent),
         data: { title: 'Expansions' }
       },
+      {
+        path: 'games',
+        loadComponent: () => import('./features/games/pages/games-page.component').then(m => m.GamesPageComponent),
+        data: { title: 'Games' }
+      },
       // TODO: Add routes for Phase 3.3-3.5
       // - /layout/products (Product Listing Component)
       // - /layout/orders (Orders Component)
