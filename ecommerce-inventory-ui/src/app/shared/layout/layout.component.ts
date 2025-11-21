@@ -39,6 +39,7 @@ export class LayoutComponent {
     { label: 'Sincronizzazione', route: '/layout/sync', icon: 'sync' },
     { label: 'Games', route: '/layout/games', icon: 'casino' },
     { label: 'Expansions', route: '/layout/expansions', icon: 'extension' },
+    { label: 'Nuovo Prodotto', route: '/layout/products/create', icon: 'add_circle' },
     { label: 'Prodotti', route: '/layout/products', icon: 'shopping_bag' },
     { label: 'Ordini', route: '/layout/orders', icon: 'shopping_cart' },
     { label: 'Report', route: '/layout/reporting', icon: 'bar_chart' },

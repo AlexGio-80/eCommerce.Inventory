@@ -1,0 +1,106 @@
+<div class="create-listing-container">
+    <mat-card>
+        <mat-card-header>
+            <mat-card-title>Create New Product Listing</mat-card-title>
+            <mat-card-subtitle>Add a new item to your local inventory</mat-card-subtitle>
+            <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 14px; color: #666;">Save defaults</span>
+                <mat-slide-toggle [checked]="saveDefaults()" (change)="onToggleSaveDefaults()"
+                    matTooltip="Save condition, language, and properties as defaults for next listing" color="primary">
+                </mat-slide-toggle>
+            </div>
+        </mat-card-header>
+
+        <mat-card-content>
+            <!-- Blueprint Selector -->
+            <div class="blueprint-section" *ngIf="!selectedBlueprint()">
+                <app-blueprint-selector (selectionChange)="onBlueprintSelected($event)"></app-blueprint-selector>
+            </div>
+
+            <!-- Selected Blueprint Info -->
+            <div class="selected-blueprint-info" *ngIf="selectedBlueprint()">
+                <img [src]="selectedBlueprint()?.imageUrl || 'assets/placeholder-card.png'" alt="Card Image"
+                    class="blueprint-image">
+                <div class="blueprint-details">
+                    <h3>{{ selectedBlueprint()?.name }}</h3>
+                    <p>{{ selectedBlueprint()?.expansion?.name }} - {{ selectedBlueprint()?.rarity }}</p>
+                    <button mat-button color="primary" (click)="selectedBlueprint.set(null)">Change Card</button>
+                </div>
+            </div>
+
+            <!-- Listing Form -->
+            <form [formGroup]="listingForm" (ngSubmit)="onSubmit()" *ngIf="selectedBlueprint()">
+
+                <div class="form-row">
+                    <mat-form-field appearance="outline">
+                        <mat-label>Condition</mat-label>
+                        <mat-select formControlName="condition">
+                            <mat-option *ngFor="let c of conditions" [value]="c">{{c}}</mat-option>
+                        </mat-select>
+                        <mat-error *ngIf="listingForm.get('condition')?.hasError('required')">
+                            Condition is required
+                        </mat-error>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline">
+                        <mat-label>Language</mat-label>
+                        <mat-select formControlName="language">
+                            <mat-option *ngFor="let l of languages" [value]="l">{{l}}</mat-option>
+                        </mat-select>
+                        <mat-error *ngIf="listingForm.get('language')?.hasError('required')">
+                            Language is required
+                        </mat-error>
+                    </mat-form-field>
+                </div>
+
+                <div class="form-row">
+                    <mat-form-field appearance="outline">
+                        <mat-label>Quantity</mat-label>
+                        <input matInput type="number" formControlName="quantity" min="1">
+                        <mat-error *ngIf="listingForm.get('quantity')?.hasError('min')">
+                            Quantity must be at least 1
+                        </mat-error>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline">
+                        <mat-label>Listing Price (€)</mat-label>
+                        <input matInput type="number" formControlName="price" min="0" step="0.01">
+                        <span matPrefix>€&nbsp;</span>
+                        <mat-error *ngIf="listingForm.get('price')?.hasError('required')">
+                            Price is required
+                        </mat-error>
+                    </mat-form-field>
+                </div>
+
+                <div class="form-row">
+                    <mat-form-field appearance="outline">
+                        <mat-label>Purchase Price (€)</mat-label>
+                        <input matInput type="number" formControlName="purchasePrice" min="0" step="0.01">
+                        <span matPrefix>€&nbsp;</span>
+                        <mat-hint>Cost of goods sold (internal only)</mat-hint>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline">
+                        <mat-label>Location</mat-label>
+                        <input matInput formControlName="location" placeholder="e.g. Box A, Binder 1">
+                    </mat-form-field>
+                </div>
+
+                <div class="checkbox-row">
+                    <mat-checkbox formControlName="isFoil">Foil</mat-checkbox>
+                    <mat-checkbox formControlName="isSigned">Signed</mat-checkbox>
+                </div>
+
+                <div class="actions">
+                    <button mat-raised-button color="primary" type="submit"
+                        [disabled]="listingForm.invalid || isSubmitting()" class="full-width">
+                        <mat-spinner *ngIf="isSubmitting()" diameter="20"
+                            style="display:inline-block; margin-right: 8px"></mat-spinner>
+                        {{ isSubmitting() ? 'Creating Listing...' : 'Create Listing' }}
+                    </button>
+                </div>
+
+            </form>
+        </mat-card-content>
+    </mat-card>
+</div>

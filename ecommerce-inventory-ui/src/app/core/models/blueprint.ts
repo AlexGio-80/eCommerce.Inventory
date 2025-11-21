@@ -1,10 +1,22 @@
 export interface Blueprint {
   id: number;
+  name: string;
   expansionId: number;
-  cardName: string;
-  cardTraderProductId?: number;
+  gameId: number;
+  imageUrl?: string;
   rarity?: string;
-  condition?: string;
+  version?: string;
+  fixedProperties?: string;
+  editableProperties?: string;
+  expansion?: {
+    id: number;
+    name: string;
+    code: string;
+  };
+  game?: {
+    id: number;
+    name: string;
+  };
   createdAt: Date;
   updatedAt: Date;
 }

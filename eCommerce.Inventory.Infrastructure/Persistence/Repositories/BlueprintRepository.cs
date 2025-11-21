@@ -125,6 +125,7 @@ public class BlueprintRepository : IBlueprintRepository
 
     /// <summary>
     /// Search blueprints by name (case-insensitive partial match)
+    /// Allows searching by card name and expansion name (e.g. "Sol Ring Commander")
     /// </summary>
     public async Task<IEnumerable<Blueprint>> SearchByNameAsync(
         string name,
@@ -135,12 +136,19 @@ public class BlueprintRepository : IBlueprintRepository
             return new List<Blueprint>();
         }
 
-        var searchTerm = name.ToLower().Trim();
+        var searchTerms = name.ToLower().Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-        return await _context.Blueprints
+        var query = _context.Blueprints
             .Include(b => b.Game)
             .Include(b => b.Expansion)
-            .Where(b => b.Name.ToLower().Contains(searchTerm))
+            .AsNoTracking();
+
+        foreach (var term in searchTerms)
+        {
+            query = query.Where(b => b.Name.ToLower().Contains(term) || b.Expansion.Name.ToLower().Contains(term));
+        }
+
+        return await query
             .OrderBy(b => b.Name)
             .Take(50) // Limit search results to 50
             .ToListAsync(cancellationToken);

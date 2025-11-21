@@ -60,7 +60,7 @@ export class InventoryListComponent implements OnInit {
 
   private pageSubject = new BehaviorSubject<number>(1);
 
-  constructor(private apiService: CardTraderApiService) {}
+  constructor(private apiService: CardTraderApiService) { }
 
   ngOnInit(): void {
     this.games$ = this.apiService.getGames();
@@ -96,7 +96,7 @@ export class InventoryListComponent implements OnInit {
   }
 
   deleteItem(item: InventoryItem): void {
-    if (confirm(`Sei sicuro di voler eliminare ${item.blueprint?.cardName}?`)) {
+    if (confirm(`Sei sicuro di voler eliminare ${item.blueprint?.name}?`)) {
       this.apiService.deleteInventoryItem(item.id).subscribe({
         next: () => {
           console.log('Item deleted');
