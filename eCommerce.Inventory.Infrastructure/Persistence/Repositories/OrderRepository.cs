@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using eCommerce.Inventory.Application.Interfaces;
 using eCommerce.Inventory.Domain.Entities;
+using eCommerce.Inventory.Application.DTOs;
 
 namespace eCommerce.Inventory.Infrastructure.Persistence.Repositories;
 
@@ -28,7 +29,7 @@ public class OrderRepository : IOrderRepository
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<IEnumerable<Order>> GetOrdersWithItemsAsync(DateTime? from = null, DateTime? to = null, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<Order>> GetOrdersWithItemsAsync(DateTime? from = null, DateTime? to = null, bool excludeNullDates = true, CancellationToken cancellationToken = default)
     {
         var query = _context.Orders
             .Include(o => o.OrderItems)
@@ -38,16 +39,44 @@ public class OrderRepository : IOrderRepository
         if (from.HasValue || to.HasValue)
         {
             query = query.Where(o =>
-                // Include orders with null PaidAt
-                o.PaidAt == null ||
+                // Include orders with null PaidAt ONLY if excludeNullDates is false
+                (!excludeNullDates && o.PaidAt == null) ||
                 // Or orders within the date range
                 ((!from.HasValue || o.PaidAt >= from.Value) &&
                  (!to.HasValue || o.PaidAt <= to.Value.AddDays(1).AddSeconds(-1))) // Include entire "to" day
             );
         }
+        else if (excludeNullDates)
+        {
+            // If no date range provided but excludeNullDates is true, filter out nulls
+            query = query.Where(o => o.PaidAt != null);
+        }
 
         return await query
             .OrderByDescending(o => o.PaidAt)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IEnumerable<UnpreparedItemDto>> GetUnpreparedItemsAsync(CancellationToken cancellationToken = default)
+    {
+        return await _context.OrderItems
+            .Include(oi => oi.Order)
+            .Where(oi => !oi.IsPrepared)
+            .Select(oi => new UnpreparedItemDto
+            {
+                Id = oi.Id,
+                Name = oi.Name,
+                ExpansionName = oi.ExpansionName,
+                Condition = oi.Condition,
+                Language = oi.Language,
+                Quantity = oi.Quantity,
+                Price = oi.Price,
+                OrderCode = oi.Order != null ? oi.Order.Code : "N/A",
+                BuyerUsername = oi.Order != null ? oi.Order.BuyerUsername : "N/A",
+                OrderDate = oi.Order != null ? oi.Order.PaidAt : null,
+                IsPrepared = oi.IsPrepared,
+                ImageUrl = oi.Blueprint != null ? oi.Blueprint.ImageUrl : null
+            })
             .ToListAsync(cancellationToken);
     }
 

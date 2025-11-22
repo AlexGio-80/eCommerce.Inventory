@@ -9,7 +9,8 @@ public class OrderItem
 
     public int CardTraderId { get; set; }
     public int ProductId { get; set; }
-    public int BlueprintId { get; set; }
+    public int? BlueprintId { get; set; }
+    public virtual Blueprint? Blueprint { get; set; }
     public int CategoryId { get; set; }
     public int GameId { get; set; }
 

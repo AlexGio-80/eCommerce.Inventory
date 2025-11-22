@@ -48,6 +48,7 @@ export class OrdersListComponent implements OnInit {
     // Date filters
     fromDate: string;
     toDate: string;
+    excludeNullDates: boolean = true;
 
     // AG-Grid Column Definitions
     columnDefs: ColDef[] = [
@@ -110,19 +111,6 @@ export class OrdersListComponent implements OnInit {
                 });
                 return checkbox;
             }
-        },
-        {
-            headerName: 'Actions',
-            field: 'actions',
-            sortable: false,
-            filter: false,
-            width: 100,
-            cellRenderer: (params: any) => {
-                return `<button class="action-btn">View</button>`;
-            },
-            onCellClicked: (params) => {
-                this.viewOrderDetails(params.data);
-            }
         }
     ];
 
@@ -146,28 +134,7 @@ export class OrdersListComponent implements OnInit {
         enableRangeSelection: false,
         suppressMenuHide: false,
         columnMenu: 'new' as const,
-        suppressDragLeaveHidesColumns: true,
-        sideBar: {
-            toolPanels: [
-                {
-                    id: 'columns',
-                    labelDefault: 'Columns',
-                    labelKey: 'columns',
-                    iconKey: 'columns',
-                    toolPanel: 'agColumnsToolPanel',
-                    toolPanelParams: {
-                        suppressRowGroups: true,
-                        suppressValues: true,
-                        suppressPivots: true,
-                        suppressPivotMode: true,
-                        suppressColumnFilter: false,
-                        suppressColumnSelectAll: false,
-                        suppressColumnExpandAll: false
-                    }
-                }
-            ],
-            defaultToolPanel: ''
-        }
+        suppressDragLeaveHidesColumns: true
     };
 
     constructor(
@@ -209,7 +176,7 @@ export class OrdersListComponent implements OnInit {
     loadOrders(): void {
         this.isLoading = true;
         // Pass date filters to backend for SQL-level filtering
-        this.apiService.getOrders(this.fromDate, this.toDate).subscribe({
+        this.apiService.getOrders(this.fromDate, this.toDate, this.excludeNullDates).subscribe({
             next: (orders) => {
                 this.orders = orders;
                 this.filteredOrders = orders; // No need for client-side filtering
@@ -220,31 +187,6 @@ export class OrdersListComponent implements OnInit {
                 this.showSnackBar('Error loading orders');
                 this.isLoading = false;
             }
-        });
-    }
-
-    applyDateFilter(): void {
-        if (!this.fromDate && !this.toDate) {
-            this.filteredOrders = this.orders;
-            return;
-        }
-
-        const from = this.fromDate ? new Date(this.fromDate) : null;
-        const to = this.toDate ? new Date(this.toDate) : null;
-
-        this.filteredOrders = this.orders.filter(order => {
-            if (!order.paidAt) return false;
-
-            const orderDate = new Date(order.paidAt);
-
-            if (from && orderDate < from) return false;
-            if (to) {
-                const toEndOfDay = new Date(to);
-                toEndOfDay.setHours(23, 59, 59, 999);
-                if (orderDate > toEndOfDay) return false;
-            }
-
-            return true;
         });
     }
 
@@ -345,14 +287,32 @@ export class OrdersListComponent implements OnInit {
 
     // Event handlers for grid state changes
     onColumnMoved(): void {
-        this.saveGridState();
+        // this.saveGridState(); // Auto-save disabled per user request
     }
 
     onColumnVisible(): void {
-        this.saveGridState();
+        // this.saveGridState(); // Auto-save disabled per user request
     }
 
     onSortChanged(): void {
-        this.saveGridState();
+        // this.saveGridState(); // Auto-save disabled per user request
+    }
+
+    // Column Visibility Helper
+    toggleColumnVisibility(colId: string): void {
+        const col = this.gridApi.getColumn(colId);
+        if (col) {
+            this.gridApi.setColumnsVisible([colId], !col.isVisible());
+            this.saveGridState();
+        }
+    }
+
+    isColumnVisible(colId: string): boolean {
+        const col = this.gridApi?.getColumn(colId);
+        return col ? col.isVisible() : true;
+    }
+
+    getAllColumns(): any[] {
+        return this.columnDefs.filter(col => col.field !== 'actions');
     }
 }

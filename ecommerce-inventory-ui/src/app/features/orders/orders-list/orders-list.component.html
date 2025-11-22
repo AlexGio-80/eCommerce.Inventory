@@ -1,35 +1,58 @@
 <div class="orders-container">
   <div class="orders-header">
     <h1>Orders</h1>
-    <div class="date-filters">
-      <mat-form-field appearance="outline" class="date-field">
-        <mat-label>Da</mat-label>
-        <input matInput type="date" [(ngModel)]="fromDate" (change)="onDateFilterChange()">
-      </mat-form-field>
-      <mat-form-field appearance="outline" class="date-field">
-        <mat-label>A</mat-label>
-        <input matInput type="date" [(ngModel)]="toDate" (change)="onDateFilterChange()">
-      </mat-form-field>
-    </div>
     <div class="actions">
       <button mat-raised-button color="primary" (click)="syncOrders()" [disabled]="isSyncing">
         <mat-icon>sync</mat-icon>
         {{ isSyncing ? 'Syncing...' : 'Sync Orders' }}
       </button>
+
+      <!-- Grid Options Menu -->
       <button mat-icon-button [matMenuTriggerFor]="gridMenu" matTooltip="Grid Options">
         <mat-icon>more_vert</mat-icon>
       </button>
       <mat-menu #gridMenu="matMenu">
+        <button mat-menu-item [matMenuTriggerFor]="columnsMenu">
+          <mat-icon>view_column</mat-icon>
+          <span>Columns</span>
+        </button>
         <button mat-menu-item (click)="saveGridState()">
           <mat-icon>save</mat-icon>
-          <span>Save Grid Configuration</span>
+          <span>Save Configuration</span>
         </button>
         <button mat-menu-item (click)="resetGridState()">
           <mat-icon>refresh</mat-icon>
           <span>Reset to Defaults</span>
         </button>
       </mat-menu>
+
+      <!-- Columns Sub-Menu -->
+      <mat-menu #columnsMenu="matMenu">
+        <div class="columns-menu-container" (click)="$event.stopPropagation()">
+          <div *ngFor="let col of getAllColumns()" class="column-toggle-item">
+            <mat-checkbox [checked]="isColumnVisible(col.field!)" (change)="toggleColumnVisibility(col.field!)">
+              {{ col.headerName }}
+            </mat-checkbox>
+          </div>
+        </div>
+      </mat-menu>
     </div>
+  </div>
+
+  <div class="filters-container">
+    <mat-form-field appearance="outline">
+      <mat-label>From Date</mat-label>
+      <input matInput type="date" [(ngModel)]="fromDate" (change)="onDateFilterChange()">
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>To Date</mat-label>
+      <input matInput type="date" [(ngModel)]="toDate" (change)="onDateFilterChange()">
+    </mat-form-field>
+
+    <mat-checkbox [(ngModel)]="excludeNullDates" (change)="onDateFilterChange()" class="filter-checkbox">
+      Hide Unpaid/Null Date
+    </mat-checkbox>
   </div>
 
   <div *ngIf="isLoading" class="loading-spinner">

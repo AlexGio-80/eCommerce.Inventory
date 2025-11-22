@@ -19,9 +19,7 @@
         </div>
         <div class="detail-row">
           <label>Status:</label>
-          <mat-slide-toggle
-            [checked]="selectedGame()?.isEnabled ?? false"
-            (change)="toggleGameEnabled($event.checked)"
+          <mat-slide-toggle [checked]="selectedGame()?.isEnabled ?? false" (change)="toggleGameEnabled($event.checked)"
             color="primary">
             {{ selectedGame()?.isEnabled ? 'Enabled' : 'Disabled' }}
           </mat-slide-toggle>
@@ -29,20 +27,13 @@
       </div>
     </mat-card-content>
     <mat-card-actions>
-      <button 
-        mat-raised-button 
-        color="primary" 
-        (click)="syncExpansions()"
+      <button mat-raised-button color="primary" (click)="syncExpansions()"
         [disabled]="isSyncingExpansions() || isSyncingAll()">
         <mat-spinner *ngIf="isSyncingExpansions()" diameter="20"></mat-spinner>
         {{ isSyncingExpansions() ? 'Syncing Expansions...' : 'Sync Expansions' }}
       </button>
-      
-      <button 
-        mat-raised-button 
-        color="accent" 
-        (click)="syncAll()"
-        [disabled]="isSyncingExpansions() || isSyncingAll()">
+
+      <button mat-raised-button color="accent" (click)="syncAll()" [disabled]="isSyncingExpansions() || isSyncingAll()">
         <mat-spinner *ngIf="isSyncingAll()" diameter="20"></mat-spinner>
         {{ isSyncingAll() ? 'Syncing All...' : 'Sync All (Expansions + Blueprints)' }}
       </button>
@@ -52,16 +43,44 @@
   <!-- AG-Grid Table -->
   <mat-card class="grid-card">
     <mat-card-content>
-      <ag-grid-angular
-        class="ag-theme-material"
-        [rowData]="games()"
-        [columnDefs]="columnDefs"
-        [defaultColDef]="defaultColDef"
-        [pagination]="true"
-        [paginationPageSize]="20"
-        [rowSelection]="'single'"
-        (gridReady)="onGridReady($event)"
-        (selectionChanged)="onSelectionChanged($event)"
+      <div class="grid-header">
+        <h2>Games List</h2>
+
+        <!-- Grid Options Menu -->
+        <button mat-icon-button [matMenuTriggerFor]="gridMenu" matTooltip="Grid Options">
+          <mat-icon>more_vert</mat-icon>
+        </button>
+        <mat-menu #gridMenu="matMenu">
+          <button mat-menu-item [matMenuTriggerFor]="columnsMenu">
+            <mat-icon>view_column</mat-icon>
+            <span>Columns</span>
+          </button>
+          <button mat-menu-item (click)="saveGridState()">
+            <mat-icon>save</mat-icon>
+            <span>Save Configuration</span>
+          </button>
+          <button mat-menu-item (click)="resetGridState()">
+            <mat-icon>refresh</mat-icon>
+            <span>Reset to Defaults</span>
+          </button>
+        </mat-menu>
+
+        <!-- Columns Sub-Menu -->
+        <mat-menu #columnsMenu="matMenu">
+          <div class="columns-menu-container" (click)="$event.stopPropagation()">
+            <div *ngFor="let col of getAllColumns()" class="column-toggle-item">
+              <mat-checkbox [checked]="isColumnVisible(col.field!)" (change)="toggleColumnVisibility(col.field!)">
+                {{ col.headerName }}
+              </mat-checkbox>
+            </div>
+          </div>
+        </mat-menu>
+      </div>
+
+      <ag-grid-angular class="ag-theme-material" [rowData]="games()" [columnDefs]="columnDefs"
+        [defaultColDef]="defaultColDef" [gridOptions]="gridOptions" [pagination]="true" [paginationPageSize]="20"
+        [rowSelection]="'single'" (gridReady)="onGridReady($event)" (selectionChanged)="onSelectionChanged($event)"
+        (columnMoved)="onColumnMoved()" (columnVisible)="onColumnVisible()" (sortChanged)="onSortChanged()"
         style="height: 600px; width: 100%;">
       </ag-grid-angular>
     </mat-card-content>

@@ -1,8 +1,9 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AgGridAngular } from 'ag-grid-angular';
-import { ColDef, ModuleRegistry, AllCommunityModule, GridApi } from 'ag-grid-community';
-import { GamesService, Game, SyncResponse } from '../services/games.service';
+import { ColDef, ModuleRegistry, AllCommunityModule, GridApi, GridReadyEvent } from 'ag-grid-community';
+import { GamesService, Game } from '../services/games.service';
+import { GridStateService } from '../../../core/services/grid-state.service';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -10,6 +11,10 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatIconModule } from '@angular/material/icon';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
 
 // Register AG Grid modules
@@ -28,6 +33,10 @@ ModuleRegistry.registerModules([AllCommunityModule]);
         MatProgressSpinnerModule,
         MatSnackBarModule,
         MatSlideToggleModule,
+        MatMenuModule,
+        MatIconModule,
+        MatCheckboxModule,
+        MatTooltipModule,
         FormsModule
     ],
     templateUrl: './games-page.component.html',
@@ -79,10 +88,39 @@ ModuleRegistry.registerModules([AllCommunityModule]);
     .grid-card {
       margin-top: 24px;
     }
+    
+    .grid-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+    }
+    
+    .grid-header h2 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 500;
+    }
 
     :host ::ng-deep .ag-theme-material {
       --ag-header-background-color: #3f51b5;
       --ag-header-foreground-color: white;
+    }
+    
+    /* Column Menu Styles */
+    .columns-menu-container {
+      padding: 8px;
+      min-width: 200px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .column-toggle-item {
+      padding: 4px 8px;
+    }
+
+    ::ng-deep .mat-mdc-menu-content {
+      padding: 0 !important;
     }
   `]
 })
@@ -93,6 +131,7 @@ export class GamesPageComponent implements OnInit {
     isSyncingAll = signal(false);
 
     private gridApi!: GridApi;
+    private readonly GRID_ID = 'games-grid';
 
     columnDefs: ColDef[] = [
         { field: 'id', headerName: 'ID', width: 80, filter: 'agNumberColumnFilter' },
@@ -115,8 +154,15 @@ export class GamesPageComponent implements OnInit {
         filter: true
     };
 
+    gridOptions = {
+        suppressMenuHide: false,
+        columnMenu: 'new' as const,
+        suppressDragLeaveHidesColumns: true
+    };
+
     constructor(
         private gamesService: GamesService,
+        private gridStateService: GridStateService,
         private snackBar: MatSnackBar
     ) { }
 
@@ -124,15 +170,25 @@ export class GamesPageComponent implements OnInit {
         this.loadGames();
     }
 
-    onGridReady(params: any) {
+    onGridReady(params: GridReadyEvent) {
         this.gridApi = params.api;
+
+        // Restore saved grid state
+        const savedState = this.gridStateService.loadGridState(this.GRID_ID);
+        if (savedState) {
+            if (savedState.columnState) {
+                this.gridApi.applyColumnState({ state: savedState.columnState, applyOrder: true });
+            }
+            if (savedState.sortModel) {
+                this.gridApi.applyColumnState({ state: savedState.sortModel });
+            }
+        }
     }
 
     loadGames() {
         this.gamesService.getGames().subscribe({
             next: (data) => {
                 this.games.set(data);
-                console.log('Loaded games:', data);
             },
             error: (error) => {
                 console.error('Error loading games:', error);
@@ -145,7 +201,6 @@ export class GamesPageComponent implements OnInit {
         const selectedRows = event.api.getSelectedRows();
         if (selectedRows.length > 0) {
             this.selectedGame.set(selectedRows[0]);
-            console.log('Selected game:', selectedRows[0]);
         } else {
             this.selectedGame.set(null);
         }
@@ -171,8 +226,6 @@ export class GamesPageComponent implements OnInit {
             error: (error) => {
                 console.error('Error updating game:', error);
                 this.snackBar.open('Error updating game status', 'Close', { duration: 3000 });
-                // Revert toggle if needed, but since it's bound to selectedGame which hasn't changed yet, it might be tricky. 
-                // Actually, the toggle in UI is bound to selectedGame().isEnabled.
             }
         });
     }
@@ -187,7 +240,6 @@ export class GamesPageComponent implements OnInit {
         this.gamesService.syncExpansions(game.id).subscribe({
             next: (response) => {
                 this.isSyncingExpansions.set(false);
-                console.log('Sync expansions response:', response);
                 this.snackBar.open(response.message, 'Close', { duration: 5000 });
             },
             error: (error) => {
@@ -208,7 +260,6 @@ export class GamesPageComponent implements OnInit {
         this.gamesService.syncAll(game.id).subscribe({
             next: (response) => {
                 this.isSyncingAll.set(false);
-                console.log('Sync all response:', response);
                 this.snackBar.open(response.message, 'Close', { duration: 5000 });
             },
             error: (error) => {
@@ -217,5 +268,60 @@ export class GamesPageComponent implements OnInit {
                 this.snackBar.open(`Error: ${error.error?.error || 'Failed to perform full sync'}`, 'Close', { duration: 5000 });
             }
         });
+    }
+
+    // Grid State Management
+    saveGridState(): void {
+        if (!this.gridApi) return;
+
+        const columnState = this.gridApi.getColumnState();
+        const sortModel = this.gridApi.getColumnState().filter(col => col.sort != null);
+
+        this.gridStateService.saveGridState(this.GRID_ID, {
+            columnState,
+            sortModel
+        });
+
+        this.snackBar.open('Grid configuration saved', 'Close', { duration: 3000 });
+    }
+
+    resetGridState(): void {
+        if (!this.gridApi) return;
+
+        this.gridStateService.clearGridState(this.GRID_ID);
+        this.gridApi.resetColumnState();
+        this.gridApi.sizeColumnsToFit();
+
+        this.snackBar.open('Grid configuration reset to defaults', 'Close', { duration: 3000 });
+    }
+
+    onColumnMoved(): void {
+        this.saveGridState();
+    }
+
+    onColumnVisible(): void {
+        this.saveGridState();
+    }
+
+    onSortChanged(): void {
+        this.saveGridState();
+    }
+
+    // Column Visibility Helper
+    toggleColumnVisibility(colId: string): void {
+        const col = this.gridApi.getColumn(colId);
+        if (col) {
+            this.gridApi.setColumnsVisible([colId], !col.isVisible());
+            this.saveGridState();
+        }
+    }
+
+    isColumnVisible(colId: string): boolean {
+        const col = this.gridApi?.getColumn(colId);
+        return col ? col.isVisible() : true;
+    }
+
+    getAllColumns(): any[] {
+        return this.columnDefs;
     }
 }

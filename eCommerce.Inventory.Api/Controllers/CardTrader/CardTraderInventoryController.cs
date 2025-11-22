@@ -20,14 +20,28 @@ public class CardTraderInventoryController : ControllerBase
     }
 
     /// <summary>
-    /// Get all inventory items for Card Trader
+    /// Get inventory items for Card Trader with pagination
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<InventoryItem>>> GetAllInventoryItems(CancellationToken cancellationToken)
+    public async Task<ActionResult<object>> GetInventoryItems(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Getting all inventory items for Card Trader");
-        var items = await _inventoryItemRepository.GetAllAsync(cancellationToken);
-        return Ok(items);
+        _logger.LogInformation("Getting inventory items - page: {Page}, pageSize: {PageSize}", page, pageSize);
+
+        var (items, totalCount) = await _inventoryItemRepository.GetPagedAsync(page, pageSize, cancellationToken);
+
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+        return Ok(new
+        {
+            items,
+            totalCount,
+            pageNumber = page,
+            pageSize,
+            totalPages
+        });
     }
 
     /// <summary>

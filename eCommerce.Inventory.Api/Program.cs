@@ -58,6 +58,10 @@ builder.Services.AddMediatR(config =>
 var cardTraderApiConfig = builder.Configuration.GetSection("CardTraderApi");
 var bearerToken = cardTraderApiConfig["BearerToken"];
 var baseUrl = cardTraderApiConfig["BaseUrl"];
+if (string.IsNullOrEmpty(baseUrl))
+{
+    throw new InvalidOperationException("CardTrader API BaseUrl is missing in configuration.");
+}
 
 builder.Services.AddHttpClient<ICardTraderApiService, CardTraderApiClient>(client =>
 {

@@ -12,8 +12,6 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
-  flex-wrap: wrap;
-  gap: 16px;
 }
 
 .orders-header h1 {
@@ -22,20 +20,22 @@
   font-weight: 500;
 }
 
-.date-filters {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.date-field {
-  width: 180px;
-}
-
 .actions {
   display: flex;
   gap: 12px;
   align-items: center;
+}
+
+.filters-container {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filter-checkbox {
+  margin-left: 8px;
 }
 
 .loading-spinner {
@@ -50,7 +50,6 @@
   margin-top: 16px;
 }
 
-/* Custom AG-Grid styling */
 .ag-theme-material {
   --ag-header-background-color: #3f51b5;
   --ag-header-foreground-color: white;
@@ -68,7 +67,6 @@
   border-bottom: 1px solid #e0e0e0;
 }
 
-/* Action button styling */
 .action-btn {
   background-color: #3f51b5;
   color: white;
@@ -84,31 +82,18 @@
   background-color: #303f9f;
 }
 
-/* Checkbox styling in grid */
-.ag-theme-material input[type="checkbox"] {
-  cursor: pointer;
-  width: 18px;
-  height: 18px;
+/* Column Menu Styles */
+.columns-menu-container {
+  padding: 8px;
+  min-width: 200px;
+  max-height: 300px;
+  overflow-y: auto;
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .orders-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+.column-toggle-item {
+  padding: 4px 8px;
+}
 
-  .date-filters {
-    width: 100%;
-    flex-direction: column;
-  }
-
-  .date-field {
-    width: 100%;
-  }
-
-  .actions {
-    width: 100%;
-    justify-content: flex-start;
-  }
+::ng-deep .mat-mdc-menu-content {
+  padding: 0 !important;
 }

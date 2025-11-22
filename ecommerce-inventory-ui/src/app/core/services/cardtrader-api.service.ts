@@ -7,8 +7,10 @@ import {
   Blueprint,
   InventoryItem,
   Order,
+  OrderItem,
   PagedResponse,
   ApiResponse,
+  UnpreparedItemDto,
 } from '../models';
 import { environment } from '../../../environments/environment';
 
@@ -92,8 +94,7 @@ export class CardTraderApiService {
   }
 
   // Orders
-  // Orders
-  getOrders(from?: string, to?: string): Observable<Order[]> {
+  getOrders(from?: string, to?: string, excludeNullDates: boolean = true): Observable<Order[]> {
     let params = new HttpParams();
     if (from) {
       params = params.set('from', from);
@@ -101,11 +102,17 @@ export class CardTraderApiService {
     if (to) {
       params = params.set('to', to);
     }
+    params = params.set('excludeNullDates', excludeNullDates.toString());
+
     return this.http.get<Order[]>(`${this.apiUrl}/orders`, { params });
   }
 
   getOrderById(id: number): Observable<Order> {
     return this.http.get<Order>(`${this.apiUrl}/orders/${id}`);
+  }
+
+  getUnpreparedItems(): Observable<UnpreparedItemDto[]> {
+    return this.http.get<UnpreparedItemDto[]>(`${this.apiUrl}/orders/unprepared-items`);
   }
 
   syncOrders(from?: string, to?: string): Observable<ApiResponse<any>> {

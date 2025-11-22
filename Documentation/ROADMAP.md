@@ -80,13 +80,21 @@
         - Fixed `GetOrdersAsync` to properly pass query string parameters
         - Added `limit=1000` parameter to fetch up to 1000 orders per request
         - Verified parameters are correctly included in HTTP GET request
-  - **Phase 3.5: Advanced Grid Features ⏳ TODO** (PRIORITY: MEDIUM)
-    - Column sorting (click to sort)
-    - Column reordering (drag & drop)
-    - Column visibility toggle
-    - Grid configuration persistence (localStorage)
-    - Apply to all grids: Orders, Inventory, Products, etc.
-    - **Options**: Use AG-Grid (already in package.json) or implement with Material Table
+  - **Phase 3.5: Advanced Grid Features ✅ DONE**
+    - AG-Grid integration for all data grids (Orders, Inventory, To Prepare, Games, Expansions)
+    - Custom column visibility menu (Material Design)
+    - Grid state persistence (localStorage) with manual save/reset
+    - Server-side pagination for Inventory (Infinite Row Model)
+    - Performance optimizations (removed autoHeight, optimized queries)
+    - **Backend Optimizations:**
+      - Created `UnpreparedItemDto` for efficient data transfer
+      - Added `GetUnpreparedItemsAsync` with LINQ projection
+      - Implemented server-side pagination for Inventory
+      - Added Blueprint navigation to OrderItem for image display
+    - **Bug Fixes:**
+      - Fixed TypeScript compilation errors (rowModelType type)
+      - Fixed database migration for OrderItem-Blueprint relationship
+      - Disabled auto-save on grid events (manual save only)
   - Phase 3.6-3.7: ⏳ TODO
 
 ⏳ **TODO**: Phase 4 Advanced Features, Phase 5 Deployment

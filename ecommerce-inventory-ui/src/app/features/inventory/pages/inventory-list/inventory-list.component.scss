@@ -26,13 +26,6 @@
   align-items: center;
 }
 
-.loading-spinner {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 400px;
-}
-
 .ag-grid-container {
   width: 100%;
   margin-top: 16px;
@@ -77,4 +70,20 @@
 
 .action-btn.delete-btn:hover {
   background-color: #d32f2f;
+}
+
+/* Column Menu Styles */
+.columns-menu-container {
+  padding: 8px;
+  min-width: 200px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.column-toggle-item {
+  padding: 4px 8px;
+}
+
+::ng-deep .mat-mdc-menu-content {
+  padding: 0 !important;
 }

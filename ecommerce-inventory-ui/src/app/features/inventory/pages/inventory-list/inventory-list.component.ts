@@ -1,12 +1,15 @@
 import { Component, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { AgGridAngular } from 'ag-grid-angular';
-import { ColDef, GridApi, GridReadyEvent } from 'ag-grid-community';
+import { ColDef, GridApi, GridReadyEvent, IDatasource, IGetRowsParams } from 'ag-grid-community';
 
 import { CardTraderApiService } from '../../../../core/services';
 import { GridStateService } from '../../../../core/services/grid-state.service';
@@ -17,10 +20,13 @@ import { InventoryItem } from '../../../../core/models';
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
     MatButtonModule,
     MatIconModule,
     MatProgressSpinnerModule,
     MatMenuModule,
+    MatCheckboxModule,
+    MatTooltipModule,
     MatSnackBarModule,
     AgGridAngular
   ],
@@ -33,42 +39,44 @@ export class InventoryListComponent implements OnInit {
   private gridApi!: GridApi;
   private readonly GRID_ID = 'inventory-grid';
 
-  items: InventoryItem[] = [];
-  isLoading = false;
+  // Infinite Scroll Configuration
+  rowModelType = 'infinite';
+  cacheBlockSize = 50; // Fetch 50 items at a time
+  maxBlocksInCache = 10; // Keep 10 blocks (500 items) in memory
 
   columnDefs: ColDef[] = [
     {
       headerName: 'ID',
       field: 'id',
-      sortable: true,
+      sortable: false, // Sorting not supported by backend yet
       filter: 'agNumberColumnFilter',
       width: 80
     },
     {
       headerName: 'Card Name',
       field: 'blueprint.name',
-      sortable: true,
+      sortable: false,
       filter: true,
       width: 250
     },
     {
       headerName: 'Expansion',
       field: 'blueprint.expansion.name',
-      sortable: true,
+      sortable: false,
       filter: true,
       width: 200
     },
     {
       headerName: 'Quantity',
       field: 'quantity',
-      sortable: true,
+      sortable: false,
       filter: 'agNumberColumnFilter',
       width: 100
     },
     {
       headerName: 'Purchase Price',
       field: 'purchasePrice',
-      sortable: true,
+      sortable: false,
       filter: 'agNumberColumnFilter',
       width: 130,
       valueFormatter: (params) => params.value ? `€${params.value.toFixed(2)}` : ''
@@ -76,7 +84,7 @@ export class InventoryListComponent implements OnInit {
     {
       headerName: 'Listing Price',
       field: 'listingPrice',
-      sortable: true,
+      sortable: false,
       filter: 'agNumberColumnFilter',
       width: 130,
       valueFormatter: (params) => params.value ? `€${params.value.toFixed(2)}` : ''
@@ -84,21 +92,21 @@ export class InventoryListComponent implements OnInit {
     {
       headerName: 'Condition',
       field: 'condition',
-      sortable: true,
+      sortable: false,
       filter: true,
       width: 100
     },
     {
       headerName: 'Language',
       field: 'language',
-      sortable: true,
+      sortable: false,
       filter: true,
       width: 100
     },
     {
       headerName: 'Status',
       field: 'status',
-      sortable: true,
+      sortable: false,
       filter: true,
       width: 100
     },
@@ -109,6 +117,7 @@ export class InventoryListComponent implements OnInit {
       filter: false,
       width: 150,
       cellRenderer: (params: any) => {
+        if (!params.data) return ''; // Loading row
         return `<button class="action-btn edit-btn">Edit</button>
                 <button class="action-btn delete-btn">Delete</button>`;
       },
@@ -125,34 +134,27 @@ export class InventoryListComponent implements OnInit {
 
   defaultColDef: ColDef = {
     resizable: true,
-    sortable: true,
+    sortable: false, // Disable sorting globally for now
     filter: true
   };
 
   gridOptions = {
-    pagination: false,
-    domLayout: 'autoHeight' as const,
+    // Pagination settings
+    pagination: false, // Infinite scroll handles this
+    rowModelType: 'infinite' as const,
+    cacheBlockSize: this.cacheBlockSize,
+    maxBlocksInCache: this.maxBlocksInCache,
+    infiniteInitialRowCount: 100,
+
+    // domLayout: 'autoHeight' as const, // REMOVED: Causes performance issues with infinite scroll
     enableCellTextSelection: true,
     suppressRowClickSelection: true,
     animateRows: true,
-    sideBar: {
-      toolPanels: [
-        {
-          id: 'columns',
-          labelDefault: 'Columns',
-          labelKey: 'columns',
-          iconKey: 'columns',
-          toolPanel: 'agColumnsToolPanel',
-          toolPanelParams: {
-            suppressRowGroups: true,
-            suppressValues: true,
-            suppressPivots: true,
-            suppressPivotMode: true
-          }
-        }
-      ],
-      defaultToolPanel: ''
-    }
+
+    // Menu settings
+    suppressMenuHide: false,
+    columnMenu: 'new' as const,
+    suppressDragLeaveHidesColumns: true
   };
 
   constructor(
@@ -162,34 +164,42 @@ export class InventoryListComponent implements OnInit {
   ) { }
 
   ngOnInit(): void {
-    this.loadInventory();
+    // No initial load needed, grid calls getRows
   }
 
   onGridReady(params: GridReadyEvent): void {
     this.gridApi = params.api;
 
+    // Restore saved grid state
     const savedState = this.gridStateService.loadGridState(this.GRID_ID);
     if (savedState?.columnState) {
       this.gridApi.applyColumnState({ state: savedState.columnState, applyOrder: true });
     }
 
-    this.gridApi.sizeColumnsToFit();
-  }
+    // Setup Infinite Scroll Datasource
+    const dataSource: IDatasource = {
+      getRows: (params: IGetRowsParams) => {
+        const page = Math.floor(params.startRow / this.cacheBlockSize) + 1;
 
-  loadInventory(): void {
-    this.isLoading = true;
-    // Load all items (no pagination for AG-Grid)
-    this.apiService.getInventoryItems(1, 10000).subscribe({
-      next: (response) => {
-        this.items = response.items || [];
-        this.isLoading = false;
-      },
-      error: (err) => {
-        console.error('Error loading inventory:', err);
-        this.showSnackBar('Error loading inventory');
-        this.isLoading = false;
+        console.log(`Fetching page ${page} (rows ${params.startRow} to ${params.endRow})`);
+
+        this.apiService.getInventoryItems(page, this.cacheBlockSize).subscribe({
+          next: (response) => {
+            // If we reached the end, totalCount will tell grid to stop scrolling
+            const lastRow = response.totalCount <= params.endRow ? response.totalCount : -1;
+            params.successCallback(response.items || [], response.totalCount);
+          },
+          error: (err) => {
+            console.error('Error fetching inventory:', err);
+            params.failCallback();
+            this.showSnackBar('Error loading inventory data');
+          }
+        });
       }
-    });
+    };
+
+    this.gridApi.setGridOption('datasource', dataSource);
+    this.gridApi.sizeColumnsToFit();
   }
 
   saveGridState(): void {
@@ -198,7 +208,7 @@ export class InventoryListComponent implements OnInit {
     const columnState = this.gridApi.getColumnState();
     this.gridStateService.saveGridState(this.GRID_ID, {
       columnState,
-      sortModel: columnState.filter(col => col.sort != null)
+      sortModel: [] // Sorting not supported yet
     });
 
     this.showSnackBar('Grid configuration saved');
@@ -224,7 +234,7 @@ export class InventoryListComponent implements OnInit {
       this.apiService.deleteInventoryItem(item.id).subscribe({
         next: () => {
           this.showSnackBar('Item deleted successfully');
-          this.loadInventory();
+          this.gridApi.refreshInfiniteCache(); // Reload data
         },
         error: (err) => {
           console.error('Error deleting item:', err);
@@ -240,15 +250,29 @@ export class InventoryListComponent implements OnInit {
     });
   }
 
+  // Column Visibility Helper
+  toggleColumnVisibility(colId: string): void {
+    const col = this.gridApi.getColumn(colId);
+    if (col) {
+      this.gridApi.setColumnsVisible([colId], !col.isVisible());
+      // this.saveGridState(); // Auto-save disabled
+    }
+  }
+
+  isColumnVisible(colId: string): boolean {
+    const col = this.gridApi?.getColumn(colId);
+    return col ? col.isVisible() : true;
+  }
+
+  getAllColumns(): any[] {
+    return this.columnDefs.filter(col => col.field !== 'actions');
+  }
+
   onColumnMoved(): void {
-    this.saveGridState();
+    // this.saveGridState(); // Auto-save disabled
   }
 
   onColumnVisible(): void {
-    this.saveGridState();
-  }
-
-  onSortChanged(): void {
-    this.saveGridState();
+    // this.saveGridState(); // Auto-save disabled
   }
 }

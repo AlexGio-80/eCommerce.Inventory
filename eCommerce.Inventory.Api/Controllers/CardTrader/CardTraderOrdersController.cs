@@ -1,7 +1,9 @@
 using eCommerce.Inventory.Application.Interfaces;
 using eCommerce.Inventory.Domain.Entities;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
+using eCommerce.Inventory.Application.DTOs;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace eCommerce.Inventory.Api.Controllers.CardTrader;
 
@@ -32,19 +34,28 @@ public class CardTraderOrdersController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Order>>> GetOrders(
         [FromQuery] DateTime? from = null,
-        [FromQuery] DateTime? to = null)
+        [FromQuery] DateTime? to = null,
+        [FromQuery] bool excludeNullDates = true)
     {
-        _logger.LogInformation("Getting orders with filters - from: {From}, to: {To}", from, to);
+        _logger.LogInformation("Getting orders with filters - from: {From}, to: {To}, excludeNullDates: {ExcludeNullDates}", from, to, excludeNullDates);
 
-        var orders = await _orderRepository.GetOrdersWithItemsAsync(from, to);
+        var orders = await _orderRepository.GetOrdersWithItemsAsync(from, to, excludeNullDates);
 
         _logger.LogInformation("Retrieved {Count} orders", orders.Count());
 
         return Ok(orders);
     }
 
+    [HttpGet("unprepared-items")]
+    public async Task<ActionResult<IEnumerable<UnpreparedItemDto>>> GetUnpreparedItems(CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Getting unprepared items");
+        var items = await _orderRepository.GetUnpreparedItemsAsync(cancellationToken);
+        return Ok(items);
+    }
+
     [HttpPost("sync")]
-    public async Task<IActionResult> SyncOrders([FromBody] SyncOrdersRequest? request = null)
+    public async Task<IActionResult> SyncOrders([FromBody] SyncOrdersRequest request)
     {
         try
         {
@@ -57,8 +68,6 @@ public class CardTraderOrdersController : ControllerBase
             var orderDtos = await _cardTraderApiService.GetOrdersAsync(from, to);
 
             // Cast dynamic list to concrete DTO list
-            // Note: GetOrdersAsync returns List<dynamic> but underlying objects are CardTraderOrderDto
-            // because we deserialized them as such in CardTraderApiClient
             var concreteDtos = ((IEnumerable<dynamic>)orderDtos).Cast<Infrastructure.ExternalServices.CardTrader.DTOs.CardTraderOrderDto>().ToList();
 
             await _inventorySyncService.SyncOrdersAsync(concreteDtos);
@@ -91,12 +100,6 @@ public class CardTraderOrdersController : ControllerBase
     public async Task<IActionResult> ToggleItemPreparation(int itemId, [FromBody] bool isPrepared)
     {
         // We need to access OrderItems directly. 
-        // Since we don't have an OrderItemRepository, we'll use DbContext directly or add method to OrderRepository
-        // For now, let's use DbContext as it's available (though not ideal pattern, but pragmatic)
-        // Better: Add UpdateItemAsync to IOrderRepository? No, repository is for Aggregate Root.
-        // But OrderItem is part of Order aggregate.
-
-        // Let's fetch the order containing the item
         var dbContext = _context as Microsoft.EntityFrameworkCore.DbContext;
         var item = await dbContext!.Set<OrderItem>().FindAsync(itemId);
 

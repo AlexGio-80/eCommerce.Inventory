@@ -1,14 +1,19 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AgGridAngular } from 'ag-grid-angular';
-import { ColDef, ModuleRegistry, AllCommunityModule } from 'ag-grid-community';
+import { ColDef, ModuleRegistry, AllCommunityModule, GridApi, GridReadyEvent } from 'ag-grid-community';
 import { ExpansionsService, Expansion, SyncBlueprintsResponse } from '../services/expansions.service';
+import { GridStateService } from '../../../core/services/grid-state.service';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatIconModule } from '@angular/material/icon';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatTooltipModule } from '@angular/material/tooltip';
 
 // Register AG Grid modules
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -24,7 +29,11 @@ ModuleRegistry.registerModules([AllCommunityModule]);
     MatFormFieldModule,
     MatInputModule,
     MatProgressSpinnerModule,
-    MatSnackBarModule
+    MatSnackBarModule,
+    MatMenuModule,
+    MatIconModule,
+    MatCheckboxModule,
+    MatTooltipModule
   ],
   template: `
     <div class="expansions-container">
@@ -67,15 +76,56 @@ ModuleRegistry.registerModules([AllCommunityModule]);
       <!-- AG-Grid Table -->
       <mat-card class="grid-card">
         <mat-card-content>
+          <div class="grid-header">
+            <h2>Expansions List</h2>
+            
+            <!-- Grid Options Menu -->
+            <button mat-icon-button [matMenuTriggerFor]="gridMenu" matTooltip="Grid Options">
+              <mat-icon>more_vert</mat-icon>
+            </button>
+            <mat-menu #gridMenu="matMenu">
+              <button mat-menu-item [matMenuTriggerFor]="columnsMenu">
+                <mat-icon>view_column</mat-icon>
+                <span>Columns</span>
+              </button>
+              <button mat-menu-item (click)="saveGridState()">
+                <mat-icon>save</mat-icon>
+                <span>Save Configuration</span>
+              </button>
+              <button mat-menu-item (click)="resetGridState()">
+                <mat-icon>refresh</mat-icon>
+                <span>Reset to Defaults</span>
+              </button>
+            </mat-menu>
+
+            <!-- Columns Sub-Menu -->
+            <mat-menu #columnsMenu="matMenu">
+              <div class="columns-menu-container" (click)="$event.stopPropagation()">
+                <div *ngFor="let col of getAllColumns()" class="column-toggle-item">
+                  <mat-checkbox 
+                    [checked]="isColumnVisible(col.field!)"
+                    (change)="toggleColumnVisibility(col.field!)">
+                    {{ col.headerName }}
+                  </mat-checkbox>
+                </div>
+              </div>
+            </mat-menu>
+          </div>
+
           <ag-grid-angular
             class="ag-theme-material"
             [rowData]="expansions()"
             [columnDefs]="columnDefs"
             [defaultColDef]="defaultColDef"
+            [gridOptions]="gridOptions"
             [pagination]="true"
             [paginationPageSize]="20"
             [rowSelection]="'single'"
+            (gridReady)="onGridReady($event)"
             (selectionChanged)="onSelectionChanged($event)"
+            (columnMoved)="onColumnMoved()"
+            (columnVisible)="onColumnVisible()"
+            (sortChanged)="onSortChanged()"
             style="height: 600px; width: 100%;">
           </ag-grid-angular>
         </mat-card-content>
@@ -129,10 +179,39 @@ ModuleRegistry.registerModules([AllCommunityModule]);
     .grid-card {
       margin-top: 24px;
     }
+    
+    .grid-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+    }
+    
+    .grid-header h2 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 500;
+    }
 
     :host ::ng-deep .ag-theme-material {
       --ag-header-background-color: #3f51b5;
       --ag-header-foreground-color: white;
+    }
+    
+    /* Column Menu Styles */
+    .columns-menu-container {
+      padding: 8px;
+      min-width: 200px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .column-toggle-item {
+      padding: 4px 8px;
+    }
+
+    ::ng-deep .mat-mdc-menu-content {
+      padding: 0 !important;
     }
   `]
 })
@@ -140,6 +219,9 @@ export class ExpansionsPageComponent implements OnInit {
   expansions = signal<Expansion[]>([]);
   selectedExpansion = signal<Expansion | null>(null);
   isSyncing = signal(false);
+
+  private gridApi!: GridApi;
+  private readonly GRID_ID = 'expansions-grid';
 
   columnDefs: ColDef[] = [
     { field: 'id', headerName: 'ID', width: 80, filter: 'agNumberColumnFilter' },
@@ -156,8 +238,15 @@ export class ExpansionsPageComponent implements OnInit {
     filter: true
   };
 
+  gridOptions = {
+    suppressMenuHide: false,
+    columnMenu: 'new' as const,
+    suppressDragLeaveHidesColumns: true
+  };
+
   constructor(
     private expansionsService: ExpansionsService,
+    private gridStateService: GridStateService,
     private snackBar: MatSnackBar
   ) { }
 
@@ -165,11 +254,25 @@ export class ExpansionsPageComponent implements OnInit {
     this.loadExpansions();
   }
 
+  onGridReady(params: GridReadyEvent) {
+    this.gridApi = params.api;
+
+    // Restore saved grid state
+    const savedState = this.gridStateService.loadGridState(this.GRID_ID);
+    if (savedState) {
+      if (savedState.columnState) {
+        this.gridApi.applyColumnState({ state: savedState.columnState, applyOrder: true });
+      }
+      if (savedState.sortModel) {
+        this.gridApi.applyColumnState({ state: savedState.sortModel });
+      }
+    }
+  }
+
   loadExpansions() {
     this.expansionsService.getExpansions().subscribe({
       next: (data) => {
         this.expansions.set(data);
-        console.log('Loaded expansions:', data);
       },
       error: (error) => {
         console.error('Error loading expansions:', error);
@@ -182,7 +285,6 @@ export class ExpansionsPageComponent implements OnInit {
     const selectedRows = event.api.getSelectedRows();
     if (selectedRows.length > 0) {
       this.selectedExpansion.set(selectedRows[0]);
-      console.log('Selected expansion:', selectedRows[0]);
     } else {
       this.selectedExpansion.set(null);
     }
@@ -198,7 +300,6 @@ export class ExpansionsPageComponent implements OnInit {
     this.expansionsService.syncBlueprints(expansion.id).subscribe({
       next: (response: SyncBlueprintsResponse) => {
         this.isSyncing.set(false);
-        console.log('Sync response:', response);
         this.snackBar.open(response.message, 'Close', { duration: 5000 });
       },
       error: (error) => {
@@ -207,5 +308,60 @@ export class ExpansionsPageComponent implements OnInit {
         this.snackBar.open(`Error: ${error.error?.error || 'Failed to sync blueprints'}`, 'Close', { duration: 5000 });
       }
     });
+  }
+
+  // Grid State Management
+  saveGridState(): void {
+    if (!this.gridApi) return;
+
+    const columnState = this.gridApi.getColumnState();
+    const sortModel = this.gridApi.getColumnState().filter(col => col.sort != null);
+
+    this.gridStateService.saveGridState(this.GRID_ID, {
+      columnState,
+      sortModel
+    });
+
+    this.snackBar.open('Grid configuration saved', 'Close', { duration: 3000 });
+  }
+
+  resetGridState(): void {
+    if (!this.gridApi) return;
+
+    this.gridStateService.clearGridState(this.GRID_ID);
+    this.gridApi.resetColumnState();
+    this.gridApi.sizeColumnsToFit();
+
+    this.snackBar.open('Grid configuration reset to defaults', 'Close', { duration: 3000 });
+  }
+
+  onColumnMoved(): void {
+    this.saveGridState();
+  }
+
+  onColumnVisible(): void {
+    this.saveGridState();
+  }
+
+  onSortChanged(): void {
+    this.saveGridState();
+  }
+
+  // Column Visibility Helper
+  toggleColumnVisibility(colId: string): void {
+    const col = this.gridApi.getColumn(colId);
+    if (col) {
+      this.gridApi.setColumnsVisible([colId], !col.isVisible());
+      this.saveGridState();
+    }
+  }
+
+  isColumnVisible(colId: string): boolean {
+    const col = this.gridApi?.getColumn(colId);
+    return col ? col.isVisible() : true;
+  }
+
+  getAllColumns(): any[] {
+    return this.columnDefs;
   }
 }
