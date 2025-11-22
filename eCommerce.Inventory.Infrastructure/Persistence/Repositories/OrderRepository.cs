@@ -28,9 +28,27 @@ public class OrderRepository : IOrderRepository
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<IEnumerable<Order>> GetOrdersWithItemsAsync(CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<Order>> GetOrdersWithItemsAsync(DateTime? from = null, DateTime? to = null, CancellationToken cancellationToken = default)
     {
-        return await GetAllAsync(cancellationToken);
+        var query = _context.Orders
+            .Include(o => o.OrderItems)
+            .AsQueryable();
+
+        // Apply date filters if provided
+        if (from.HasValue || to.HasValue)
+        {
+            query = query.Where(o =>
+                // Include orders with null PaidAt
+                o.PaidAt == null ||
+                // Or orders within the date range
+                ((!from.HasValue || o.PaidAt >= from.Value) &&
+                 (!to.HasValue || o.PaidAt <= to.Value.AddDays(1).AddSeconds(-1))) // Include entire "to" day
+            );
+        }
+
+        return await query
+            .OrderByDescending(o => o.PaidAt)
+            .ToListAsync(cancellationToken);
     }
 
     public async Task AddAsync(Order order, CancellationToken cancellationToken = default)

@@ -93,8 +93,15 @@ export class CardTraderApiService {
 
   // Orders
   // Orders
-  getOrders(): Observable<Order[]> {
-    return this.http.get<Order[]>(`${this.apiUrl}/orders`);
+  getOrders(from?: string, to?: string): Observable<Order[]> {
+    let params = new HttpParams();
+    if (from) {
+      params = params.set('from', from);
+    }
+    if (to) {
+      params = params.set('to', to);
+    }
+    return this.http.get<Order[]>(`${this.apiUrl}/orders`, { params });
   }
 
   getOrderById(id: number): Observable<Order> {

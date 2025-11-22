@@ -146,7 +146,28 @@ export class OrdersListComponent implements OnInit {
         enableRangeSelection: false,
         suppressMenuHide: false,
         columnMenu: 'new' as const,
-        suppressDragLeaveHidesColumns: true
+        suppressDragLeaveHidesColumns: true,
+        sideBar: {
+            toolPanels: [
+                {
+                    id: 'columns',
+                    labelDefault: 'Columns',
+                    labelKey: 'columns',
+                    iconKey: 'columns',
+                    toolPanel: 'agColumnsToolPanel',
+                    toolPanelParams: {
+                        suppressRowGroups: true,
+                        suppressValues: true,
+                        suppressPivots: true,
+                        suppressPivotMode: true,
+                        suppressColumnFilter: false,
+                        suppressColumnSelectAll: false,
+                        suppressColumnExpandAll: false
+                    }
+                }
+            ],
+            defaultToolPanel: ''
+        }
     };
 
     constructor(
@@ -187,10 +208,11 @@ export class OrdersListComponent implements OnInit {
 
     loadOrders(): void {
         this.isLoading = true;
-        this.apiService.getOrders().subscribe({
+        // Pass date filters to backend for SQL-level filtering
+        this.apiService.getOrders(this.fromDate, this.toDate).subscribe({
             next: (orders) => {
                 this.orders = orders;
-                this.applyDateFilter();
+                this.filteredOrders = orders; // No need for client-side filtering
                 this.isLoading = false;
             },
             error: (err) => {
@@ -227,7 +249,8 @@ export class OrdersListComponent implements OnInit {
     }
 
     onDateFilterChange(): void {
-        this.applyDateFilter();
+        // Reload orders from backend with new date filters
+        this.loadOrders();
     }
 
     syncOrders(): void {

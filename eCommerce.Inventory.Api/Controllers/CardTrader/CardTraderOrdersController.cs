@@ -30,9 +30,16 @@ public class CardTraderOrdersController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
+    public async Task<ActionResult<IEnumerable<Order>>> GetOrders(
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null)
     {
-        var orders = await _orderRepository.GetOrdersWithItemsAsync();
+        _logger.LogInformation("Getting orders with filters - from: {From}, to: {To}", from, to);
+
+        var orders = await _orderRepository.GetOrdersWithItemsAsync(from, to);
+
+        _logger.LogInformation("Retrieved {Count} orders", orders.Count());
+
         return Ok(orders);
     }
 

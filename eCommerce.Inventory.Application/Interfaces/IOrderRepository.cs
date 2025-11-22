@@ -8,5 +8,5 @@ public interface IOrderRepository : IReadonlyRepository<Order>
     Task UpdateAsync(Order order, CancellationToken cancellationToken = default);
     Task DeleteAsync(int id, CancellationToken cancellationToken = default);
     Task<Order?> GetByCardTraderIdAsync(int cardTraderId, CancellationToken cancellationToken = default);
-    Task<IEnumerable<Order>> GetOrdersWithItemsAsync(CancellationToken cancellationToken = default);
+    Task<IEnumerable<Order>> GetOrdersWithItemsAsync(DateTime? from = null, DateTime? to = null, CancellationToken cancellationToken = default);
 }
