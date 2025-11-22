@@ -42,6 +42,7 @@ import { Order, OrderItem } from '../../../core/models/order';
 })
 export class OrdersListComponent implements OnInit {
     orders: Order[] = [];
+    filteredOrders: Order[] = [];
     columnsToDisplay = ['id', 'code', 'buyer', 'total', 'state', 'paidAt', 'isCompleted', 'actions'];
     expandedElement: Order | null = null;
     isLoading = false;
@@ -73,6 +74,7 @@ export class OrdersListComponent implements OnInit {
         this.apiService.getOrders().subscribe({
             next: (orders) => {
                 this.orders = orders;
+                this.applyDateFilter();
                 this.isLoading = false;
             },
             error: (err) => {
@@ -81,6 +83,36 @@ export class OrdersListComponent implements OnInit {
                 this.isLoading = false;
             }
         });
+    }
+
+    applyDateFilter(): void {
+        if (!this.fromDate && !this.toDate) {
+            this.filteredOrders = this.orders;
+            return;
+        }
+
+        const from = this.fromDate ? new Date(this.fromDate) : null;
+        const to = this.toDate ? new Date(this.toDate) : null;
+
+        this.filteredOrders = this.orders.filter(order => {
+            if (!order.paidAt) return false;
+
+            const orderDate = new Date(order.paidAt);
+
+            if (from && orderDate < from) return false;
+            if (to) {
+                // Include the entire "to" day
+                const toEndOfDay = new Date(to);
+                toEndOfDay.setHours(23, 59, 59, 999);
+                if (orderDate > toEndOfDay) return false;
+            }
+
+            return true;
+        });
+    }
+
+    onDateFilterChange(): void {
+        this.applyDateFilter();
     }
 
     syncOrders(): void {
