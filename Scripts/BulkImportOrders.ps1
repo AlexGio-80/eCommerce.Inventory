@@ -4,7 +4,7 @@
 
 $apiUrl = "http://localhost:5152/api/cardtrader/orders/sync"
 $startDate = Get-Date "2013-01-01"
-$endDate = Get-Date
+$endDate = Get-Date "2025-11-21"
 $delayMs = 1000  # 1 second delay between requests to avoid rate limiting
 
 Write-Host "=== Bulk Historical Orders Import ===" -ForegroundColor Cyan
@@ -23,16 +23,17 @@ $totalOrders = 0
 while ($currentDate -le $endDate) {
     $dayCount++
     $fromDate = $currentDate.ToString("yyyy-MM-dd")
-    $toDate = $currentDate.ToString("yyyy-MM-dd")
+    $nextDay = $currentDate.AddDays(1)
+    $toDate = $nextDay.ToString("yyyy-MM-dd")
     
     $percentComplete = [math]::Round(($dayCount / $totalDays) * 100, 2)
     
-    Write-Host "[$dayCount/$totalDays - $percentComplete%] Processing: $fromDate" -NoNewline
+    Write-Host "[$dayCount/$totalDays - $percentComplete%] Processing: $fromDate to $toDate" -NoNewline
     
     try {
         $body = @{
             from = $fromDate
-            to = $toDate
+            to   = $toDate
         } | ConvertTo-Json
         
         $response = Invoke-RestMethod -Uri $apiUrl -Method Post -Body $body -ContentType "application/json" -ErrorAction Stop
@@ -47,11 +48,13 @@ while ($currentDate -le $endDate) {
         
         if ($ordersCount -gt 0) {
             Write-Host " ✓ $ordersCount orders" -ForegroundColor Green
-        } else {
+        }
+        else {
             Write-Host " ✓ No orders" -ForegroundColor Gray
         }
         
-    } catch {
+    }
+    catch {
         $errorCount++
         Write-Host " ✗ ERROR: $($_.Exception.Message)" -ForegroundColor Red
     }
