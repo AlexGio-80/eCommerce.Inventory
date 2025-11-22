@@ -347,15 +347,36 @@ public class CardTraderApiClient : ICardTraderApiService
     }
 
     /// <summary>
-    /// Fetch all new orders from Card Trader API (returns DTOs for mapping)
+    /// Fetch all orders from Card Trader API (returns DTOs for mapping)
     /// </summary>
-    public async Task<List<dynamic>> FetchNewOrdersAsync(CancellationToken cancellationToken = default)
+    public async Task<List<dynamic>> GetOrdersAsync(DateTime? from = null, DateTime? to = null, CancellationToken cancellationToken = default)
     {
         try
         {
-            _logger.LogInformation("Fetching orders from Card Trader API");
+            _logger.LogInformation("Fetching orders from Card Trader API (from: {From}, to: {To})", from, to);
 
-            var response = await _httpClient.GetAsync("orders", cancellationToken);
+            // Build query string with date filters
+            var queryParams = new List<string>
+            {
+                "sort=date.desc",
+                "limit=1000"  // Increase limit to get more orders per request
+            };
+
+            if (from.HasValue)
+            {
+                queryParams.Add($"from={from.Value:yyyy-MM-dd}");
+            }
+            if (to.HasValue)
+            {
+                queryParams.Add($"to={to.Value:yyyy-MM-dd}");
+            }
+
+            var queryString = string.Join("&", queryParams);
+            var endpoint = $"orders?{queryString}";
+
+            _logger.LogInformation("Calling Card Trader endpoint: {Endpoint}", endpoint);
+
+            var response = await _httpClient.GetAsync(endpoint, cancellationToken);
             response.EnsureSuccessStatusCode();
 
             var jsonContent = await response.Content.ReadAsStringAsync(cancellationToken);

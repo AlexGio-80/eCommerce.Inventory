@@ -436,4 +436,67 @@ public class CardTraderDtoMapper
 
         return null;
     }
+
+    /// <summary>
+    /// Maps CardTraderOrderDto to Order entity
+    /// </summary>
+    public Order MapOrder(CardTraderOrderDto dto)
+    {
+        if (dto == null) throw new ArgumentNullException(nameof(dto));
+
+        var order = new Order
+        {
+            CardTraderOrderId = dto.Id,
+            Code = dto.Code ?? string.Empty,
+            TransactionCode = dto.TransactionCode ?? string.Empty,
+            BuyerId = dto.Buyer?.Id ?? 0,
+            BuyerUsername = dto.Buyer?.Username ?? string.Empty,
+            State = dto.State ?? string.Empty,
+            PaidAt = dto.PaidAt,
+            SentAt = dto.SentAt,
+            SellerTotal = dto.SellerTotal?.Cents / 100m ?? 0,
+            SellerFee = dto.SellerFeeAmount?.Cents / 100m ?? 0,
+            SellerSubtotal = dto.SellerSubtotal?.Cents / 100m ?? 0,
+            ShippingAddressJson = dto.OrderShippingAddress != null ? JsonSerializer.Serialize(dto.OrderShippingAddress) : string.Empty,
+            BillingAddressJson = dto.OrderBillingAddress != null ? JsonSerializer.Serialize(dto.OrderBillingAddress) : string.Empty,
+            IsCompleted = false // Default to false
+        };
+
+        if (dto.OrderItems != null && dto.OrderItems.Any())
+        {
+            order.OrderItems = dto.OrderItems.Select(i => MapOrderItem(i, order)).ToList();
+        }
+
+        return order;
+    }
+
+    /// <summary>
+    /// Maps CardTraderOrderItemDto to OrderItem entity
+    /// </summary>
+    public OrderItem MapOrderItem(CardTraderOrderItemDto dto, Order order)
+    {
+        if (dto == null) throw new ArgumentNullException(nameof(dto));
+
+        return new OrderItem
+        {
+            OrderId = order.Id, // This will be 0 for new orders, EF Core handles relationship via navigation property
+            Order = order,
+            CardTraderId = dto.Id,
+            ProductId = dto.ProductId ?? 0,
+            BlueprintId = dto.BlueprintId ?? 0,
+            CategoryId = dto.CategoryId ?? 0,
+            GameId = dto.GameId ?? 0,
+            Name = dto.Name ?? string.Empty,
+            ExpansionName = dto.Expansion ?? string.Empty,
+            Quantity = dto.Quantity,
+            Price = dto.SellerPrice?.Cents / 100m ?? 0,
+            Condition = dto.Properties?.Condition ?? string.Empty,
+            Language = dto.Properties?.Language ?? string.Empty,
+            IsFoil = dto.Properties?.Foil ?? false,
+            IsSigned = dto.Properties?.Signed ?? false,
+            IsAltered = dto.Properties?.Altered ?? false,
+            UserDataField = dto.UserDataField,
+            IsPrepared = false // Default to false
+        };
+    }
 }

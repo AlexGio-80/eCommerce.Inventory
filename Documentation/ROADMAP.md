@@ -66,7 +66,28 @@
       - Removed incorrect InventoryItem creation during pending sync
       - Fixed "Save Defaults" OFF behavior (reset fields, keep blueprint)
       - Added detailed logging for sync failures
-  - Phase 3.4-3.7: ⏳ TODO
+  - **Phase 3.4: Orders Management ✅ DONE**
+    - Backend: Order/OrderItem entities, DTOs, Repository, Controller, Sync Service
+    - Frontend: Orders List (master-detail), Unprepared Items View
+    - Manual sync with date filters (from/to) - **FIXED ✅**
+    - Order completion and item preparation flags
+    - **Bug Fixes:**
+      - Fixed nullable IDs in CardTraderOrderItemDto
+      - Fixed unprepared items filter (show all, not just paid/sending)
+      - Added date range filters with defaults (today to tomorrow)
+      - **Fixed date filter parameters not being sent to Card Trader API:**
+        - Changed sync endpoint from query parameters to request body (`[FromBody]`)
+        - Fixed `GetOrdersAsync` to properly pass query string parameters
+        - Added `limit=1000` parameter to fetch up to 1000 orders per request
+        - Verified parameters are correctly included in HTTP GET request
+  - **Phase 3.5: Advanced Grid Features ⏳ TODO** (PRIORITY: MEDIUM)
+    - Column sorting (click to sort)
+    - Column reordering (drag & drop)
+    - Column visibility toggle
+    - Grid configuration persistence (localStorage)
+    - Apply to all grids: Orders, Inventory, Products, etc.
+    - **Options**: Use AG-Grid (already in package.json) or implement with Material Table
+  - Phase 3.6-3.7: ⏳ TODO
 
 ⏳ **TODO**: Phase 4 Advanced Features, Phase 5 Deployment
 

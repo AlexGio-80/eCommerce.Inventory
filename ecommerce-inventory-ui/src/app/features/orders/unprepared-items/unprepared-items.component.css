@@ -1,0 +1,25 @@
+.container {
+    padding: 20px;
+}
+
+.loading-spinner {
+    display: flex;
+    justify-content: center;
+    padding: 20px;
+}
+
+.no-items {
+    text-align: center;
+    padding: 40px;
+    font-size: 1.2em;
+    color: #666;
+}
+
+table {
+    width: 100%;
+}
+
+th.mat-header-cell {
+    font-weight: bold;
+    color: #333;
+}

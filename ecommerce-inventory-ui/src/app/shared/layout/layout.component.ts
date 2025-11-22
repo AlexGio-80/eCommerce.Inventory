@@ -42,6 +42,7 @@ export class LayoutComponent {
     { label: 'Nuovo Prodotto', route: '/layout/products/create', icon: 'add_circle' },
     { label: 'Prodotti', route: '/layout/products', icon: 'shopping_bag' },
     { label: 'Ordini', route: '/layout/orders', icon: 'shopping_cart' },
+    { label: 'Da Preparare', route: '/layout/orders/unprepared', icon: 'checklist' },
     { label: 'Report', route: '/layout/reporting', icon: 'bar_chart' },
   ];
 

@@ -106,7 +106,7 @@ public class CardTraderSyncWorker : BackgroundService
 
                 // ========== STEP 3: Fetch and Sync Orders ==========
                 _logger.LogInformation("Step 3: Fetching orders from Card Trader API");
-                var orderDtos = (await cardTraderApiService.FetchNewOrdersAsync(cancellationToken))
+                var orderDtos = (await cardTraderApiService.GetOrdersAsync(null, null, cancellationToken))
                     .Cast<CardTraderOrderDto>().ToList();
 
                 if (orderDtos.Any())

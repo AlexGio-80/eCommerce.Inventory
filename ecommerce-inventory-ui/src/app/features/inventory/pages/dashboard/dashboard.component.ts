@@ -41,7 +41,7 @@ export class DashboardComponent implements OnInit {
   recentOrders$!: Observable<Order[]>;
   isLoading = true;
 
-  constructor(private apiService: CardTraderApiService) {}
+  constructor(private apiService: CardTraderApiService) { }
 
   ngOnInit(): void {
     this.loadDashboard();
@@ -52,8 +52,8 @@ export class DashboardComponent implements OnInit {
       totalItems: this.apiService.getInventoryItems(1, 1).pipe(
         map((response: PagedResponse<any>) => response.totalCount || 0)
       ),
-      totalOrders: this.apiService.getOrders(1, 1).pipe(
-        map((response: PagedResponse<any>) => response.totalCount || 0)
+      totalOrders: this.apiService.getOrders().pipe(
+        map((orders: Order[]) => orders.length)
       ),
       games: this.apiService.getGames().pipe(
         map((games: any[]) => games.length)
@@ -67,21 +67,22 @@ export class DashboardComponent implements OnInit {
       }))
     );
 
-    this.recentOrders$ = this.apiService.getOrders(1, 5).pipe(
-      map((response: PagedResponse<any>) => response.items || [])
+    this.recentOrders$ = this.apiService.getOrders().pipe(
+      map((orders: Order[]) => orders.slice(0, 5))
     );
 
     this.isLoading = false;
   }
 
-  getOrderStatusColor(status: string): string {
+  getOrderStatusColor(state: string): string {
     const statusColorMap: { [key: string]: string } = {
       pending: 'warn',
       paid: 'accent',
-      shipped: 'primary',
+      sending: 'primary',
+      sent: 'primary',
       delivered: 'success',
       cancelled: 'warn',
     };
-    return statusColorMap[status] || 'primary';
+    return statusColorMap[state] || 'primary';
   }
 }

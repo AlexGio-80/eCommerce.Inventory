@@ -418,7 +418,7 @@ public class InventorySyncService
 
             var dbContext = _context as DbContext;
             var existingOrders = await dbContext!.Set<Order>()
-                .AsNoTracking()
+                .Include(o => o.OrderItems)
                 .Where(o => orderDtos.Select(d => d.Id).Contains(o.CardTraderOrderId))
                 .ToListAsync(cancellationToken);
 
@@ -431,21 +431,25 @@ public class InventorySyncService
                 if (existingOrder == null)
                 {
                     // INSERT: New order
-                    var newOrder = new Order
-                    {
-                        CardTraderOrderId = dto.Id,
-                        DatePlaced = DateTime.UtcNow,
-                        Status = dto.State ?? "Pending",
-                        TotalAmount = 0m, // Not provided in DTO
-                        ShippingCost = 0m // Not provided in DTO
-                    };
+                    var newOrder = _mapper.MapOrder(dto);
                     dbContext!.Set<Order>().Add(newOrder);
                     insertCount++;
                 }
                 else
                 {
-                    // UPDATE: Existing order status
-                    existingOrder.Status = dto.State ?? existingOrder.Status;
+                    // UPDATE: Existing order
+                    // We update basic fields and status
+                    existingOrder.State = dto.State ?? existingOrder.State;
+                    existingOrder.PaidAt = dto.PaidAt;
+                    existingOrder.SentAt = dto.SentAt;
+                    existingOrder.TransactionCode = dto.TransactionCode ?? existingOrder.TransactionCode;
+
+                    // Update items if needed? 
+                    // Usually items are immutable once ordered, but let's check if we need to add missing items
+                    // For now, we assume items don't change structure, only order status changes.
+                    // If we want to be thorough, we could delete and re-add items, or check one by one.
+                    // Given the complexity, let's stick to updating the order header for now.
+
                     dbContext!.Set<Order>().Update(existingOrder);
                     updateCount++;
                 }

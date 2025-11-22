@@ -92,17 +92,29 @@ export class CardTraderApiService {
   }
 
   // Orders
-  getOrders(page: number = 1, pageSize: number = 20): Observable<PagedResponse<Order>> {
-    const params = new HttpParams()
-      .set('page', page.toString())
-      .set('pageSize', pageSize.toString());
-    return this.http.get<PagedResponse<Order>>(`${this.apiUrl}/orders`, {
-      params,
-    });
+  // Orders
+  getOrders(): Observable<Order[]> {
+    return this.http.get<Order[]>(`${this.apiUrl}/orders`);
   }
 
   getOrderById(id: number): Observable<Order> {
     return this.http.get<Order>(`${this.apiUrl}/orders/${id}`);
+  }
+
+  syncOrders(from?: string, to?: string): Observable<ApiResponse<any>> {
+    const body = {
+      from: from || null,
+      to: to || null
+    };
+    return this.http.post<ApiResponse<any>>(`${this.apiUrl}/orders/sync`, body);
+  }
+
+  toggleOrderCompletion(id: number, isCompleted: boolean): Observable<Order> {
+    return this.http.put<Order>(`${this.apiUrl}/orders/${id}/complete`, isCompleted);
+  }
+
+  toggleItemPreparation(itemId: number, isPrepared: boolean): Observable<any> {
+    return this.http.put<any>(`${this.apiUrl}/orders/items/${itemId}/prepare`, isPrepared);
   }
 
   // Sync

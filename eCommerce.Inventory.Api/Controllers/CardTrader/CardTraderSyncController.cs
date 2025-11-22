@@ -170,7 +170,7 @@ public class CardTraderSyncController : ControllerBase
 
         try
         {
-            var orders = await _cardTraderApiService.FetchNewOrdersAsync(cancellationToken);
+            var orders = await _cardTraderApiService.GetOrdersAsync(null, null, cancellationToken);
             _logger.LogInformation("Synced {OrderCount} orders from Card Trader", orders.Count());
             return Ok(new { message = "Orders synced successfully", count = orders.Count() });
         }
@@ -196,7 +196,7 @@ public class CardTraderSyncController : ControllerBase
             var games = await _cardTraderApiService.SyncGamesAsync(cancellationToken);
             var expansions = await _cardTraderApiService.SyncExpansionsAsync(cancellationToken);
             var products = await _cardTraderApiService.FetchMyProductsAsync(cancellationToken);
-            var orders = await _cardTraderApiService.FetchNewOrdersAsync(cancellationToken);
+            var orders = await _cardTraderApiService.GetOrdersAsync(null, null, cancellationToken);
 
             _logger.LogInformation(
                 "Full sync completed. Games: {GameCount}, Expansions: {ExpansionCount}, Products: {ProductCount}, Orders: {OrderCount}",

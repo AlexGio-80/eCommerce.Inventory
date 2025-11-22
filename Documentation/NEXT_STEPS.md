@@ -1,16 +1,16 @@
 # Next Steps - Session 2025-11-22
 
-## Status Summary (As of 2025-11-21)
+## Status Summary (As of 2025-11-22)
 
 **✅ Phase 3.3 COMPLETED**: Product Listing Creation with Pending Listings System
-- Pending Listings queue-based workflow fully implemented
-- Card Trader sync integration working correctly
-- All major bugs fixed (Blueprint ID, payload structure, response parsing)
-- Defaults persistence working as expected
+**✅ Phase 3.4 COMPLETED**: Orders Management (Manual Sync & Master-Detail View)
+- Backend: Order/OrderItem entities, Repository, Controller, Sync Service
+- Frontend: Orders List, Unprepared Items View, Sync Integration
+- Features: Manual Sync, Order Completion Flag, Item Preparation Flag
 
 ## Immediate Next Steps
 
-### Phase 3.4: Webhook Processing & Real-time Updates (PRIORITY: HIGH)
+### Phase 3.5: Webhook Processing & Real-time Updates (PRIORITY: HIGH)
 
 The next major feature to implement is real-time order tracking and inventory updates via Card Trader webhooks.
 
@@ -50,7 +50,7 @@ The next major feature to implement is real-time order tracking and inventory up
 
 ---
 
-### Phase 3.5: Bulk Operations & Advanced Features (PRIORITY: MEDIUM)
+### Phase 3.6: Bulk Operations & Advanced Features (PRIORITY: MEDIUM)
 
 1. **Bulk Blueprint Navigation**
    - Previous/Next arrows to navigate cards within an expansion
@@ -71,7 +71,7 @@ The next major feature to implement is real-time order tracking and inventory up
 
 ---
 
-### Phase 3.6: Reporting & Business Intelligence (PRIORITY: MEDIUM)
+### Phase 3.7: Reporting & Business Intelligence (PRIORITY: MEDIUM)
 
 1. **Sales Analytics Dashboard**
    - Revenue charts (daily, weekly, monthly)
@@ -92,7 +92,7 @@ The next major feature to implement is real-time order tracking and inventory up
 
 ---
 
-### Phase 3.7: Polish & Optimization (PRIORITY: LOW)
+### Phase 3.8: Polish & Optimization (PRIORITY: LOW)
 
 1. **Performance Optimization**
    - Lazy loading for large lists
@@ -123,7 +123,7 @@ The next major feature to implement is real-time order tracking and inventory up
 - Frontend `.env` for API base URLs
 - localStorage keys: `listing_defaults`
 
-## Testing Checklist for Tomorrow
+## Testing Checklist
 
 Before starting new work:
 - [x] Verify backend builds successfully
@@ -131,4 +131,7 @@ Before starting new work:
 - [ ] Test Pending Listings sync (create 2-3 items and sync)
 - [ ] Test sync FROM Card Trader (verify InventoryItems populated)
 - [ ] Verify "Save Defaults" toggle works correctly
+- [ ] **Test Orders Manual Sync**
+- [ ] **Test Order Completion Toggle**
+- [ ] **Test Item Preparation Toggle**
 - [ ] Check browser console for any errors

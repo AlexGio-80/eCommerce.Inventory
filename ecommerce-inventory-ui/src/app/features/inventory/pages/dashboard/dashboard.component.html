@@ -72,20 +72,20 @@
       <mat-card-content>
         <mat-list *ngIf="recentOrders$ | async as orders; else noOrders">
           <mat-list-item *ngFor="let order of orders">
-            <mat-icon matListItemIcon [color]="getOrderStatusColor(order.status)">
-              {{ order.status === 'delivered' ? 'check_circle' : 'schedule' }}
+            <mat-icon matListItemIcon [color]="getOrderStatusColor(order.state)">
+              {{ order.state === 'delivered' ? 'check_circle' : 'schedule' }}
             </mat-icon>
             <div matLine>
-              <strong>Ordine #{{ order.id }}</strong>
+              <strong>Ordine #{{ order.code }}</strong>
             </div>
             <div matLine>
-              Status: <mat-chip [color]="getOrderStatusColor(order.status)" selected>
-                {{ order.status }}
+              Status: <mat-chip [color]="getOrderStatusColor(order.state)" selected>
+                {{ order.state }}
               </mat-chip>
             </div>
             <div matLine class="secondary-text">
-              € {{ order.totalPrice | number: '1.2-2' }} •
-              {{ order.createdAt | date: 'short' }}
+              € {{ order.sellerTotal | number: '1.2-2' }} •
+              {{ order.paidAt | date: 'short' }}
             </div>
           </mat-list-item>
         </mat-list>

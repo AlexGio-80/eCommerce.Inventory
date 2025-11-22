@@ -48,6 +48,16 @@ export const routes: Routes = [
       // - /layout/products (Product Listing Component)
       // - /layout/orders (Orders Component)
       // - /layout/reporting (Reporting Component)
+      {
+        path: 'orders',
+        loadComponent: () => import('./features/orders/orders-list/orders-list.component').then(m => m.OrdersListComponent),
+        data: { title: 'Orders' }
+      },
+      {
+        path: 'orders/unprepared',
+        loadComponent: () => import('./features/orders/unprepared-items/unprepared-items.component').then(m => m.UnpreparedItemsComponent),
+        data: { title: 'Unprepared Items' }
+      },
     ]
   },
   {

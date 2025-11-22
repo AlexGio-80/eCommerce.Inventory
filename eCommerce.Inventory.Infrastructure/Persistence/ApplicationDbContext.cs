@@ -103,13 +103,6 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             .HasForeignKey(oi => oi.OrderId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // InventoryItem -> OrderItem (One-to-Many)
-        modelBuilder.Entity<InventoryItem>()
-            .HasMany(i => i.OrderItems)
-            .WithOne(oi => oi.InventoryItem)
-            .HasForeignKey(oi => oi.InventoryItemId)
-            .OnDelete(DeleteBehavior.Cascade);
-
         // Configure decimal precision for prices
         modelBuilder.Entity<InventoryItem>()
             .Property(i => i.PurchasePrice)
@@ -120,15 +113,19 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             .HasPrecision(18, 2);
 
         modelBuilder.Entity<Order>()
-            .Property(o => o.TotalAmount)
+            .Property(o => o.SellerTotal)
             .HasPrecision(18, 2);
 
         modelBuilder.Entity<Order>()
-            .Property(o => o.ShippingCost)
+            .Property(o => o.SellerFee)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<Order>()
+            .Property(o => o.SellerSubtotal)
             .HasPrecision(18, 2);
 
         modelBuilder.Entity<OrderItem>()
-            .Property(oi => oi.PricePerItem)
+            .Property(oi => oi.Price)
             .HasPrecision(18, 2);
 
         // PendingListing -> Blueprint (Many-to-One)
