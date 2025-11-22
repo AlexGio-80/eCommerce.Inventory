@@ -622,6 +622,172 @@ Loggare SEMPRE:
 
 ---
 
+## 15. Grid UI Standards (OBBLIGATORIO)
+
+Tutte le griglie di dati nell'applicazione Angular DEVONO usare **AG-Grid** con le seguenti funzionalità standard.
+
+### Libreria Obbligatoria
+- **AG-Grid Community Edition** (già installata in package.json)
+- Versione: `^34.3.1` o superiore
+
+### Funzionalità Obbligatorie
+
+Ogni griglia DEVE implementare:
+
+1. **Column Sorting** - Click su header per ordinare
+2. **Column Reordering** - Drag & drop per riordinare colonne
+3. **Column Visibility Toggle** - Sidebar per mostrare/nascondere colonne
+4. **Grid State Persistence** - Salvataggio configurazione in localStorage
+5. **Auto-save** - Salvataggio automatico su modifiche
+6. **Manual Controls** - Pulsanti Save/Reset nel menu
+
+### Implementazione Standard
+
+✅ **CORRETTO**:
+```typescript
+import { AgGridAngular } from 'ag-grid-angular';
+import { ColDef, GridApi, GridReadyEvent } from 'ag-grid-community';
+import { GridStateService } from '../../../core/services/grid-state.service';
+
+@Component({
+  imports: [AgGridAngular, MatMenuModule, ...],
+  // ...
+})
+export class MyListComponent {
+  @ViewChild(AgGridAngular) agGrid!: AgGridAngular;
+  private gridApi!: GridApi;
+  private readonly GRID_ID = 'my-grid'; // Unique ID per localStorage
+
+  columnDefs: ColDef[] = [
+    {
+      headerName: 'Name',
+      field: 'name',
+      sortable: true,
+      filter: true,
+      width: 200
+    }
+    // ... altre colonne
+  ];
+
+  defaultColDef: ColDef = {
+    resizable: true,
+    sortable: true,
+    filter: true
+  };
+
+  gridOptions = {
+    domLayout: 'autoHeight' as const,
+    animateRows: true,
+    sideBar: {
+      toolPanels: [{
+        id: 'columns',
+        labelDefault: 'Columns',
+        toolPanel: 'agColumnsToolPanel'
+      }]
+    }
+  };
+
+  constructor(private gridStateService: GridStateService) {}
+
+  onGridReady(params: GridReadyEvent): void {
+    this.gridApi = params.api;
+    const savedState = this.gridStateService.loadGridState(this.GRID_ID);
+    if (savedState?.columnState) {
+      this.gridApi.applyColumnState({ 
+        state: savedState.columnState, 
+        applyOrder: true 
+      });
+    }
+  }
+
+  saveGridState(): void {
+    const columnState = this.gridApi.getColumnState();
+    this.gridStateService.saveGridState(this.GRID_ID, {
+      columnState,
+      sortModel: columnState.filter(col => col.sort != null)
+    });
+  }
+
+  // Event handlers per auto-save
+  onColumnMoved(): void { this.saveGridState(); }
+  onColumnVisible(): void { this.saveGridState(); }
+  onSortChanged(): void { this.saveGridState(); }
+}
+```
+
+### Template Standard
+```html
+<ag-grid-angular
+  style="width: 100%; height: 600px;"
+  class="ag-theme-material"
+  [rowData]="data"
+  [columnDefs]="columnDefs"
+  [defaultColDef]="defaultColDef"
+  [gridOptions]="gridOptions"
+  (gridReady)="onGridReady($event)"
+  (columnMoved)="onColumnMoved()"
+  (columnVisible)="onColumnVisible()"
+  (sortChanged)="onSortChanged()"
+>
+</ag-grid-angular>
+```
+
+### Stili Standard
+```scss
+@import 'ag-grid-community/styles/ag-grid.css';
+@import 'ag-grid-community/styles/ag-theme-material.css';
+
+.ag-theme-material {
+  --ag-header-background-color: #3f51b5;
+  --ag-header-foreground-color: white;
+  --ag-odd-row-background-color: #f5f5f5;
+}
+```
+
+### GridStateService
+Usare il servizio condiviso `GridStateService` per gestire la persistenza:
+- **Path**: `src/app/core/services/grid-state.service.ts`
+- **Metodi**: `saveGridState()`, `loadGridState()`, `clearGridState()`
+
+### Grid ID Naming Convention
+Ogni griglia DEVE avere un ID univoco per localStorage:
+- Orders: `'orders-grid'`
+- Inventory: `'inventory-grid'`
+- Products: `'products-grid'`
+- Blueprints: `'blueprints-grid'`
+
+### Performance Best Practices
+- Usare `domLayout: 'autoHeight'` per griglie piccole/medie
+- Abilitare `animateRows` per UX migliore
+- Configurare `defaultColDef` per evitare ripetizioni
+- Usare `valueFormatter` per formattazione custom (date, valute)
+
+### Documentazione
+Consultare `Documentation/AG-Grid-Implementation-Guide.md` per:
+- Pattern completi di implementazione
+- Esempi di column definitions
+- Custom cell renderers
+- Troubleshooting
+
+❌ **VIETATO**:
+```typescript
+// NO Material Table per nuove griglie!
+import { MatTableModule } from '@angular/material/table';
+
+// NO implementazioni custom di sorting/filtering
+// Usare AG-Grid built-in features
+```
+
+### Migrazione Griglie Esistenti
+Griglie già implementate con Material Table:
+- **Orders List**: ✅ Migrata ad AG-Grid
+- **Inventory List**: ✅ Migrata ad AG-Grid
+- **Blueprints List**: ⏳ Da migrare (complessa, con filtri)
+
+Nuove griglie DEVONO usare AG-Grid da subito.
+
+---
+
 ## Checklist per Nuovo Feature
 
 Prima di fare un commit, verificare:
@@ -641,6 +807,9 @@ Prima di fare un commit, verificare:
 - [ ] Documentazione aggiornata
 - [ ] **[SE IMPORTAZIONE]** Filtro IsEnabled applicato per Games (sezione 14)
 - [ ] **[SE IMPORTAZIONE]** Logging obbligatorio aggiunto (fetched, filtered, skipped counts)
+- [ ] **[SE GRIGLIA DATI]** Usato AG-Grid con tutte le funzionalità obbligatorie (sezione 15)
+- [ ] **[SE GRIGLIA DATI]** GridStateService configurato per persistenza
+- [ ] **[SE GRIGLIA DATI]** SideBar abilitato per column visibility
 
 ---
 

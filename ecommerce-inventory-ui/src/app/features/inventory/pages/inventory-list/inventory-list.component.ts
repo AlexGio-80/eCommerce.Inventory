@@ -1,93 +1,217 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MatTableModule } from '@angular/material/table';
-import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
-import { MatSortModule } from '@angular/material/sort';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatSelectModule } from '@angular/material/select';
-import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatToolbarModule } from '@angular/material/toolbar';
-import { MatCardModule } from '@angular/material/card';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { Observable, BehaviorSubject } from 'rxjs';
-import { map, tap, switchMap, startWith } from 'rxjs/operators';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { AgGridAngular } from 'ag-grid-angular';
+import { ColDef, GridApi, GridReadyEvent } from 'ag-grid-community';
 
 import { CardTraderApiService } from '../../../../core/services';
-import { InventoryItem, Game, PagedResponse } from '../../../../core/models';
+import { GridStateService } from '../../../../core/services/grid-state.service';
+import { InventoryItem } from '../../../../core/models';
 
 @Component({
   selector: 'app-inventory-list',
   standalone: true,
   imports: [
     CommonModule,
-    MatTableModule,
-    MatPaginatorModule,
-    MatSortModule,
-    MatFormFieldModule,
-    MatSelectModule,
-    MatInputModule,
     MatButtonModule,
     MatIconModule,
-    MatToolbarModule,
-    MatCardModule,
-    MatChipsModule,
     MatProgressSpinnerModule,
+    MatMenuModule,
+    MatSnackBarModule,
+    AgGridAngular
   ],
   templateUrl: './inventory-list.component.html',
   styleUrls: ['./inventory-list.component.scss'],
 })
 export class InventoryListComponent implements OnInit {
-  displayedColumns: string[] = [
-    'id',
-    'cardName',
-    'quantity',
-    'price',
-    'status',
-    'actions',
+  @ViewChild(AgGridAngular) agGrid!: AgGridAngular;
+
+  private gridApi!: GridApi;
+  private readonly GRID_ID = 'inventory-grid';
+
+  items: InventoryItem[] = [];
+  isLoading = false;
+
+  columnDefs: ColDef[] = [
+    {
+      headerName: 'ID',
+      field: 'id',
+      sortable: true,
+      filter: 'agNumberColumnFilter',
+      width: 80
+    },
+    {
+      headerName: 'Card Name',
+      field: 'blueprint.name',
+      sortable: true,
+      filter: true,
+      width: 250
+    },
+    {
+      headerName: 'Expansion',
+      field: 'blueprint.expansion.name',
+      sortable: true,
+      filter: true,
+      width: 200
+    },
+    {
+      headerName: 'Quantity',
+      field: 'quantity',
+      sortable: true,
+      filter: 'agNumberColumnFilter',
+      width: 100
+    },
+    {
+      headerName: 'Purchase Price',
+      field: 'purchasePrice',
+      sortable: true,
+      filter: 'agNumberColumnFilter',
+      width: 130,
+      valueFormatter: (params) => params.value ? `€${params.value.toFixed(2)}` : ''
+    },
+    {
+      headerName: 'Listing Price',
+      field: 'listingPrice',
+      sortable: true,
+      filter: 'agNumberColumnFilter',
+      width: 130,
+      valueFormatter: (params) => params.value ? `€${params.value.toFixed(2)}` : ''
+    },
+    {
+      headerName: 'Condition',
+      field: 'condition',
+      sortable: true,
+      filter: true,
+      width: 100
+    },
+    {
+      headerName: 'Language',
+      field: 'language',
+      sortable: true,
+      filter: true,
+      width: 100
+    },
+    {
+      headerName: 'Status',
+      field: 'status',
+      sortable: true,
+      filter: true,
+      width: 100
+    },
+    {
+      headerName: 'Actions',
+      field: 'actions',
+      sortable: false,
+      filter: false,
+      width: 150,
+      cellRenderer: (params: any) => {
+        return `<button class="action-btn edit-btn">Edit</button>
+                <button class="action-btn delete-btn">Delete</button>`;
+      },
+      onCellClicked: (params) => {
+        const target = params.event?.target as HTMLElement;
+        if (target.classList.contains('edit-btn')) {
+          this.editItem(params.data);
+        } else if (target.classList.contains('delete-btn')) {
+          this.deleteItem(params.data);
+        }
+      }
+    }
   ];
 
-  items$!: Observable<InventoryItem[]>;
-  games$!: Observable<Game[]>;
-  totalItems = 0;
-  isLoading = true;
+  defaultColDef: ColDef = {
+    resizable: true,
+    sortable: true,
+    filter: true
+  };
 
-  pageSize = 20;
-  pageSizeOptions = [10, 20, 50, 100];
-  currentPage = 0;
+  gridOptions = {
+    pagination: false,
+    domLayout: 'autoHeight' as const,
+    enableCellTextSelection: true,
+    suppressRowClickSelection: true,
+    animateRows: true,
+    sideBar: {
+      toolPanels: [
+        {
+          id: 'columns',
+          labelDefault: 'Columns',
+          labelKey: 'columns',
+          iconKey: 'columns',
+          toolPanel: 'agColumnsToolPanel',
+          toolPanelParams: {
+            suppressRowGroups: true,
+            suppressValues: true,
+            suppressPivots: true,
+            suppressPivotMode: true
+          }
+        }
+      ],
+      defaultToolPanel: ''
+    }
+  };
 
-  private pageSubject = new BehaviorSubject<number>(1);
-
-  constructor(private apiService: CardTraderApiService) { }
+  constructor(
+    private apiService: CardTraderApiService,
+    private gridStateService: GridStateService,
+    private snackBar: MatSnackBar
+  ) { }
 
   ngOnInit(): void {
-    this.games$ = this.apiService.getGames();
     this.loadInventory();
   }
 
-  private loadInventory(): void {
-    this.items$ = this.pageSubject.pipe(
-      tap(() => {
-        this.isLoading = true;
-      }),
-      switchMap((page) =>
-        this.apiService.getInventoryItems(page, this.pageSize)
-      ),
-      tap((response: PagedResponse<InventoryItem>) => {
-        this.totalItems = response.totalCount || 0;
-        this.isLoading = false;
-      }),
-      map((response: PagedResponse<InventoryItem>) => response.items || []),
-      startWith([])
-    );
+  onGridReady(params: GridReadyEvent): void {
+    this.gridApi = params.api;
+
+    const savedState = this.gridStateService.loadGridState(this.GRID_ID);
+    if (savedState?.columnState) {
+      this.gridApi.applyColumnState({ state: savedState.columnState, applyOrder: true });
+    }
+
+    this.gridApi.sizeColumnsToFit();
   }
 
-  onPageChange(event: PageEvent): void {
-    this.pageSize = event.pageSize;
-    this.currentPage = event.pageIndex;
-    this.pageSubject.next(event.pageIndex + 1);
+  loadInventory(): void {
+    this.isLoading = true;
+    // Load all items (no pagination for AG-Grid)
+    this.apiService.getInventoryItems(1, 10000).subscribe({
+      next: (response) => {
+        this.items = response.items || [];
+        this.isLoading = false;
+      },
+      error: (err) => {
+        console.error('Error loading inventory:', err);
+        this.showSnackBar('Error loading inventory');
+        this.isLoading = false;
+      }
+    });
+  }
+
+  saveGridState(): void {
+    if (!this.gridApi) return;
+
+    const columnState = this.gridApi.getColumnState();
+    this.gridStateService.saveGridState(this.GRID_ID, {
+      columnState,
+      sortModel: columnState.filter(col => col.sort != null)
+    });
+
+    this.showSnackBar('Grid configuration saved');
+  }
+
+  resetGridState(): void {
+    if (!this.gridApi) return;
+
+    this.gridStateService.clearGridState(this.GRID_ID);
+    this.gridApi.resetColumnState();
+    this.gridApi.sizeColumnsToFit();
+
+    this.showSnackBar('Grid configuration reset to defaults');
   }
 
   editItem(item: InventoryItem): void {
@@ -99,22 +223,32 @@ export class InventoryListComponent implements OnInit {
     if (confirm(`Sei sicuro di voler eliminare ${item.blueprint?.name}?`)) {
       this.apiService.deleteInventoryItem(item.id).subscribe({
         next: () => {
-          console.log('Item deleted');
+          this.showSnackBar('Item deleted successfully');
           this.loadInventory();
         },
         error: (err) => {
           console.error('Error deleting item:', err);
-        },
+          this.showSnackBar('Error deleting item');
+        }
       });
     }
   }
 
-  getStatusColor(status: string): string {
-    const colorMap: { [key: string]: string } = {
-      active: 'primary',
-      inactive: 'warn',
-      sold: 'accent',
-    };
-    return colorMap[status] || 'primary';
+  private showSnackBar(message: string): void {
+    this.snackBar.open(message, 'Close', {
+      duration: 3000
+    });
+  }
+
+  onColumnMoved(): void {
+    this.saveGridState();
+  }
+
+  onColumnVisible(): void {
+    this.saveGridState();
+  }
+
+  onSortChanged(): void {
+    this.saveGridState();
   }
 }
