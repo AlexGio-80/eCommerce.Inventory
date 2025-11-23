@@ -32,7 +32,7 @@ public class CardTraderOrdersController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Order>>> GetOrders(
+    public async Task<ActionResult<Models.ApiResponse<List<Order>>>> GetOrders(
         [FromQuery] DateTime? from = null,
         [FromQuery] DateTime? to = null,
         [FromQuery] bool excludeNullDates = true)
@@ -43,61 +43,56 @@ public class CardTraderOrdersController : ControllerBase
 
         _logger.LogInformation("Retrieved {Count} orders", orders.Count());
 
-        return Ok(orders);
+        return Ok(Models.ApiResponse<List<Order>>.SuccessResult(orders.ToList()));
     }
 
     [HttpGet("unprepared-items")]
-    public async Task<ActionResult<IEnumerable<UnpreparedItemDto>>> GetUnpreparedItems(CancellationToken cancellationToken)
+    public async Task<ActionResult<Models.ApiResponse<List<UnpreparedItemDto>>>> GetUnpreparedItems(CancellationToken cancellationToken)
     {
         _logger.LogInformation("Getting unprepared items");
         var items = await _orderRepository.GetUnpreparedItemsAsync(cancellationToken);
-        return Ok(items);
+        return Ok(Models.ApiResponse<List<UnpreparedItemDto>>.SuccessResult(items.ToList()));
     }
 
     [HttpPost("sync")]
-    public async Task<IActionResult> SyncOrders([FromBody] SyncOrdersRequest request)
+    public async Task<ActionResult<Models.ApiResponse<object>>> SyncOrders([FromBody] SyncOrdersRequest request)
     {
-        try
-        {
-            var from = request?.From;
-            var to = request?.To;
+        var from = request?.From;
+        var to = request?.To;
 
-            _logger.LogInformation("Manual sync of orders triggered");
-            _logger.LogInformation("Received parameters - from: {From}, to: {To}", from, to);
+        _logger.LogInformation("Manual sync of orders triggered");
+        _logger.LogInformation("Received parameters - from: {From}, to: {To}", from, to);
 
-            var orderDtos = await _cardTraderApiService.GetOrdersAsync(from, to);
+        var orderDtos = await _cardTraderApiService.GetOrdersAsync(from, to);
 
-            // Cast dynamic list to concrete DTO list
-            var concreteDtos = ((IEnumerable<dynamic>)orderDtos).Cast<Infrastructure.ExternalServices.CardTrader.DTOs.CardTraderOrderDto>().ToList();
+        // Cast dynamic list to concrete DTO list
+        var concreteDtos = ((IEnumerable<dynamic>)orderDtos).Cast<Infrastructure.ExternalServices.CardTrader.DTOs.CardTraderOrderDto>().ToList();
 
-            await _inventorySyncService.SyncOrdersAsync(concreteDtos);
+        await _inventorySyncService.SyncOrdersAsync(concreteDtos);
 
-            return Ok(new { message = $"Synced {concreteDtos.Count} orders" });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error syncing orders");
-            return StatusCode(500, new { message = "Error syncing orders", error = ex.Message });
-        }
+        return Ok(Models.ApiResponse<object>.SuccessResult(
+            data: new { syncedCount = concreteDtos.Count },
+            message: $"Synced {concreteDtos.Count} orders"
+        ));
     }
 
     [HttpPut("{orderId}/complete")]
-    public async Task<IActionResult> ToggleOrderCompletion(int orderId, [FromBody] bool isCompleted)
+    public async Task<ActionResult<Models.ApiResponse<Order>>> ToggleOrderCompletion(int orderId, [FromBody] bool isCompleted)
     {
         var order = await _orderRepository.GetByIdAsync(orderId);
         if (order == null)
         {
-            return NotFound();
+            return NotFound(Models.ApiResponse<Order>.ErrorResult($"Order with ID {orderId} not found"));
         }
 
         order.IsCompleted = isCompleted;
         await _orderRepository.UpdateAsync(order);
 
-        return Ok(order);
+        return Ok(Models.ApiResponse<Order>.SuccessResult(order, $"Order marked as {(isCompleted ? "complete" : "incomplete")}"));
     }
 
     [HttpPut("items/{itemId}/prepare")]
-    public async Task<IActionResult> ToggleItemPreparation(int itemId, [FromBody] bool isPrepared)
+    public async Task<ActionResult<Models.ApiResponse<OrderItem>>> ToggleItemPreparation(int itemId, [FromBody] bool isPrepared)
     {
         // We need to access OrderItems directly. 
         var dbContext = _context as Microsoft.EntityFrameworkCore.DbContext;
@@ -105,13 +100,13 @@ public class CardTraderOrdersController : ControllerBase
 
         if (item == null)
         {
-            return NotFound();
+            return NotFound(Models.ApiResponse<OrderItem>.ErrorResult($"Order item with ID {itemId} not found"));
         }
 
         item.IsPrepared = isPrepared;
         await dbContext.SaveChangesAsync();
 
-        return Ok(item);
+        return Ok(Models.ApiResponse<OrderItem>.SuccessResult(item, $"Item marked as {(isPrepared ? "prepared" : "unprepared")}"));
     }
 }
 

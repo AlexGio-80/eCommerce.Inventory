@@ -140,6 +140,9 @@ app.UseCors("AllowAll");
 // Use Serilog middleware for request/response logging
 app.UseSerilogRequestLogging();
 
+// Use Global Exception Middleware (AFTER logging, BEFORE authorization)
+app.UseMiddleware<eCommerce.Inventory.Api.Middleware.GlobalExceptionMiddleware>();
+
 app.UseAuthorization();
 
 app.MapControllers();

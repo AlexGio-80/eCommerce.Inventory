@@ -23,7 +23,7 @@ public class CardTraderInventoryController : ControllerBase
     /// Get inventory items for Card Trader with pagination
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<object>> GetInventoryItems(
+    public async Task<ActionResult<Models.ApiResponse<Models.PagedResponse<InventoryItem>>>> GetInventoryItems(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
         CancellationToken cancellationToken = default)
@@ -32,23 +32,21 @@ public class CardTraderInventoryController : ControllerBase
 
         var (items, totalCount) = await _inventoryItemRepository.GetPagedAsync(page, pageSize, cancellationToken);
 
-        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+        var pagedData = Models.PagedResponse<InventoryItem>.Create(
+            items: items.ToList(),
+            page: page,
+            pageSize: pageSize,
+            totalCount: totalCount
+        );
 
-        return Ok(new
-        {
-            items,
-            totalCount,
-            pageNumber = page,
-            pageSize,
-            totalPages
-        });
+        return Ok(Models.ApiResponse<Models.PagedResponse<InventoryItem>>.SuccessResult(pagedData));
     }
 
     /// <summary>
     /// Get a specific inventory item by ID
     /// </summary>
     [HttpGet("{id}")]
-    public async Task<ActionResult<InventoryItem>> GetInventoryItemById(int id, CancellationToken cancellationToken)
+    public async Task<ActionResult<Models.ApiResponse<InventoryItem>>> GetInventoryItemById(int id, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Getting inventory item {ItemId} for Card Trader", id);
         var item = await _inventoryItemRepository.GetByIdAsync(id, cancellationToken);
@@ -56,17 +54,17 @@ public class CardTraderInventoryController : ControllerBase
         if (item == null)
         {
             _logger.LogWarning("Inventory item {ItemId} not found", id);
-            return NotFound(new { message = $"Inventory item with ID {id} not found" });
+            return NotFound(Models.ApiResponse<InventoryItem>.ErrorResult($"Inventory item with ID {id} not found"));
         }
 
-        return Ok(item);
+        return Ok(Models.ApiResponse<InventoryItem>.SuccessResult(item));
     }
 
     /// <summary>
     /// Add a new inventory item to Card Trader
     /// </summary>
     [HttpPost]
-    public async Task<ActionResult<InventoryItem>> AddInventoryItem(
+    public async Task<ActionResult<Models.ApiResponse<InventoryItem>>> AddInventoryItem(
         [FromBody] CreateInventoryItemRequest request,
         CancellationToken cancellationToken)
     {
@@ -89,14 +87,15 @@ public class CardTraderInventoryController : ControllerBase
         await _inventoryItemRepository.AddAsync(item, cancellationToken);
         _logger.LogInformation("Inventory item {ItemId} added successfully", item.Id);
 
-        return CreatedAtAction(nameof(GetInventoryItemById), new { id = item.Id }, item);
+        var response = Models.ApiResponse<InventoryItem>.SuccessResult(item, "Inventory item created successfully");
+        return CreatedAtAction(nameof(GetInventoryItemById), new { id = item.Id }, response);
     }
 
     /// <summary>
     /// Update an existing inventory item on Card Trader
     /// </summary>
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateInventoryItem(
+    public async Task<ActionResult<Models.ApiResponse<InventoryItem>>> UpdateInventoryItem(
         int id,
         [FromBody] UpdateInventoryItemRequest request,
         CancellationToken cancellationToken)
@@ -107,7 +106,7 @@ public class CardTraderInventoryController : ControllerBase
         if (item == null)
         {
             _logger.LogWarning("Inventory item {ItemId} not found for update", id);
-            return NotFound(new { message = $"Inventory item with ID {id} not found" });
+            return NotFound(Models.ApiResponse<InventoryItem>.ErrorResult($"Inventory item with ID {id} not found"));
         }
 
         // Update only the provided fields
@@ -126,14 +125,14 @@ public class CardTraderInventoryController : ControllerBase
         await _inventoryItemRepository.UpdateAsync(item, cancellationToken);
         _logger.LogInformation("Inventory item {ItemId} updated successfully", id);
 
-        return Ok(item);
+        return Ok(Models.ApiResponse<InventoryItem>.SuccessResult(item, "Inventory item updated successfully"));
     }
 
     /// <summary>
     /// Delete an inventory item from Card Trader
     /// </summary>
     [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteInventoryItem(int id, CancellationToken cancellationToken)
+    public async Task<ActionResult<Models.ApiResponse<object>>> DeleteInventoryItem(int id, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Deleting inventory item {ItemId} from Card Trader", id);
 
@@ -141,13 +140,13 @@ public class CardTraderInventoryController : ControllerBase
         if (item == null)
         {
             _logger.LogWarning("Inventory item {ItemId} not found for deletion", id);
-            return NotFound(new { message = $"Inventory item with ID {id} not found" });
+            return NotFound(Models.ApiResponse<object>.ErrorResult($"Inventory item with ID {id} not found"));
         }
 
         await _inventoryItemRepository.DeleteAsync(id, cancellationToken);
         _logger.LogInformation("Inventory item {ItemId} deleted successfully", id);
 
-        return NoContent();
+        return Ok(Models.ApiResponse<object>.SuccessResult(null, "Inventory item deleted successfully"));
     }
 }
 
