@@ -19,6 +19,7 @@ import { GridStateService } from '../../../core/services/grid-state.service';
 import { ExportService } from '../../../core/services/export.service';
 import { Order, OrderItem } from '../../../core/models/order';
 import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialog.component';
+import { OrderStatusMonitorComponent } from '../components/order-status-monitor/order-status-monitor.component';
 
 @Component({
     selector: 'app-orders-list',
@@ -37,7 +38,8 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
         MatDividerModule,
         MatSelectModule,
         MatDialogModule,
-        AgGridAngular
+        AgGridAngular,
+        OrderStatusMonitorComponent
     ],
     templateUrl: './orders-list.component.html',
     styleUrls: ['./orders-list.component.css']
@@ -205,6 +207,10 @@ export class OrdersListComponent implements OnInit {
 
         // Auto-size columns to fit
         this.gridApi.sizeColumnsToFit();
+    }
+
+    refreshOrders(): void {
+        this.loadOrders();
     }
 
     loadOrders(): void {

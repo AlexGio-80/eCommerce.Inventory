@@ -417,10 +417,27 @@ public class InventorySyncService
             _logger.LogInformation("Starting sync for {OrderCount} orders", orderDtos.Count);
 
             var dbContext = _context as DbContext;
+
+            // Pre-fetch existing orders
             var existingOrders = await dbContext!.Set<Order>()
                 .Include(o => o.OrderItems)
                 .Where(o => orderDtos.Select(d => d.Id).Contains(o.CardTraderOrderId))
                 .ToListAsync(cancellationToken);
+
+            // Pre-fetch Blueprints map (CardTraderId -> InternalId)
+            // Collect all Blueprint IDs referenced in the incoming orders
+            var allBlueprintIds = orderDtos
+                .SelectMany(o => o.OrderItems)
+                .Where(i => i.BlueprintId.HasValue)
+                .Select(i => i.BlueprintId!.Value)
+                .Distinct()
+                .ToList();
+
+            var blueprintMap = await dbContext.Set<Blueprint>()
+                .AsNoTracking()
+                .Where(b => allBlueprintIds.Contains(b.CardTraderId))
+                .Select(b => new { b.CardTraderId, b.Id })
+                .ToDictionaryAsync(b => b.CardTraderId, b => b.Id, cancellationToken);
 
             int insertCount = 0, updateCount = 0;
 
@@ -432,6 +449,35 @@ public class InventorySyncService
                 {
                     // INSERT: New order
                     var newOrder = _mapper.MapOrder(dto);
+
+                    // Fix Blueprint IDs in OrderItems
+                    // The mapper sets BlueprintId to the External CardTraderId
+                    // We need to replace it with the Internal Database Id
+                    foreach (var item in newOrder.OrderItems)
+                    {
+                        // The mapper initializes BlueprintId with the external ID (if present)
+                        if (item.BlueprintId.HasValue && item.BlueprintId.Value > 0)
+                        {
+                            if (blueprintMap.TryGetValue(item.BlueprintId.Value, out var internalId))
+                            {
+                                item.BlueprintId = internalId;
+                            }
+                            else
+                            {
+                                // Blueprint not found in local DB
+                                // We set it to null to avoid FK constraint violation
+                                // The item will still be saved, but without the link to the Blueprint entity
+                                _logger.LogWarning("Order {OrderId} Item {ItemId} references missing Blueprint {BlueprintId}. Setting BlueprintId to null.",
+                                    dto.Id, item.CardTraderId, item.BlueprintId.Value);
+                                item.BlueprintId = null;
+                            }
+                        }
+                        else
+                        {
+                            item.BlueprintId = null;
+                        }
+                    }
+
                     dbContext!.Set<Order>().Add(newOrder);
                     insertCount++;
                 }

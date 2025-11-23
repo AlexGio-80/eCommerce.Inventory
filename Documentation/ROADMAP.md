@@ -71,6 +71,10 @@
     - Frontend: Orders List (master-detail), Unprepared Items View
     - Manual sync with date filters (from/to) - **FIXED ✅**
     - Order completion and item preparation flags
+    - **Real-time Updates (SignalR) ✅ DONE:**
+      - WebSocket connection for `OrderCreated`/`OrderUpdated` events
+      - `OrderStatusMonitorComponent` for live activity feed
+      - Auto-sync trigger on webhook events
     - **Bug Fixes:**
       - Fixed nullable IDs in CardTraderOrderItemDto
       - Fixed unprepared items filter (show all, not just paid/sending)
@@ -80,6 +84,8 @@
         - Fixed `GetOrdersAsync` to properly pass query string parameters
         - Added `limit=1000` parameter to fetch up to 1000 orders per request
         - Verified parameters are correctly included in HTTP GET request
+      - **Fixed FK Constraint Violation during Order Sync:**
+        - Mapped external Blueprint IDs to internal DB IDs before saving OrderItems
   - **Phase 3.5: Advanced Grid Features ✅ DONE**
     - AG-Grid integration for all data grids (Orders, Inventory, To Prepare, Games, Expansions)
     - Custom column visibility menu (Material Design)
@@ -89,6 +95,28 @@
     - **Backend Optimizations:**
       - Created `UnpreparedItemDto` for efficient data transfer
       - Added `GetUnpreparedItemsAsync` with LINQ projection
+      - Implemented server-side pagination for Inventory
+      - Added Blueprint navigation to OrderItem for image display
+    - **Bug Fixes:**
+      - Fixed TypeScript compilation errors (rowModelType type)
+      - Fixed database migration for OrderItem-Blueprint relationship
+      - Disabled auto-save on grid events (manual save only)
+  - **Phase 3.6: Export & Advanced Filtering (Prototype) ✅ DONE**
+    - **Orders List Prototype:**
+      - Export to CSV/Excel (using `xlsx`)
+      - Export Selected Rows
+      - Quick Filter (Global Search)
+      - Filter Presets (All, Incomplete, Today)
+      - Bulk Operations (Mark Complete/Incomplete) with Confirmation Dialog
+      - Shared AG-Grid Theme (`ag-grid-theme.scss`)
+    - **Deferred:** Full replication to other grids (Inventory, Games, etc.) deferred to future phase.
+
+⏳ **TODO**: Phase 4 Advanced Features, Phase 5 Deployment
+
+---
+
+## Phase 1: Database & Migrations (PRIORITY: HIGH)
+
 ### 1.1 Create Initial Migration
 ```bash
 cd eCommerce.Inventory.Api

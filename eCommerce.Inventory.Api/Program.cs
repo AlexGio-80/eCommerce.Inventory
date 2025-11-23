@@ -49,6 +49,7 @@ builder.Services.AddScoped<CardTraderDtoMapper>();
 builder.Services.AddScoped<InventorySyncService>();
 builder.Services.AddScoped<WebhookSignatureVerificationService>();
 builder.Services.AddScoped<CardTraderSyncOrchestrator>();
+builder.Services.AddScoped<INotificationService, eCommerce.Inventory.Api.Services.SignalRNotificationService>();
 
 // Register MediatR for CQRS command handling
 builder.Services.AddMediatR(config =>
@@ -77,6 +78,9 @@ builder.Services.AddHttpClient<ICardTraderApiService, CardTraderApiClient>(clien
 // NOTE: Temporarily disabled for development. Enable once Card Trader API is properly configured.
 // builder.Services.AddHostedService<CardTraderSyncWorker>();
 builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJobs.ScheduledProductSyncWorker>();
+
+// Register SignalR
+builder.Services.AddSignalR();
 
 // Add CORS if needed for future frontend integration
 builder.Services.AddCors(options =>
@@ -139,6 +143,8 @@ app.UseSerilogRequestLogging();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<eCommerce.Inventory.Api.Hubs.NotificationHub>("/notificationHub");
+
 
 try
 {

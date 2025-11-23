@@ -17,15 +17,18 @@ public class ProcessCardTraderWebhookHandler : IRequestHandler<ProcessCardTrader
 {
     private readonly IApplicationDbContext _context;
     private readonly InventorySyncService _syncService;
+    private readonly INotificationService _notificationService;
     private readonly ILogger<ProcessCardTraderWebhookHandler> _logger;
 
     public ProcessCardTraderWebhookHandler(
         IApplicationDbContext context,
         InventorySyncService syncService,
+        INotificationService notificationService,
         ILogger<ProcessCardTraderWebhookHandler> logger)
     {
         _context = context;
         _syncService = syncService;
+        _notificationService = notificationService;
         _logger = logger;
     }
 
@@ -91,6 +94,9 @@ public class ProcessCardTraderWebhookHandler : IRequestHandler<ProcessCardTrader
             var orderDtos = new List<CardTraderOrderDto> { orderDto };
             await _syncService.SyncOrdersAsync(orderDtos, cancellationToken);
 
+            // Notify frontend
+            await _notificationService.NotifyAsync("OrderCreated", orderDto);
+
             _logger.LogInformation("Order {OrderId} created successfully from webhook", request.ObjectId);
         }
         catch (Exception ex)
@@ -119,6 +125,9 @@ public class ProcessCardTraderWebhookHandler : IRequestHandler<ProcessCardTrader
             // Sync the order update to database
             var orderDtos = new List<CardTraderOrderDto> { orderDto };
             await _syncService.SyncOrdersAsync(orderDtos, cancellationToken);
+
+            // Notify frontend
+            await _notificationService.NotifyAsync("OrderUpdated", orderDto);
 
             _logger.LogInformation("Order {OrderId} updated successfully from webhook", request.ObjectId);
         }

@@ -47,3 +47,42 @@
   - Verified Grid State persistence (refreshing page restores filters).
   - Verified Bulk Mark Complete/Incomplete with confirmation dialogs.
   - Verified Build success (development and production configurations).
+
+---
+
+## Phase 3.4: Webhook Integration & Real-time Updates
+
+### New Features
+- **Real-time Notifications (SignalR)**:
+  - Implemented `NotificationHub` in the backend to manage WebSocket connections.
+  - Created `SignalRNotificationService` to broadcast `OrderCreated` and `OrderUpdated` events.
+  - Integrated `@microsoft/signalr` in the Angular frontend.
+  - Created `SignalRService` to handle connection lifecycle and event subscriptions.
+  - Added `MatSnackBar` notifications for real-time alerts on new/updated orders.
+
+- **Real-time Order Monitoring**:
+  - Developed `OrderStatusMonitorComponent` to display a live feed of recent order events.
+  - Integrated the monitor into the `OrdersListComponent` dashboard.
+
+- **Inventory Auto-update**:
+  - Backend `ProcessCardTraderWebhookHandler` now triggers order synchronization upon receiving webhooks.
+  - Frontend listens for events and allows for grid refresh (manual trigger implemented for stability, auto-refresh capability ready).
+
+### Bug Fixes
+- **Order Sync FK Violation**:
+  - Fixed a critical bug in `InventorySyncService.SyncOrdersAsync` where `OrderItems` were being saved with external `CardTraderId` as `BlueprintId`, causing Foreign Key constraint violations.
+  - Implemented a pre-fetch and mapping logic to translate external Blueprint IDs to internal Database IDs before saving.
+  - Added handling for missing blueprints (setting `BlueprintId` to null and logging a warning) to prevent sync failures.
+
+- **Frontend Build Fixes**:
+  - Resolved multiple TypeScript errors in `inventory-list.component.ts` (corrupted file restoration).
+  - Fixed HTML template errors in `orders-list.component.html`.
+  - Corrected module imports and exports for `CardTraderApiService` and `SignalRService`.
+
+### Technical Details
+- **Architecture**:
+  - Decoupled notification logic using `INotificationService` interface in Application layer.
+  - Maintained Clean Architecture by implementing SignalR logic in API layer and injecting it into Infrastructure.
+- **Configuration**:
+  - Added CORS policy "AllowAll" for development ease.
+  - Configured SignalR endpoint at `/notificationHub`.

@@ -1,6 +1,15 @@
 <div class="orders-container">
+  <div class="header-section">
+    <h1>📦 Ordini</h1>
+    <span class="spacer"></span>
+    <button mat-raised-button color="primary" (click)="refreshOrders()">
+      <mat-icon>refresh</mat-icon> Aggiorna
+    </button>
+  </div>
+
+  <app-order-status-monitor></app-order-status-monitor>
+
   <div class="orders-header">
-    <h1>Orders</h1>
     <div class="actions">
       <!-- Quick Filter Search -->
       <mat-form-field appearance="outline" style="width: 250px;">
