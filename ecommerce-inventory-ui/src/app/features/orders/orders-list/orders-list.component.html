@@ -2,6 +2,54 @@
   <div class="orders-header">
     <h1>Orders</h1>
     <div class="actions">
+      <!-- Quick Filter Search -->
+      <mat-form-field appearance="outline" style="width: 250px;">
+        <mat-label>Search</mat-label>
+        <input matInput placeholder="Search all columns..." [(ngModel)]="quickFilterText"
+          (input)="onQuickFilterChanged($event)">
+        <button mat-icon-button matSuffix *ngIf="quickFilterText" (click)="clearQuickFilter()">
+          <mat-icon>clear</mat-icon>
+        </button>
+        <mat-icon matPrefix>search</mat-icon>
+      </mat-form-field>
+
+      <!-- Filter Presets -->
+      <mat-form-field appearance="outline" style="width: 200px;">
+        <mat-label>Filter Preset</mat-label>
+        <mat-select [(ngModel)]="filterPreset" (selectionChange)="onFilterPresetChange($event.value)">
+          <mat-option *ngFor="let preset of filterPresets" [value]="preset.value">
+            {{ preset.label }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <!-- Clear All Filters Button -->
+      <button mat-raised-button (click)="clearAllFilters()">
+        <mat-icon>filter_alt_off</mat-icon>
+        Clear Filters
+      </button>
+
+      <!-- Export Menu -->
+      <button mat-raised-button [matMenuTriggerFor]="exportMenu">
+        <mat-icon>download</mat-icon>
+        Export
+      </button>
+      <mat-menu #exportMenu="matMenu">
+        <button mat-menu-item (click)="exportToCsv()">
+          <mat-icon>description</mat-icon>
+          <span>Export as CSV</span>
+        </button>
+        <button mat-menu-item (click)="exportToExcel()">
+          <mat-icon>table_chart</mat-icon>
+          <span>Export as Excel</span>
+        </button>
+        <mat-divider></mat-divider>
+        <button mat-menu-item (click)="exportSelectedRows()" [disabled]="selectedRows.length === 0">
+          <mat-icon>check_box</mat-icon>
+          <span>Export Selected ({{ selectedRows.length }})</span>
+        </button>
+      </mat-menu>
+
       <button mat-raised-button color="primary" (click)="syncOrders()" [disabled]="isSyncing">
         <mat-icon>sync</mat-icon>
         {{ isSyncing ? 'Syncing...' : 'Sync Orders' }}
@@ -55,6 +103,29 @@
     </mat-checkbox>
   </div>
 
+  <!-- Bulk Actions Toolbar (shown when rows are selected) -->
+  <div *ngIf="selectedRows.length > 0" class="bulk-actions-toolbar">
+    <span class="selection-count">{{ selectedRows.length }} row(s) selected</span>
+    <div class="bulk-actions">
+      <button mat-raised-button color="primary" (click)="bulkMarkComplete()">
+        <mat-icon>check_circle</mat-icon>
+        Mark Complete
+      </button>
+      <button mat-raised-button color="warn" (click)="bulkMarkIncomplete()">
+        <mat-icon>cancel</mat-icon>
+        Mark Incomplete
+      </button>
+      <button mat-raised-button color="accent" (click)="exportSelectedRows()">
+        <mat-icon>download</mat-icon>
+        Export Selected
+      </button>
+      <button mat-button (click)="deselectAll()">
+        <mat-icon>clear</mat-icon>
+        Deselect All
+      </button>
+    </div>
+  </div>
+
   <div *ngIf="isLoading" class="loading-spinner">
     <mat-spinner></mat-spinner>
   </div>
@@ -63,7 +134,7 @@
     <ag-grid-angular style="width: 100%; height: 600px;" class="ag-theme-material" [rowData]="filteredOrders"
       [columnDefs]="columnDefs" [defaultColDef]="defaultColDef" [gridOptions]="gridOptions"
       (gridReady)="onGridReady($event)" (columnMoved)="onColumnMoved()" (columnVisible)="onColumnVisible()"
-      (sortChanged)="onSortChanged()">
+      (sortChanged)="onSortChanged()" (selectionChanged)="onSelectionChanged()">
     </ag-grid-angular>
   </div>
 </div>

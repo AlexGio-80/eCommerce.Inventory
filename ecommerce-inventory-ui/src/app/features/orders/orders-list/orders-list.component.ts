@@ -9,11 +9,16 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatDividerModule } from '@angular/material/divider';
+import { MatSelectModule } from '@angular/material/select';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { AgGridAngular } from 'ag-grid-angular';
 import { ColDef, GridApi, GridReadyEvent, ColumnState, SortModelItem } from 'ag-grid-community';
 import { CardTraderApiService } from '../../../core/services/cardtrader-api.service';
 import { GridStateService } from '../../../core/services/grid-state.service';
+import { ExportService } from '../../../core/services/export.service';
 import { Order, OrderItem } from '../../../core/models/order';
+import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialog.component';
 
 @Component({
     selector: 'app-orders-list',
@@ -29,6 +34,9 @@ import { Order, OrderItem } from '../../../core/models/order';
         MatInputModule,
         MatFormFieldModule,
         MatMenuModule,
+        MatDividerModule,
+        MatSelectModule,
+        MatDialogModule,
         AgGridAngular
     ],
     templateUrl: './orders-list.component.html',
@@ -49,6 +57,21 @@ export class OrdersListComponent implements OnInit {
     fromDate: string;
     toDate: string;
     excludeNullDates: boolean = true;
+
+    // Quick filter
+    quickFilterText: string = '';
+
+    // Filter presets
+    filterPreset: string = 'all';
+    filterPresets = [
+        { value: 'all', label: 'All Orders' },
+        { value: 'incomplete', label: 'Incomplete Orders' },
+        { value: 'unprepared', label: 'Has Unprepared Items' },
+        { value: 'today', label: "Today's Orders" }
+    ];
+
+    // Row selection
+    selectedRows: Order[] = [];
 
     // AG-Grid Column Definitions
     columnDefs: ColDef[] = [
@@ -129,7 +152,7 @@ export class OrdersListComponent implements OnInit {
         domLayout: 'autoHeight' as const,
         enableCellTextSelection: true,
         suppressRowClickSelection: true,
-        rowSelection: 'single' as const,
+        rowSelection: 'multiple' as const,  // Enable multiple row selection
         animateRows: true,
         enableRangeSelection: false,
         suppressMenuHide: false,
@@ -140,7 +163,9 @@ export class OrdersListComponent implements OnInit {
     constructor(
         private apiService: CardTraderApiService,
         private gridStateService: GridStateService,
-        private snackBar: MatSnackBar
+        private exportService: ExportService,
+        private snackBar: MatSnackBar,
+        private dialog: MatDialog
     ) {
         // Set default dates
         const today = new Date();
@@ -166,6 +191,15 @@ export class OrdersListComponent implements OnInit {
             }
             if (savedState.sortModel) {
                 this.gridApi.applyColumnState({ state: savedState.sortModel });
+            }
+            // Restore filter model
+            if (savedState.filterModel) {
+                this.gridApi.setFilterModel(savedState.filterModel);
+            }
+            // Restore quick filter text
+            if (savedState.quickFilterText) {
+                this.quickFilterText = savedState.quickFilterText;
+                this.gridApi.setGridOption('quickFilterText', this.quickFilterText);
             }
         }
 
@@ -216,10 +250,13 @@ export class OrdersListComponent implements OnInit {
 
         const columnState = this.gridApi.getColumnState();
         const sortModel = this.gridApi.getColumnState().filter(col => col.sort != null);
+        const filterModel = this.gridApi.getFilterModel();
 
         this.gridStateService.saveGridState(this.GRID_ID, {
             columnState,
-            sortModel
+            sortModel,
+            filterModel,
+            quickFilterText: this.quickFilterText
         });
 
         this.showSnackBar('Grid configuration saved');
@@ -314,5 +351,249 @@ export class OrdersListComponent implements OnInit {
 
     getAllColumns(): any[] {
         return this.columnDefs.filter(col => col.field !== 'actions');
+    }
+
+    // ========================================================================
+    // Export Functionality
+    // ========================================================================
+
+    exportToCsv(): void {
+        try {
+            this.exportService.exportToCsv(this.gridApi, 'orders', false);
+            this.showSnackBar('Orders exported to CSV successfully');
+        } catch (error) {
+            console.error('Export error:', error);
+            this.showSnackBar('Error exporting to CSV');
+        }
+    }
+
+    exportToExcel(): void {
+        try {
+            const allData = this.exportService.getAllRowData(this.gridApi);
+            this.exportService.exportToExcel(allData, this.columnDefs, 'orders', 'Orders');
+            this.showSnackBar('Orders exported to Excel successfully');
+        } catch (error) {
+            console.error('Export error:', error);
+            this.showSnackBar('Error exporting to Excel');
+        }
+    }
+
+    exportSelectedRows(): void {
+        try {
+            if (this.selectedRows.length === 0) {
+                this.showSnackBar('No rows selected for export');
+                return;
+            }
+            this.exportService.exportToExcel(
+                this.selectedRows,
+                this.columnDefs,
+                'orders_selected',
+                'Selected Orders'
+            );
+            this.showSnackBar(`${this.selectedRows.length} orders exported to Excel`);
+        } catch (error) {
+            console.error('Export error:', error);
+            this.showSnackBar('Error exporting selected rows');
+        }
+    }
+
+    // ========================================================================
+    // Row Selection
+    // ========================================================================
+
+    onSelectionChanged(): void {
+        this.selectedRows = this.gridApi.getSelectedRows();
+    }
+
+    deselectAll(): void {
+        this.gridApi.deselectAll();
+        this.selectedRows = [];
+    }
+
+    // ========================================================================
+    // Quick Filter
+    // ========================================================================
+
+    onQuickFilterChanged(event: any): void {
+        this.quickFilterText = event.target.value;
+        this.gridApi.setGridOption('quickFilterText', this.quickFilterText);
+    }
+
+    clearQuickFilter(): void {
+        this.quickFilterText = '';
+        this.gridApi.setGridOption('quickFilterText', '');
+    }
+
+    // ========================================================================
+    // Filter Presets
+    // ========================================================================
+
+    onFilterPresetChange(preset: string): void {
+        this.filterPreset = preset;
+        this.applyFilterPreset();
+    }
+
+    private applyFilterPreset(): void {
+        if (!this.gridApi) return;
+
+        // Clear existing filters first
+        this.gridApi.setFilterModel(null);
+
+        switch (this.filterPreset) {
+            case 'all':
+                // No filters
+                break;
+
+            case 'incomplete':
+                // Filter for incomplete orders
+                this.gridApi.setFilterModel({
+                    isCompleted: {
+                        filterType: 'text',
+                        type: 'equals',
+                        filter: 'false'
+                    }
+                });
+                break;
+
+            case 'unprepared':
+                // This would require a custom filter or backend support
+                // For now, just show a message
+                this.showSnackBar('Unprepared items filter requires backend support');
+                break;
+
+            case 'today':
+                // Filter for today's orders
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const tomorrow = new Date(today);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+
+                this.gridApi.setFilterModel({
+                    paidAt: {
+                        filterType: 'date',
+                        type: 'inRange',
+                        dateFrom: today.toISOString().split('T')[0],
+                        dateTo: tomorrow.toISOString().split('T')[0]
+                    }
+                });
+                break;
+        }
+    }
+
+    clearAllFilters(): void {
+        if (!this.gridApi) return;
+
+        // Clear AG-Grid filters
+        this.gridApi.setFilterModel(null);
+
+        // Clear quick filter
+        this.quickFilterText = '';
+        this.gridApi.setGridOption('quickFilterText', '');
+
+        // Reset filter preset
+        this.filterPreset = 'all';
+
+        // Clear date filters (reset to defaults)
+        const today = new Date();
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        this.fromDate = this.formatDate(today);
+        this.toDate = this.formatDate(tomorrow);
+        this.excludeNullDates = true;
+
+        // Reload orders
+        this.loadOrders();
+
+        this.showSnackBar('All filters cleared');
+    }
+
+    // ========================================================================
+    // Bulk Operations
+    // ========================================================================
+
+    bulkMarkComplete(): void {
+        if (this.selectedRows.length === 0) {
+            this.showSnackBar('No orders selected');
+            return;
+        }
+
+        const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+            data: {
+                title: 'Mark Orders as Complete',
+                message: `Are you sure you want to mark ${this.selectedRows.length} order(s) as complete?`,
+                confirmText: 'Mark Complete',
+                cancelText: 'Cancel'
+            }
+        });
+
+        dialogRef.afterClosed().subscribe(confirmed => {
+            if (confirmed) {
+                this.performBulkUpdate(true);
+            }
+        });
+    }
+
+    bulkMarkIncomplete(): void {
+        if (this.selectedRows.length === 0) {
+            this.showSnackBar('No orders selected');
+            return;
+        }
+
+        const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+            data: {
+                title: 'Mark Orders as Incomplete',
+                message: `Are you sure you want to mark ${this.selectedRows.length} order(s) as incomplete?`,
+                confirmText: 'Mark Incomplete',
+                cancelText: 'Cancel'
+            }
+        });
+
+        dialogRef.afterClosed().subscribe(confirmed => {
+            if (confirmed) {
+                this.performBulkUpdate(false);
+            }
+        });
+    }
+
+    private performBulkUpdate(isComplete: boolean): void {
+        const orderIds = this.selectedRows.map(order => order.id);
+        let completed = 0;
+        let failed = 0;
+
+        // Update orders one by one (could be optimized with a bulk API endpoint)
+        orderIds.forEach((orderId, index) => {
+            this.apiService.toggleOrderCompletion(orderId, isComplete).subscribe({
+                next: (updatedOrder) => {
+                    completed++;
+                    // Update the order in the local array
+                    const order = this.orders.find(o => o.id === orderId);
+                    if (order) {
+                        order.isCompleted = updatedOrder.isCompleted;
+                    }
+
+                    // If this is the last update, refresh grid and show summary
+                    if (completed + failed === orderIds.length) {
+                        this.gridApi.refreshCells({ force: true });
+                        this.deselectAll();
+                        this.showSnackBar(
+                            `Bulk update complete: ${completed} succeeded, ${failed} failed`
+                        );
+                    }
+                },
+                error: (err) => {
+                    failed++;
+                    console.error(`Error updating order ${orderId}:`, err);
+
+                    // If this is the last update, show summary
+                    if (completed + failed === orderIds.length) {
+                        this.gridApi.refreshCells({ force: true });
+                        this.deselectAll();
+                        this.showSnackBar(
+                            `Bulk update complete: ${completed} succeeded, ${failed} failed`
+                        );
+                    }
+                }
+            });
+        });
     }
 }

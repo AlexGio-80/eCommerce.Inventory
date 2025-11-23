@@ -1,5 +1,9 @@
-@import 'ag-grid-community/styles/ag-grid.css';
-@import 'ag-grid-community/styles/ag-theme-material.css';
+/* Import shared AG-Grid theme */
+@import '../../../shared/styles/ag-grid-theme.scss';
+
+/* ============================================================================
+   Orders List - Component-Specific Styles
+   ============================================================================ */
 
 .orders-container {
   padding: 20px;
@@ -29,7 +33,7 @@
 .filters-container {
   display: flex;
   gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   align-items: center;
   flex-wrap: wrap;
 }
@@ -38,62 +42,24 @@
   margin-left: 8px;
 }
 
-.loading-spinner {
+/* Bulk Actions Toolbar */
+.bulk-actions-toolbar {
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
   align-items: center;
-  min-height: 400px;
-}
-
-.ag-grid-container {
-  width: 100%;
-  margin-top: 16px;
-}
-
-.ag-theme-material {
-  --ag-header-background-color: #3f51b5;
-  --ag-header-foreground-color: white;
-  --ag-odd-row-background-color: #f5f5f5;
-  --ag-row-hover-color: #e3f2fd;
-  --ag-selected-row-background-color: #bbdefb;
-  font-family: 'Roboto', sans-serif;
-}
-
-.ag-theme-material .ag-header-cell {
-  font-weight: 500;
-}
-
-.ag-theme-material .ag-row {
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.action-btn {
-  background-color: #3f51b5;
-  color: white;
-  border: none;
-  padding: 4px 12px;
+  padding: 12px 16px;
+  background-color: #e3f2fd;
+  border-left: 4px solid #2196f3;
+  margin-bottom: 16px;
   border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: background-color 0.2s;
 }
 
-.action-btn:hover {
-  background-color: #303f9f;
+.selection-count {
+  font-weight: 500;
+  color: #1976d2;
 }
 
-/* Column Menu Styles */
-.columns-menu-container {
-  padding: 8px;
-  min-width: 200px;
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.column-toggle-item {
-  padding: 4px 8px;
-}
-
-::ng-deep .mat-mdc-menu-content {
-  padding: 0 !important;
+.bulk-actions {
+  display: flex;
+  gap: 8px;
 }

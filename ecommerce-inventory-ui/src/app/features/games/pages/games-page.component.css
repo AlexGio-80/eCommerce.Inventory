@@ -1,0 +1,44 @@
+/* Import shared AG-Grid theme */
+@import '../../../shared/styles/ag-grid-theme.scss';
+
+/* ============================================================================
+   Games Page - Component-Specific Styles
+   ============================================================================ */
+
+.games-container {
+    padding: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.games-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.games-header h1 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 500;
+}
+
+.actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.game-details {
+    margin-top: 20px;
+    padding: 16px;
+    background-color: #f5f5f5;
+    border-radius: 4px;
+}
+
+.detail-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+}

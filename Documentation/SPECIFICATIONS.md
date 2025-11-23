@@ -798,6 +798,64 @@ Prima di fare un commit, verificare:
 - [ ] Async/await su I/O operations
 - [ ] Error handling con try-catch e logging
 - [ ] Code organizzato in folder corrette
+
+---
+
+## 16. Export & Bulk Operations (OBBLIGATORIO)
+
+Le griglie AG-Grid DEVONO supportare funzionalità avanzate di export e operazioni massive.
+
+### Export Standard
+Ogni griglia deve implementare l'export tramite `ExportService`:
+
+1. **CSV Export**: Utilizzare funzionalità nativa AG-Grid `gridApi.exportDataAsCsv()`.
+2. **Excel Export**: Utilizzare libreria `xlsx` tramite `ExportService.exportToExcel()`.
+3. **Export Selected**: Permettere l'export delle sole righe selezionate.
+
+✅ **CORRETTO**:
+```typescript
+exportToExcel(): void {
+  const data = this.getAllRows();
+  this.exportService.exportToExcel(data, 'filename');
+}
+
+exportSelectedRows(): void {
+  const selectedData = this.gridApi.getSelectedRows();
+  this.exportService.exportToExcel(selectedData, 'filename-selected');
+}
+```
+
+### Advanced Filtering
+Ogni griglia deve supportare:
+1. **Quick Filter**: Input di ricerca globale che filtra su tutte le colonne visibili.
+2. **Filter Presets**: Dropdown con filtri predefiniti comuni (es. "Oggi", "Incompleti").
+3. **Clear Filters**: Pulsante per resettare tutti i filtri e la ricerca.
+4. **Persistence**: Salvare lo stato dei filtri e del quick filter in `localStorage` tramite `GridStateService`.
+
+### Bulk Operations
+Per operazioni su più righe (es. Mark Complete, Delete):
+1. **Multi-selection**: Abilitare selezione multipla (`rowSelection="multiple"`).
+2. **Bulk Actions Toolbar**: Mostrare toolbar dedicata quando `selectedRows.length > 0`.
+3. **Confirmation Dialog**: Usare SEMPRE `ConfirmDialogComponent` prima di eseguire l'azione.
+4. **Feedback**: Mostrare notifica (SnackBar) con conteggio successi/errori.
+5. **Refresh**: Ricaricare la griglia o aggiornare le righe localmente dopo l'operazione.
+
+✅ **CORRETTO**:
+```typescript
+bulkDelete(): void {
+  const selected = this.gridApi.getSelectedRows();
+  const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+    data: { title: 'Delete Items', message: `Delete ${selected.length} items?` }
+  });
+
+  dialogRef.afterClosed().subscribe(confirmed => {
+    if (confirmed) {
+      // Execute logic...
+    }
+  });
+}
+```
+
 - [ ] Naming conventions rispettate
 - [ ] EF Core best practices (eager loading, etc.)
 - [ ] RESTful endpoints se API

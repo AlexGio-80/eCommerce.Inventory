@@ -1,0 +1,144 @@
+// ============================================================================
+// Shared AG-Grid Theme for eCommerce.Inventory
+// ============================================================================
+// This file provides centralized styling for all AG-Grid components
+// to ensure visual consistency across the application.
+//
+// NOTE: AG-Grid base styles (ag-grid.css, ag-theme-material.css) are imported
+// globally in src/styles.css to avoid component-level budget issues.
+//
+// Usage: Import this file in component stylesheets:
+//   @import '../../../shared/styles/ag-grid-theme.scss';
+// ============================================================================
+
+// ============================================================================
+// Theme Variables
+// ============================================================================
+
+$ag-header-bg: #3f51b5; // Material Indigo 500
+$ag-header-fg: white;
+$ag-odd-row-bg: #f5f5f5; // Light gray for zebra striping
+$ag-row-hover: #e3f2fd; // Light blue on hover
+$ag-selected-row: #bbdefb; // Darker blue for selected rows
+$ag-border-color: #e0e0e0; // Subtle borders
+
+$action-btn-bg: #3f51b5; // Primary action button
+$action-btn-hover: #303f9f; // Darker on hover
+$delete-btn-bg: #f44336; // Red for destructive actions
+$delete-btn-hover: #d32f2f;
+
+// ============================================================================
+// AG-Grid Theme Customization
+// ============================================================================
+
+.ag-theme-material {
+  --ag-header-background-color: #{$ag-header-bg};
+  --ag-header-foreground-color: #{$ag-header-fg};
+  --ag-odd-row-background-color: #{$ag-odd-row-bg};
+  --ag-row-hover-color: #{$ag-row-hover};
+  --ag-selected-row-background-color: #{$ag-selected-row};
+  font-family: 'Roboto', sans-serif;
+
+  // Header styling
+  .ag-header-cell {
+    font-weight: 500;
+  }
+
+  // Row borders
+  .ag-row {
+    border-bottom: 1px solid $ag-border-color;
+  }
+
+  // Checkbox styling
+  .ag-checkbox-input-wrapper {
+    font-size: 16px;
+  }
+}
+
+// ============================================================================
+// Action Buttons (in cell renderers)
+// ============================================================================
+
+.action-btn {
+  background-color: $action-btn-bg;
+  color: white;
+  border: none;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  margin-right: 4px;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background-color: $action-btn-hover;
+  }
+
+  &:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+  }
+
+  &.delete-btn {
+    background-color: $delete-btn-bg;
+
+    &:hover {
+      background-color: $delete-btn-hover;
+    }
+  }
+}
+
+// ============================================================================
+// Column Menu Styles (for visibility toggle)
+// ============================================================================
+
+.columns-menu-container {
+  padding: 8px;
+  min-width: 200px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.column-toggle-item {
+  padding: 4px 8px;
+}
+
+// Remove default Material menu padding
+::ng-deep .mat-mdc-menu-content {
+  padding: 0 !important;
+}
+
+// ============================================================================
+// Grid Container
+// ============================================================================
+
+.ag-grid-container {
+  width: 100%;
+  margin-top: 16px;
+}
+
+// ============================================================================
+// Loading Spinner (for grids)
+// ============================================================================
+
+.loading-spinner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+}
+
+// ============================================================================
+// Responsive Adjustments
+// ============================================================================
+
+@media (max-width: 768px) {
+  .ag-theme-material {
+    font-size: 12px;
+  }
+
+  .action-btn {
+    padding: 2px 8px;
+    font-size: 11px;
+  }
+}

@@ -4,6 +4,8 @@ import { ColumnState } from 'ag-grid-community';
 export interface GridState {
     columnState: ColumnState[];
     sortModel: any[];
+    filterModel?: any;           // AG-Grid filter model
+    quickFilterText?: string;    // Global search text
 }
 
 @Injectable({

@@ -1,3 +1,10 @@
+/* Import shared AG-Grid theme */
+@import '../../../shared/styles/ag-grid-theme.scss';
+
+/* ============================================================================
+   Unprepared Items - Component-Specific Styles
+   ============================================================================ */
+
 .container {
     padding: 20px;
     height: 100%;
