@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using eCommerce.Inventory.Application.Interfaces;
 using eCommerce.Inventory.Domain.Entities;
 
@@ -20,26 +21,75 @@ public class CardTraderInventoryController : ControllerBase
     }
 
     /// <summary>
-    /// Get inventory items for Card Trader with pagination
+    /// Get inventory items for Card Trader with pagination and filtering
     /// </summary>
     [HttpGet]
     public async Task<ActionResult<Models.ApiResponse<Models.PagedResponse<InventoryItem>>>> GetInventoryItems(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
+        [FromQuery] string? searchTerm = null,
+        [FromQuery] string? cardName = null,
+        [FromQuery] string? expansionName = null,
+        [FromQuery] string? condition = null,
+        [FromQuery] string? language = null,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Getting inventory items - page: {Page}, pageSize: {PageSize}", page, pageSize);
+        _logger.LogInformation("Getting inventory items - page: {Page}, pageSize: {PageSize}, searchTerm: {SearchTerm}",
+            page, pageSize, searchTerm);
 
-        var (items, totalCount) = await _inventoryItemRepository.GetPagedAsync(page, pageSize, cancellationToken);
+        // Use repository for simple case (no filters)
+        if (string.IsNullOrWhiteSpace(searchTerm) &&
+            string.IsNullOrWhiteSpace(cardName) &&
+            string.IsNullOrWhiteSpace(expansionName) &&
+            string.IsNullOrWhiteSpace(condition) &&
+            string.IsNullOrWhiteSpace(language))
+        {
+            var (items, totalCount) = await _inventoryItemRepository.GetPagedAsync(page, pageSize, cancellationToken);
+            var pagedData = Models.PagedResponse<InventoryItem>.Create(
+                items: items.ToList(),
+                page: page,
+                pageSize: pageSize,
+                totalCount: totalCount
+            );
+            return Ok(Models.ApiResponse<Models.PagedResponse<InventoryItem>>.SuccessResult(pagedData));
+        }
 
-        var pagedData = Models.PagedResponse<InventoryItem>.Create(
-            items: items.ToList(),
+        // For filtered queries, we need to access DbContext directly
+        // This is acceptable for complex query scenarios
+        var dbContext = _inventoryItemRepository as Infrastructure.Persistence.Repositories.InventoryItemRepository;
+        if (dbContext == null)
+        {
+            // Fallback: use repository without filters
+            var (items, totalCount) = await _inventoryItemRepository.GetPagedAsync(page, pageSize, cancellationToken);
+            var pagedData = Models.PagedResponse<InventoryItem>.Create(
+                items: items.ToList(),
+                page: page,
+                pageSize: pageSize,
+                totalCount: totalCount
+            );
+            return Ok(Models.ApiResponse<Models.PagedResponse<InventoryItem>>.SuccessResult(pagedData));
+        }
+
+        // Build filtered query using DbContext
+        var query = dbContext.GetFilteredQuery(searchTerm, cardName, expansionName, condition, language);
+
+        // Get total count
+        var filteredTotalCount = await query.CountAsync(cancellationToken);
+
+        // Apply pagination
+        var filteredItems = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        var filteredPagedData = Models.PagedResponse<InventoryItem>.Create(
+            items: filteredItems,
             page: page,
             pageSize: pageSize,
-            totalCount: totalCount
+            totalCount: filteredTotalCount
         );
 
-        return Ok(Models.ApiResponse<Models.PagedResponse<InventoryItem>>.SuccessResult(pagedData));
+        return Ok(Models.ApiResponse<Models.PagedResponse<InventoryItem>>.SuccessResult(filteredPagedData));
     }
 
     /// <summary>

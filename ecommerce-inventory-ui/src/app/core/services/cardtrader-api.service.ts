@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import {
   Game,
   Expansion,
@@ -60,14 +61,37 @@ export class CardTraderApiService {
   // Inventory Items
   getInventoryItems(
     page: number = 1,
-    pageSize: number = 20
+    pageSize: number = 20,
+    filters?: {
+      searchTerm?: string;
+      cardName?: string;
+      expansionName?: string;
+      condition?: string;
+      language?: string;
+    }
   ): Observable<PagedResponse<InventoryItem>> {
-    const params = new HttpParams()
+    let params = new HttpParams()
       .set('page', page.toString())
       .set('pageSize', pageSize.toString());
-    return this.http.get<PagedResponse<InventoryItem>>(
+
+    if (filters) {
+      if (filters.searchTerm) params = params.set('searchTerm', filters.searchTerm);
+      if (filters.cardName) params = params.set('cardName', filters.cardName);
+      if (filters.expansionName) params = params.set('expansionName', filters.expansionName);
+      if (filters.condition) params = params.set('condition', filters.condition);
+      if (filters.language) params = params.set('language', filters.language);
+    }
+
+    return this.http.get<ApiResponse<PagedResponse<InventoryItem>>>(
       `${this.apiUrl}/inventory`,
       { params }
+    ).pipe(
+      map(response => {
+        if (!response.success || !response.data) {
+          throw new Error(response.message || 'Failed to fetch inventory items');
+        }
+        return response.data;
+      })
     );
   }
 
@@ -104,7 +128,14 @@ export class CardTraderApiService {
     }
     params = params.set('excludeNullDates', excludeNullDates.toString());
 
-    return this.http.get<Order[]>(`${this.apiUrl}/orders`, { params });
+    return this.http.get<ApiResponse<Order[]>>(`${this.apiUrl}/orders`, { params }).pipe(
+      map(response => {
+        if (!response.success || !response.data) {
+          throw new Error(response.message || 'Failed to fetch orders');
+        }
+        return response.data;
+      })
+    );
   }
 
   getOrderById(id: number): Observable<Order> {
@@ -112,7 +143,14 @@ export class CardTraderApiService {
   }
 
   getUnpreparedItems(): Observable<UnpreparedItemDto[]> {
-    return this.http.get<UnpreparedItemDto[]>(`${this.apiUrl}/orders/unprepared-items`);
+    return this.http.get<ApiResponse<UnpreparedItemDto[]>>(`${this.apiUrl}/orders/unprepared-items`).pipe(
+      map(response => {
+        if (!response.success || !response.data) {
+          throw new Error(response.message || 'Failed to fetch unprepared items');
+        }
+        return response.data;
+      })
+    );
   }
 
   syncOrders(from?: string, to?: string): Observable<ApiResponse<any>> {
@@ -124,11 +162,25 @@ export class CardTraderApiService {
   }
 
   toggleOrderCompletion(id: number, isCompleted: boolean): Observable<Order> {
-    return this.http.put<Order>(`${this.apiUrl}/orders/${id}/complete`, isCompleted);
+    return this.http.put<ApiResponse<Order>>(`${this.apiUrl}/orders/${id}/complete`, isCompleted).pipe(
+      map(response => {
+        if (!response.success || !response.data) {
+          throw new Error(response.message || 'Failed to toggle order completion');
+        }
+        return response.data;
+      })
+    );
   }
 
   toggleItemPreparation(itemId: number, isPrepared: boolean): Observable<any> {
-    return this.http.put<any>(`${this.apiUrl}/orders/items/${itemId}/prepare`, isPrepared);
+    return this.http.put<ApiResponse<any>>(`${this.apiUrl}/orders/items/${itemId}/prepare`, isPrepared).pipe(
+      map(response => {
+        if (!response.success || !response.data) {
+          throw new Error(response.message || 'Failed to toggle item preparation');
+        }
+        return response.data;
+      })
+    );
   }
 
   // Sync

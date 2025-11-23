@@ -128,8 +128,12 @@
       - `CardTraderInventoryController` (5 endpoints)
       - `CardTraderOrdersController` (5 endpoints)
     - **Deferred:** Remaining 9 controllers (pattern documented for future migration)
+    - **Bugfixes:**
+      - Fixed frontend API response unwrapping (ApiResponse<T> envelope)
+      - Implemented server-side filtering for Inventory AG-Grid
+      - Fixed major performance issue (removed lazy loading from InventoryItem.OrderItems)
 
-⏳ **TODO**: Phase 5 Deployment, Complete remaining controller migrations
+⏳ **TODO**: Phase 4 remaining controllers, Phase 5 Deployment
 
 ---
 

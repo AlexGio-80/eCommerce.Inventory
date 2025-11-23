@@ -80,4 +80,57 @@ public class InventoryItemRepository : IInventoryItemRepository
             .ThenInclude(e => e.Game)
             .FirstOrDefaultAsync(i => i.CardTraderProductId == cardTraderProductId, cancellationToken);
     }
+
+    /// <summary>
+    /// Build a filtered query for inventory items (for server-side AG-Grid filtering)
+    /// </summary>
+    public IQueryable<InventoryItem> GetFilteredQuery(
+        string? searchTerm = null,
+        string? cardName = null,
+        string? expansionName = null,
+        string? condition = null,
+        string? language = null)
+    {
+        var query = _context.InventoryItems
+            .Include(i => i.Blueprint)
+                .ThenInclude(b => b.Expansion)
+                    .ThenInclude(e => e.Game)
+            .AsNoTracking();
+
+        // Global search across multiple fields
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            query = query.Where(i =>
+                i.Blueprint.Name.Contains(searchTerm) ||
+                i.Blueprint.Expansion.Name.Contains(searchTerm) ||
+                i.Condition.Contains(searchTerm) ||
+                i.Language.Contains(searchTerm));
+        }
+
+        // Specific column filters
+        if (!string.IsNullOrWhiteSpace(cardName))
+        {
+            query = query.Where(i => i.Blueprint.Name.Contains(cardName));
+        }
+
+        if (!string.IsNullOrWhiteSpace(expansionName))
+        {
+            query = query.Where(i => i.Blueprint.Expansion.Name.Contains(expansionName));
+        }
+
+        if (!string.IsNullOrWhiteSpace(condition))
+        {
+            query = query.Where(i => i.Condition.Contains(condition));
+        }
+
+        if (!string.IsNullOrWhiteSpace(language))
+        {
+            query = query.Where(i => i.Language.Contains(language));
+        }
+
+        // Default ordering
+        query = query.OrderByDescending(i => i.DateAdded);
+
+        return query;
+    }
 }

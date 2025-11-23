@@ -176,9 +176,12 @@ export class InventoryListComponent implements OnInit {
       getRows: (params: IGetRowsParams) => {
         const page = Math.floor(params.startRow / this.cacheBlockSize) + 1;
 
-        console.log(`Fetching page ${page} (rows ${params.startRow} to ${params.endRow})`);
+        // Extract filters from AG-Grid filter model
+        const filters = this.buildFiltersFromModel(params.filterModel);
 
-        this.apiService.getInventoryItems(page, this.cacheBlockSize).subscribe({
+        console.log(`Fetching page ${page} (rows ${params.startRow} to ${params.endRow}) with filters:`, filters);
+
+        this.apiService.getInventoryItems(page, this.cacheBlockSize, filters).subscribe({
           next: (response) => {
             // If we reached the end, totalCount will tell grid to stop scrolling
             const lastRow = response.totalCount <= params.endRow ? response.totalCount : -1;
@@ -195,6 +198,26 @@ export class InventoryListComponent implements OnInit {
 
     this.gridApi.setGridOption('datasource', dataSource);
     this.gridApi.sizeColumnsToFit();
+  }
+
+  private buildFiltersFromModel(filterModel: any): any {
+    const filters: any = {};
+
+    // AG-Grid text filters have structure: { filter: "search text", filterType: "text", type: "contains" }
+    if (filterModel['blueprint.name']) {
+      filters.cardName = filterModel['blueprint.name'].filter;
+    }
+    if (filterModel['blueprint.expansion.name']) {
+      filters.expansionName = filterModel['blueprint.expansion.name'].filter;
+    }
+    if (filterModel['condition']) {
+      filters.condition = filterModel['condition'].filter;
+    }
+    if (filterModel['language']) {
+      filters.language = filterModel['language'].filter;
+    }
+
+    return filters;
   }
 
   saveGridState(): void {
