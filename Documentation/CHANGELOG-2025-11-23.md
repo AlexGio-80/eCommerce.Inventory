@@ -1,5 +1,48 @@
 # Changelog - 2025-11-23
 
+## Phase 3.7: Testing & QA
+
+### Backend Testing
+- **New Unit Tests:**
+  - Created `InventorySyncServiceTests.cs` with 3 comprehensive tests for product synchronization logic
+  - Tests cover INSERT, UPDATE, and empty list handling scenarios
+  - All tests use EF Core InMemory database for isolation
+
+- **Test Fixes:**
+  - Fixed `ProcessCardTraderWebhookHandlerTests.cs` - added missing `INotificationService` mock parameter
+  - All 3 webhook handler tests now passing
+
+- **Test Results:**
+  - Total: 21 tests
+  - Passed: ✅ 21/21
+  - Failed: ❌ 0
+
+### Frontend/E2E Testing
+- **Cypress E2E Framework:**
+  - Installed Cypress `^15.7.0` via npm
+  - Created `cypress.config.ts` with base configuration
+  - BaseURL: `http://localhost:4200`
+  - Spec pattern: `cypress/e2e/**/*.cy.ts`
+
+- **Sample E2E Test:**
+  - Created `inventory.cy.ts` for Inventory page testing
+  - Tests: page title visibility, AG-Grid rendering, column headers
+  - Configured with proper route: `/layout/inventory`
+  - Timeout: 10 seconds for async grid loading
+
+### Technical Details
+- **Testing Strategy:**
+  - Backend: xUnit + Moq + FluentAssertions + InMemory EF Core
+  - Frontend: Jasmine/Karma (existing) + Cypress (new E2E)
+  - Integration tests use existing framework with mock dependencies
+
+### Documentation
+- Created comprehensive walkthrough in `walkthrough.md`
+- Documented all test execution commands
+- Noted pre-existing frontend test failure (unrelated to Phase 3.7)
+
+---
+
 ## Phase 3.6: Export, Advanced Filtering & Bulk Operations (Orders List Prototype)
 
 ### New Features
