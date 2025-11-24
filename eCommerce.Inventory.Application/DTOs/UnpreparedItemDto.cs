@@ -5,6 +5,7 @@ public class UnpreparedItemDto
     public int Id { get; set; }
     public string? Name { get; set; }
     public string? ExpansionName { get; set; }
+    public string? ExpansionCode { get; set; }
     public string? Condition { get; set; }
     public string? Language { get; set; }
     public int Quantity { get; set; }

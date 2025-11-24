@@ -80,6 +80,13 @@ export class UnpreparedItemsComponent implements OnInit {
             width: 200
         },
         {
+            headerName: 'Exp. Code',
+            field: 'expansionCode',
+            sortable: true,
+            filter: true,
+            width: 100
+        },
+        {
             headerName: 'Coll. #',
             field: 'collectorNumber', // Assuming this field will be populated in DTO
             sortable: true,

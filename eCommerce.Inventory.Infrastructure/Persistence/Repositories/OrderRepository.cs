@@ -63,12 +63,14 @@ public class OrderRepository : IOrderRepository
         var items = await _context.OrderItems
             .Include(oi => oi.Order)
             .Include(oi => oi.Blueprint)
+            .ThenInclude(b => b.Expansion)
             .Where(oi => !oi.IsPrepared)
             .Select(oi => new UnpreparedItemDto
             {
                 Id = oi.Id,
                 Name = oi.Name,
                 ExpansionName = oi.ExpansionName,
+                ExpansionCode = oi.Blueprint != null && oi.Blueprint.Expansion != null ? oi.Blueprint.Expansion.Code : null,
                 Condition = oi.Condition,
                 Language = oi.Language,
                 Quantity = oi.Quantity,

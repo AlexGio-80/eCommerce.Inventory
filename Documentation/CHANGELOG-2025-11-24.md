@@ -26,3 +26,11 @@
 
 ## 🛠️ Infrastructure
 - **Documentation**: Updated `ROADMAP.md` and cleaned up temporary files.
+
+## ✨ Features
+
+### Orders Grid Usability
+- **Multi-Column Sorting**: Enabled sorting by multiple columns (Shift+Click) in "Orders to Prepare" grid.
+- **Grid State Persistence**: Implemented saving of sort order, column dimensions, and visibility to `localStorage`.
+- **Expansion Code**: Added "Exp. Code" column to the grid for better identification.
+- **Image Preview**: Improved image preview to maximize size within the container.

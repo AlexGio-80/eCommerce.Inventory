@@ -2,6 +2,7 @@ export interface UnpreparedItemDto {
     id: number;
     name?: string;
     expansionName?: string;
+    expansionCode?: string;
     condition?: string;
     language?: string;
     quantity: number;
