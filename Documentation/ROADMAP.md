@@ -1878,7 +1878,234 @@ app.UseHealthChecks("/health");
 
 ⏳ **Phase 7 Complete**: CI/CD pipeline attiva, deployable su cloud
 
+**Timeline**: 6-8 ore per marketplace (una sola volta)
+
+---
+
+## Phase 7: DevOps & Deployment (PRIORITY: MEDIUM)
+
+### 7.1 Docker Support
+
+```dockerfile
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+WORKDIR /app
+COPY . .
+RUN dotnet restore
+RUN dotnet build -c Release -o /out
+ENTRYPOINT ["dotnet", "/out/eCommerce.Inventory.Api.dll"]
+```
+
+**File**: `Dockerfile` (root)
+
+**Timeline**: 1 ora
+
+### 7.2 CI/CD Pipeline (GitHub Actions)
+
+```yaml
+name: Build & Test
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: 8.0
+      - run: dotnet restore
+      - run: dotnet build
+      - run: dotnet test
+```
+
+**File**: `.github/workflows/build.yml`
+
+**Timeline**: 1.5 ore
+
+### 7.3 Deployment Configuration
+
+Azure App Service / AWS Lambda setup con:
+- Connection string from Key Vault
+- Card Trader API token from secrets manager
+- Health check endpoints
+
+**Timeline**: 2 ore
+
+---
+
+## Phase 8: Monitoring & Analytics (PRIORITY: LOW)
+
+### 8.1 Application Insights
+
+```csharp
+builder.Services.AddApplicationInsightsTelemetry();
+
+// Track custom events:
+_telemetryClient.TrackEvent("InventoryItemCreated",
+    new Dictionary<string, string> { { "marketplace", "cardtrader" } });
+```
+
+**NuGet**: `Microsoft.ApplicationInsights.AspNetCore`
+
+**Timeline**: 1 ora
+
+### 8.2 Health Check Endpoints
+
+```csharp
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<ApplicationDbContext>()
+    .AddUrlGroup(new Uri("https://api.cardtrader.com/health"), "CardTrader API");
+
+app.UseHealthChecks("/health");
+```
+
+**Timeline**: 30 minuti
+
+---
+
+## Summary Timeline
+
+| Phase | Tasks | Estimated Hours | Priority | Status |
+|-------|-------|-----------------|----------|--------|
+| 1 | Database & Migrations | 1.5 | HIGH | ✅ DONE |
+| 2.1 | Card Trader Sync Integration | 7 | HIGH | ✅ DONE |
+| 2.2 | Webhook Processing | 5 | HIGH | ✅ DONE |
+| 2.3 | Backend Testing | 5.5 | HIGH | 🔨 IN PROGRESS |
+| 3.0 | Angular Project Setup | 1.25 | HIGH | ✅ DONE |
+| 3.1 | Database Consultation UI | 7.5 | HIGH | ✅ DONE |
+| 3.2 | Card Trader Data Initial Sync | 3.5 | HIGH | 🔨 NEXT |
+| 3.3 | Product Listing Creation | 10.5 | HIGH | ⏳ TODO |
+| 3.4 | Webhook Integration (Frontend) | 5.5 | HIGH | ⏳ TODO |
+| 3.5 | Reporting & BI | 10.5 | HIGH | ⏳ TODO |
+| 3.6 | Authentication & Security | 2.5 | MEDIUM | ⏳ TODO |
+| 3.7 | Testing & QA | 5.5 | MEDIUM | ⏳ TODO |
+| 4 | API Controller Enhancement | 3.5 | MEDIUM | ⏳ TODO |
+| 5 | Advanced Features (Polly, Caching, Rate Limiting) | 7 | LOW | ⏳ TODO |
+| 6 | Marketplace Expansion | 6-8 | LOW | ⏳ TODO |
+| 7 | DevOps & Deployment | 4.5 | MEDIUM | ⏳ TODO |
+| 8 | Monitoring & Analytics | 1.5 | LOW | ⏳ TODO |
+| 3.X | AI Card Grading (Future) | 8-10 | LOW | 📅 FUTURE |
+| **TOTAL** | | **~90-95 ore** | | |
+
+---
+
+## Recommended Development Order
+
+1. **Week 1 - COMPLETED ✅**:
+   - Phase 1: Database (1.5h) ✅
+   - Phase 2.1: Card Trader Sync (7h) ✅
+   - Phase 2.2: Webhooks (5h) ✅
+   - **Total**: ~13.5h ✅
+
+2. **Week 2 - CURRENT 🔨**:
+   - Phase 2.3: Backend Testing (5.5h) - IN PROGRESS
+   - **Total**: 5.5h
+
+3. **Week 3 - CURRENT 🔨**:
+   - Phase 3.0: Angular Project Setup (1.25h) ✅ DONE
+   - Phase 3.1: Database Consultation UI (7.5h) ✅ DONE
+   - Phase 3.2: Card Trader Data Initial Sync (3.5h) - NEXT
+   - **Total**: ~12.25h
+
+4. **Week 4 - COMPLEX ⏳**:
+   - Phase 3.3: Product Listing Creation (10.5h) - **Most complex step, includes:**
+     - 3.3.1.1: Basic Listing Form (3h)
+     - 3.3.1.2: Price Optimization Helper (2.5h)
+     - 3.3.1.3: Bulk Listing Creator (3h)
+     - 3.3.1.4: Listing Preview & Validation (2h)
+   - **Total**: 10.5h
+
+5. **Week 5 - REAL-TIME INTEGRATION ⏳**:
+   - Phase 3.4: Webhook Integration (5.5h)
+   - Phase 3.5: Reporting & BI (10.5h)
+   - **Total**: ~16h
+
+6. **Week 6 - FINALIZATION ⏳**:
+   - Phase 3.6: Authentication & Security (2.5h)
+   - Phase 3.7: Testing & QA (5.5h)
+   - **Total**: ~8h
+
+7. **Week 7+ - POST-MVP**:
+   - Phase 4: API Controllers (3.5h)
+   - Phase 5: Advanced Features (7h)
+   - Phase 6: Marketplace Expansion (6-8h)
+   - Phase 7: DevOps (4.5h)
+   - Phase 8: Monitoring (1.5h)
+   - **Total**: ~22.5-23.5h
+
+8. **Future - AI Integration**:
+   - Phase 3.X: AI Card Grading (8-10h)
+
+---
+
+## Version History
+
+- **v0.1** ✅ COMPLETED: Architecture (Clean Architecture), Domain models, Infrastructure (DbContext, Repository pattern), API skeleton
+- **v0.2** 🔨 IN PROGRESS: Database (Phase 1✅), API client + Sync (Phase 2.1✅), Webhooks (Phase 2.2✅), Backend Testing (Phase 2.3🔨)
+- **v0.3** 🔨 IN PROGRESS: Angular Frontend (Phase 3.0✅, Phase 3.1✅, Phase 3.2-3.7 incoming)
+- **v1.0** (Target): Full Card Trader integration, Complete UI, Testing, Monitoring
+- **v2.0** (Future): Multi-marketplace support, Advanced features, AI grading
+
+---
+
+## Success Criteria
+
+✅ **Phase 1 Complete**: Database creato e migrazioni funzionanti
+
+✅ **Phase 2.1 Complete**: Sync da Card Trader funzionante, data in DB
+
+✅ **Phase 2.2 Complete**: Webhook processing con signature verification, handlers funzionanti
+
+🔨 **Phase 2.3 In Progress**: Unit + Integration tests per webhook handlers e endpoints
+
+✅ **Phase 3.0 Complete**: Angular 20 project setup, models, services, folder structure configured
+
+✅ **Phase 3.1 Complete**: Dashboard Component with stats cards & Inventory List Component with Material table, pagination, filtering
+
+⏳ **Phase 3 Complete**: Angular UI funzionante, integrazione API completa, testabile in browser
+
+⏳ **Phase 4 Complete**: API endpoints rispondono correttamente, pagination attiva
+
+⏳ **Phase 5 Complete**: API resiliente con retry e caching
+
+⏳ **Phase 6 Complete**: Almeno 1 marketplace aggiunto (eBay o Wallapop)
+
+⏳ **Phase 7 Complete**: CI/CD pipeline attiva, deployable su cloud
+
 ⏳ **Phase 8 Complete**: Monitoring e health checks funzionanti
+
+---
+
+## Deployment Strategy
+
+### Current: Development Mode (Active)
+**Script**: `start-inventory.ps1`
+- Avvio rapido con PowerShell
+- Due finestre separate (Backend + Frontend)
+- Ideale per sviluppo attivo e debug
+- Aggiornamenti immediati senza rebuild
+
+### Future: Production Mode (When Ready)
+**Target**: Local IIS Hosting
+
+**Benefits**:
+- Applicazione in background (no console windows)
+- Avvio automatico con Windows
+- Accesso via URL personalizzato (es. `http://inventory.local`)
+- Più stabile per uso quotidiano
+
+**Setup Requirements** (da implementare quando il progetto sarà stabile):
+1. Script `publish.ps1` per automatizzare:
+   - `dotnet publish` del backend
+   - `ng build --prod` del frontend
+   - Deploy su IIS
+2. Configurazione IIS:
+   - App Pool dedicato (.NET 8)
+   - URL Rewrite per SPA routing
+   - HTTPS con certificato self-signed
+
+**Documentazione**: Vedi `Documentation/DEPLOYMENT.md` per dettagli completi
 
 ---
 
