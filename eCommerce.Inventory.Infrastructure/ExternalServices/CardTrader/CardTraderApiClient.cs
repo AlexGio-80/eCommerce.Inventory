@@ -178,28 +178,25 @@ public class CardTraderApiClient : ICardTraderApiService
         {
             _logger.LogInformation("Creating product on Card Trader for inventory item {ItemId}", item.Id);
 
-            var userData = item.Location;
-            if (!string.IsNullOrWhiteSpace(item.Tag))
-            {
-                userData = $"{userData} {item.Tag}".Trim();
-            }
-
             var payload = new
             {
                 blueprint_id = item.Blueprint?.CardTraderId ?? throw new InvalidOperationException($"Blueprint not loaded for InventoryItem {item.Id}"),
                 price = item.ListingPrice,
                 quantity = item.Quantity,
-                user_data_field = userData,
+                user_data_field = item.Location,
+                tag = item.Tag,
                 properties = new Dictionary<string, object>
                 {
                     { "condition", item.Condition },
                     { "mtg_language", GetLanguageCode(item.Language) },
                     { "mtg_foil", item.IsFoil },
                     { "signed", item.IsSigned },
-                    { "altered", false },
-                    { "tag", item.Tag ?? string.Empty }
+                    { "altered", false }
                 }
             };
+
+            var jsonPayload = JsonSerializer.Serialize(payload);
+            _logger.LogInformation("Sending Create Product Payload: {Payload}", jsonPayload);
 
             var response = await _httpClient.PostAsJsonAsync("products", payload, cancellationToken);
             var jsonResponse = await response.Content.ReadAsStringAsync(cancellationToken);

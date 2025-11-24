@@ -16,7 +16,7 @@
 - **Fixed JSON Deserialization**:
   - Fixed `JsonException` in `CardTraderApiClient.GetMarketplaceProductsAsync`.
   - Updated deserialization logic to handle `Dictionary<string, List<ProductDto>>` response format instead of expecting a single object.
-  - **Fixed Tag Sync**: Added `tag` field to the `properties` object in the product creation payload, ensuring it is correctly sent to Card Trader.
+  - **Fixed Tag Sync**: Corrected the API payload structure to send `tag` as a top-level field (instead of within `properties`), ensuring it is correctly recognized by Card Trader.
 
 ### Dashboard Performance
 - **Fixed N+1 Query Issue**:
