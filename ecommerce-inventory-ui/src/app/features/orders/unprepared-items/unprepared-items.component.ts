@@ -184,6 +184,7 @@ export class UnpreparedItemsComponent implements OnInit {
     gridOptions = {
         pagination: true,
         paginationPageSize: 20,
+        domLayout: 'autoHeight' as const,
         enableCellTextSelection: true,
         suppressRowClickSelection: true,
         animateRows: true,
@@ -220,6 +221,13 @@ export class UnpreparedItemsComponent implements OnInit {
             next: (items) => {
                 this.unpreparedItems = items;
                 this.isLoading = false;
+
+                // Force grid to re-render after data is loaded
+                setTimeout(() => {
+                    if (this.gridApi) {
+                        this.gridApi.setGridOption('rowData', this.unpreparedItems);
+                    }
+                }, 0);
             },
             error: (err) => {
                 console.error('Error loading unprepared items', err);

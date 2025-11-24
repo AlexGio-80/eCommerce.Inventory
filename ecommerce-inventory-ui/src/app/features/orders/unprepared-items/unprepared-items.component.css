@@ -45,8 +45,8 @@
 
 .ag-grid-container {
     flex: 1;
-    min-height: 400px;
-    /* Explicit minimum height ensures grid renders on first load */
+    min-height: 0;
+    /* Important for flexbox scrolling */
     border: 1px solid #e0e0e0;
     border-radius: 4px;
     overflow: hidden;
