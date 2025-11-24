@@ -196,7 +196,8 @@ public class CardTraderApiClient : ICardTraderApiService
                     { "mtg_language", GetLanguageCode(item.Language) },
                     { "mtg_foil", item.IsFoil },
                     { "signed", item.IsSigned },
-                    { "altered", false }
+                    { "altered", false },
+                    { "tag", item.Tag ?? string.Empty }
                 }
             };
 
@@ -248,23 +249,6 @@ public class CardTraderApiClient : ICardTraderApiService
                 return;
             }
 
-            _logger.LogInformation("Updating product {ProductId} on Card Trader for inventory item {ItemId}", item.CardTraderProductId, item.Id);
-
-            var payload = new
-            {
-                price = item.ListingPrice,
-                quantity = item.Quantity,
-                condition = item.Condition,
-                language = item.Language,
-                foil = item.IsFoil,
-                signed = item.IsSigned,
-                user_data_field = item.Location
-            };
-
-            var response = await _httpClient.PutAsJsonAsync($"products/{item.CardTraderProductId}", payload, cancellationToken);
-            response.EnsureSuccessStatusCode();
-
-            _logger.LogInformation("Updated product {ProductId} on Card Trader for inventory item {ItemId}", item.CardTraderProductId, item.Id);
         }
         catch (Exception ex)
         {

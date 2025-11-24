@@ -337,7 +337,7 @@ export class CreateListingComponent {
         isFoil: defaults.isFoil,
         isSigned: defaults.isSigned,
         location: '',
-        tag: ''
+        tag: defaults.tag || ''
       });
     } else {
       this.listingForm.reset({
