@@ -86,8 +86,19 @@
   - **Phase 3.7: Testing & QA ✅ DONE**
     - Backend Unit Tests (21 passing)
     - E2E Testing Framework (Cypress) setup
+  - **Phase 3.8: Orders Grid Enhancements ✅ DONE (2025-11-24)**
+    - **Multi-Column Sorting**: Shift+Click for multi-column sorting
+    - **Grid State Persistence**: Save/load column dimensions, order, visibility, and sort state
+    - **Visual Improvements**: 
+      - Colored badges for card conditions (NM, SP, MP, HP, PO)
+      - Flag icons for languages (via flag-icons CDN)
+      - Star icon for foil cards
+    - **Card Trader Integration**: Opens Card Trader product page when marking items as prepared
+    - **Bug Fixes**: Fixed grid loading issue on first visit (force refresh after data load)
 
-⏳ **Next Steps**: Phase 4 (Remaining Controllers) & Phase 5 (Deployment)
+⏳ **Next Steps**: 
+  - Additional features per Orders workflow
+  - Phase 4 (Remaining Controllers) & Phase 5 (Deployment)
 
 ⏳ **TODO**: Phase 4 remaining controllers, Phase 5 Deployment
 
