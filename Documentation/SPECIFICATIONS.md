@@ -634,10 +634,10 @@ Tutte le griglie di dati nell'applicazione Angular DEVONO usare **AG-Grid** con 
 
 Ogni griglia DEVE implementare:
 
-1. **Column Sorting** - Click su header per ordinare
+1. **Column Sorting** - Click su header per ordinare (incluso Multi-Column Sort con Shift+Click)
 2. **Column Reordering** - Drag & drop per riordinare colonne
 3. **Column Visibility Toggle** - Sidebar per mostrare/nascondere colonne
-4. **Grid State Persistence** - Salvataggio configurazione in localStorage
+4. **Grid State Persistence** - Salvataggio configurazione in localStorage (incluso Sort Order e Column Dimensions)
 5. **Auto-save** - Salvataggio automatico su modifiche
 6. **Manual Controls** - Pulsanti Save/Reset nel menu
 

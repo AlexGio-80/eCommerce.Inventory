@@ -48,7 +48,8 @@
         <ag-grid-angular style="width: 100%; height: 100%;" class="ag-theme-material" [rowData]="unpreparedItems"
             [columnDefs]="columnDefs" [defaultColDef]="defaultColDef" [gridOptions]="gridOptions"
             (gridReady)="onGridReady($event)" (columnMoved)="onColumnMoved()" (columnVisible)="onColumnVisible()"
-            (cellMouseOver)="onCellMouseOver($event)" (cellMouseOut)="onCellMouseOut($event)">
+            (sortChanged)="onSortChanged()" (cellMouseOver)="onCellMouseOver($event)"
+            (cellMouseOut)="onCellMouseOut($event)">
         </ag-grid-angular>
     </div>
 

@@ -198,9 +198,9 @@ export class UnpreparedItemsComponent implements OnInit {
         const savedState = this.gridStateService.loadGridState(this.GRID_ID);
         if (savedState?.columnState) {
             this.gridApi.applyColumnState({ state: savedState.columnState, applyOrder: true });
+        } else {
+            this.gridApi.sizeColumnsToFit();
         }
-
-        this.gridApi.sizeColumnsToFit();
     }
 
     loadUnpreparedItems(): void {
@@ -250,7 +250,7 @@ export class UnpreparedItemsComponent implements OnInit {
         const columnState = this.gridApi.getColumnState();
         this.gridStateService.saveGridState(this.GRID_ID, {
             columnState,
-            sortModel: []
+            sortModel: [] // Sort is included in columnState
         });
 
         this.showSnackBar('Grid configuration saved');
@@ -285,11 +285,15 @@ export class UnpreparedItemsComponent implements OnInit {
     }
 
     onColumnMoved(): void {
-        // this.saveGridState(); // Auto-save disabled
+        this.saveGridState();
     }
 
     onColumnVisible(): void {
-        // this.saveGridState(); // Auto-save disabled
+        this.saveGridState();
+    }
+
+    onSortChanged(): void {
+        this.saveGridState();
     }
 
     // Image Preview Logic
