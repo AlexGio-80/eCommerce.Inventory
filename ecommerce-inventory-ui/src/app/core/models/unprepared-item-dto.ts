@@ -3,6 +3,7 @@ export interface UnpreparedItemDto {
     name?: string;
     expansionName?: string;
     expansionCode?: string;
+    cardTraderBlueprintId?: number;
     condition?: string;
     language?: string;
     quantity: number;

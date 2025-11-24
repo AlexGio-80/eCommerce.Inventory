@@ -20,4 +20,5 @@ public class UnpreparedItemDto
     public bool IsAltered { get; set; }
     public string? Tag { get; set; }
     public string? CollectorNumber { get; set; }
+    public int? CardTraderBlueprintId { get; set; }
 }

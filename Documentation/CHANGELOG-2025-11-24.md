@@ -38,3 +38,5 @@
   - **Condition**: Replaced text with colored badges (e.g., NM in green, PO in grey).
   - **Language**: Replaced text with flag icons (using `flag-icons` library via CDN).
   - **Foil**: Replaced "Yes/No" with a shiny star icon (`auto_awesome`).
+- **Card Trader Link**: When marking an item as prepared, the application automatically opens the Card Trader product page in a new tab.
+- **Grid Loading Fix**: Fixed an issue where the grid wouldn't display on first visit by using explicit CSS height instead of `domLayout: 'autoHeight'`.

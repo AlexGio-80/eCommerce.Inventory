@@ -84,7 +84,8 @@ public class OrderRepository : IOrderRepository
                 IsSigned = oi.IsSigned,
                 IsAltered = oi.IsAltered,
                 Tag = oi.UserDataField,
-                CollectorNumber = oi.Blueprint != null ? oi.Blueprint.FixedProperties : null
+                CollectorNumber = oi.Blueprint != null ? oi.Blueprint.FixedProperties : null,
+                CardTraderBlueprintId = oi.Blueprint != null ? oi.Blueprint.CardTraderId : null
             })
             .ToListAsync(cancellationToken);
 

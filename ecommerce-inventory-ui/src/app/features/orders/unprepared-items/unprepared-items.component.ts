@@ -184,7 +184,6 @@ export class UnpreparedItemsComponent implements OnInit {
     gridOptions = {
         pagination: true,
         paginationPageSize: 20,
-        domLayout: 'autoHeight' as const, // Safe here as list shouldn't be huge, but can change if needed
         enableCellTextSelection: true,
         suppressRowClickSelection: true,
         animateRows: true,
@@ -239,7 +238,14 @@ export class UnpreparedItemsComponent implements OnInit {
         this.apiService.toggleItemPreparation(item.id, newValue).subscribe({
             next: () => {
                 this.showSnackBar(`Item ${item.name} marked as ${newValue ? 'prepared' : 'unprepared'}`);
-                // Remove from list if marked prepared (optional, user might want to see it briefly)
+
+                // Open Card Trader URL if marked prepared and has Card Trader Blueprint ID
+                if (newValue && item.cardTraderBlueprintId) {
+                    const url = `https://www.cardtrader.com/cards/${item.cardTraderBlueprintId}`;
+                    window.open(url, '_blank');
+                }
+
+                // Remove from list if marked prepared
                 if (newValue) {
                     this.unpreparedItems = this.unpreparedItems.filter(i => i.id !== item.id);
                     // Refresh grid data
