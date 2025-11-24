@@ -15,6 +15,9 @@ import { GridStateService } from '../../../core/services/grid-state.service';
 import { UnpreparedItemDto } from '../../../core/models';
 
 import { ImageCellRendererComponent } from '../../../shared/components/image-cell-renderer/image-cell-renderer.component';
+import { ConditionCellRendererComponent } from '../../../shared/components/condition-cell-renderer/condition-cell-renderer.component';
+import { LanguageCellRendererComponent } from '../../../shared/components/language-cell-renderer/language-cell-renderer.component';
+import { FoilCellRendererComponent } from '../../../shared/components/foil-cell-renderer/foil-cell-renderer.component';
 
 @Component({
     selector: 'app-unprepared-items',
@@ -98,22 +101,24 @@ export class UnpreparedItemsComponent implements OnInit {
             field: 'condition',
             sortable: true,
             filter: true,
-            width: 100
+            width: 80,
+            cellRenderer: ConditionCellRendererComponent
         },
         {
             headerName: 'Language',
             field: 'language',
             sortable: true,
             filter: true,
-            width: 100
+            width: 80,
+            cellRenderer: LanguageCellRendererComponent
         },
         {
             headerName: 'Foil',
             field: 'isFoil',
             sortable: true,
             filter: true,
-            width: 80,
-            cellRenderer: (params: any) => params.value ? 'Yes' : 'No'
+            width: 60,
+            cellRenderer: FoilCellRendererComponent
         },
         {
             headerName: 'Signed',

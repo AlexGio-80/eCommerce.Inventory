@@ -34,3 +34,7 @@
 - **Grid State Persistence**: Implemented saving of sort order, column dimensions, and visibility to `localStorage`.
 - **Expansion Code**: Added "Exp. Code" column to the grid for better identification.
 - **Image Preview**: Improved image preview to maximize size within the container.
+- **Visual Improvements**:
+  - **Condition**: Replaced text with colored badges (e.g., NM in green, PO in grey).
+  - **Language**: Replaced text with flag icons (using `flag-icons` library via CDN).
+  - **Foil**: Replaced "Yes/No" with a shiny star icon (`auto_awesome`).
