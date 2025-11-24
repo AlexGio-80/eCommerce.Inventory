@@ -1,5 +1,6 @@
 export interface Blueprint {
   id: number;
+  cardTraderId: number;
   name: string;
   expansionId: number;
   gameId: number;

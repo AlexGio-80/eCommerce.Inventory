@@ -49,89 +49,45 @@
   - Code coverage report generated with Coverlet XPlat
   - Key coverage: signature verification, tampering detection, payload validation
 
-🔨 **In Progress**: Phase 3 - Angular Frontend
+✅ **Phase 3: Angular Frontend (COMPLETED)**
   - Phase 3.0: Project Setup ✅ DONE
   - Phase 3.1: Database Consultation UI ✅ DONE (Dashboard & Inventory List)
-  - Phase 3.2: Card Trader Data Initial Sync ✅ DONE (with improved error reporting)
-  - Phase 3.2b: Games Management Page ✅ DONE (View, Toggle Status, Sync Actions)
+  - Phase 3.2: Card Trader Data Initial Sync ✅ DONE
+  - Phase 3.2b: Games Management Page ✅ DONE
   - **Phase 3.3: Product Listing Creation ✅ DONE**
     - Pending Listings System (queue-based workflow)
     - "Save Defaults" toggle with localStorage persistence
+    - Price Suggestions from Card Trader Marketplace (Min/Avg/Max)
     - Edit/Delete pending listings
     - Sync to Card Trader with proper error handling
     - **Bug Fixes & Refinements:**
       - Fixed Blueprint ID mapping (use CardTraderId instead of local ID)
-      - Fixed API response parsing (handle Card Trader's `resource` wrapper)
-      - Fixed payload structure (use `properties` object with `mtg_foil`, `mtg_language`)
-      - Removed incorrect InventoryItem creation during pending sync
-      - Fixed "Save Defaults" OFF behavior (reset fields, keep blueprint)
-      - Added detailed logging for sync failures
+      - Fixed API response parsing (handle Card Trader's `resource` wrapper and Dictionary responses)
+      - Fixed payload structure (use `properties` object)
+      - Fixed "Save Defaults" OFF behavior
+      - Restored missing UI fields and navigation
   - **Phase 3.4: Orders Management ✅ DONE**
     - Backend: Order/OrderItem entities, DTOs, Repository, Controller, Sync Service
     - Frontend: Orders List (master-detail), Unprepared Items View
-    - Manual sync with date filters (from/to) - **FIXED ✅**
+    - Manual sync with date filters (from/to)
     - Order completion and item preparation flags
-    - **Real-time Updates (SignalR) ✅ DONE:**
-      - WebSocket connection for `OrderCreated`/`OrderUpdated` events
-      - `OrderStatusMonitorComponent` for live activity feed
-      - Auto-sync trigger on webhook events
-    - **Bug Fixes:**
-      - Fixed nullable IDs in CardTraderOrderItemDto
-      - Fixed unprepared items filter (show all, not just paid/sending)
-      - Added date range filters with defaults (today to tomorrow)
-      - **Fixed date filter parameters not being sent to Card Trader API:**
-        - Changed sync endpoint from query parameters to request body (`[FromBody]`)
-        - Fixed `GetOrdersAsync` to properly pass query string parameters
-        - Added `limit=1000` parameter to fetch up to 1000 orders per request
-        - Verified parameters are correctly included in HTTP GET request
-      - **Fixed FK Constraint Violation during Order Sync:**
-        - Mapped external Blueprint IDs to internal DB IDs before saving OrderItems
+    - **Real-time Updates (SignalR) ✅ DONE**
+    - **Performance Optimization:**
+      - Fixed N+1 query issue in Dashboard loading (added `AsNoTracking`)
   - **Phase 3.5: Advanced Grid Features ✅ DONE**
-    - AG-Grid integration for all data grids (Orders, Inventory, To Prepare, Games, Expansions)
-    - Custom column visibility menu (Material Design)
-    - Grid state persistence (localStorage) with manual save/reset
-    - Server-side pagination for Inventory (Infinite Row Model)
-    - Performance optimizations (removed autoHeight, optimized queries)
-    - **Backend Optimizations:**
-      - Created `UnpreparedItemDto` for efficient data transfer
-      - Added `GetUnpreparedItemsAsync` with LINQ projection
-      - Implemented server-side pagination for Inventory
-      - Added Blueprint navigation to OrderItem for image display
-    - **Bug Fixes:**
-      - Fixed TypeScript compilation errors (rowModelType type)
-      - Fixed database migration for OrderItem-Blueprint relationship
-      - Disabled auto-save on grid events (manual save only)
-  - **Phase 3.6: Export & Advanced Filtering (Prototype) ✅ DONE**
-    - **Orders List Prototype:**
-      - Export to CSV/Excel (using `xlsx`)
-      - Export Selected Rows
-      - Quick Filter (Global Search)
-      - Filter Presets (All, Incomplete, Today)
-      - Bulk Operations (Mark Complete/Incomplete) with Confirmation Dialog
-      - Shared AG-Grid Theme (`ag-grid-theme.scss`)
-    - **Deferred:** Full replication to other grids (Inventory, Games, etc.) deferred to future phase.
+    - AG-Grid integration for all data grids
+    - Custom column visibility menu
+    - Grid state persistence
+    - Server-side pagination for Inventory
+  - **Phase 3.6: Export & Advanced Filtering ✅ DONE**
+    - Export to CSV/Excel
+    - Quick Filter (Global Search)
+    - Bulk Operations
   - **Phase 3.7: Testing & QA ✅ DONE**
-    - **Backend Testing:**
-      - Created `InventorySyncServiceTests.cs` (3 unit tests for product sync)
-      - Fixed `ProcessCardTraderWebhookHandlerTests.cs` (added missing INotificationService)
-      - All 21 backend tests passing
-    - **E2E Testing:**
-      - Installed and configured Cypress E2E framework
-      - Created sample test for Inventory page
-      - Documented test execution commands
-  - **Phase 4: API Controller Enhancement (Core Complete) ✅ DONE**
-    - **Core Infrastructure:**
-      - `ApiResponse<T>` model for standardized responses
-      - `PagedResponse<T>` model for consistent pagination
-      - `GlobalExceptionMiddleware` for centralized error handling
-    - **Migrated Controllers (2/11):**
-      - `CardTraderInventoryController` (5 endpoints)
-      - `CardTraderOrdersController` (5 endpoints)
-    - **Deferred:** Remaining 9 controllers (pattern documented for future migration)
-    - **Bugfixes:**
-      - Fixed frontend API response unwrapping (ApiResponse<T> envelope)
-      - Implemented server-side filtering for Inventory AG-Grid
-      - Fixed major performance issue (removed lazy loading from InventoryItem.OrderItems)
+    - Backend Unit Tests (21 passing)
+    - E2E Testing Framework (Cypress) setup
+
+⏳ **Next Steps**: Phase 4 (Remaining Controllers) & Phase 5 (Deployment)
 
 ⏳ **TODO**: Phase 4 remaining controllers, Phase 5 Deployment
 

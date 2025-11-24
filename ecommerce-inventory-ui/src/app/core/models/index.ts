@@ -5,3 +5,4 @@ export * from './inventory-item';
 export * from './order';
 export * from './unprepared-item-dto';
 export * from './api-response';
+export * from './marketplace-stats';

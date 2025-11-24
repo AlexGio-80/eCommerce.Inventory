@@ -11,4 +11,9 @@ export interface UnpreparedItemDto {
     orderDate?: Date;
     isPrepared: boolean;
     imageUrl?: string;
+    isFoil?: boolean;
+    isSigned?: boolean;
+    isAltered?: boolean;
+    tag?: string;
+    collectorNumber?: string;
 }

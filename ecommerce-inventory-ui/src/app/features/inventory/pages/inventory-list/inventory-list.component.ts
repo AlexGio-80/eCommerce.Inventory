@@ -13,6 +13,8 @@ import { CardTraderApiService } from '../../../../core/services/cardtrader-api.s
 import { GridStateService } from '../../../../core/services/grid-state.service';
 import { InventoryItem } from '../../../../core/models/inventory-item';
 
+import { ImageCellRendererComponent } from '../../../../shared/components/image-cell-renderer/image-cell-renderer.component';
+
 @Component({
   selector: 'app-inventory-list',
   standalone: true,
@@ -42,10 +44,28 @@ export class InventoryListComponent implements OnInit {
 
   columnDefs: ColDef[] = [
     {
-      field: 'id',
-      sortable: false, // Sorting not supported by backend yet
-      filter: 'agNumberColumnFilter',
-      width: 80
+      headerName: 'Image',
+      field: 'blueprint.imageUrl',
+      sortable: false,
+      filter: false,
+      width: 80,
+      cellRenderer: ImageCellRendererComponent
+    },
+    {
+      headerName: 'Coll. #',
+      field: 'blueprint.fixedProperties',
+      sortable: false,
+      filter: true,
+      width: 80,
+      valueGetter: (params) => {
+        if (!params.data?.blueprint?.fixedProperties) return '';
+        try {
+          const props = JSON.parse(params.data.blueprint.fixedProperties);
+          return props.collector_number || '';
+        } catch {
+          return '';
+        }
+      }
     },
     {
       headerName: 'Card Name',
@@ -97,6 +117,37 @@ export class InventoryListComponent implements OnInit {
       sortable: false,
       filter: true,
       width: 100
+    },
+    {
+      headerName: 'Foil',
+      field: 'isFoil',
+      sortable: false,
+      filter: true,
+      width: 80,
+      cellRenderer: (params: any) => params.value ? 'Yes' : 'No'
+    },
+    {
+      headerName: 'Signed',
+      field: 'isSigned',
+      sortable: false,
+      filter: true,
+      width: 80,
+      cellRenderer: (params: any) => params.value ? 'Yes' : 'No'
+    },
+    {
+      headerName: 'Altered',
+      field: 'isAltered',
+      sortable: false,
+      filter: true,
+      width: 80,
+      cellRenderer: (params: any) => params.value ? 'Yes' : 'No'
+    },
+    {
+      headerName: 'Tag',
+      field: 'tag',
+      sortable: false,
+      filter: true,
+      width: 120
     },
     {
       headerName: 'Status',
@@ -292,5 +343,20 @@ export class InventoryListComponent implements OnInit {
 
   onColumnVisible(): void {
     // this.saveGridState(); // Auto-save disabled
+  }
+
+  // Image Preview Logic
+  previewImage: string | null = null;
+
+  onCellMouseOver(params: any): void {
+    if (params.colDef.field === 'blueprint.imageUrl' && params.value) {
+      this.previewImage = params.value;
+    }
+  }
+
+  onCellMouseOut(params: any): void {
+    if (params.colDef.field === 'blueprint.imageUrl') {
+      this.previewImage = null;
+    }
   }
 }

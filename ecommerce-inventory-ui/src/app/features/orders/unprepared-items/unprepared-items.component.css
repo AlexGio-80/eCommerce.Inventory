@@ -1,56 +1,100 @@
-/* Import shared AG-Grid theme */
-@import '../../../shared/styles/ag-grid-theme.scss';
-
-/* ============================================================================
-   Unprepared Items - Component-Specific Styles
-   ============================================================================ */
-
 .container {
-    padding: 20px;
     height: 100%;
     display: flex;
     flex-direction: column;
+    padding: 16px;
+    box-sizing: border-box;
+    position: relative;
+    /* For absolute positioning context if needed */
 }
 
 .header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
+}
+
+.header h1 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 500;
 }
 
 .actions {
     display: flex;
-    gap: 10px;
-}
-
-.ag-grid-container {
-    flex: 1;
-    min-height: 500px;
+    gap: 8px;
 }
 
 .loading-spinner {
     display: flex;
     justify-content: center;
-    padding: 20px;
+    align-items: center;
+    height: 300px;
 }
 
 .no-items {
-    text-align: center;
-    padding: 40px;
-    font-size: 1.2em;
-    color: #666;
     display: flex;
     flex-direction: column;
+    justify-content: center;
     align-items: center;
+    height: 300px;
+    color: #666;
+    font-size: 18px;
+}
+
+.ag-grid-container {
+    flex: 1;
+    min-height: 0;
+    /* Important for flexbox scrolling */
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
 }
 
 .columns-menu-container {
     padding: 8px;
     max-height: 300px;
     overflow-y: auto;
+    border-radius: 4px;
 }
 
-.column-toggle-item {
-    padding: 4px 8px;
+/* Image Preview Panel */
+.image-preview-panel {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    width: 375px;
+    height: 525px;
+    background: white;
+    border: 1px solid #ccc;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    z-index: 1000;
+    padding: 10px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none;
+    /* Let clicks pass through if it overlaps something important */
+    animation: slideIn 0.2s ease-out;
+}
+
+.image-preview-panel img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: 4px;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }

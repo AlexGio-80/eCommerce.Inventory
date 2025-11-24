@@ -14,4 +14,9 @@ public class UnpreparedItemDto
     public DateTime? OrderDate { get; set; }
     public bool IsPrepared { get; set; }
     public string? ImageUrl { get; set; }
+    public bool IsFoil { get; set; }
+    public bool IsSigned { get; set; }
+    public bool IsAltered { get; set; }
+    public string? Tag { get; set; }
+    public string? CollectorNumber { get; set; }
 }

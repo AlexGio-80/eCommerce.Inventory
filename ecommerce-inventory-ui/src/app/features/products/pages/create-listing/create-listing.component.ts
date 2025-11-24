@@ -14,6 +14,8 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { MatChipsModule } from '@angular/material/chips';
+import { CardTraderApiService } from '../../../../core/services/cardtrader-api.service';
 import { Router } from '@angular/router';
 import { BlueprintSelectorComponent } from '../../../../shared/components/blueprint-selector/blueprint-selector.component';
 import { ProductsService } from '../../services/products.service';
@@ -39,6 +41,7 @@ import { Blueprint } from '../../../../core/models';
     MatTableModule,
     MatIconModule,
     MatButtonToggleModule,
+    MatChipsModule,
     BlueprintSelectorComponent
   ],
   templateUrl: './create-listing.component.html',
@@ -99,6 +102,38 @@ import { Blueprint } from '../../../../core/models';
       margin: 0;
       color: #666;
     }
+
+    /* Image Preview Panel */
+    .image-preview-panel {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      width: 375px;
+      height: 525px;
+      background: white;
+      border: 1px solid #ccc;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      border-radius: 8px;
+      z-index: 1000;
+      padding: 10px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      pointer-events: none;
+      animation: slideIn 0.2s ease-out;
+    }
+
+    .image-preview-panel img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      border-radius: 4px;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
   `]
 })
 export class CreateListingComponent {
@@ -124,7 +159,7 @@ export class CreateListingComponent {
     private productsService: ProductsService,
     private pendingListingsService: PendingListingsService,
     private snackBar: MatSnackBar,
-    private router: Router
+    private cardTraderService: CardTraderApiService
   ) {
     const defaults = this.loadDefaults();
     this.listingForm = this.fb.group({
@@ -135,7 +170,7 @@ export class CreateListingComponent {
       isFoil: [defaults.isFoil],
       isSigned: [defaults.isSigned],
       location: [''],
-      tag: [''],
+      tag: [defaults.tag || ''],
       purchasePrice: [0, [Validators.required, Validators.min(0)]]
     });
     this.saveDefaults.set(defaults.saveEnabled);
@@ -162,6 +197,7 @@ export class CreateListingComponent {
       isSigned: false,
       sellingPrice: null,
       purchasePrice: 0,
+      tag: '',
       saveEnabled: false
     };
   }
@@ -185,6 +221,7 @@ export class CreateListingComponent {
       isSigned: this.listingForm.get('isSigned')?.value,
       sellingPrice: this.listingForm.get('sellingPrice')?.value,
       purchasePrice: this.listingForm.get('purchasePrice')?.value,
+      tag: this.listingForm.get('tag')?.value,
       saveEnabled: true
     };
     localStorage.setItem(this.STORAGE_KEY, JSON.stringify(defaults));
@@ -192,6 +229,72 @@ export class CreateListingComponent {
 
   onBlueprintSelected(blueprint: Blueprint) {
     this.selectedBlueprint.set(blueprint);
+    // Reset form but keep defaults if enabled
+    this.resetFormState();
+    // Load marketplace stats
+    this.loadMarketplaceStats(blueprint.cardTraderId);
+  }
+
+  loadNextBlueprint(): void {
+    const current = this.selectedBlueprint();
+    if (!current || !current.expansionId || !current.fixedProperties) return;
+
+    let collectorNumber = '';
+    try {
+      const props = JSON.parse(current.fixedProperties);
+      collectorNumber = props.collector_number;
+    } catch (e) {
+      console.error('Error parsing fixed properties', e);
+      return;
+    }
+
+    if (!collectorNumber) return;
+
+    this.cardTraderService.getAdjacentBlueprint(current.expansionId, collectorNumber, 'next')
+      .subscribe({
+        next: (blueprint) => {
+          if (blueprint) {
+            this.onBlueprintSelected(blueprint);
+          } else {
+            this.snackBar.open('No next card found', 'Close', { duration: 2000 });
+          }
+        },
+        error: (err) => {
+          console.error('Error fetching next blueprint', err);
+          this.snackBar.open('Error fetching next card', 'Close', { duration: 2000 });
+        }
+      });
+  }
+
+  loadPreviousBlueprint(): void {
+    const current = this.selectedBlueprint();
+    if (!current || !current.expansionId || !current.fixedProperties) return;
+
+    let collectorNumber = '';
+    try {
+      const props = JSON.parse(current.fixedProperties);
+      collectorNumber = props.collector_number;
+    } catch (e) {
+      console.error('Error parsing fixed properties', e);
+      return;
+    }
+
+    if (!collectorNumber) return;
+
+    this.cardTraderService.getAdjacentBlueprint(current.expansionId, collectorNumber, 'prev')
+      .subscribe({
+        next: (blueprint) => {
+          if (blueprint) {
+            this.onBlueprintSelected(blueprint);
+          } else {
+            this.snackBar.open('No previous card found', 'Close', { duration: 2000 });
+          }
+        },
+        error: (err) => {
+          console.error('Error fetching previous blueprint', err);
+          this.snackBar.open('Error fetching previous card', 'Close', { duration: 2000 });
+        }
+      });
   }
 
   loadPendingListings() {
@@ -219,7 +322,10 @@ export class CreateListingComponent {
   onResetForm() {
     this.selectedBlueprint.set(null);
     this.editingId.set(null);
+    this.resetFormState();
+  }
 
+  private resetFormState() {
     if (this.saveDefaults()) {
       const defaults = this.loadDefaults();
       this.listingForm.patchValue({
@@ -303,6 +409,44 @@ export class CreateListingComponent {
     });
   }
 
+  // Image Preview Logic
+  previewImage = signal<string | null>(null);
+
+  showPreview(url: string | undefined) {
+    if (url) {
+      this.previewImage.set(url);
+    }
+  }
+
+  hidePreview() {
+    this.previewImage.set(null);
+  }
+
+  // Marketplace Stats
+  marketplaceStats = signal<import('../../../../core/models').MarketplaceStats | null>(null);
+  isLoadingStats = signal(false);
+
+  loadMarketplaceStats(blueprintId: number) {
+    this.isLoadingStats.set(true);
+    this.marketplaceStats.set(null);
+
+    this.cardTraderService.getMarketplaceStats(blueprintId).subscribe({
+      next: (stats) => {
+        this.marketplaceStats.set(stats);
+        this.isLoadingStats.set(false);
+      },
+      error: (err) => {
+        console.error('Error loading marketplace stats', err);
+        this.isLoadingStats.set(false);
+      }
+    });
+  }
+
+  applyPrice(price: number) {
+    this.listingForm.patchValue({ sellingPrice: price });
+    this.listingForm.markAsDirty();
+  }
+
   onSubmit() {
     if (this.listingForm.invalid || !this.selectedBlueprint()) {
       return;
@@ -336,21 +480,7 @@ export class CreateListingComponent {
           this.isSubmitting.set(false);
           this.editingId.set(null);
           this.loadPendingListings();
-
-          // Logic for "Save Defaults" OFF: Reset fields, keep blueprint
-          if (!this.saveDefaults()) {
-            this.listingForm.reset({
-              quantity: 1,
-              sellingPrice: null,
-              purchasePrice: 0,
-              condition: 'Near Mint',
-              language: 'English',
-              isFoil: false,
-              isSigned: false,
-              location: '',
-              tag: ''
-            });
-          }
+          this.resetFormState();
         },
         error: (err) => {
           console.error('Error updating listing', err);
@@ -369,21 +499,7 @@ export class CreateListingComponent {
             });
 
           this.loadPendingListings();
-
-          // Logic for "Save Defaults" OFF: Reset fields, keep blueprint
-          if (!this.saveDefaults()) {
-            this.listingForm.reset({
-              quantity: 1,
-              sellingPrice: null,
-              purchasePrice: 0,
-              condition: 'Near Mint',
-              language: 'English',
-              isFoil: false,
-              isSigned: false,
-              location: '',
-              tag: ''
-            });
-          }
+          this.resetFormState();
         },
         error: (error) => {
           this.isSubmitting.set(false);

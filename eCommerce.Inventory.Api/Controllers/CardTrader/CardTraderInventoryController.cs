@@ -10,13 +10,16 @@ namespace eCommerce.Inventory.Api.Controllers.CardTrader;
 public class CardTraderInventoryController : ControllerBase
 {
     private readonly IInventoryItemRepository _inventoryItemRepository;
+    private readonly ICardTraderApiService _cardTraderApiService;
     private readonly ILogger<CardTraderInventoryController> _logger;
 
     public CardTraderInventoryController(
         IInventoryItemRepository inventoryItemRepository,
+        ICardTraderApiService cardTraderApiService,
         ILogger<CardTraderInventoryController> logger)
     {
         _inventoryItemRepository = inventoryItemRepository;
+        _cardTraderApiService = cardTraderApiService;
         _logger = logger;
     }
 
@@ -130,6 +133,7 @@ public class CardTraderInventoryController : ControllerBase
             Language = request.Language,
             IsFoil = request.IsFoil,
             IsSigned = request.IsSigned,
+            IsAltered = request.IsAltered,
             Location = request.Location,
             DateAdded = DateTime.UtcNow
         };
@@ -198,6 +202,66 @@ public class CardTraderInventoryController : ControllerBase
 
         return Ok(Models.ApiResponse<object>.SuccessResult(null, "Inventory item deleted successfully"));
     }
+    /// <summary>
+    /// Get marketplace statistics for a blueprint (Min, Max, Avg price)
+    /// </summary>
+    [HttpGet("marketplace-stats/{blueprintId}")]
+    public async Task<ActionResult<Application.DTOs.MarketplaceStatsDto>> GetMarketplaceStats(int blueprintId)
+    {
+        try
+        {
+            var products = await _cardTraderApiService.GetMarketplaceProductsAsync(blueprintId);
+
+            if (!products.Any())
+            {
+                return Ok(new Application.DTOs.MarketplaceStatsDto
+                {
+                    BlueprintId = blueprintId,
+                    MinPrice = 0,
+                    MaxPrice = 0,
+                    AveragePrice = 0,
+                    TotalListings = 0
+                });
+            }
+
+            // Filter out products with 0 price or invalid data if necessary
+            var validProducts = products.Where(p => p.PriceCents > 0).ToList();
+
+            if (!validProducts.Any())
+            {
+                return Ok(new Application.DTOs.MarketplaceStatsDto
+                {
+                    BlueprintId = blueprintId,
+                    MinPrice = 0,
+                    MaxPrice = 0,
+                    AveragePrice = 0,
+                    TotalListings = 0
+                });
+            }
+
+            var minPriceCents = validProducts.Min(p => p.PriceCents);
+            var maxPriceCents = validProducts.Max(p => p.PriceCents);
+            var avgPriceCents = validProducts.Average(p => p.PriceCents);
+
+            // Convert cents to EUR (assuming cents are in the currency of the response, usually EUR or USD depending on account, but Card Trader API usually returns cents)
+            // We'll assume EUR for now as per user context
+
+            return Ok(new Application.DTOs.MarketplaceStatsDto
+            {
+                BlueprintId = blueprintId,
+                MinPrice = minPriceCents / 100m,
+                MaxPrice = maxPriceCents / 100m,
+                AveragePrice = Math.Round((decimal)avgPriceCents / 100m, 2),
+                TotalListings = validProducts.Count,
+                Currency = validProducts.First().PriceCurrency
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting marketplace stats for blueprint {BlueprintId}", blueprintId);
+            return StatusCode(500, "Error getting marketplace stats");
+        }
+    }
 }
 
 public class CreateInventoryItemRequest
@@ -210,6 +274,7 @@ public class CreateInventoryItemRequest
     public string Language { get; set; }
     public bool IsFoil { get; set; }
     public bool IsSigned { get; set; }
+    public bool IsAltered { get; set; }
     public string Location { get; set; }
 }
 

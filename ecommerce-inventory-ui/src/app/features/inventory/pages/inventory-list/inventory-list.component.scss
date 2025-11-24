@@ -1,24 +1,20 @@
-/* Import shared AG-Grid theme */
-@import '../../../../shared/styles/ag-grid-theme.scss';
-
-/* ============================================================================
-   Inventory List - Component-Specific Styles
-   ============================================================================ */
-
-.inventory-container {
-  padding: 20px;
-  max-width: 1400px;
-  margin: 0 auto;
+.container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  box-sizing: border-box;
+  position: relative;
 }
 
-.inventory-header {
+.header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
-.inventory-header h1 {
+.header h1 {
   margin: 0;
   font-size: 24px;
   font-weight: 500;
@@ -26,6 +22,58 @@
 
 .actions {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
+}
+
+.search-field {
+  width: 300px;
+  font-size: 14px;
+}
+
+.ag-grid-container {
+  flex: 1;
+  min-height: 0;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+/* Image Preview Panel */
+.image-preview-panel {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  width: 375px;
+  height: 525px;
+  background: white;
+  border: 1px solid #ccc;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  z-index: 1000;
+  padding: 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none;
+  animation: slideIn 0.2s ease-out;
+}
+
+.image-preview-panel img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

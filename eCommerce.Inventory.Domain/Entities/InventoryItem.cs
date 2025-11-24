@@ -20,6 +20,7 @@ public class InventoryItem
     public string Language { get; set; } // Es. "English", "Italian"
     public bool IsFoil { get; set; }
     public bool IsSigned { get; set; }
+    public bool IsAltered { get; set; }
 
     // Dati personalizzati per la BI
     public string Location { get; set; } // Es. "Scatola A", "Raccoglitore 1"

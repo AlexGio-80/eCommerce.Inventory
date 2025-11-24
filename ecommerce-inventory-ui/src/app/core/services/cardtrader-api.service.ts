@@ -12,6 +12,7 @@ import {
   PagedResponse,
   ApiResponse,
   UnpreparedItemDto,
+  MarketplaceStats,
 } from '../models';
 import { environment } from '../../../environments/environment';
 
@@ -56,6 +57,18 @@ export class CardTraderApiService {
 
   getBlueprintById(id: number): Observable<Blueprint> {
     return this.http.get<Blueprint>(`${this.apiUrl}/blueprints/${id}`);
+  }
+
+  getBlueprintByCardTraderId(cardTraderId: number): Observable<Blueprint> {
+    return this.http.get<Blueprint>(`${this.apiUrl}/blueprints/by-cardtrader-id/${cardTraderId}`);
+  }
+
+  getAdjacentBlueprint(expansionId: number, currentCollectorNumber: string, direction: 'next' | 'prev'): Observable<Blueprint> {
+    const params = new HttpParams()
+      .set('expansionId', expansionId)
+      .set('currentCollectorNumber', currentCollectorNumber)
+      .set('direction', direction);
+    return this.http.get<Blueprint>(`${this.apiUrl}/blueprints/adjacent`, { params });
   }
 
   // Inventory Items
@@ -193,5 +206,9 @@ export class CardTraderApiService {
     syncInventory?: boolean;
   }): Observable<ApiResponse<any>> {
     return this.http.post<ApiResponse<any>>(`${this.apiUrl}/sync`, request);
+  }
+
+  getMarketplaceStats(blueprintId: number): Observable<MarketplaceStats> {
+    return this.http.get<MarketplaceStats>(`${this.apiUrl}/inventory/marketplace-stats/${blueprintId}`);
   }
 }

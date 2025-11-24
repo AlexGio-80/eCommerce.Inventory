@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using eCommerce.Inventory.Application.Interfaces;
 using eCommerce.Inventory.Domain.Entities;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.DTOs;
+using eCommerce.Inventory.Application.DTOs;
 using Microsoft.Extensions.Logging;
 
 namespace eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader;
@@ -349,7 +350,7 @@ public class CardTraderApiClient : ICardTraderApiService
     /// <summary>
     /// Fetch all orders from Card Trader API (returns DTOs for mapping)
     /// </summary>
-    public async Task<List<dynamic>> GetOrdersAsync(DateTime? from = null, DateTime? to = null, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<dynamic>> GetOrdersAsync(DateTime? from = null, DateTime? to = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -412,5 +413,35 @@ public class CardTraderApiClient : ICardTraderApiService
             "korean" => "ko",
             _ => "en" // Default to English
         };
+    }
+
+    /// <summary>
+    /// Fetch marketplace products for a specific blueprint
+    /// Endpoint: /api/v2/marketplace/products?blueprint_id={id}
+    /// </summary>
+    public async Task<IEnumerable<CardTraderMarketplaceProductDto>> GetMarketplaceProductsAsync(int blueprintId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Fetching marketplace products for blueprint {BlueprintId} from Card Trader API", blueprintId);
+
+            var response = await _httpClient.GetAsync($"marketplace/products?blueprint_id={blueprintId}", cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            var jsonContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            // The endpoint returns a dictionary where keys are Blueprint IDs (strings) and values are LISTS of product objects
+            var productsDict = JsonSerializer.Deserialize<Dictionary<string, List<CardTraderMarketplaceProductDto>>>(jsonContent);
+
+            var products = productsDict?.Values.SelectMany(x => x).ToList() ?? new List<CardTraderMarketplaceProductDto>();
+
+            _logger.LogInformation("Fetched {ProductCount} marketplace products for blueprint {BlueprintId}", products.Count, blueprintId);
+            return products;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching marketplace products for blueprint {BlueprintId}", blueprintId);
+            return new List<CardTraderMarketplaceProductDto>();
+        }
     }
 }

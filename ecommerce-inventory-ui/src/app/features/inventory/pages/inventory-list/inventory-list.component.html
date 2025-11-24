@@ -42,9 +42,15 @@
   <!-- No loading spinner needed for infinite scroll, grid handles it -->
 
   <div class="ag-grid-container">
-    <ag-grid-angular style="width: 100%; height: 600px;" class="ag-theme-material" [columnDefs]="columnDefs"
+    <ag-grid-angular style="width: 100%; height: 100%;" class="ag-theme-material" [columnDefs]="columnDefs"
       [defaultColDef]="defaultColDef" [gridOptions]="gridOptions" (gridReady)="onGridReady($event)"
-      (columnMoved)="onColumnMoved()" (columnVisible)="onColumnVisible()">
+      (columnMoved)="onColumnMoved()" (columnVisible)="onColumnVisible()" (cellMouseOver)="onCellMouseOver($event)"
+      (cellMouseOut)="onCellMouseOut($event)">
     </ag-grid-angular>
+  </div>
+
+  <!-- Fixed Image Preview Panel -->
+  <div class="image-preview-panel" *ngIf="previewImage">
+    <img [src]="previewImage" alt="Card Preview">
   </div>
 </div>

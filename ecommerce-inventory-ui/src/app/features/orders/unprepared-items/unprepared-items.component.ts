@@ -14,6 +14,8 @@ import { CardTraderApiService } from '../../../core/services/cardtrader-api.serv
 import { GridStateService } from '../../../core/services/grid-state.service';
 import { UnpreparedItemDto } from '../../../core/models';
 
+import { ImageCellRendererComponent } from '../../../shared/components/image-cell-renderer/image-cell-renderer.component';
+
 @Component({
     selector: 'app-unprepared-items',
     standalone: true,
@@ -56,20 +58,19 @@ export class UnpreparedItemsComponent implements OnInit {
             width: 150
         },
         {
+            headerName: 'Image',
+            field: 'imageUrl',
+            width: 80,
+            sortable: false,
+            filter: false,
+            cellRenderer: ImageCellRendererComponent
+        },
+        {
             headerName: 'Card Name',
             field: 'name',
             sortable: true,
             filter: true,
-            width: 250,
-            cellRenderer: (params: any) => {
-                if (params.data?.imageUrl) {
-                    return `<div style="display: flex; align-items: center;">
-                    <img src="${params.data.imageUrl}" style="height: 30px; margin-right: 8px;" alt="Card">
-                    ${params.value}
-                  </div>`;
-                }
-                return params.value;
-            }
+            width: 250
         },
         {
             headerName: 'Expansion',
@@ -77,6 +78,13 @@ export class UnpreparedItemsComponent implements OnInit {
             sortable: true,
             filter: true,
             width: 200
+        },
+        {
+            headerName: 'Coll. #',
+            field: 'collectorNumber', // Assuming this field will be populated in DTO
+            sortable: true,
+            filter: true,
+            width: 80
         },
         {
             headerName: 'Condition',
@@ -88,6 +96,37 @@ export class UnpreparedItemsComponent implements OnInit {
         {
             headerName: 'Language',
             field: 'language',
+            sortable: true,
+            filter: true,
+            width: 100
+        },
+        {
+            headerName: 'Foil',
+            field: 'isFoil',
+            sortable: true,
+            filter: true,
+            width: 80,
+            cellRenderer: (params: any) => params.value ? 'Yes' : 'No'
+        },
+        {
+            headerName: 'Signed',
+            field: 'isSigned',
+            sortable: true,
+            filter: true,
+            width: 80,
+            cellRenderer: (params: any) => params.value ? 'Yes' : 'No'
+        },
+        {
+            headerName: 'Altered',
+            field: 'isAltered',
+            sortable: true,
+            filter: true,
+            width: 80,
+            cellRenderer: (params: any) => params.value ? 'Yes' : 'No'
+        },
+        {
+            headerName: 'Tag',
+            field: 'tag',
             sortable: true,
             filter: true,
             width: 100
@@ -251,6 +290,24 @@ export class UnpreparedItemsComponent implements OnInit {
 
     onColumnVisible(): void {
         // this.saveGridState(); // Auto-save disabled
+    }
+
+    // Image Preview Logic
+    previewImage: string | null = null;
+    previewPosition = { top: 0, left: 0 };
+
+    onCellMouseOver(params: any): void {
+        if (params.colDef.field === 'imageUrl' && params.value) {
+            this.previewImage = params.value;
+            // Position logic can be handled here or just fixed CSS
+            // For fixed sidebar, we don't need mouse position
+        }
+    }
+
+    onCellMouseOut(params: any): void {
+        if (params.colDef.field === 'imageUrl') {
+            this.previewImage = null;
+        }
     }
 
     private showSnackBar(message: string): void {

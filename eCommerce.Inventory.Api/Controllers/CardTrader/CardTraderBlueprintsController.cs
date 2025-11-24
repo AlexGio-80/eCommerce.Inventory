@@ -168,4 +168,84 @@ public class CardTraderBlueprintsController : ControllerBase
         var count = await _blueprintRepository.GetCountAsync(cancellationToken);
         return Ok(count);
     }
+    /// <summary>
+    /// Get the next or previous blueprint based on collector number
+    /// </summary>
+    [HttpGet("adjacent")]
+    [ProducesResponseType(typeof(Blueprint), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<Blueprint>> GetAdjacentBlueprint(
+        [FromQuery] int expansionId,
+        [FromQuery] string currentCollectorNumber,
+        [FromQuery] string direction, // "next" or "prev"
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(currentCollectorNumber))
+        {
+            return BadRequest(new { message = "Current collector number is required" });
+        }
+
+        _logger.LogInformation("Getting adjacent blueprint for expansion {ExpansionId}, current {Current}, direction {Direction}",
+            expansionId, currentCollectorNumber, direction);
+
+        // This logic is a bit complex because collector numbers can be alphanumeric (e.g. "123a", "A123")
+        // For now, we'll fetch all blueprints for the expansion and sort them in memory or use a smart query if possible
+        // Given the number of cards per expansion is usually manageable (< 500), fetching IDs and FixedProperties might be okay
+        // But let's try to do it efficiently.
+
+        // We need a repository method for this, but for now let's implement a basic version using the existing GetByExpansionIdAsync
+        // and filtering/sorting in memory. Ideally this should be pushed to the database.
+
+        var blueprints = await _blueprintRepository.GetByExpansionIdAsync(expansionId, cancellationToken);
+
+        // Parse collector numbers and sort
+        var sortedBlueprints = blueprints
+            .Select(b => new
+            {
+                Blueprint = b,
+                CollectorNumber = GetCollectorNumber(b.FixedProperties)
+            })
+            .Where(x => x.CollectorNumber != null)
+            .OrderBy(x => PadNumbers(x.CollectorNumber)) // Simple alphanumeric sort
+            .ToList();
+
+        var currentIndex = sortedBlueprints.FindIndex(x => x.CollectorNumber == currentCollectorNumber);
+
+        if (currentIndex == -1)
+        {
+            return NotFound(new { message = "Current collector number not found in expansion" });
+        }
+
+        int targetIndex = direction.ToLower() == "next" ? currentIndex + 1 : currentIndex - 1;
+
+        if (targetIndex >= 0 && targetIndex < sortedBlueprints.Count)
+        {
+            return Ok(sortedBlueprints[targetIndex].Blueprint);
+        }
+
+        return NotFound(new { message = "No adjacent blueprint found" });
+    }
+
+    private string? GetCollectorNumber(string? fixedProperties)
+    {
+        if (string.IsNullOrEmpty(fixedProperties)) return null;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(fixedProperties);
+            if (doc.RootElement.TryGetProperty("collector_number", out var prop))
+            {
+                return prop.GetString();
+            }
+        }
+        catch
+        {
+            // Ignore parsing errors
+        }
+        return null;
+    }
+
+    private string PadNumbers(string input)
+    {
+        return System.Text.RegularExpressions.Regex.Replace(input, "[0-9]+", match => match.Value.PadLeft(10, '0'));
+    }
 }

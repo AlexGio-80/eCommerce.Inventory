@@ -32,6 +32,7 @@ public class OrderRepository : IOrderRepository
     public async Task<IEnumerable<Order>> GetOrdersWithItemsAsync(DateTime? from = null, DateTime? to = null, bool excludeNullDates = true, CancellationToken cancellationToken = default)
     {
         var query = _context.Orders
+            .AsNoTracking()
             .Include(o => o.OrderItems)
             .AsQueryable();
 
@@ -59,8 +60,9 @@ public class OrderRepository : IOrderRepository
 
     public async Task<IEnumerable<UnpreparedItemDto>> GetUnpreparedItemsAsync(CancellationToken cancellationToken = default)
     {
-        return await _context.OrderItems
+        var items = await _context.OrderItems
             .Include(oi => oi.Order)
+            .Include(oi => oi.Blueprint)
             .Where(oi => !oi.IsPrepared)
             .Select(oi => new UnpreparedItemDto
             {
@@ -75,9 +77,41 @@ public class OrderRepository : IOrderRepository
                 BuyerUsername = oi.Order != null ? oi.Order.BuyerUsername : "N/A",
                 OrderDate = oi.Order != null ? oi.Order.PaidAt : null,
                 IsPrepared = oi.IsPrepared,
-                ImageUrl = oi.Blueprint != null ? oi.Blueprint.ImageUrl : null
+                ImageUrl = oi.Blueprint != null ? oi.Blueprint.ImageUrl : null,
+                IsFoil = oi.IsFoil,
+                IsSigned = oi.IsSigned,
+                IsAltered = oi.IsAltered,
+                Tag = oi.UserDataField,
+                CollectorNumber = oi.Blueprint != null ? oi.Blueprint.FixedProperties : null
             })
             .ToListAsync(cancellationToken);
+
+        foreach (var item in items)
+        {
+            if (!string.IsNullOrEmpty(item.CollectorNumber))
+            {
+                try
+                {
+                    using (var doc = System.Text.Json.JsonDocument.Parse(item.CollectorNumber))
+                    {
+                        if (doc.RootElement.TryGetProperty("collector_number", out var prop))
+                        {
+                            item.CollectorNumber = prop.GetString();
+                        }
+                        else
+                        {
+                            item.CollectorNumber = null;
+                        }
+                    }
+                }
+                catch
+                {
+                    item.CollectorNumber = null;
+                }
+            }
+        }
+
+        return items;
     }
 
     public async Task AddAsync(Order order, CancellationToken cancellationToken = default)

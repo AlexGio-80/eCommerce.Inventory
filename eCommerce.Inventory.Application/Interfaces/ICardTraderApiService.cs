@@ -1,4 +1,5 @@
 using eCommerce.Inventory.Domain.Entities;
+using eCommerce.Inventory.Application.DTOs;
 
 namespace eCommerce.Inventory.Application.Interfaces;
 
@@ -21,7 +22,8 @@ public interface ICardTraderApiService
     Task<IEnumerable<dynamic>> SyncCategoriesAsync(CancellationToken cancellationToken = default);
     Task<List<dynamic>> FetchMyProductsAsync(CancellationToken cancellationToken = default);
     Task<List<dynamic>> GetProductsExportAsync(CancellationToken cancellationToken = default);
-    Task<List<dynamic>> GetOrdersAsync(DateTime? from = null, DateTime? to = null, CancellationToken cancellationToken = default);
+    Task<IEnumerable<dynamic>> GetOrdersAsync(DateTime? from = null, DateTime? to = null, CancellationToken cancellationToken = default);
+    Task<IEnumerable<CardTraderMarketplaceProductDto>> GetMarketplaceProductsAsync(int blueprintId, CancellationToken cancellationToken = default);
 
     // Mutation methods - operate on Card Trader marketplace
     Task<int> CreateProductOnCardTraderAsync(InventoryItem item, CancellationToken cancellationToken = default);

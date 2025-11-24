@@ -3,7 +3,8 @@
     <mat-icon>menu</mat-icon>
   </button>
   <span class="toolbar-spacer"></span>
-  <h1 class="app-title">eCommerce Inventory</h1>
+  <span class="toolbar-spacer"></span>
+  <span class="toolbar-spacer"></span>
   <span class="toolbar-spacer"></span>
   <button mat-icon-button class="notification-btn">
     <mat-icon>notifications</mat-icon>
@@ -14,19 +15,10 @@
 </mat-toolbar>
 
 <mat-sidenav-container class="sidenav-container">
-  <mat-sidenav
-    #sidenav
-    [opened]="isSidenavOpen()"
-    mode="side"
-    class="app-sidenav"
-  >
+  <mat-sidenav #sidenav [opened]="isSidenavOpen()" mode="side" class="app-sidenav">
     <mat-nav-list class="nav-list">
-      <mat-list-item
-        *ngFor="let item of navItems"
-        [class.active]="isActive(item.route)"
-        (click)="navigateTo(item.route)"
-        class="nav-item"
-      >
+      <mat-list-item *ngFor="let item of navItems" [class.active]="isActive(item.route)"
+        (click)="navigateTo(item.route)" class="nav-item">
         <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
         <span matListItemTitle>{{ item.label }}</span>
       </mat-list-item>
