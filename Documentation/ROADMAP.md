@@ -107,6 +107,16 @@
       - `TabManagerService` - Centralized tab lifecycle management
       - `TabBarComponent` - UI component with drag-and-drop support
       - Extended `GridStateService` for tab-specific grid states
+  - **Phase 3.10: Unprepared Items Grid Enhancements ✅ DONE (2025-11-25)**
+    - **Data Formatting**: 
+      - Expansion code displayed in UPPERCASE (valueFormatter)
+      - Collector number zero-padded to 3 digits (001, 013, 134)
+    - **Sync Toolbar**: 
+      - Added sync orders button with loading state
+      - Date pickers for From/To date filtering
+      - Default dates: From = today -1 day, To = today +1 day
+      - Filters apply only to sync operation, not grid data
+    - **Integration**: Reuses existing `CardTraderApiService.syncOrders` method
 
 ⏳ **Next Steps**: 
   - Additional features per Orders workflow
