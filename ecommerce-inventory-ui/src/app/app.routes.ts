@@ -58,6 +58,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/orders/unprepared-items/unprepared-items.component').then(m => m.UnpreparedItemsComponent),
         data: { title: 'Unprepared Items' }
       },
+      {
+        path: 'reporting',
+        loadChildren: () => import('./features/reporting/reporting.module').then(m => m.ReportingModule),
+        data: { title: 'Reporting' }
+      }
     ]
   },
   {

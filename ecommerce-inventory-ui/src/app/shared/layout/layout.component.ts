@@ -46,7 +46,9 @@ export class LayoutComponent {
     { label: 'Prodotti', route: '/layout/products', icon: 'shopping_bag' },
     { label: 'Ordini', route: '/layout/orders', icon: 'shopping_cart' },
     { label: 'Da Preparare', route: '/layout/orders/unprepared', icon: 'checklist' },
-    { label: 'Report', route: '/layout/reporting', icon: 'bar_chart' },
+    { label: 'Sales Report', route: '/layout/reporting/sales', icon: 'monetization_on' },
+    { label: 'Inventory Report', route: '/layout/reporting/inventory', icon: 'inventory' },
+    { label: 'Profitability Report', route: '/layout/reporting/profitability', icon: 'trending_up' },
   ];
 
   constructor(

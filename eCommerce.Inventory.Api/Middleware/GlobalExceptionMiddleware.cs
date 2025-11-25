@@ -28,7 +28,14 @@ public class GlobalExceptionMiddleware
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unhandled exception occurred: {Message}", ex.Message);
+            if (ex is TaskCanceledException || ex is OperationCanceledException)
+            {
+                _logger.LogWarning("Request was canceled: {Message}", ex.Message);
+            }
+            else
+            {
+                _logger.LogError(ex, "Unhandled exception occurred: {Message}", ex.Message);
+            }
             await HandleExceptionAsync(context, ex);
         }
     }
@@ -43,6 +50,8 @@ public class GlobalExceptionMiddleware
             ArgumentException => (HttpStatusCode.BadRequest, exception.Message),
             KeyNotFoundException => (HttpStatusCode.NotFound, "Resource not found"),
             UnauthorizedAccessException => (HttpStatusCode.Unauthorized, "Unauthorized access"),
+            TaskCanceledException => ((HttpStatusCode)499, "Request was canceled"),
+            OperationCanceledException => ((HttpStatusCode)499, "Request was canceled"),
             _ => (HttpStatusCode.InternalServerError, "An internal server error occurred")
         };
 

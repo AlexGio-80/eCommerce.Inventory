@@ -33,15 +33,14 @@ public class InventoryItemRepository : IInventoryItemRepository
 
     public async Task<(IEnumerable<InventoryItem> Items, int TotalCount)> GetPagedAsync(int page, int pageSize, CancellationToken cancellationToken = default)
     {
-        var query = _context.InventoryItems
+        // Optimization: Count without includes
+        var totalCount = await _context.InventoryItems.CountAsync(cancellationToken);
+
+        var items = await _context.InventoryItems
             .Include(i => i.Blueprint)
             .ThenInclude(b => b.Expansion)
             .ThenInclude(e => e.Game)
-            .AsNoTracking();
-
-        var totalCount = await query.CountAsync(cancellationToken);
-
-        var items = await query
+            .AsNoTracking()
             .OrderByDescending(i => i.DateAdded)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)

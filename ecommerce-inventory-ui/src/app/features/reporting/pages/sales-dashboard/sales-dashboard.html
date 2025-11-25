@@ -1,0 +1,42 @@
+<div class="sales-dashboard">
+  <h2>Sales Dashboard</h2>
+
+  <!-- KPI Metrics -->
+  <div class="metrics" *ngIf="salesMetrics">
+    <div class="metric-item">
+      <h3>Total Revenue</h3>
+      <p>{{ salesMetrics.totalRevenue | currency }}</p>
+    </div>
+    <div class="metric-item">
+      <h3>Total Orders</h3>
+      <p>{{ salesMetrics.totalOrders }}</p>
+    </div>
+    <div class="metric-item">
+      <h3>Average Order Value</h3>
+      <p>{{ salesMetrics.averageOrderValue | currency }}</p>
+    </div>
+    <div class="metric-item">
+      <h3>Growth</h3>
+      <p>{{ salesMetrics.growthPercentage }}%</p>
+    </div>
+  </div>
+
+  <!-- Sales Trend Chart -->
+  <div class="chart-container" *ngIf="salesChartData">
+    <canvas baseChart [data]="{ datasets: [{ data: chartValues, label: 'Revenue' }], labels: chartLabels }"
+      [options]="chartOptions" [legend]="true" chartType="line">
+    </canvas>
+  </div>
+
+  <!-- Top Products Grid -->
+  <h3>Top Products</h3>
+  <ag-grid-angular class="ag-theme-alpine" style="width: 100%; height: 300px;" [rowData]="topProducts"
+    [columnDefs]="topProductsColumnDefs">
+  </ag-grid-angular>
+
+  <!-- Sales By Game Grid -->
+  <h3>Sales by Game</h3>
+  <ag-grid-angular class="ag-theme-alpine" style="width: 100%; height: 250px;" [rowData]="salesByGame"
+    [columnDefs]="salesByGameColumnDefs">
+  </ag-grid-angular>
+</div>

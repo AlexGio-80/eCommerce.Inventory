@@ -129,6 +129,22 @@
   - **DTOs Created**: `GameDto`, `ExpansionDto` for consistent response shapes
   - **Benefits**: Standardized error handling, improved API documentation, consistent client code generation
 
+✅ **Phase 3.11: Reporting & Analytics System ✅ DONE (2025-11-25)**
+  - **Backend**: `ReportingController` with 10 endpoints across 3 categories
+    - Sales Analytics: metrics, chart data, top products, sales by game
+    - Inventory Analytics: value, distribution, slow-movers
+    - Profitability Analytics: overview, top performers
+  - **Frontend**: 3 dashboard components with Chart.js and AG-Grid
+    - `SalesDashboard`: KPIs, revenue trend chart, top products/games tables
+    - `InventoryAnalyticsComponent`: value metrics, distribution pie chart, slow-movers table
+    - `ProfitabilityAnalysisComponent`: profit metrics, top performers table
+  - **DTOs**: 10 reporting DTOs for structured data transfer
+  - **Routing**: Lazy-loaded reporting module with child routes
+  - **Navigation**: Added 3 menu items for each dashboard
+  - **Bug Fixes**: Property name mismatches, API URL correction, safe navigation operators
+  - **Optimizations**: Query performance improvements, error handling enhancements
+
+
 ⏳ **Next Steps**: 
   - Additional features per Orders workflow
   - Phase 4 (Remaining Controllers) & Phase 5 (Deployment)

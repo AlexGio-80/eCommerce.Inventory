@@ -1,0 +1,25 @@
+<div class="profitability-analysis">
+    <h2>Profitability Analysis</h2>
+
+    <!-- KPI Metrics -->
+    <div class="metrics" *ngIf="overview">
+        <div class="metric-item">
+            <h3>Total Profit</h3>
+            <p>{{ overview.grossProfit | currency:'EUR' }}</p>
+        </div>
+        <div class="metric-item">
+            <h3>Average Margin</h3>
+            <p>{{ overview.profitMarginPercentage }}%</p>
+        </div>
+        <div class="metric-item">
+            <h3>ROI</h3>
+            <p>{{ overview.roi }}%</p>
+        </div>
+    </div>
+
+    <!-- Top Performers Grid -->
+    <h3>Top Performers</h3>
+    <ag-grid-angular class="ag-theme-alpine" style="width: 100%; height: 400px;" [rowData]="topPerformers"
+        [columnDefs]="topPerformersColumnDefs">
+    </ag-grid-angular>
+</div>
