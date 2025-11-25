@@ -171,7 +171,7 @@
     <!-- Pending Listings Grid -->
     <mat-card style="margin-top: 24px;">
         <mat-card-header>
-            <mat-card-title>Pending Listings ({{ pendingListings().length }})</mat-card-title>
+            <mat-card-title>Pending Listings ({{ (pendingListings() || []).length }})</mat-card-title>
             <div style="margin-left: auto; display: flex; gap: 16px; align-items: center;">
                 <mat-button-toggle-group [value]="filterStatus()" (change)="onFilterChange($event.value)">
                     <mat-button-toggle value="unsynced">To Send</mat-button-toggle>
@@ -181,7 +181,7 @@
                 </mat-button-toggle-group>
 
                 <button mat-raised-button color="accent" (click)="onSyncAll()"
-                    [disabled]="isSyncing() || pendingListings().length === 0">
+                    [disabled]="isSyncing() || (pendingListings() || []).length === 0">
                     <mat-spinner *ngIf="isSyncing()" diameter="20"
                         style="display:inline-block; margin-right: 8px"></mat-spinner>
                     Sync All to Card Trader

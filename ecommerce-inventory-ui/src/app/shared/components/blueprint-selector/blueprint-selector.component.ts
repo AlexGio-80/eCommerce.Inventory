@@ -21,14 +21,14 @@ import { Blueprint } from '../../../core/models';
     MatProgressSpinnerModule
   ],
   template: `
-    <mat-form-field class="full-width">
+    <mat-form-field class="full-width" appearance="outline">
       <mat-label>Search Card (Blueprint)</mat-label>
       <input type="text"
-             placeholder="Type card name (e.g. 'Sol Ring Commander')..."
              matInput
              [formControl]="searchControl"
              [matAutocomplete]="auto">
       <mat-spinner *ngIf="isLoading" matSuffix diameter="20"></mat-spinner>
+      <mat-hint>Type at least 1 character to search</mat-hint>
       <mat-autocomplete #auto="matAutocomplete" [displayWith]="displayFn" (optionSelected)="onOptionSelected($event)">
         <mat-option *ngFor="let blueprint of filteredBlueprints" [value]="blueprint" class="blueprint-option-container">
           <div class="blueprint-option">
@@ -92,7 +92,7 @@ export class BlueprintSelectorComponent implements OnInit {
     this.searchControl.valueChanges.pipe(
       debounceTime(300),
       distinctUntilChanged(),
-      filter(value => typeof value === 'string' && value.length >= 2),
+      filter(value => typeof value === 'string' && value.length >= 1),
       tap(() => this.isLoading = true),
       switchMap(value => this.blueprintsService.searchBlueprints(value as string)
         .pipe(

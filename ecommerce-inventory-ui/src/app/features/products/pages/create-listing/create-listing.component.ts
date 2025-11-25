@@ -308,7 +308,7 @@ export class CreateListingComponent {
 
     this.pendingListingsService.getPendingListings(1, 100, isSynced, hasError).subscribe({
       next: (response) => {
-        this.pendingListings.set(response.items);
+        this.pendingListings.set(response.data?.items || []);
       },
       error: (error) => console.error('Error loading pending listings', error)
     });

@@ -151,8 +151,63 @@ Implemented a comprehensive reporting and analytics system with three main dashb
 - **DTOs**: 10 new data transfer objects
 - **Time Invested**: ~6 hours (including debugging and fixes)
 
+
 ### Next Steps
 - Add date range pickers to dashboards for custom filtering
 - Implement export functionality (CSV/Excel) for reports
 - Add more advanced analytics (cohort analysis, customer lifetime value)
 - Create scheduled report generation and email delivery
+
+---
+
+## Evening Bug Fixes (21:30-22:00) ✅
+
+### 1. Blueprint Search Field Issues
+
+#### Problem 1: Overlapping Text
+- **Location**: `blueprint-selector.component.ts`
+- **Issue**: Both `mat-label` and `placeholder` were displayed simultaneously, causing text overlap
+- **Fix**: Removed `placeholder` attribute from input element
+- **Reason**: Angular Material's outline appearance uses `mat-label` as floating label, making placeholder redundant
+
+#### Problem 2: Runtime TypeError
+- **Location**: `create-listing.component.html`
+- **Issue**: `TypeError: Cannot read properties of undefined (reading 'length')` blocking component render
+- **Root Cause**: Template accessed `pendingListings().length` before signal initialization
+- **Fix**: Added safe navigation operators: `(pendingListings() || []).length`
+- **Applied to**: Line 174 (card title) and Line 184 (button disabled condition)
+
+#### Verification
+- Browser testing confirmed both issues resolved
+- Search autocomplete now works correctly
+- No console errors
+- Screenshots captured in walkthrough
+
+### 2. Pending Listings Display Issue
+
+#### Problem
+- 18 records existed in database with `IsSynced = 0`
+- UI displayed "Pending Listings (0)" - empty grid
+
+#### Root Cause Analysis
+- Backend returns: `ApiResponse<PagedResponse<PendingListing>>`
+- Structure: `{ data: { items: [...], totalCount: 18 }, message: null, errors: null }`
+- Frontend accessed: `response.items` (❌ incorrect)
+- Should access: `response.data.items` (✅ correct)
+
+#### Fix Applied
+- **Location**: `create-listing.component.ts`, line 311
+- **Before**: `this.pendingListings.set(response.items);`
+- **After**: `this.pendingListings.set(response.data?.items || []);`
+- **Safe navigation**: `?.` handles undefined gracefully
+- **Fallback**: `|| []` ensures empty array instead of undefined
+
+#### Verification
+- API test with PowerShell confirmed 18 records returned
+- Response structure verified: `"totalCount":18,"items":[...]`
+- Frontend now correctly extracts and displays all pending listings
+
+### Files Modified (Evening Session)
+1. `ecommerce-inventory-ui/src/app/shared/components/blueprint-selector/blueprint-selector.component.ts`
+2. `ecommerce-inventory-ui/src/app/features/products/pages/create-listing/create-listing.component.html`
+3. `ecommerce-inventory-ui/src/app/features/products/pages/create-listing/create-listing.component.ts`
