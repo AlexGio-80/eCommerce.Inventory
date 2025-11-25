@@ -35,6 +35,28 @@
         </div>
     </div>
 
+    <!-- Sync Toolbar -->
+    <div class="sync-toolbar">
+        <mat-form-field appearance="outline" class="date-field">
+            <mat-label>From Date</mat-label>
+            <input matInput [matDatepicker]="fromPicker" [(ngModel)]="fromDate">
+            <mat-datepicker-toggle matSuffix [for]="fromPicker"></mat-datepicker-toggle>
+            <mat-datepicker #fromPicker></mat-datepicker>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="date-field">
+            <mat-label>To Date</mat-label>
+            <input matInput [matDatepicker]="toPicker" [(ngModel)]="toDate">
+            <mat-datepicker-toggle matSuffix [for]="toPicker"></mat-datepicker-toggle>
+            <mat-datepicker #toPicker></mat-datepicker>
+        </mat-form-field>
+
+        <button mat-raised-button color="primary" (click)="syncOrders()" [disabled]="isSyncing">
+            <mat-icon>sync</mat-icon>
+            {{ isSyncing ? 'Syncing...' : 'Sync Orders' }}
+        </button>
+    </div>
+
     <div *ngIf="isLoading" class="loading-spinner">
         <mat-spinner></mat-spinner>
     </div>

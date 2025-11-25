@@ -5,7 +5,6 @@
     padding: 16px;
     box-sizing: border-box;
     position: relative;
-    /* For absolute positioning context if needed */
 }
 
 .header {
@@ -24,6 +23,24 @@
 .actions {
     display: flex;
     gap: 8px;
+}
+
+.sync-toolbar {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    margin-bottom: 16px;
+    padding: 12px;
+    background-color: #f5f5f5;
+    border-radius: 4px;
+}
+
+.sync-toolbar .date-field {
+    width: 200px;
+}
+
+.sync-toolbar button {
+    height: 56px;
 }
 
 .loading-spinner {
@@ -46,7 +63,6 @@
 .ag-grid-container {
     flex: 1;
     min-height: 0;
-    /* Important for flexbox scrolling */
     border: 1px solid #e0e0e0;
     border-radius: 4px;
     overflow: hidden;
@@ -57,6 +73,10 @@
     max-height: 300px;
     overflow-y: auto;
     border-radius: 4px;
+}
+
+.column-toggle-item {
+    padding: 4px 0;
 }
 
 /* Image Preview Panel */
@@ -76,7 +96,6 @@
     justify-content: center;
     align-items: center;
     pointer-events: none;
-    /* Let clicks pass through if it overlaps something important */
     animation: slideIn 0.2s ease-out;
 }
 

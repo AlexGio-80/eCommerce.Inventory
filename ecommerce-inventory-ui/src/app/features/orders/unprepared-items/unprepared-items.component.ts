@@ -7,6 +7,11 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatDatepickerModule } from '@angular/material/datepicker';
+import { MatInputModule } from '@angular/material/input';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatNativeDateModule } from '@angular/material/core';
+import { FormsModule } from '@angular/forms';
 import { AgGridAngular } from 'ag-grid-angular';
 import { ColDef, GridApi, GridReadyEvent } from 'ag-grid-community';
 
@@ -31,6 +36,11 @@ import { FoilCellRendererComponent } from '../../../shared/components/foil-cell-
         MatCheckboxModule,
         MatTooltipModule,
         MatSnackBarModule,
+        MatDatepickerModule,
+        MatInputModule,
+        MatFormFieldModule,
+        MatNativeDateModule,
+        FormsModule,
         AgGridAngular
     ],
     templateUrl: './unprepared-items.component.html',
@@ -44,6 +54,11 @@ export class UnpreparedItemsComponent implements OnInit {
 
     unpreparedItems: UnpreparedItemDto[] = [];
     isLoading = false;
+    isSyncing = false;
+
+    // Sync date filters
+    fromDate: Date;
+    toDate: Date;
 
     columnDefs: ColDef[] = [
         {
@@ -87,14 +102,16 @@ export class UnpreparedItemsComponent implements OnInit {
             field: 'expansionCode',
             sortable: true,
             filter: true,
-            width: 100
+            width: 100,
+            valueFormatter: (params) => params.value ? params.value.toUpperCase() : ''
         },
         {
             headerName: 'Coll. #',
-            field: 'collectorNumber', // Assuming this field will be populated in DTO
+            field: 'collectorNumber',
             sortable: true,
             filter: true,
-            width: 80
+            width: 80,
+            valueFormatter: (params) => params.value ? params.value.toString().padStart(3, '0') : ''
         },
         {
             headerName: 'Condition',
@@ -197,7 +214,15 @@ export class UnpreparedItemsComponent implements OnInit {
         private apiService: CardTraderApiService,
         private gridStateService: GridStateService,
         private snackBar: MatSnackBar
-    ) { }
+    ) {
+        // Initialize default dates: from = today - 1 day, to = today + 1 day
+        const today = new Date();
+        this.fromDate = new Date(today);
+        this.fromDate.setDate(today.getDate() - 1);
+
+        this.toDate = new Date(today);
+        this.toDate.setDate(today.getDate() + 1);
+    }
 
     ngOnInit(): void {
         this.loadUnpreparedItems();
@@ -233,6 +258,33 @@ export class UnpreparedItemsComponent implements OnInit {
                 console.error('Error loading unprepared items', err);
                 this.showSnackBar('Error loading items');
                 this.isLoading = false;
+            }
+        });
+    }
+
+    syncOrders(): void {
+        if (!this.fromDate || !this.toDate) {
+            this.showSnackBar('Please select both From and To dates');
+            return;
+        }
+
+        this.isSyncing = true;
+        // Convert dates to ISO strings for API
+        const fromDateStr = this.fromDate.toISOString().split('T')[0];
+        const toDateStr = this.toDate.toISOString().split('T')[0];
+
+        this.apiService.syncOrders(fromDateStr, toDateStr).subscribe({
+            next: (result) => {
+                const count = (result as any).syncedCount || (result as any).data?.syncedCount || 0;
+                this.showSnackBar(`Synced ${count} orders successfully`);
+                this.isSyncing = false;
+                // Reload unprepared items after sync
+                this.loadUnpreparedItems();
+            },
+            error: (err) => {
+                console.error('Error syncing orders', err);
+                this.showSnackBar('Error syncing orders');
+                this.isSyncing = false;
             }
         });
     }
