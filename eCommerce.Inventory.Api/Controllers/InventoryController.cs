@@ -25,122 +25,103 @@ public class InventoryController : ControllerBase
     /// Get inventory items with pagination
     /// </summary>
     [HttpGet]
-    public async Task<IActionResult> GetInventory(
+    public async Task<ActionResult<Models.ApiResponse<PagedResponse<InventoryItem>>>> GetInventory(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         [FromQuery] string? search = null,
         CancellationToken cancellationToken = default)
     {
-        try
+        var query = _dbContext.InventoryItems
+            .Include(i => i.Blueprint)
+            .ThenInclude(b => b.Expansion)
+            .ThenInclude(e => e.Game)
+            .AsNoTracking()
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
         {
-            var query = _dbContext.InventoryItems
-                .Include(i => i.Blueprint)
-                .ThenInclude(b => b.Expansion)
-                .ThenInclude(e => e.Game)
-                .AsNoTracking()
-                .AsQueryable();
-
-            if (!string.IsNullOrWhiteSpace(search))
-            {
-                query = query.Where(i =>
-                    i.Blueprint.Name.Contains(search) ||
-                    i.Blueprint.Expansion.Name.Contains(search));
-            }
-
-            var totalCount = await query.CountAsync(cancellationToken);
-
-            var items = await query
-                .OrderByDescending(i => i.DateAdded)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync(cancellationToken);
-
-            return Ok(new PagedResponse<InventoryItem>
-            {
-                Items = items,
-                TotalCount = totalCount,
-                Page = page,
-                PageSize = pageSize
-            });
+            query = query.Where(i =>
+                i.Blueprint.Name.Contains(search) ||
+                i.Blueprint.Expansion.Name.Contains(search));
         }
-        catch (Exception ex)
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(i => i.DateAdded)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        var pagedResponse = new PagedResponse<InventoryItem>
         {
-            _logger.LogError(ex, "Error fetching inventory items");
-            return StatusCode(500, new { error = "Failed to fetch inventory items" });
-        }
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize
+        };
+
+        return Ok(Models.ApiResponse<PagedResponse<InventoryItem>>.SuccessResult(pagedResponse));
     }
 
     /// <summary>
     /// Create a new inventory item
     /// </summary>
     [HttpPost]
-    public async Task<IActionResult> CreateInventoryItem(
+    public async Task<ActionResult<Models.ApiResponse<InventoryItem>>> CreateInventoryItem(
         [FromBody] CreateInventoryItemDto dto,
         CancellationToken cancellationToken = default)
     {
-        try
+        // Verify blueprint exists
+        var blueprint = await _dbContext.Blueprints
+            .FindAsync(new object[] { dto.BlueprintId }, cancellationToken);
+
+        if (blueprint == null)
         {
-            // Verify blueprint exists
-            var blueprint = await _dbContext.Blueprints
-                .FindAsync(new object[] { dto.BlueprintId }, cancellationToken);
-
-            if (blueprint == null)
-            {
-                return BadRequest(new { error = "Blueprint not found" });
-            }
-
-            var item = new InventoryItem
-            {
-                BlueprintId = dto.BlueprintId,
-                Quantity = dto.Quantity,
-                ListingPrice = dto.Price,
-                Condition = dto.Condition,
-                Language = dto.Language,
-                IsFoil = dto.IsFoil,
-                IsSigned = dto.IsSigned,
-                Location = dto.Location ?? string.Empty,
-                Tag = dto.Tag,
-                PurchasePrice = dto.PurchasePrice,
-                DateAdded = DateTime.UtcNow
-            };
-
-            _dbContext.InventoryItems.Add(item);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-
-            return CreatedAtAction(nameof(GetInventoryItem), new { id = item.Id }, item);
+            return BadRequest(Models.ApiResponse<InventoryItem>.ErrorResult("Blueprint not found"));
         }
-        catch (Exception ex)
+
+        var item = new InventoryItem
         {
-            _logger.LogError(ex, "Error creating inventory item");
-            return StatusCode(500, new { error = "Failed to create inventory item" });
-        }
+            BlueprintId = dto.BlueprintId,
+            Quantity = dto.Quantity,
+            ListingPrice = dto.Price,
+            Condition = dto.Condition,
+            Language = dto.Language,
+            IsFoil = dto.IsFoil,
+            IsSigned = dto.IsSigned,
+            Location = dto.Location ?? string.Empty,
+            Tag = dto.Tag,
+            PurchasePrice = dto.PurchasePrice,
+            DateAdded = DateTime.UtcNow
+        };
+
+        _dbContext.InventoryItems.Add(item);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return CreatedAtAction(
+            nameof(GetInventoryItem),
+            new { id = item.Id },
+            Models.ApiResponse<InventoryItem>.SuccessResult(item, "Inventory item created successfully"));
     }
 
     /// <summary>
     /// Get a single inventory item by ID
     /// </summary>
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetInventoryItem(int id, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<Models.ApiResponse<InventoryItem>>> GetInventoryItem(int id, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var item = await _dbContext.InventoryItems
-                .Include(i => i.Blueprint)
-                .ThenInclude(b => b.Expansion)
-                .ThenInclude(e => e.Game)
-                .FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
+        var item = await _dbContext.InventoryItems
+            .Include(i => i.Blueprint)
+            .ThenInclude(b => b.Expansion)
+            .ThenInclude(e => e.Game)
+            .FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
 
-            if (item == null)
-            {
-                return NotFound(new { error = "Inventory item not found" });
-            }
-
-            return Ok(item);
-        }
-        catch (Exception ex)
+        if (item == null)
         {
-            _logger.LogError(ex, "Error fetching inventory item {ItemId}", id);
-            return StatusCode(500, new { error = "Failed to fetch inventory item" });
+            return NotFound(Models.ApiResponse<InventoryItem>.ErrorResult($"Inventory item with ID {id} not found"));
         }
+
+        return Ok(Models.ApiResponse<InventoryItem>.SuccessResult(item));
     }
 }

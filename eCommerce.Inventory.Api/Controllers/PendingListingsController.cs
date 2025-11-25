@@ -29,124 +29,113 @@ public class PendingListingsController : ControllerBase
     /// Get pending listings with filtering
     /// </summary>
     [HttpGet]
-    public async Task<IActionResult> GetPendingListings(
+    public async Task<ActionResult<Models.ApiResponse<PagedResponse<PendingListing>>>> GetPendingListings(
         [FromQuery] bool? isSynced = null,
         [FromQuery] bool hasError = false,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
-        try
+        var query = _dbContext.PendingListings
+            .Include(p => p.Blueprint)
+            .ThenInclude(b => b.Expansion)
+            .ThenInclude(e => e.Game)
+            .AsNoTracking()
+            .AsQueryable();
+
+        if (isSynced.HasValue)
         {
-            var query = _dbContext.PendingListings
-                .Include(p => p.Blueprint)
-                .ThenInclude(b => b.Expansion)
-                .ThenInclude(e => e.Game)
-                .AsNoTracking()
-                .AsQueryable();
-
-            if (isSynced.HasValue)
-            {
-                query = query.Where(p => p.IsSynced == isSynced.Value);
-            }
-
-            if (hasError)
-            {
-                query = query.Where(p => p.SyncError != null);
-            }
-
-            var totalCount = await query.CountAsync(cancellationToken);
-
-            var items = await query
-                .OrderByDescending(p => p.CreatedAt)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync(cancellationToken);
-
-            return Ok(new PagedResponse<PendingListing>
-            {
-                Items = items,
-                TotalCount = totalCount,
-                Page = page,
-                PageSize = pageSize
-            });
+            query = query.Where(p => p.IsSynced == isSynced.Value);
         }
-        catch (Exception ex)
+
+        if (hasError)
         {
-            _logger.LogError(ex, "Error fetching pending listings");
-            return StatusCode(500, new { error = "Failed to fetch pending listings" });
+            query = query.Where(p => p.SyncError != null);
         }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(p => p.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        var pagedResponse = new PagedResponse<PendingListing>
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize
+        };
+
+        return Ok(Models.ApiResponse<PagedResponse<PendingListing>>.SuccessResult(pagedResponse));
     }
 
     /// <summary>
     /// Add a listing to the pending queue
     /// </summary>
     [HttpPost]
-    public async Task<IActionResult> CreatePendingListing(
+    public async Task<ActionResult<Models.ApiResponse<PendingListing>>> CreatePendingListing(
         [FromBody] CreatePendingListingDto dto,
         CancellationToken cancellationToken = default)
     {
-        try
+        // Verify blueprint exists
+        var blueprint = await _dbContext.Blueprints
+            .FindAsync(new object[] { dto.BlueprintId }, cancellationToken);
+
+        if (blueprint == null)
         {
-            // Verify blueprint exists
-            var blueprint = await _dbContext.Blueprints
-                .FindAsync(new object[] { dto.BlueprintId }, cancellationToken);
-
-            if (blueprint == null)
-            {
-                return BadRequest(new { error = "Blueprint not found" });
-            }
-
-            // Duplicate check (only against unsynced items)
-            var isDuplicate = await _dbContext.PendingListings
-                .AnyAsync(p =>
-                    !p.IsSynced &&
-                    p.BlueprintId == dto.BlueprintId &&
-                    p.Condition == dto.Condition &&
-                    p.Language == dto.Language &&
-                    p.SellingPrice == dto.Price &&
-                    p.IsFoil == dto.IsFoil &&
-                    p.IsSigned == dto.IsSigned,
-                    cancellationToken);
-
-            if (isDuplicate)
-            {
-                return Conflict(new { error = "Duplicate pending listing exists" });
-            }
-
-            var pendingListing = new PendingListing
-            {
-                BlueprintId = dto.BlueprintId,
-                Quantity = dto.Quantity,
-                SellingPrice = dto.Price,
-                PurchasePrice = dto.PurchasePrice,
-                Condition = dto.Condition,
-                Language = dto.Language,
-                IsFoil = dto.IsFoil,
-                IsSigned = dto.IsSigned,
-                Location = dto.Location ?? string.Empty,
-                Tag = dto.Tag,
-                CreatedAt = DateTime.UtcNow,
-                IsSynced = false
-            };
-
-            _dbContext.PendingListings.Add(pendingListing);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-
-            return CreatedAtAction(nameof(GetPendingListing), new { id = pendingListing.Id }, pendingListing);
+            return BadRequest(Models.ApiResponse<PendingListing>.ErrorResult("Blueprint not found"));
         }
-        catch (Exception ex)
+
+        // Duplicate check (only against unsynced items)
+        var isDuplicate = await _dbContext.PendingListings
+            .AnyAsync(p =>
+                !p.IsSynced &&
+                p.BlueprintId == dto.BlueprintId &&
+                p.Condition == dto.Condition &&
+                p.Language == dto.Language &&
+                p.SellingPrice == dto.Price &&
+                p.IsFoil == dto.IsFoil &&
+                p.IsSigned == dto.IsSigned,
+                cancellationToken);
+
+        if (isDuplicate)
         {
-            _logger.LogError(ex, "Error creating pending listing");
-            return StatusCode(500, new { error = "Failed to create pending listing" });
+            return Conflict(Models.ApiResponse<PendingListing>.ErrorResult("Duplicate pending listing exists"));
         }
+
+        var pendingListing = new PendingListing
+        {
+            BlueprintId = dto.BlueprintId,
+            Quantity = dto.Quantity,
+            SellingPrice = dto.Price,
+            PurchasePrice = dto.PurchasePrice,
+            Condition = dto.Condition,
+            Language = dto.Language,
+            IsFoil = dto.IsFoil,
+            IsSigned = dto.IsSigned,
+            Location = dto.Location ?? string.Empty,
+            Tag = dto.Tag,
+            CreatedAt = DateTime.UtcNow,
+            IsSynced = false
+        };
+
+        _dbContext.PendingListings.Add(pendingListing);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return CreatedAtAction(
+            nameof(GetPendingListing),
+            new { id = pendingListing.Id },
+            Models.ApiResponse<PendingListing>.SuccessResult(pendingListing, "Pending listing created successfully"));
     }
 
     /// <summary>
     /// Get a single pending listing
     /// </summary>
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetPendingListing(int id, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<Models.ApiResponse<PendingListing>>> GetPendingListing(int id, CancellationToken cancellationToken = default)
     {
         var item = await _dbContext.PendingListings
             .Include(p => p.Blueprint)
@@ -154,17 +143,17 @@ public class PendingListingsController : ControllerBase
 
         if (item == null)
         {
-            return NotFound();
+            return NotFound(Models.ApiResponse<PendingListing>.ErrorResult($"Pending listing with ID {id} not found"));
         }
 
-        return Ok(item);
+        return Ok(Models.ApiResponse<PendingListing>.SuccessResult(item));
     }
 
     /// <summary>
     /// Update a pending listing
     /// </summary>
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdatePendingListing(
+    public async Task<ActionResult<Models.ApiResponse<PendingListing>>> UpdatePendingListing(
         int id,
         [FromBody] CreatePendingListingDto dto,
         CancellationToken cancellationToken = default)
@@ -173,12 +162,12 @@ public class PendingListingsController : ControllerBase
 
         if (item == null)
         {
-            return NotFound();
+            return NotFound(Models.ApiResponse<PendingListing>.ErrorResult($"Pending listing with ID {id} not found"));
         }
 
         if (item.IsSynced)
         {
-            return BadRequest(new { error = "Cannot update a synced listing" });
+            return BadRequest(Models.ApiResponse<PendingListing>.ErrorResult("Cannot update a synced listing"));
         }
 
         item.BlueprintId = dto.BlueprintId;
@@ -195,33 +184,33 @@ public class PendingListingsController : ControllerBase
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return Ok(item);
+        return Ok(Models.ApiResponse<PendingListing>.SuccessResult(item, "Pending listing updated successfully"));
     }
 
     /// <summary>
     /// Delete a pending listing
     /// </summary>
     [HttpDelete("{id}")]
-    public async Task<IActionResult> DeletePendingListing(int id, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<Models.ApiResponse<object>>> DeletePendingListing(int id, CancellationToken cancellationToken = default)
     {
         var item = await _dbContext.PendingListings.FindAsync(new object[] { id }, cancellationToken);
 
         if (item == null)
         {
-            return NotFound();
+            return NotFound(Models.ApiResponse<object>.ErrorResult($"Pending listing with ID {id} not found"));
         }
 
         _dbContext.PendingListings.Remove(item);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return NoContent();
+        return Ok(Models.ApiResponse<object>.SuccessResult(null, "Pending listing deleted successfully"));
     }
 
     /// <summary>
     /// Sync all pending listings to Card Trader
     /// </summary>
     [HttpPost("sync")]
-    public async Task<IActionResult> SyncPendingListings(CancellationToken cancellationToken = default)
+    public async Task<ActionResult<Models.ApiResponse<object>>> SyncPendingListings(CancellationToken cancellationToken = default)
     {
         var pendingItems = await _dbContext.PendingListings
             .Include(p => p.Blueprint)
@@ -236,11 +225,10 @@ public class PendingListingsController : ControllerBase
             try
             {
                 // Create InventoryItem object for the service
-                // Note: We don't save this yet, the service uses it to send data
                 var inventoryItem = new InventoryItem
                 {
                     BlueprintId = pending.BlueprintId,
-                    Blueprint = pending.Blueprint, // Service might need navigation property
+                    Blueprint = pending.Blueprint,
                     Quantity = pending.Quantity,
                     ListingPrice = pending.SellingPrice,
                     Condition = pending.Condition,
@@ -256,8 +244,6 @@ public class PendingListingsController : ControllerBase
                 var cardTraderId = await _cardTraderService.CreateProductOnCardTraderAsync(inventoryItem, cancellationToken);
 
                 // Update PendingListing with sync info
-                // Note: We do NOT create InventoryItems here - they will be created
-                // only when syncing data FROM Card Trader
                 pending.IsSynced = true;
                 pending.SyncedAt = DateTime.UtcNow;
                 pending.CardTraderProductId = cardTraderId;
@@ -275,11 +261,15 @@ public class PendingListingsController : ControllerBase
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return Ok(new
+        var result = new
         {
             Total = pendingItems.Count,
             Success = successCount,
             Errors = errorCount
-        });
+        };
+
+        return Ok(Models.ApiResponse<object>.SuccessResult(
+            result,
+            $"Sync completed. Success: {successCount}, Errors: {errorCount}"));
     }
 }

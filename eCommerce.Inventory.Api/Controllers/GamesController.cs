@@ -30,98 +30,75 @@ public class GamesController : ControllerBase
     /// Get all games
     /// </summary>
     [HttpGet]
-    public async Task<IActionResult> GetGames(CancellationToken cancellationToken = default)
+    public async Task<ActionResult<Models.ApiResponse<List<GameDto>>>> GetGames(CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var games = await _dbContext.Games
-                .OrderBy(g => g.Name)
-                .Select(g => new
-                {
-                    g.Id,
-                    g.CardTraderId,
-                    g.Name,
-                    g.Code,
-                    g.IsEnabled
-                })
-                .ToListAsync(cancellationToken);
+        var games = await _dbContext.Games
+            .OrderBy(g => g.Name)
+            .Select(g => new GameDto
+            {
+                Id = g.Id,
+                CardTraderId = g.CardTraderId,
+                Name = g.Name,
+                Code = g.Code,
+                IsEnabled = g.IsEnabled
+            })
+            .ToListAsync(cancellationToken);
 
-            return Ok(games);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error fetching games");
-            return StatusCode(500, new { error = "Failed to fetch games" });
-        }
+        return Ok(Models.ApiResponse<List<GameDto>>.SuccessResult(games));
     }
 
     /// <summary>
     /// Get a single game by ID
     /// </summary>
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetGame(int id, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<Models.ApiResponse<GameDto>>> GetGame(int id, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var game = await _dbContext.Games
-                .Where(g => g.Id == id)
-                .Select(g => new
-                {
-                    g.Id,
-                    g.CardTraderId,
-                    g.Name,
-                    g.Code,
-                    g.IsEnabled
-                })
-                .FirstOrDefaultAsync(cancellationToken);
-
-            if (game == null)
+        var game = await _dbContext.Games
+            .Where(g => g.Id == id)
+            .Select(g => new GameDto
             {
-                return NotFound(new { error = "Game not found" });
-            }
+                Id = g.Id,
+                CardTraderId = g.CardTraderId,
+                Name = g.Name,
+                Code = g.Code,
+                IsEnabled = g.IsEnabled
+            })
+            .FirstOrDefaultAsync(cancellationToken);
 
-            return Ok(game);
-        }
-        catch (Exception ex)
+        if (game == null)
         {
-            _logger.LogError(ex, "Error fetching game {GameId}", id);
-            return StatusCode(500, new { error = "Failed to fetch game" });
+            return NotFound(Models.ApiResponse<GameDto>.ErrorResult($"Game with ID {id} not found"));
         }
+
+        return Ok(Models.ApiResponse<GameDto>.SuccessResult(game));
     }
 
     /// <summary>
     /// Update game details (specifically IsEnabled)
     /// </summary>
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateGame(int id, [FromBody] UpdateGameDto dto, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<Models.ApiResponse<GameDto>>> UpdateGame(int id, [FromBody] UpdateGameDto dto, CancellationToken cancellationToken = default)
     {
-        try
+        var game = await _dbContext.Games.FindAsync(new object[] { id }, cancellationToken);
+
+        if (game == null)
         {
-            var game = await _dbContext.Games.FindAsync(new object[] { id }, cancellationToken);
-
-            if (game == null)
-            {
-                return NotFound(new { error = "Game not found" });
-            }
-
-            game.IsEnabled = dto.IsEnabled;
-
-            await _dbContext.SaveChangesAsync(cancellationToken);
-
-            return Ok(new
-            {
-                game.Id,
-                game.CardTraderId,
-                game.Name,
-                game.Code,
-                game.IsEnabled
-            });
+            return NotFound(Models.ApiResponse<GameDto>.ErrorResult($"Game with ID {id} not found"));
         }
-        catch (Exception ex)
+
+        game.IsEnabled = dto.IsEnabled;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        var result = new GameDto
         {
-            _logger.LogError(ex, "Error updating game {GameId}", id);
-            return StatusCode(500, new { error = "Failed to update game" });
-        }
+            Id = game.Id,
+            CardTraderId = game.CardTraderId,
+            Name = game.Name,
+            Code = game.Code,
+            IsEnabled = game.IsEnabled
+        };
+
+        return Ok(Models.ApiResponse<GameDto>.SuccessResult(result, "Game updated successfully"));
     }
 
     /// <summary>
@@ -129,81 +106,74 @@ public class GamesController : ControllerBase
     /// Note: Currently triggers global expansion sync as API doesn't support filtering by game
     /// </summary>
     [HttpPost("{id}/sync-expansions")]
-    public async Task<IActionResult> SyncExpansions(int id, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<Models.ApiResponse<object>>> SyncExpansions(int id, CancellationToken cancellationToken = default)
     {
-        try
+        // Verify game exists
+        var game = await _dbContext.Games.FindAsync(new object[] { id }, cancellationToken);
+        if (game == null)
         {
-            // Verify game exists
-            var game = await _dbContext.Games.FindAsync(new object[] { id }, cancellationToken);
-            if (game == null)
-            {
-                return NotFound(new { error = "Game not found" });
-            }
-
-            // Trigger global expansion sync
-            var result = await _syncOrchestrator.SyncAsync(new SyncRequestDto { SyncExpansions = true }, cancellationToken);
-
-            return Ok(new
-            {
-                message = "Expansions sync completed",
-                details = result
-            });
+            return NotFound(Models.ApiResponse<object>.ErrorResult($"Game with ID {id} not found"));
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error syncing expansions for game {GameId}", id);
-            return StatusCode(500, new { error = "Failed to sync expansions" });
-        }
+
+        // Trigger global expansion sync
+        var result = await _syncOrchestrator.SyncAsync(new SyncRequestDto { SyncExpansions = true }, cancellationToken);
+
+        return Ok(Models.ApiResponse<object>.SuccessResult(
+            new { message = "Expansions sync completed", details = result },
+            "Expansions sync completed successfully"));
     }
 
     /// <summary>
     /// Trigger full sync for this game (Expansions + Blueprints)
     /// </summary>
     [HttpPost("{id}/sync-all")]
-    public async Task<IActionResult> SyncAll(int id, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<Models.ApiResponse<object>>> SyncAll(int id, CancellationToken cancellationToken = default)
     {
-        try
+        // Verify game exists
+        var game = await _dbContext.Games.FindAsync(new object[] { id }, cancellationToken);
+        if (game == null)
         {
-            // Verify game exists
-            var game = await _dbContext.Games.FindAsync(new object[] { id }, cancellationToken);
-            if (game == null)
-            {
-                return NotFound(new { error = "Game not found" });
-            }
-
-            // 1. Sync Expansions (Global)
-            await _syncOrchestrator.SyncAsync(new SyncRequestDto { SyncExpansions = true }, cancellationToken);
-
-            // 2. Sync Blueprints for all expansions of this game
-            var expansions = await _dbContext.Expansions
-                .Where(e => e.GameId == id)
-                .ToListAsync(cancellationToken);
-
-            int totalAdded = 0;
-            int totalUpdated = 0;
-            int totalFailed = 0;
-
-            foreach (var expansion in expansions)
-            {
-                var result = await _syncOrchestrator.SyncBlueprintsForExpansionAsync(expansion.Id, cancellationToken);
-                totalAdded += result.Added;
-                totalUpdated += result.Updated;
-                totalFailed += result.Failed;
-            }
-
-            return Ok(new
-            {
-                message = $"Full sync completed for game {game.Name}",
-                expansionsSynced = true,
-                blueprintsStats = new { Added = totalAdded, Updated = totalUpdated, Failed = totalFailed }
-            });
+            return NotFound(Models.ApiResponse<object>.ErrorResult($"Game with ID {id} not found"));
         }
-        catch (Exception ex)
+
+        // 1. Sync Expansions (Global)
+        await _syncOrchestrator.SyncAsync(new SyncRequestDto { SyncExpansions = true }, cancellationToken);
+
+        // 2. Sync Blueprints for all expansions of this game
+        var expansions = await _dbContext.Expansions
+            .Where(e => e.GameId == id)
+            .ToListAsync(cancellationToken);
+
+        int totalAdded = 0;
+        int totalUpdated = 0;
+        int totalFailed = 0;
+
+        foreach (var expansion in expansions)
         {
-            _logger.LogError(ex, "Error performing full sync for game {GameId}", id);
-            return StatusCode(500, new { error = "Failed to perform full sync" });
+            var syncResult = await _syncOrchestrator.SyncBlueprintsForExpansionAsync(expansion.Id, cancellationToken);
+            totalAdded += syncResult.Added;
+            totalUpdated += syncResult.Updated;
+            totalFailed += syncResult.Failed;
         }
+
+        var responseData = new
+        {
+            message = $"Full sync completed for game {game.Name}",
+            expansionsSynced = true,
+            blueprintsStats = new { Added = totalAdded, Updated = totalUpdated, Failed = totalFailed }
+        };
+
+        return Ok(Models.ApiResponse<object>.SuccessResult(responseData, $"Full sync completed for {game.Name}"));
     }
+}
+
+public class GameDto
+{
+    public int Id { get; set; }
+    public int? CardTraderId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
+    public bool IsEnabled { get; set; }
 }
 
 public class UpdateGameDto
