@@ -1,0 +1,53 @@
+<div class="tab-bar-container" *ngIf="(tabs$ | async) as tabs">
+    <div class="tabs-wrapper" cdkDropList cdkDropListOrientation="horizontal" (cdkDropListDropped)="onTabDrop($event)">
+
+        <div *ngFor="let tab of tabs; let i = index" class="tab-item"
+            [class.active]="isActive(tab.id, activeTabId$ | async)" cdkDrag [cdkDragData]="tab"
+            (contextmenu)="onContextMenu($event, tab, tabs, menuTrigger)">
+
+            <!-- Drag Preview -->
+            <div class="tab-drag-preview" *cdkDragPreview>
+                <mat-icon *ngIf="tab.icon" class="tab-icon">{{ tab.icon }}</mat-icon>
+                <span class="tab-title">{{ tab.title }}</span>
+            </div>
+
+            <!-- Tab Button -->
+            <button mat-button class="tab-button" [matTooltip]="tab.title" (click)="onTabClick(tab)">
+                <mat-icon *ngIf="tab.icon" class="tab-icon">{{ tab.icon }}</mat-icon>
+                <span class="tab-title">{{ tab.title }}</span>
+            </button>
+
+            <!-- Close Button -->
+            <button mat-icon-button class="close-button" matTooltip="Chiudi tab" (click)="onTabClose(tab.id, $event)">
+                <mat-icon>close</mat-icon>
+            </button>
+
+            <!-- Hidden Menu Trigger -->
+            <div style="display: none;" [matMenuTriggerFor]="tabMenu" [matMenuTriggerData]="{tab: tab, tabs: tabs}"
+                #menuTrigger="matMenuTrigger"></div>
+
+            <!-- Context Menu (Right-Click Only) -->
+            <mat-menu #tabMenu="matMenu">
+                <ng-template matMenuContent let-tab="tab" let-tabs="tabs">
+                    <button mat-menu-item (click)="onTabClose(tab.id, $event)">
+                        <mat-icon>close</mat-icon>
+                        <span>Chiudi</span>
+                    </button>
+                    <button mat-menu-item (click)="closeOtherTabs(tab.id)" [disabled]="tabs.length <= 1">
+                        <mat-icon>tab_unselected</mat-icon>
+                        <span>Chiudi altri tab</span>
+                    </button>
+                    <button mat-menu-item (click)="closeTabsToRight(tab.id)" [disabled]="!hasTabsToRight(tabs, tab.id)">
+                        <mat-icon>last_page</mat-icon>
+                        <span>Chiudi tab a destra</span>
+                    </button>
+                    <mat-divider></mat-divider>
+                    <button mat-menu-item (click)="closeAllTabs()" [disabled]="tabs.length === 0">
+                        <mat-icon>clear_all</mat-icon>
+                        <span>Chiudi tutti i tab</span>
+                    </button>
+                </ng-template>
+            </mat-menu>
+        </div>
+    </div>
+</div>

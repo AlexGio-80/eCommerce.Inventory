@@ -6,6 +6,7 @@ export interface GridState {
     sortModel: any[];
     filterModel?: any;           // AG-Grid filter model
     quickFilterText?: string;    // Global search text
+    scrollPosition?: number;     // Scroll position for restoration
 }
 
 @Injectable({
@@ -45,6 +46,44 @@ export class GridStateService {
             localStorage.removeItem(`grid-state-${gridId}`);
         } catch (error) {
             console.error('Error clearing grid state:', error);
+        }
+    }
+
+    /**
+     * Save grid state for a specific tab
+     */
+    saveGridStateForTab(gridId: string, tabId: string, state: GridState): void {
+        try {
+            const key = `grid-state-${gridId}-tab-${tabId}`;
+            localStorage.setItem(key, JSON.stringify(state));
+        } catch (error) {
+            console.error('Error saving grid state for tab:', error);
+        }
+    }
+
+    /**
+     * Load grid state for a specific tab
+     */
+    loadGridStateForTab(gridId: string, tabId: string): GridState | null {
+        try {
+            const key = `grid-state-${gridId}-tab-${tabId}`;
+            const stateJson = localStorage.getItem(key);
+            return stateJson ? JSON.parse(stateJson) : null;
+        } catch (error) {
+            console.error('Error loading grid state for tab:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Clear grid state for a specific tab
+     */
+    clearGridStateForTab(gridId: string, tabId: string): void {
+        try {
+            const key = `grid-state-${gridId}-tab-${tabId}`;
+            localStorage.removeItem(key);
+        } catch (error) {
+            console.error('Error clearing grid state for tab:', error);
         }
     }
 }

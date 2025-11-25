@@ -7,6 +7,8 @@ import { MatListModule } from '@angular/material/list';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { TabBarComponent } from '../components/tab-bar/tab-bar.component';
+import { TabManagerService } from '../../core/services';
 
 interface NavItem {
   label: string;
@@ -26,6 +28,7 @@ interface NavItem {
     MatIconModule,
     MatButtonModule,
     MatTooltipModule,
+    TabBarComponent,
   ],
   templateUrl: './layout.component.html',
   styleUrls: ['./layout.component.scss'],
@@ -46,14 +49,29 @@ export class LayoutComponent {
     { label: 'Report', route: '/layout/reporting', icon: 'bar_chart' },
   ];
 
-  constructor(private router: Router) { }
+  constructor(
+    private router: Router,
+    private tabManager: TabManagerService
+  ) { }
 
   toggleSidenav(): void {
     this.isSidenavOpen.update((val) => !val);
   }
 
   navigateTo(route: string): void {
-    this.router.navigate([route]);
+    // Trova il nav item per ottenere label e icon
+    const navItem = this.navItems.find(item => item.route === route);
+
+    if (navItem) {
+      // Apri o attiva il tab
+      const tabId = this.tabManager.openTab(route, navItem.label, navItem.icon);
+      this.tabManager.setActiveTab(tabId);
+      this.router.navigate([route]);
+    } else {
+      // Fallback per route non trovate
+      this.router.navigate([route]);
+    }
+
     // Chiudi sidenav su mobile quando clicchi un link
     if (window.innerWidth < 768) {
       this.isSidenavOpen.set(false);
