@@ -24,26 +24,26 @@ export class CardTraderApiService {
 
   constructor(private http: HttpClient) { }
 
-  // Games
+  // Games (use dedicated GamesController)
   getGames(): Observable<Game[]> {
-    return this.http.get<Game[]>(`${this.apiUrl}/games`);
+    return this.http.get<Game[]>(`${environment.api.baseUrl}/api/games`);
   }
 
   getGameById(id: number): Observable<Game> {
-    return this.http.get<Game>(`${this.apiUrl}/games/${id}`);
+    return this.http.get<Game>(`${environment.api.baseUrl}/api/games/${id}`);
   }
 
-  // Expansions
+  // Expansions (use dedicated ExpansionsController)
   getExpansions(gameId?: number): Observable<Expansion[]> {
     let params = new HttpParams();
     if (gameId) {
       params = params.set('gameId', gameId.toString());
     }
-    return this.http.get<Expansion[]>(`${this.apiUrl}/expansions`, { params });
+    return this.http.get<Expansion[]>(`${environment.api.baseUrl}/api/expansions`, { params });
   }
 
   getExpansionById(id: number): Observable<Expansion> {
-    return this.http.get<Expansion>(`${this.apiUrl}/expansions/${id}`);
+    return this.http.get<Expansion>(`${environment.api.baseUrl}/api/expansions/${id}`);
   }
 
   // Blueprints

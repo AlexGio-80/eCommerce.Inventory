@@ -20,6 +20,15 @@ Log.Logger = new LoggerConfiguration()
 
 builder.Host.UseSerilog();
 
+// Configure as Windows Service
+builder.Host.UseWindowsService(options =>
+{
+    options.ServiceName = "eCommerce.Inventory";
+});
+
+// Configure Kestrel to listen on port 5152
+builder.WebHost.UseUrls("http://localhost:5152");
+
 // Add services to the container
 builder.Services.AddControllers()
     .AddJsonOptions(options =>

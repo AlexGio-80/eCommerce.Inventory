@@ -145,11 +145,37 @@
   - **Optimizations**: Query performance improvements, error handling enhancements
 
 
-⏳ **Next Steps**: 
-  - Additional features per Orders workflow
-  - Phase 4 (Remaining Controllers) & Phase 5 (Deployment)
+✅ **Phase 5: Deployment ✅ DONE (2025-11-26)**
+  - **Deployment Architecture**:
+    - Frontend (Angular): Hosted on IIS at `http://inventory.local` (port 80)
+    - Backend (API): Running as Windows Service on `http://localhost:5152`
+  - **Deployment Scripts**:
+    - `publish.ps1`: Automated build and deployment script
+      - Builds backend (Release) and frontend (Production)
+      - Stops/starts IIS and Windows Service
+      - Preserves `appsettings.Production.json`
+      - Sets NetworkService permissions
+    - `setup-iis.ps1`: IIS initial configuration script
+      - Creates IIS site and AppPool
+      - Configures `web.config` for Angular routing
+      - Adds `inventory.local` to hosts file
+  - **Configuration Fixes**:
+    - Fixed `web.config` MIME type duplicates (added `<remove>` tags)
+    - Corrected frontend API routes (`api/games` instead of `api/cardtrader/games`)
+    - Removed legacy AG-Grid CSS import
+    - Fixed IIS permissions on `wwwroot` folder
+  - **Windows Service Configuration**:
+    - Service runs as `NetworkService` for proper permissions
+    - Configured to listen on `http://localhost:5152`
+    - Auto-start on system boot
+  - **Known Issues**:
+    - Windows Service not writing logs (works when run manually) - to be investigated
 
-⏳ **TODO**: Phase 4 remaining controllers, Phase 5 Deployment
+⏳ **Next Steps**: 
+  - Investigate Windows Service logging issue
+  - Additional features per Orders workflow
+
+⏳ **TODO**: Additional enhancements and optimizations
 
 ---
 

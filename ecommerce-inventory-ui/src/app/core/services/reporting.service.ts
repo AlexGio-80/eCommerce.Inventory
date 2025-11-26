@@ -15,12 +15,13 @@ import {
     DateRange
 } from '../models/reporting.models';
 import { ApiResponse } from '../models/api-response';
+import { environment } from '../../../environments/environment';
 
 @Injectable({
     providedIn: 'root'
 })
 export class ReportingService {
-    private apiUrl = 'http://localhost:5152/api/reporting';
+    private apiUrl = `${environment.api.baseUrl}/api/reporting`;
 
     constructor(private http: HttpClient) { }
 
