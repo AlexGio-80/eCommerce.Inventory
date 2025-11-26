@@ -11,10 +11,11 @@ using MediatR;
 var builder = WebApplication.CreateBuilder(args);
 
 // Configure Serilog
+var logPath = Path.Combine(AppContext.BaseDirectory, "logs", "ecommerce-inventory-.txt");
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Debug()
     .WriteTo.Console()
-    .WriteTo.File("logs/taffel-inventory-.txt", rollingInterval: RollingInterval.Day)
+    .WriteTo.File(logPath, rollingInterval: RollingInterval.Day)
     .Enrich.FromLogContext()
     .CreateLogger();
 

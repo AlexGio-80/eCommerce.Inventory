@@ -164,16 +164,16 @@
     - Corrected frontend API routes (`api/games` instead of `api/cardtrader/games`)
     - Removed legacy AG-Grid CSS import
     - Fixed IIS permissions on `wwwroot` folder
+    - Fixed Serilog to use absolute path for logs (resolves Windows Service logging)
   - **Windows Service Configuration**:
     - Service runs as `NetworkService` for proper permissions
     - Configured to listen on `http://localhost:5152`
     - Auto-start on system boot
-  - **Known Issues**:
-    - Windows Service not writing logs (works when run manually) - to be investigated
+    - Logs written to `Publish/api/logs/` directory
 
 ⏳ **Next Steps**: 
-  - Investigate Windows Service logging issue
-  - Additional features per Orders workflow
+  - Additional features and enhancements as needed
+  - Continue improving reporting and analytics
 
 ⏳ **TODO**: Additional enhancements and optimizations
 
