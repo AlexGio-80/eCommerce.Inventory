@@ -117,6 +117,10 @@
       - Default dates: From = today -1 day, To = today +1 day
       - Filters apply only to sync operation, not grid data
     - **Integration**: Reuses existing `CardTraderApiService.syncOrders` method
+    - **Auto-Sync**:
+      - Added background timer (every 5 minutes) when tab is active
+      - Fixed sync window: Today - 1 day to Today + 1 day
+      - Automatic grid refresh on new data
 
 ✅ **Phase 4: API Controller Standardization ✅ DONE (2025-11-25)**
   - **Controllers Migrated**: 4 controllers, 18 endpoints total

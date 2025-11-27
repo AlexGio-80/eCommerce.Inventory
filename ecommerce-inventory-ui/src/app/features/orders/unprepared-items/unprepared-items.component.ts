@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -46,7 +46,7 @@ import { FoilCellRendererComponent } from '../../../shared/components/foil-cell-
     templateUrl: './unprepared-items.component.html',
     styleUrls: ['./unprepared-items.component.css']
 })
-export class UnpreparedItemsComponent implements OnInit {
+export class UnpreparedItemsComponent implements OnInit, OnDestroy {
     @ViewChild(AgGridAngular) agGrid!: AgGridAngular;
 
     private gridApi!: GridApi;
@@ -55,6 +55,7 @@ export class UnpreparedItemsComponent implements OnInit {
     unpreparedItems: UnpreparedItemDto[] = [];
     isLoading = false;
     isSyncing = false;
+    private syncInterval: any;
 
     // Sync date filters
     fromDate: Date;
@@ -226,6 +227,16 @@ export class UnpreparedItemsComponent implements OnInit {
 
     ngOnInit(): void {
         this.loadUnpreparedItems();
+        // Start auto-sync every 5 minutes (300000 ms)
+        this.syncInterval = setInterval(() => {
+            this.autoSyncOrders();
+        }, 300000);
+    }
+
+    ngOnDestroy(): void {
+        if (this.syncInterval) {
+            clearInterval(this.syncInterval);
+        }
     }
 
     onGridReady(params: GridReadyEvent): void {
@@ -285,6 +296,38 @@ export class UnpreparedItemsComponent implements OnInit {
                 console.error('Error syncing orders', err);
                 this.showSnackBar('Error syncing orders');
                 this.isSyncing = false;
+            }
+        });
+    }
+
+    autoSyncOrders(): void {
+        // Fixed dates: Today - 1 day to Today + 1 day
+        const today = new Date();
+
+        const fromDate = new Date(today);
+        fromDate.setDate(today.getDate() - 1);
+
+        const toDate = new Date(today);
+        toDate.setDate(today.getDate() + 1);
+
+        const fromDateStr = fromDate.toISOString().split('T')[0];
+        const toDateStr = toDate.toISOString().split('T')[0];
+
+        // We don't set isSyncing to true here to avoid blocking the UI or showing the spinner constantly
+        // or maybe we do want to show it? The user said "lancia la sincronizzazione".
+        // Let's keep it subtle.
+
+        this.apiService.syncOrders(fromDateStr, toDateStr).subscribe({
+            next: (result) => {
+                const count = (result as any).syncedCount || (result as any).data?.syncedCount || 0;
+                if (count > 0) {
+                    this.showSnackBar(`Auto-sync: ${count} orders synced`);
+                    this.loadUnpreparedItems();
+                }
+            },
+            error: (err) => {
+                console.error('Error in auto-sync orders', err);
+                // Silently fail or log to console, don't disturb user with snackbar for background task unless critical
             }
         });
     }
