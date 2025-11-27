@@ -151,7 +151,7 @@ export class CreateListingComponent {
 
   private readonly STORAGE_KEY = 'listing_defaults';
 
-  conditions = ['Mint', 'Near Mint', 'Excellent', 'Good', 'Light Played', 'Played', 'Poor'];
+  conditions = ['Near Mint', 'Slightly Played', 'Moderately Played', 'Played', 'Poor'];
   languages = ['English', 'Italian', 'Japanese', 'French', 'German', 'Spanish', 'Chinese'];
 
   constructor(

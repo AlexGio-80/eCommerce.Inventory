@@ -1,8 +1,8 @@
 export const environment = {
   production: false,
-  apiUrl: 'http://localhost:5152',
+  apiUrl: 'http://localhost:5155',
   api: {
-    baseUrl: 'http://localhost:5152',
-    port: 5152
+    baseUrl: 'http://localhost:5155',
+    port: 5155
   }
 };

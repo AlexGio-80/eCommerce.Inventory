@@ -28,7 +28,9 @@ builder.Host.UseWindowsService(options =>
 });
 
 // Configure Kestrel to listen on port 5152
-builder.WebHost.UseUrls("http://localhost:5152");
+var apiConfig = builder.Configuration.GetSection("Api");
+var apiBaseUrl = apiConfig["BaseUrl"];
+builder.WebHost.UseUrls(apiBaseUrl);
 
 // Add services to the container
 builder.Services.AddControllers()
