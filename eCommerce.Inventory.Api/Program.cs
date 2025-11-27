@@ -6,6 +6,7 @@ using eCommerce.Inventory.Infrastructure.Persistence.Repositories;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Mappers;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
+using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Policies;
 using eCommerce.Inventory.Infrastructure.Services;
 using MediatR;
 
@@ -113,7 +114,9 @@ builder.Services.AddHttpClient<ICardTraderApiService, CardTraderApiClient>(clien
     client.DefaultRequestHeaders.Add("Authorization", $"Bearer {bearerToken}");
     client.DefaultRequestHeaders.Add("Accept", "application/json");
     client.Timeout = TimeSpan.FromSeconds(30);
-});
+})
+.AddPolicyHandler(CardTraderPolicies.GetRetryPolicy())
+.AddPolicyHandler(CardTraderPolicies.GetCircuitBreakerPolicy());
 
 // Register Card Trader background sync worker
 // NOTE: Temporarily disabled for development. Enable once Card Trader API is properly configured.

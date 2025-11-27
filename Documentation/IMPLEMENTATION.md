@@ -601,20 +601,161 @@ All components use `CardTraderApiService` for:
 
 ---
 
-## Next Steps (Phase 3.2+)
+## Phase 3.2: Card Trader Data Initial Sync - COMPLETED ✅
 
-**Phase 3.2**: Card Trader Data Initial Sync (3.5h)
-**Phase 3.3**: Product Listing Creation (10.5h)
-**Phase 3.4**: Webhook Integration Frontend (5.5h)
-**Phase 3.5**: Reporting & BI (10.5h)
-**Phase 3.6**: Authentication & Security (2.5h)
-**Phase 3.7**: Testing & QA (5.5h)
-
-**Estimated Total Remaining**: ~38 hours
+**Status**: Integrated into Frontend
+**Features**:
+- Sync Service with progress tracking (BehaviorSubject)
+- Initial Sync Page with progress bar and status indicators
+- Syncs Games, Expansions, and Blueprints
+- Error handling and success notifications
 
 ---
 
-**Last Updated**: November 18, 2024 (Phase 3.1 Completion)
-**Status**: Phase 3.1 Complete ✅ | Phase 3.2 Next 🔨
-**Current Phase**: Phase 3 Angular Frontend - Progressing
-**All Previous Phases**: Phase 1 ✅, Phase 2.1 ✅, Phase 2.2 ✅, Phase 2.3 ✅, Phase 3.0 ✅, Phase 3.1 ✅
+## Phase 3.3: Product Listing Creation - COMPLETED ✅
+
+**Status**: Fully Functional
+**Features**:
+- **Pending Listings System**: Queue-based workflow for creating listings
+- **"Save Defaults"**: Toggle with localStorage persistence for rapid entry
+- **Price Suggestions**: Min/Avg/Max from Card Trader Marketplace
+- **Edit/Delete**: Management of pending listings before sync
+- **Sync to Card Trader**: Bulk upload capability
+- **Bug Fixes**: Blueprint ID mapping, API response parsing, payload structure
+
+---
+
+## Phase 3.4: Orders Management & Webhooks - COMPLETED ✅
+
+**Status**: Real-time Updates Active
+**Features**:
+- **Orders List**: Master-detail view with status filtering
+- **Unprepared Items View**: For warehouse operations
+- **Manual Sync**: Date range filters (From/To)
+- **Real-time Updates**: SignalR/Polling integration for new orders
+- **Grid Enhancements**: Multi-column sorting, state persistence, colored badges
+- **Card Trader Integration**: Direct links to product pages
+
+---
+
+## Phase 3.5: Reporting & Analytics System - COMPLETED ✅
+
+**Status**: Live
+**Components**:
+- **Sales Dashboard**: Revenue trends, top products, sales by game
+- **Inventory Analytics**: Value distribution, slow-movers
+- **Profitability Analysis**: Profit metrics, top performers
+- **Tech Stack**: Chart.js and AG-Grid integration
+- **Backend**: `ReportingController` with 10 specialized endpoints
+
+---
+
+## Phase 3.12: Authentication & Security - COMPLETED ✅
+
+**Completion Date**: November 27, 2024
+**Status**: Secure
+**Features**:
+- **Backend**: JWT Bearer Token authentication, BCrypt password hashing
+- **Frontend**: Login page, AuthGuard, AuthInterceptor, Logout functionality
+- **User Management**: Default admin seeding, Role-based access (foundation)
+- **Security**: CORS policies, Secure token storage
+
+---
+
+## Phase 4: API Controller Standardization - COMPLETED ✅
+
+**Completion Date**: November 25, 2024
+**Status**: Standardized
+**Changes**:
+- Migrated 4 controllers (18 endpoints) to use `ApiResponse<T>`
+- Standardized error handling and response shapes
+- Improved client-side type safety with matching DTOs
+
+---
+
+## Phase 5: Deployment - COMPLETED ✅
+
+**Completion Date**: November 26, 2024
+**Architecture**:
+- **Frontend**: IIS hosted at `http://inventory.local`
+- **Backend**: Windows Service on `http://localhost:5152`
+**Scripts**:
+- `publish.ps1`: Automated build and deploy
+- `setup-iis.ps1`: IIS configuration
+- `start-inventory.ps1`: Dev environment launcher
+
+
+---
+
+## Phase 6.1: Polly Resilience - COMPLETED ✅
+
+**Completion Date**: November 27, 2024
+**Duration**: ~2 hours
+**Status**: Operational
+
+### Implementation Details
+
+**Created Files**:
+- `Infrastructure/ExternalServices/CardTrader/Policies/CardTraderPolicies.cs` (85 LOC)
+
+**Modified Files**:
+- `Infrastructure/eCommerce.Inventory.Infrastructure.csproj` - Added `Microsoft.Extensions.Http.Polly` v8.0.0
+- `Api/Program.cs` - Configured HttpClient with Polly policies
+
+### Resilience Policies
+
+**1. Retry Policy**:
+- **Retries**: 3 attempts
+- **Backoff**: Exponential (2s, 4s, 8s)
+- **Triggers**: HTTP 5xx, 408 (Timeout), 429 (Too Many Requests)
+- **Logging**: Structured logging at each retry
+
+**2. Circuit Breaker Policy**:
+- **Threshold**: 5 consecutive failures
+- **Break Duration**: 30 seconds
+- **States**: Closed → Open → Half-Open → Closed
+- **Logging**: State transitions logged
+
+**3. Timeout Policy**:
+- **Duration**: 30 seconds per request
+- **Scope**: Per HTTP call
+
+### Configuration
+
+```csharp
+builder.Services.AddHttpClient<ICardTraderApiService, CardTraderApiClient>(...)
+    .AddPolicyHandler(CardTraderPolicies.GetRetryPolicy())
+    .AddPolicyHandler(CardTraderPolicies.GetCircuitBreakerPolicy());
+```
+
+### Benefits
+
+✅ **Automatic retry** on transient failures (network glitches, temporary server issues)
+✅ **Circuit breaker** prevents cascading failures and API overload
+✅ **Structured logging** for debugging and monitoring
+✅ **Zero code changes** in existing API calls - policies applied transparently
+
+### Testing Notes
+
+Manual testing can be performed by:
+1. Simulating network failures (disconnect WiFi during sync)
+2. Checking logs for retry attempts
+3. Verifying circuit breaker opens after repeated failures
+
+---
+
+## Next Steps (Post-Deployment)
+
+**Phase 6.2**: Caching (Redis) - 📅 FUTURE
+**Phase 6.3**: Rate Limiting - 📅 FUTURE
+**Phase 7**: Marketplace Expansion
+**Phase 8**: Monitoring & Analytics
+
+**Estimated Total Remaining**: ~13-18 hours
+
+---
+
+**Last Updated**: November 27, 2024
+**Status**: Phase 6.1 Complete ✅ | Phase 6.2-6.3 Future 📅
+**Current Phase**: Post-Deployment / Advanced Features
+**All Previous Phases**: Phase 1-5 ✅, Phase 6.1 ✅
