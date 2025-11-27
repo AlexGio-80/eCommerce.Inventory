@@ -744,18 +744,91 @@ Manual testing can be performed by:
 
 ---
 
+## Phase 6.3: Rate Limiting - COMPLETED ✅
+
+**Completion Date**: November 27, 2024
+**Duration**: ~1.5 hours
+**Status**: Operational
+
+### Implementation Details
+
+**Modified Files**:
+- `Api/Program.cs` - Added rate limiting configuration and middleware
+- `Api/Controllers/AuthController.cs` - Applied `auth` policy
+- `Api/Controllers/CardTrader/CardTraderSyncController.cs` - Applied `cardtrader-sync` policy
+
+### Rate Limiting Policies
+
+**1. API Policy** (General endpoints):
+- **Limit**: 100 requests/minute per IP
+- **Queue**: 10 requests
+- **Window**: Fixed (1 minute)
+
+**2. Card Trader Sync Policy**:
+- **Limit**: 10 requests/minute per IP
+- **Queue**: 2 requests
+- **Window**: Fixed (1 minute)
+- **Applied to**: `CardTraderSyncController`
+
+**3. Auth Policy**:
+- **Limit**: 5 requests/minute per IP
+- **Queue**: 0 requests (immediate rejection)
+- **Window**: Sliding (1 minute, 4 segments)
+- **Applied to**: `AuthController`
+
+**4. Global Fallback**:
+- **Limit**: 200 requests/minute per user/IP
+- **Applies to**: All endpoints without specific policy
+
+### HTTP 429 Response
+
+```json
+{
+  "error": "Too many requests. Please try again later.",
+  "retryAfter": 45.2
+}
+```
+
+**Headers**:
+- `Retry-After`: Seconds until next request allowed
+
+### Configuration
+
+```csharp
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddPolicy("api", context => ...);
+    options.AddPolicy("cardtrader-sync", context => ...);
+    options.AddPolicy("auth", context => ...);
+    options.GlobalLimiter = ...;
+    options.OnRejected = async (context, token) => { ... };
+});
+
+// Middleware
+app.UseRateLimiter(); // After CORS, before Authentication
+```
+
+### Benefits
+
+✅ **DoS Protection**: Prevents abuse and denial-of-service attacks
+✅ **API Compliance**: Respects Card Trader API rate limits
+✅ **User-friendly**: `Retry-After` header for smart clients
+✅ **Flexible**: Different policies per endpoint type
+✅ **Zero Dependencies**: Native .NET 7+ feature
+
+---
+
 ## Next Steps (Post-Deployment)
 
-**Phase 6.2**: Caching (Redis) - 📅 FUTURE
-**Phase 6.3**: Rate Limiting - 📅 FUTURE
+**Phase 6.2**: Caching (Redis) - 📅 FUTURE (Prerequisites required)
 **Phase 7**: Marketplace Expansion
 **Phase 8**: Monitoring & Analytics
 
-**Estimated Total Remaining**: ~13-18 hours
+**Estimated Total Remaining**: ~11-16 hours
 
 ---
 
 **Last Updated**: November 27, 2024
-**Status**: Phase 6.1 Complete ✅ | Phase 6.2-6.3 Future 📅
+**Status**: Phase 6.1 & 6.3 Complete ✅ | Phase 6.2 Future 📅
 **Current Phase**: Post-Deployment / Advanced Features
-**All Previous Phases**: Phase 1-5 ✅, Phase 6.1 ✅
+**All Previous Phases**: Phase 1-5 ✅, Phase 6.1 ✅, Phase 6.3 ✅

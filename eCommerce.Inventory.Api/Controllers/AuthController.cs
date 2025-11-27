@@ -2,11 +2,13 @@ using eCommerce.Inventory.Application.DTOs;
 using eCommerce.Inventory.Application.Interfaces;
 using eCommerce.Inventory.Api.Models; // For ApiResponse
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace eCommerce.Inventory.Api.Controllers;
 
 [ApiController]
 [Route("api/auth")]
+[EnableRateLimiting("auth")]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;

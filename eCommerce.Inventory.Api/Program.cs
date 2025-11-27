@@ -126,6 +126,81 @@ builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJ
 // Register SignalR
 builder.Services.AddSignalR();
 
+// Add Rate Limiting
+builder.Services.AddRateLimiter(options =>
+{
+    // Policy 1: General API endpoints (100 requests/minute)
+    options.AddPolicy("api", context =>
+        System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 100,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst,
+                QueueLimit = 10
+            }));
+
+    // Policy 2: Card Trader sync endpoints (10 requests/minute)
+    options.AddPolicy("cardtrader-sync", context =>
+        System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst,
+                QueueLimit = 2
+            }));
+
+    // Policy 3: Authentication endpoints (5 requests/minute per IP)
+    options.AddPolicy("auth", context =>
+        System.Threading.RateLimiting.RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new System.Threading.RateLimiting.SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                SegmentsPerWindow = 4,
+                QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
+
+    // Global fallback (200 requests/minute per user/IP)
+    options.GlobalLimiter = System.Threading.RateLimiting.PartitionedRateLimiter.Create<Microsoft.AspNetCore.Http.HttpContext, string>(context =>
+    {
+        return System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.User.Identity?.Name ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 200,
+                Window = TimeSpan.FromMinutes(1)
+            });
+    });
+
+    // Rejection response
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.StatusCode = 429;
+        if (context.Lease.TryGetMetadata(System.Threading.RateLimiting.MetadataName.RetryAfter, out var retryAfter))
+        {
+            context.HttpContext.Response.Headers.RetryAfter = retryAfter.TotalSeconds.ToString();
+        }
+
+        double? retryAfterSeconds = null;
+        if (context.Lease.TryGetMetadata(System.Threading.RateLimiting.MetadataName.RetryAfter, out var retry))
+        {
+            retryAfterSeconds = retry.TotalSeconds;
+        }
+
+        await context.HttpContext.Response.WriteAsJsonAsync(new
+        {
+            error = "Too many requests. Please try again later.",
+            retryAfter = retryAfterSeconds
+        }, cancellationToken: token);
+    };
+});
+
 // Add CORS for frontend integration
 builder.Services.AddCors(options =>
 {
@@ -186,6 +261,9 @@ app.UseSerilogRequestLogging();
 
 // Use Global Exception Middleware (AFTER logging, BEFORE authorization)
 app.UseMiddleware<eCommerce.Inventory.Api.Middleware.GlobalExceptionMiddleware>();
+
+// Use Rate Limiter (AFTER CORS, BEFORE Authentication)
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();

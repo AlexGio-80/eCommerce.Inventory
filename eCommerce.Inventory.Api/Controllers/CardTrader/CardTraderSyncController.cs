@@ -2,11 +2,13 @@ using Microsoft.AspNetCore.Mvc;
 using eCommerce.Inventory.Application.DTOs;
 using eCommerce.Inventory.Application.Interfaces;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace eCommerce.Inventory.Api.Controllers.CardTrader;
 
 [ApiController]
 [Route("api/cardtrader/sync")]
+[EnableRateLimiting("cardtrader-sync")]
 public class CardTraderSyncController : ControllerBase
 {
     private readonly ICardTraderApiService _cardTraderApiService;

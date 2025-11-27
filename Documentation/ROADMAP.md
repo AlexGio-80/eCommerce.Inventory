@@ -1678,40 +1678,31 @@ public class CardTraderInventoryControllerTests
 
 ---
 
-## Phase 5: Advanced Features (PRIORITY: LOW)
+## Phase 6: Advanced Features (PRIORITY: LOW-MEDIUM)
 
-### 5.1 Polly Resilience Policies
+### 6.1 Polly Resilience Policies ✅ COMPLETED (November 27, 2024)
 
-Aggiungere retry logic per API calls:
+Implementato retry con backoff esponenziale, circuit breaker e timeout policies.
 
-```csharp
-var retryPolicy = Policy.Handle<HttpRequestException>()
-    .OrResult<HttpResponseMessage>(r => !r.IsSuccessStatusCode)
-    .WaitAndRetryAsync(
-        retryCount: 3,
-        sleepDurationProvider: attempt =>
-            TimeSpan.FromSeconds(Math.Pow(2, attempt)),
-        onRetry: (outcome, ts, retryCount, context) =>
-            _logger.LogWarning("Retry {RetryCount} after {Delay}ms",
-                retryCount, ts.TotalMilliseconds));
+**Timeline**: 2 ore
 
-builder.Services
-    .AddHttpClient<ICardTraderApiService, CardTraderApiClient>()
-    .AddPolicyHandler(retryPolicy);
-```
+---
 
-**NuGet**: `Polly.Extensions.Http`
+### 6.2 Caching Strategy (Redis) - 📅 FUTURE
 
-**Timeline**: 1 ora
+**⚠️ PREREQUISITI RICHIESTI:**
+1. **Redis Server**: Installare Redis localmente o usare servizio cloud
+   - Opzione A: Docker Desktop + Redis container (`docker run -d -p 6379:6379 redis`)
+   - Opzione B: WSL2 + Redis (`sudo apt install redis-server`)
+   - Opzione C: Redis Cloud free tier (https://redis.com/try-free/)
+2. **Connection String**: Configurare in `appsettings.json`
 
-### 5.2 Caching Strategy
-
-Redis per cache distribuita:
-
+**Implementazione prevista:**
 ```csharp
 builder.Services.AddStackExchangeRedisCache(options =>
 {
     options.Configuration = builder.Configuration.GetConnectionString("Redis");
+    options.InstanceName = "eCommerceInventory:";
 });
 
 // Nell'ApiClient:
@@ -1723,11 +1714,19 @@ if (cachedGames == null)
 }
 ```
 
-**NuGet**: `StackExchange.Redis`
+**Dati da cachare:**
+- Games (TTL: 24 ore)
+- Expansions (TTL: 12 ore)
+- Blueprints (TTL: 6 ore)
+- Price suggestions (TTL: 1 ora)
 
-**Timeline**: 2 ore
+**NuGet**: `StackExchange.Redis`, `Microsoft.Extensions.Caching.StackExchangeRedis`
 
-### 5.3 Rate Limiting
+**Timeline**: 3 ore
+
+---
+
+### 6.3 Rate Limiting
 
 ```csharp
 app.UseRateLimiter();
@@ -2099,7 +2098,7 @@ app.UseHealthChecks("/health");
 | 5 | Deployment (Windows Service + IIS) | 4.5 | HIGH | ✅ DONE |
 | 6.1 | Polly Resilience | 2 | MEDIUM | ✅ DONE |
 | 6.2 | Caching (Redis) | 3 | LOW | 📅 FUTURE |
-| 6.3 | Rate Limiting | 2 | LOW | 📅 FUTURE |
+| 6.3 | Rate Limiting | 2 | LOW | ✅ DONE |
 | 7 | Marketplace Expansion | 6-8 | LOW | ⏳ TODO |
 | 8 | Monitoring & Analytics | 1.5 | LOW | ⏳ TODO |
 | 3.X | AI Card Grading (Future) | 8-10 | LOW | 📅 FUTURE |
