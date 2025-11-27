@@ -9,9 +9,15 @@
   <button mat-icon-button class="notification-btn">
     <mat-icon>notifications</mat-icon>
   </button>
-  <button mat-icon-button class="profile-btn">
+  <button mat-icon-button class="profile-btn" [matMenuTriggerFor]="profileMenu">
     <mat-icon>account_circle</mat-icon>
   </button>
+  <mat-menu #profileMenu="matMenu">
+    <button mat-menu-item (click)="logout()">
+      <mat-icon>logout</mat-icon>
+      <span>Logout</span>
+    </button>
+  </mat-menu>
 </mat-toolbar>
 
 <!-- Tab Bar -->

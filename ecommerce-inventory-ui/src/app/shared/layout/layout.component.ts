@@ -7,8 +7,10 @@ import { MatListModule } from '@angular/material/list';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatMenuModule } from '@angular/material/menu';
 import { TabBarComponent } from '../components/tab-bar/tab-bar.component';
 import { TabManagerService } from '../../core/services';
+import { AuthService } from '../../core/services/auth.service';
 
 interface NavItem {
   label: string;
@@ -28,6 +30,7 @@ interface NavItem {
     MatIconModule,
     MatButtonModule,
     MatTooltipModule,
+    MatMenuModule,
     TabBarComponent,
   ],
   templateUrl: './layout.component.html',
@@ -53,8 +56,14 @@ export class LayoutComponent {
 
   constructor(
     private router: Router,
-    private tabManager: TabManagerService
+    private tabManager: TabManagerService,
+    private authService: AuthService
   ) { }
+
+  logout(): void {
+    this.authService.logout();
+    this.router.navigate(['/login']);
+  }
 
   toggleSidenav(): void {
     this.isSidenavOpen.update((val) => !val);

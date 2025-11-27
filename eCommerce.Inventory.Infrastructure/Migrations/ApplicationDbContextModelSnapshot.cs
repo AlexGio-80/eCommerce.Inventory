@@ -507,6 +507,33 @@ namespace eCommerce.Inventory.Infrastructure.Migrations
                     b.ToTable("PropertyValues");
                 });
 
+            modelBuilder.Entity("eCommerce.Inventory.Domain.Entities.User", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Users");
+                });
+
             modelBuilder.Entity("eCommerce.Inventory.Domain.Entities.Blueprint", b =>
                 {
                     b.HasOne("eCommerce.Inventory.Domain.Entities.Expansion", "Expansion")

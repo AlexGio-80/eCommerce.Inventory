@@ -6,6 +6,7 @@ using eCommerce.Inventory.Infrastructure.Persistence.Repositories;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Mappers;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
+using eCommerce.Inventory.Infrastructure.Services;
 using MediatR;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -62,6 +63,34 @@ builder.Services.AddScoped<InventorySyncService>();
 builder.Services.AddScoped<WebhookSignatureVerificationService>();
 builder.Services.AddScoped<CardTraderSyncOrchestrator>();
 builder.Services.AddScoped<INotificationService, eCommerce.Inventory.Api.Services.SignalRNotificationService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+
+// Configure JWT Authentication
+var jwtSettings = builder.Configuration.GetSection("JwtSettings");
+var secretKey = jwtSettings["SecretKey"];
+if (string.IsNullOrEmpty(secretKey))
+{
+    throw new InvalidOperationException("JWT SecretKey is not configured");
+}
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtSettings["Issuer"],
+        ValidAudience = jwtSettings["Audience"],
+        IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(secretKey))
+    };
+});
 
 // Register MediatR for CQRS command handling
 builder.Services.AddMediatR(config =>
@@ -94,14 +123,15 @@ builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJ
 // Register SignalR
 builder.Services.AddSignalR();
 
-// Add CORS if needed for future frontend integration
+// Add CORS for frontend integration
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.WithOrigins("http://localhost:4200", "http://127.0.0.1:4200", "http://inventory.local")
               .AllowAnyMethod()
-              .AllowAnyHeader();
+              .AllowAnyHeader()
+              .AllowCredentials();
     });
 });
 
@@ -122,8 +152,7 @@ if (app.Environment.IsDevelopment())
             logger.LogInformation("Database migrations applied successfully");
 
             // Seed initial data
-            // #Alex - Seeding is currently commented out. Uncomment and implement seed data as needed.
-            // await eCommerce.Inventory.Infrastructure.Persistence.SeedData.InitializeAsync(dbContext, logger);
+            await eCommerce.Inventory.Infrastructure.Persistence.SeedData.InitializeAsync(dbContext, logger);
         }
         catch (Exception ex)
         {
@@ -155,6 +184,7 @@ app.UseSerilogRequestLogging();
 // Use Global Exception Middleware (AFTER logging, BEFORE authorization)
 app.UseMiddleware<eCommerce.Inventory.Api.Middleware.GlobalExceptionMiddleware>();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

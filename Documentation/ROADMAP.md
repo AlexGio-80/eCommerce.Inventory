@@ -148,6 +148,31 @@
   - **Bug Fixes**: Property name mismatches, API URL correction, safe navigation operators
   - **Optimizations**: Query performance improvements, error handling enhancements
 
+✅ **Phase 3.12: Authentication & Security ✅ DONE (2025-11-27)**
+  - **Backend**: JWT Bearer Token authentication system
+    - `User` entity with username, password hash (BCrypt), and role
+    - `AuthService` with registration, login, password hashing, and JWT generation
+    - `AuthController` with `/api/auth/login` and `/api/auth/register` endpoints
+    - JWT configuration in `Program.cs` (Issuer, Audience, SecretKey validation)
+    - Default admin user seeding (`admin` / `admin123`)
+    - CORS policy updated to support credentials and specific origins
+  - **Frontend**: Complete authentication flow
+    - `AuthService` for login/logout, token storage (localStorage), session management
+    - `AuthInterceptor` to attach JWT tokens to all HTTP requests
+    - `AuthGuard` to protect routes and redirect unauthenticated users to login
+    - Login page with form validation and error handling
+    - Logout button in profile menu (toolbar)
+  - **Security Enhancements**:
+    - Password hashing with BCrypt (work factor 10)
+    - JWT tokens with expiration (24 hours)
+    - Protected API endpoints requiring valid Bearer tokens
+    - Secure token storage in browser localStorage
+  - **Bug Fixes**:
+    - Fixed admin user seeding logic (independent check for admin username)
+    - Removed duplicate `auth.module.ts` (LoginComponent is standalone)
+    - Fixed CORS configuration for authentication support
+    - Corrected API URL port (5155) in frontend AuthService
+
 
 ✅ **Phase 5: Deployment ✅ DONE (2025-11-26)**
   - **Deployment Architecture**:

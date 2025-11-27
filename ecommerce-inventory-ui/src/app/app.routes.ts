@@ -3,6 +3,8 @@ import { LayoutComponent } from './shared/layout/layout.component';
 import { DashboardComponent } from './features/inventory/pages/dashboard/dashboard.component';
 import { InventoryListComponent } from './features/inventory/pages/inventory-list/inventory-list.component';
 import { SyncPageComponent } from './features/sync/pages/sync-page.component';
+import { LoginComponent } from './features/auth/pages/login/login.component';
+import { AuthGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   {
@@ -11,8 +13,13 @@ export const routes: Routes = [
     pathMatch: 'full'
   },
   {
+    path: 'login',
+    component: LoginComponent
+  },
+  {
     path: 'layout',
     component: LayoutComponent,
+    canActivate: [AuthGuard],
     children: [
       {
         path: 'dashboard',
@@ -44,10 +51,6 @@ export const routes: Routes = [
         loadComponent: () => import('./features/products/pages/create-listing/create-listing.component').then(m => m.CreateListingComponent),
         data: { title: 'Create Listing' }
       },
-      // TODO: Add routes for Phase 3.3-3.5
-      // - /layout/products (Product Listing Component)
-      // - /layout/orders (Orders Component)
-      // - /layout/reporting (Reporting Component)
       {
         path: 'orders',
         loadComponent: () => import('./features/orders/orders-list/orders-list.component').then(m => m.OrdersListComponent),
