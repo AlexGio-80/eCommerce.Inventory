@@ -122,7 +122,9 @@ public class BackupService : BackgroundService
             await BackupDatabaseAsync(dbBackupPath);
 
             // 2. Backup Frontend (UI)
-            var publishRoot = Path.GetDirectoryName(AppContext.BaseDirectory)!;
+            // AppContext.BaseDirectory ends with \ so we need to go up TWO levels
+            var apiDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var publishRoot = Path.GetDirectoryName(apiDir)!; // Now this correctly gets Publish folder
             var uiPath = Path.Combine(publishRoot, "ui");
 
             _logger.LogInformation("Looking for frontend at: {Path}", uiPath);
