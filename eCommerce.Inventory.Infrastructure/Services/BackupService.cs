@@ -128,12 +128,10 @@ public class BackupService : BackgroundService
                 _logger.LogInformation("Backing up database {DbName} to {Path}", dbName, dbBackupPath);
 
                 // Execute BACKUP DATABASE command
-                // Note: This backs up to the SQL Server's filesystem if running remotely, 
-                // but since we are running locally/windows service, it usually works if permissions are right.
-                // If SQL Server is on another machine, this path must be accessible by SQL Server service account.
-                // Assuming local SQL Server for this setup.
+                // Note: COMPRESSION is not supported in SQL Server Express Edition
+                // Removed COMPRESSION option for compatibility
 
-                var sql = $"BACKUP DATABASE [{dbName}] TO DISK = @path WITH FORMAT, INIT, COMPRESSION";
+                var sql = $"BACKUP DATABASE [{dbName}] TO DISK = @path WITH FORMAT, INIT";
                 await dbContext.Database.ExecuteSqlRawAsync(sql, new SqlParameter("@path", dbBackupPath));
 
                 _logger.LogInformation("Database backup completed successfully.");
@@ -145,23 +143,34 @@ public class BackupService : BackgroundService
             // Continue to file backup even if DB fails? Yes.
         }
 
-        // 2. Application Data Backup (Images, Logs)
+        // 2. Application Data Backup (Frontend UI + Logs)
         try
         {
-            var wwwRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
+            // When running as Windows Service, AppContext.BaseDirectory points to Publish/api
+            // Frontend is in Publish/ui (sibling directory)
+            var publishRoot = Path.GetDirectoryName(AppContext.BaseDirectory); // Go up to Publish folder
+            var uiPath = Path.Combine(publishRoot!, "ui");
             var logsDir = Path.Combine(AppContext.BaseDirectory, "logs");
 
             // Create a temporary folder to collect files
             var tempDir = Path.Combine(Path.GetTempPath(), $"InventoryBackup_{timestamp}");
             Directory.CreateDirectory(tempDir);
 
-            if (Directory.Exists(wwwRoot))
+            // Backup frontend (UI)
+            if (Directory.Exists(uiPath))
             {
-                CopyDirectory(wwwRoot, Path.Combine(tempDir, "wwwroot"));
+                _logger.LogInformation("Backing up frontend from {Path}", uiPath);
+                CopyDirectory(uiPath, Path.Combine(tempDir, "ui"));
+            }
+            else
+            {
+                _logger.LogWarning("Frontend directory not found at {Path}", uiPath);
             }
 
+            // Backup logs
             if (Directory.Exists(logsDir))
             {
+                _logger.LogInformation("Backing up logs from {Path}", logsDir);
                 CopyDirectory(logsDir, Path.Combine(tempDir, "logs"));
             }
 
