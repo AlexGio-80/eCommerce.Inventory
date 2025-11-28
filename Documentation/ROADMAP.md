@@ -207,18 +207,27 @@
     - Queue limit: 10 pending requests
     - Applied to all 13 Card Trader API endpoints
     - Prevents API rate limit violations and IP bans
-  - **Daily Backup System**:
+  - **Comprehensive Daily Backup System**:
     - `BackupService` as hosted background service
-    - Database backup: SQL Server `.bak` files with compression
-    - Application data backup: Zipped `wwwroot` and `logs` folders
-    - Configurable schedule (Cron-like format: `"minuti ore * * *"`)
-    - Retention policy: Automatic deletion of old backups (default 3 days)
-    - Configuration in `appsettings.json` (`Backup` section)
-  - **Configuration**:
-    - `BackupSettings` class for strongly-typed configuration
-    - Default schedule: 02:00 AM daily
-    - Default retention: 3 days
-    - Backup path: `Backups` folder in application directory
+    - **Database backup**: SQL Server `.bak` files (no compression for SQL Express compatibility)
+    - **Application backup**: Complete ZIP archive containing:
+      - Database `.bak` file
+      - Frontend Angular application (`Publish/ui`)
+      - Backend .NET application (`Publish/api`)
+      - Application logs
+    - **Configurable destination**: Local folder or network/external drive
+    - **Configurable schedule**: Cron-like format (`"minuti ore * * *"`)
+    - **Retention policy**: Automatic deletion of old backups (default 3 days)
+    - **Configuration** in `appsettings.json`:
+      - `Enabled`: Enable/disable backup service
+      - `Schedule`: Backup time (e.g., `"0 2 * * *"` for 02:00 AM)
+      - `RetentionDays`: Days to keep backups
+      - `BackupPath`: Local backup folder (relative path)
+      - `BackupDestinationPath`: Optional absolute path for network/external storage
+    - **Fixes applied**:
+      - SQL Server permission issues resolved by writing directly to final destination
+      - Frontend path detection fixed with proper publish root calculation
+      - Enhanced logging for troubleshooting
 
 ⏳ **Next Steps**: 
   - Additional features and enhancements as needed
