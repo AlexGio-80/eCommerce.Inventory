@@ -48,7 +48,6 @@ public class BackupService : BackgroundService
 
             if (delay.TotalMilliseconds <= 0)
             {
-                // Should not happen if GetNextRunTime is correct, but safety check
                 delay = TimeSpan.FromMinutes(1);
             }
 
@@ -76,10 +75,6 @@ public class BackupService : BackgroundService
 
     private DateTime GetNextRunTime()
     {
-        // Simple daily schedule parser
-        // Assumes format "m h * * *" (Cron-like but simplified for daily)
-        // Or just hardcoded to run at specific time if parsing fails
-
         var now = DateTime.Now;
         var parts = _settings.Schedule.Split(' ');
 
@@ -104,91 +99,105 @@ public class BackupService : BackgroundService
 
     private async Task PerformBackupAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Starting scheduled backup...");
+        _logger.LogInformation("Starting comprehensive backup...");
 
-        var backupFolder = Path.Combine(AppContext.BaseDirectory, _settings.BackupPath);
+        // Determine backup destination (network/external drive or local)
+        var backupFolder = string.IsNullOrWhiteSpace(_settings.BackupDestinationPath)
+            ? Path.Combine(AppContext.BaseDirectory, _settings.BackupPath)
+            : _settings.BackupDestinationPath;
+
         Directory.CreateDirectory(backupFolder);
+        _logger.LogInformation("Backup destination: {Path}", backupFolder);
 
         var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-        var dbBackupPath = Path.Combine(backupFolder, $"InventoryDB_{timestamp}.bak");
-        var appDataBackupPath = Path.Combine(backupFolder, $"AppData_{timestamp}.zip");
+        var tempBackupDir = Path.Combine(Path.GetTempPath(), $"InventoryBackup_{timestamp}");
+        Directory.CreateDirectory(tempBackupDir);
 
-        // 1. Database Backup
         try
         {
-            using (var scope = _serviceProvider.CreateScope())
-            {
-                var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-                var connectionString = dbContext.Database.GetConnectionString();
+            // 1. Database Backup
+            var dbBackupPath = Path.Combine(tempBackupDir, $"Database_InventoryDB_{timestamp}.bak");
+            await BackupDatabaseAsync(dbBackupPath);
 
-                // Extract database name from connection string
-                var builder = new SqlConnectionStringBuilder(connectionString);
-                var dbName = builder.InitialCatalog;
-
-                _logger.LogInformation("Backing up database {DbName} to {Path}", dbName, dbBackupPath);
-
-                // Execute BACKUP DATABASE command
-                // Note: COMPRESSION is not supported in SQL Server Express Edition
-                // Removed COMPRESSION option for compatibility
-
-                var sql = $"BACKUP DATABASE [{dbName}] TO DISK = @path WITH FORMAT, INIT";
-                await dbContext.Database.ExecuteSqlRawAsync(sql, new SqlParameter("@path", dbBackupPath));
-
-                _logger.LogInformation("Database backup completed successfully.");
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Database backup failed");
-            // Continue to file backup even if DB fails? Yes.
-        }
-
-        // 2. Application Data Backup (Frontend UI + Logs)
-        try
-        {
-            // When running as Windows Service, AppContext.BaseDirectory points to Publish/api
-            // Frontend is in Publish/ui (sibling directory)
-            var publishRoot = Path.GetDirectoryName(AppContext.BaseDirectory); // Go up to Publish folder
-            var uiPath = Path.Combine(publishRoot!, "ui");
-            var logsDir = Path.Combine(AppContext.BaseDirectory, "logs");
-
-            // Create a temporary folder to collect files
-            var tempDir = Path.Combine(Path.GetTempPath(), $"InventoryBackup_{timestamp}");
-            Directory.CreateDirectory(tempDir);
-
-            // Backup frontend (UI)
+            // 2. Backup Frontend (UI)
+            var publishRoot = Path.GetDirectoryName(AppContext.BaseDirectory)!;
+            var uiPath = Path.Combine(publishRoot, "ui");
             if (Directory.Exists(uiPath))
             {
                 _logger.LogInformation("Backing up frontend from {Path}", uiPath);
-                CopyDirectory(uiPath, Path.Combine(tempDir, "ui"));
+                CopyDirectory(uiPath, Path.Combine(tempBackupDir, "Frontend_UI"));
             }
             else
             {
                 _logger.LogWarning("Frontend directory not found at {Path}", uiPath);
             }
 
-            // Backup logs
+            // 3. Backup Backend (API) - Complete application
+            var apiPath = AppContext.BaseDirectory;
+            _logger.LogInformation("Backing up backend from {Path}", apiPath);
+            CopyDirectory(apiPath, Path.Combine(tempBackupDir, "Backend_API"), excludePatterns: new[] { "Backups", "logs" });
+
+            // 4. Backup Logs separately
+            var logsDir = Path.Combine(apiPath, "logs");
             if (Directory.Exists(logsDir))
             {
                 _logger.LogInformation("Backing up logs from {Path}", logsDir);
-                CopyDirectory(logsDir, Path.Combine(tempDir, "logs"));
+                CopyDirectory(logsDir, Path.Combine(tempBackupDir, "Logs"));
             }
 
-            _logger.LogInformation("Zipping application data to {Path}", appDataBackupPath);
-            ZipFile.CreateFromDirectory(tempDir, appDataBackupPath);
+            // 5. Create comprehensive ZIP
+            var finalZipPath = Path.Combine(backupFolder, $"InventoryBackup_Complete_{timestamp}.zip");
+            _logger.LogInformation("Creating comprehensive backup ZIP: {Path}", finalZipPath);
+            ZipFile.CreateFromDirectory(tempBackupDir, finalZipPath, CompressionLevel.Optimal, false);
 
-            // Cleanup temp
-            Directory.Delete(tempDir, true);
+            _logger.LogInformation("✅ Comprehensive backup completed successfully: {Size} MB",
+                new FileInfo(finalZipPath).Length / 1024 / 1024);
 
-            _logger.LogInformation("Application data backup completed successfully.");
+            // 6. Cleanup temp directory
+            Directory.Delete(tempBackupDir, true);
+
+            // 7. Apply retention policy
+            await ApplyRetentionPolicyAsync(backupFolder);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Application data backup failed");
-        }
+            _logger.LogError(ex, "Backup process failed");
 
-        // 3. Retention Policy
-        await ApplyRetentionPolicyAsync(backupFolder);
+            // Cleanup temp on failure
+            if (Directory.Exists(tempBackupDir))
+            {
+                try { Directory.Delete(tempBackupDir, true); } catch { }
+            }
+
+            throw;
+        }
+    }
+
+    private async Task BackupDatabaseAsync(string backupPath)
+    {
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var connectionString = dbContext.Database.GetConnectionString();
+
+            var builder = new SqlConnectionStringBuilder(connectionString);
+            var dbName = builder.InitialCatalog;
+
+            _logger.LogInformation("Backing up database {DbName} to {Path}", dbName, backupPath);
+
+            // Note: COMPRESSION not supported in SQL Express
+            var sql = $"BACKUP DATABASE [{dbName}] TO DISK = @path WITH FORMAT, INIT";
+            await dbContext.Database.ExecuteSqlRawAsync(sql, new SqlParameter("@path", backupPath));
+
+            _logger.LogInformation("✅ Database backup completed: {Size} MB",
+                new FileInfo(backupPath).Length / 1024 / 1024);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Database backup failed");
+            throw;
+        }
     }
 
     private async Task ApplyRetentionPolicyAsync(string backupFolder)
@@ -198,14 +207,15 @@ public class BackupService : BackgroundService
             _logger.LogInformation("Applying retention policy. Keeping backups for {Days} days.", _settings.RetentionDays);
 
             var retentionDate = DateTime.Now.AddDays(-_settings.RetentionDays);
-            var files = Directory.GetFiles(backupFolder);
+            var files = Directory.GetFiles(backupFolder, "InventoryBackup_Complete_*.zip");
 
             foreach (var file in files)
             {
                 var fileInfo = new FileInfo(file);
                 if (fileInfo.CreationTime < retentionDate)
                 {
-                    _logger.LogInformation("Deleting old backup file: {File}", fileInfo.Name);
+                    _logger.LogInformation("Deleting old backup: {File} ({Size} MB)",
+                        fileInfo.Name, fileInfo.Length / 1024 / 1024);
                     fileInfo.Delete();
                 }
             }
@@ -216,23 +226,34 @@ public class BackupService : BackgroundService
         }
     }
 
-    private void CopyDirectory(string sourceDir, string destinationDir)
+    private void CopyDirectory(string sourceDir, string destinationDir, string[]? excludePatterns = null)
     {
         var dir = new DirectoryInfo(sourceDir);
-        if (!dir.Exists) throw new DirectoryNotFoundException($"Source directory not found: {dir.FullName}");
+        if (!dir.Exists)
+        {
+            _logger.LogWarning("Source directory not found: {Path}", dir.FullName);
+            return;
+        }
 
         Directory.CreateDirectory(destinationDir);
 
         foreach (FileInfo file in dir.GetFiles())
         {
             string targetFilePath = Path.Combine(destinationDir, file.Name);
-            file.CopyTo(targetFilePath);
+            file.CopyTo(targetFilePath, overwrite: true);
         }
 
         foreach (DirectoryInfo subDir in dir.GetDirectories())
         {
+            // Skip excluded directories
+            if (excludePatterns != null && excludePatterns.Any(pattern =>
+                subDir.Name.Equals(pattern, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
             string newDestinationDir = Path.Combine(destinationDir, subDir.Name);
-            CopyDirectory(subDir.FullName, newDestinationDir);
+            CopyDirectory(subDir.FullName, newDestinationDir, excludePatterns);
         }
     }
 }
