@@ -113,10 +113,12 @@ public class BackupService : BackgroundService
         var tempBackupDir = Path.Combine(Path.GetTempPath(), $"InventoryBackup_{timestamp}");
         Directory.CreateDirectory(tempBackupDir);
 
+        // Database backup path - directly in final destination (SQL Server needs access)
+        var dbBackupPath = Path.Combine(backupFolder, $"Database_InventoryDB_{timestamp}.bak");
+
         try
         {
-            // 1. Database Backup
-            var dbBackupPath = Path.Combine(tempBackupDir, $"Database_InventoryDB_{timestamp}.bak");
+            // 1. Database Backup - directly to final destination
             await BackupDatabaseAsync(dbBackupPath);
 
             // 2. Backup Frontend (UI)
@@ -145,7 +147,14 @@ public class BackupService : BackgroundService
                 CopyDirectory(logsDir, Path.Combine(tempBackupDir, "Logs"));
             }
 
-            // 5. Create comprehensive ZIP
+            // 5. Copy database backup into temp folder for ZIP inclusion
+            if (File.Exists(dbBackupPath))
+            {
+                var dbBackupInZip = Path.Combine(tempBackupDir, $"Database_InventoryDB_{timestamp}.bak");
+                File.Copy(dbBackupPath, dbBackupInZip, overwrite: true);
+            }
+
+            // 6. Create comprehensive ZIP
             var finalZipPath = Path.Combine(backupFolder, $"InventoryBackup_Complete_{timestamp}.zip");
             _logger.LogInformation("Creating comprehensive backup ZIP: {Path}", finalZipPath);
             ZipFile.CreateFromDirectory(tempBackupDir, finalZipPath, CompressionLevel.Optimal, false);
