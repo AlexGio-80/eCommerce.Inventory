@@ -124,14 +124,54 @@ public class BackupService : BackgroundService
             // 2. Backup Frontend (UI)
             var publishRoot = Path.GetDirectoryName(AppContext.BaseDirectory)!;
             var uiPath = Path.Combine(publishRoot, "ui");
+
+            _logger.LogInformation("Looking for frontend at: {Path}", uiPath);
+            _logger.LogInformation("AppContext.BaseDirectory: {Path}", AppContext.BaseDirectory);
+            _logger.LogInformation("Publish root: {Path}", publishRoot);
+
             if (Directory.Exists(uiPath))
             {
-                _logger.LogInformation("Backing up frontend from {Path}", uiPath);
-                CopyDirectory(uiPath, Path.Combine(tempBackupDir, "Frontend_UI"));
+                _logger.LogInformation("✅ Frontend found! Backing up from {Path}", uiPath);
+                var uiDestination = Path.Combine(tempBackupDir, "Frontend_UI");
+                CopyDirectory(uiPath, uiDestination);
+
+                var fileCount = Directory.GetFiles(uiDestination, "*", SearchOption.AllDirectories).Length;
+                _logger.LogInformation("✅ Frontend backup completed: {Count} files copied", fileCount);
             }
             else
             {
-                _logger.LogWarning("Frontend directory not found at {Path}", uiPath);
+                _logger.LogWarning("❌ Frontend directory NOT found at {Path}", uiPath);
+
+                // Try alternative paths
+                var altPath1 = Path.Combine(publishRoot, "UI");
+                var altPath2 = Path.Combine(publishRoot, "frontend");
+                var altPath3 = Path.Combine(publishRoot, "www");
+
+                _logger.LogInformation("Trying alternative path: {Path}", altPath1);
+                if (Directory.Exists(altPath1))
+                {
+                    _logger.LogInformation("✅ Found at alternative path: {Path}", altPath1);
+                    CopyDirectory(altPath1, Path.Combine(tempBackupDir, "Frontend_UI"));
+                }
+                else if (Directory.Exists(altPath2))
+                {
+                    _logger.LogInformation("✅ Found at alternative path: {Path}", altPath2);
+                    CopyDirectory(altPath2, Path.Combine(tempBackupDir, "Frontend_UI"));
+                }
+                else if (Directory.Exists(altPath3))
+                {
+                    _logger.LogInformation("✅ Found at alternative path: {Path}", altPath3);
+                    CopyDirectory(altPath3, Path.Combine(tempBackupDir, "Frontend_UI"));
+                }
+                else
+                {
+                    _logger.LogError("❌ Frontend not found in any expected location!");
+                    _logger.LogInformation("Available directories in {Path}:", publishRoot);
+                    foreach (var dir in Directory.GetDirectories(publishRoot))
+                    {
+                        _logger.LogInformation("  - {Dir}", Path.GetFileName(dir));
+                    }
+                }
             }
 
             // 3. Backup Backend (API) - Complete application
