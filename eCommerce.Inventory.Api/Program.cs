@@ -8,6 +8,7 @@ using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Mappers;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Policies;
 using eCommerce.Inventory.Infrastructure.Services;
+using eCommerce.Inventory.Application.Settings;
 using MediatR;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -63,6 +64,7 @@ builder.Services.AddScoped<CardTraderDtoMapper>();
 builder.Services.AddScoped<InventorySyncService>();
 builder.Services.AddScoped<WebhookSignatureVerificationService>();
 builder.Services.AddScoped<CardTraderSyncOrchestrator>();
+builder.Services.AddSingleton<CardTraderRateLimiter>(); // Singleton to share rate limit across all scopes
 builder.Services.AddScoped<INotificationService, eCommerce.Inventory.Api.Services.SignalRNotificationService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
@@ -122,6 +124,10 @@ builder.Services.AddHttpClient<ICardTraderApiService, CardTraderApiClient>(clien
 // NOTE: Temporarily disabled for development. Enable once Card Trader API is properly configured.
 // builder.Services.AddHostedService<CardTraderSyncWorker>();
 builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJobs.ScheduledProductSyncWorker>();
+
+// Configure and register Backup Service
+builder.Services.Configure<BackupSettings>(builder.Configuration.GetSection("Backup"));
+builder.Services.AddHostedService<BackupService>();
 
 // Register SignalR
 builder.Services.AddSignalR();

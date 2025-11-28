@@ -7,6 +7,8 @@ using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.DTOs;
 using eCommerce.Inventory.Application.DTOs;
 using Microsoft.Extensions.Logging;
 
+using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
+
 namespace eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader;
 
 public class CardTraderApiClient : ICardTraderApiService
@@ -14,15 +16,18 @@ public class CardTraderApiClient : ICardTraderApiService
     private readonly HttpClient _httpClient;
     private readonly ILogger<CardTraderApiClient> _logger;
     private readonly IApplicationDbContext _dbContext;
+    private readonly CardTraderRateLimiter _rateLimiter;
 
     public CardTraderApiClient(
         HttpClient httpClient,
         ILogger<CardTraderApiClient> logger,
-        IApplicationDbContext dbContext)
+        IApplicationDbContext dbContext,
+        CardTraderRateLimiter rateLimiter)
     {
         _httpClient = httpClient;
         _logger = logger;
         _dbContext = dbContext;
+        _rateLimiter = rateLimiter;
     }
 
     /// <summary>
@@ -34,6 +39,9 @@ public class CardTraderApiClient : ICardTraderApiService
         {
             _logger.LogInformation("Fetching games from Card Trader API");
 
+            _logger.LogInformation("Fetching games from Card Trader API");
+
+            await _rateLimiter.AcquireAsync(cancellationToken);
             var response = await _httpClient.GetAsync("games", cancellationToken);
             response.EnsureSuccessStatusCode();
 
@@ -62,6 +70,9 @@ public class CardTraderApiClient : ICardTraderApiService
         {
             _logger.LogInformation("Fetching expansions from Card Trader API");
 
+            _logger.LogInformation("Fetching expansions from Card Trader API");
+
+            await _rateLimiter.AcquireAsync(cancellationToken);
             var response = await _httpClient.GetAsync("expansions", cancellationToken);
             response.EnsureSuccessStatusCode();
 
@@ -90,6 +101,8 @@ public class CardTraderApiClient : ICardTraderApiService
             _logger.LogInformation("Fetching blueprints for expansion {ExpansionId} from Card Trader API", expansionId);
 
             // Correct endpoint for fetching blueprints is /blueprints/export?expansion_id={id}
+            // Correct endpoint for fetching blueprints is /blueprints/export?expansion_id={id}
+            await _rateLimiter.AcquireAsync(cancellationToken);
             var response = await _httpClient.GetAsync($"blueprints/export?expansion_id={expansionId}", cancellationToken);
 
             // Handle 404 gracefully - expansion might not have blueprints or endpoint might not exist
@@ -134,6 +147,9 @@ public class CardTraderApiClient : ICardTraderApiService
         {
             _logger.LogInformation("Fetching categories from Card Trader API");
 
+            _logger.LogInformation("Fetching categories from Card Trader API");
+
+            await _rateLimiter.AcquireAsync(cancellationToken);
             var response = await _httpClient.GetAsync("categories", cancellationToken);
             response.EnsureSuccessStatusCode();
 
@@ -198,6 +214,7 @@ public class CardTraderApiClient : ICardTraderApiService
             var jsonPayload = JsonSerializer.Serialize(payload);
             _logger.LogInformation("Sending Create Product Payload: {Payload}", jsonPayload);
 
+            await _rateLimiter.AcquireAsync(cancellationToken);
             var response = await _httpClient.PostAsJsonAsync("products", payload, cancellationToken);
             var jsonResponse = await response.Content.ReadAsStringAsync(cancellationToken);
 
@@ -263,6 +280,9 @@ public class CardTraderApiClient : ICardTraderApiService
         {
             _logger.LogInformation("Deleting product {ProductId} from Card Trader", cardTraderProductId);
 
+            _logger.LogInformation("Deleting product {ProductId} from Card Trader", cardTraderProductId);
+
+            await _rateLimiter.AcquireAsync(cancellationToken);
             var response = await _httpClient.DeleteAsync($"products/{cardTraderProductId}", cancellationToken);
             response.EnsureSuccessStatusCode();
 
@@ -284,6 +304,9 @@ public class CardTraderApiClient : ICardTraderApiService
         {
             _logger.LogInformation("Fetching my products from Card Trader API");
 
+            _logger.LogInformation("Fetching my products from Card Trader API");
+
+            await _rateLimiter.AcquireAsync(cancellationToken);
             var response = await _httpClient.GetAsync("products", cancellationToken);
             response.EnsureSuccessStatusCode();
 
@@ -311,6 +334,9 @@ public class CardTraderApiClient : ICardTraderApiService
         {
             _logger.LogInformation("Fetching products export from Card Trader API");
 
+            _logger.LogInformation("Fetching products export from Card Trader API");
+
+            await _rateLimiter.AcquireAsync(cancellationToken);
             var response = await _httpClient.GetAsync("products/export", cancellationToken);
             response.EnsureSuccessStatusCode();
 
@@ -358,6 +384,9 @@ public class CardTraderApiClient : ICardTraderApiService
 
             _logger.LogInformation("Calling Card Trader endpoint: {Endpoint}", endpoint);
 
+            _logger.LogInformation("Calling Card Trader endpoint: {Endpoint}", endpoint);
+
+            await _rateLimiter.AcquireAsync(cancellationToken);
             var response = await _httpClient.GetAsync(endpoint, cancellationToken);
             response.EnsureSuccessStatusCode();
 
@@ -406,6 +435,9 @@ public class CardTraderApiClient : ICardTraderApiService
         {
             _logger.LogInformation("Fetching marketplace products for blueprint {BlueprintId} from Card Trader API", blueprintId);
 
+            _logger.LogInformation("Fetching marketplace products for blueprint {BlueprintId} from Card Trader API", blueprintId);
+
+            await _rateLimiter.AcquireAsync(cancellationToken);
             var response = await _httpClient.GetAsync($"marketplace/products?blueprint_id={blueprintId}", cancellationToken);
             response.EnsureSuccessStatusCode();
 

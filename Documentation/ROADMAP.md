@@ -200,6 +200,26 @@
     - Auto-start on system boot
     - Logs written to `Publish/api/logs/` directory
 
+✅ **Phase 6: Rate Limiting & Backup System ✅ DONE (2025-11-28)**
+  - **Outbound Rate Limiting for Card Trader API**:
+    - Custom `CardTraderRateLimiter` using `System.Threading.RateLimiting`
+    - Fixed window: 20 requests per minute
+    - Queue limit: 10 pending requests
+    - Applied to all 13 Card Trader API endpoints
+    - Prevents API rate limit violations and IP bans
+  - **Daily Backup System**:
+    - `BackupService` as hosted background service
+    - Database backup: SQL Server `.bak` files with compression
+    - Application data backup: Zipped `wwwroot` and `logs` folders
+    - Configurable schedule (Cron-like format: `"minuti ore * * *"`)
+    - Retention policy: Automatic deletion of old backups (default 3 days)
+    - Configuration in `appsettings.json` (`Backup` section)
+  - **Configuration**:
+    - `BackupSettings` class for strongly-typed configuration
+    - Default schedule: 02:00 AM daily
+    - Default retention: 3 days
+    - Backup path: `Backups` folder in application directory
+
 ⏳ **Next Steps**: 
   - Additional features and enhancements as needed
   - Continue improving reporting and analytics
