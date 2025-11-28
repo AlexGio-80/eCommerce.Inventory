@@ -35,7 +35,7 @@ export class SignalRService {
                 console.log('SignalR Connection Started');
                 this.connectionStatus.next('Connected');
             })
-            .catch(err => {
+            .catch((err: any) => {
                 console.error('Error while starting SignalR connection: ' + err);
                 this.connectionStatus.next('Error');
                 setTimeout(() => this.startConnection(), 5000);

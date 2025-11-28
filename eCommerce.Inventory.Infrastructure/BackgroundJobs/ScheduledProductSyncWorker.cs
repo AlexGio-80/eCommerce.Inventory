@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 namespace eCommerce.Inventory.Infrastructure.BackgroundJobs;
 
 /// <summary>
-/// Background service that runs scheduled product synchronization
+/// Background service that runs scheduled full synchronization of all Card Trader entities
 /// </summary>
 public class ScheduledProductSyncWorker : BackgroundService
 {
@@ -28,7 +28,7 @@ public class ScheduledProductSyncWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("Scheduled Product Sync Worker started.");
+        _logger.LogInformation("Scheduled Full Sync Worker started.");
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -37,7 +37,7 @@ public class ScheduledProductSyncWorker : BackgroundService
                 var nextRunTime = GetNextRunTime();
                 var delay = nextRunTime - DateTime.Now;
 
-                _logger.LogInformation("Next product sync scheduled for {NextRunTime} (in {Delay})", nextRunTime, delay);
+                _logger.LogInformation("Next FULL sync scheduled for {NextRunTime} (in {Delay})", nextRunTime, delay);
 
                 await Task.Delay(delay, stoppingToken);
 
@@ -50,13 +50,13 @@ public class ScheduledProductSyncWorker : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in Scheduled Product Sync Worker");
+                _logger.LogError(ex, "Error in Scheduled Full Sync Worker");
                 // Wait a bit before retrying to avoid tight loop in case of error
                 await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
             }
         }
 
-        _logger.LogInformation("Scheduled Product Sync Worker stopped.");
+        _logger.LogInformation("Scheduled Full Sync Worker stopped.");
     }
 
     private async Task RunSyncAsync(CancellationToken stoppingToken)
@@ -64,28 +64,44 @@ public class ScheduledProductSyncWorker : BackgroundService
         using var scope = _serviceProvider.CreateScope();
         var orchestrator = scope.ServiceProvider.GetRequiredService<CardTraderSyncOrchestrator>();
 
-        _logger.LogInformation("Starting scheduled product synchronization...");
+        _logger.LogInformation("========================================");
+        _logger.LogInformation("Starting FULL scheduled synchronization at {Time}", DateTime.Now);
+        _logger.LogInformation("========================================");
 
         var request = new SyncRequestDto
         {
-            SyncInventory = true
-            // We only sync inventory in the scheduled job, assuming other metadata is relatively static or synced manually
+            SyncGames = true,
+            SyncExpansions = true,
+            SyncBlueprints = true,
+            SyncInventory = true,
+            SyncOrders = true
         };
 
         var result = await orchestrator.SyncAsync(request, stoppingToken);
 
+        _logger.LogInformation("========================================");
+        _logger.LogInformation("Scheduled sync completed at {Time}", DateTime.Now);
+
         if (result.ErrorMessage != null)
         {
-            _logger.LogError("Scheduled product sync failed: {ErrorMessage}", result.ErrorMessage);
+            _logger.LogError("Sync FAILED with error: {ErrorMessage}", result.ErrorMessage);
         }
         else
         {
-            _logger.LogInformation("Scheduled product sync completed. Added: {Added}, Updated: {Updated}, Failed: {Failed}, Skipped: {Skipped}, Deleted: {Deleted}",
-                result.Inventory.Added, result.Inventory.Updated, result.Inventory.Failed, result.Inventory.Skipped,
-                // Note: Deleted count is not explicitly in SyncEntityResultDto but logged by Orchestrator. 
-                // We can add it to DTO if needed, but for now logging is enough.
-                "N/A");
+            _logger.LogInformation("Sync SUCCESSFUL. Summary:");
+            _logger.LogInformation("  - Games: Added={Added}, Updated={Updated}, Failed={Failed}, Skipped={Skipped}",
+                result.Games.Added, result.Games.Updated, result.Games.Failed, result.Games.Skipped);
+            _logger.LogInformation("  - Expansions: Added={Added}, Updated={Updated}, Failed={Failed}, Skipped={Skipped}",
+                result.Expansions.Added, result.Expansions.Updated, result.Expansions.Failed, result.Expansions.Skipped);
+            _logger.LogInformation("  - Blueprints: Added={Added}, Updated={Updated}, Failed={Failed}, Skipped={Skipped}",
+                result.Blueprints.Added, result.Blueprints.Updated, result.Blueprints.Failed, result.Blueprints.Skipped);
+            _logger.LogInformation("  - Inventory: Added={Added}, Updated={Updated}, Failed={Failed}, Skipped={Skipped}",
+                result.Inventory.Added, result.Inventory.Updated, result.Inventory.Failed, result.Inventory.Skipped);
+            _logger.LogInformation("  - Orders: Added={Added}, Updated={Updated}, Failed={Failed}, Skipped={Skipped}",
+                result.Orders.Added, result.Orders.Updated, result.Orders.Failed, result.Orders.Skipped);
         }
+
+        _logger.LogInformation("========================================");
     }
 
     private DateTime GetNextRunTime()

@@ -1445,6 +1445,9 @@ export class CardGradingService {
 - **Custom ML Model**: Addestramento con dataset di carte graduate (PSA/BGS)
 - **Hybrid approach**: Local detection + cloud verification
 
+> [!NOTE]
+> **Revisione Periodica**: Verificare periodicamente lo stato della tecnologia OCR e Computer Vision per valutare se le capacità di riconoscimento automatico del grading delle carte sono migliorate abbastanza da giustificare l'implementazione. La tecnologia attuale (2025) non è ancora sufficientemente affidabile per sostituire la valutazione manuale.
+
 **Timeline**: Future phase, 8-10 ore
 
 ---
