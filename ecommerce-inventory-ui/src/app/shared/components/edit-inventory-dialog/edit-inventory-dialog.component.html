@@ -1,0 +1,61 @@
+<h2 mat-dialog-title>Modifica Articolo</h2>
+
+<mat-dialog-content class="dialog-content">
+    <form [formGroup]="editForm">
+        <!-- Card Info (Read-only) -->
+        <div class="card-info" *ngIf="data.blueprint">
+            <h3>{{ data.blueprint.name }}</h3>
+            <p>{{ data.blueprint.expansion?.name }}</p>
+        </div>
+
+        <!-- Quantity and Price -->
+        <div class="form-row">
+            <mat-form-field appearance="outline">
+                <mat-label>Quantità</mat-label>
+                <input matInput type="number" formControlName="quantity" min="1">
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+                <mat-label>Prezzo Vendita (€)</mat-label>
+                <input matInput type="number" formControlName="listingPrice" min="0" step="0.01">
+            </mat-form-field>
+        </div>
+
+        <!-- Condition and Language -->
+        <div class="form-row">
+            <mat-form-field appearance="outline">
+                <mat-label>Condizione</mat-label>
+                <mat-select formControlName="condition">
+                    <mat-option *ngFor="let cond of conditions" [value]="cond">{{ cond }}</mat-option>
+                </mat-select>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+                <mat-label>Lingua</mat-label>
+                <mat-select formControlName="language">
+                    <mat-option *ngFor="let lang of languages" [value]="lang">{{ lang }}</mat-option>
+                </mat-select>
+            </mat-form-field>
+        </div>
+
+        <!-- Tag -->
+        <div class="form-row">
+            <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Tag</mat-label>
+                <input matInput formControlName="tag">
+            </mat-form-field>
+        </div>
+
+        <!-- Checkboxes -->
+        <div class="checkbox-row">
+            <mat-checkbox formControlName="isFoil">Foil</mat-checkbox>
+            <mat-checkbox formControlName="isSigned">Signed</mat-checkbox>
+            <mat-checkbox formControlName="isAltered">Altered</mat-checkbox>
+        </div>
+    </form>
+</mat-dialog-content>
+
+<mat-dialog-actions class="dialog-actions">
+    <button mat-button (click)="onCancel()">Annulla</button>
+    <button mat-raised-button color="primary" (click)="onSave()" [disabled]="!editForm.valid">Salva</button>
+</mat-dialog-actions>

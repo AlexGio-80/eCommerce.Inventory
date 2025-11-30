@@ -1,6 +1,7 @@
 using eCommerce.Inventory.Api.Models;
 using eCommerce.Inventory.Api.Models.Reporting;
 using eCommerce.Inventory.Infrastructure.Persistence;
+using eCommerce.Inventory.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -543,50 +544,36 @@ public class ReportingController : ControllerBase
     /// </summary>
     [HttpGet("sales/by-expansion")]
     public async Task<ActionResult<ApiResponse<List<SalesByExpansionDto>>>> GetSalesByExpansion(
+        [FromQuery] int limit = 5,
         [FromQuery] DateTime? from = null,
         [FromQuery] DateTime? to = null,
-        [FromQuery] int limit = 10)
+        [FromQuery] string? filter = null)
     {
         try
         {
-            var fromDate = from ?? DateTime.MinValue;
-            var toDate = to ?? DateTime.MaxValue;
+            _logger.LogInformation("Fetching sales by expansion from ExpansionsROI view with filter {Filter}", filter);
 
-            _logger.LogInformation("Fetching sales by expansion from {FromDate} to {ToDate}", fromDate, toDate);
+            var query = _context.ExpansionsROI
+                .AsNoTracking();
 
-            var query = _context.OrderItems
-                .AsNoTracking()
-                .Include(oi => oi.Blueprint)
-                    .ThenInclude(b => b.Expansion)
-                .Where(oi => oi.Blueprint != null);
-
-            if (from.HasValue || to.HasValue)
+            if (!string.IsNullOrWhiteSpace(filter))
             {
-                query = query.Where(oi => oi.Order.PaidAt != null &&
-                            oi.Order.PaidAt >= fromDate &&
-                            oi.Order.PaidAt <= toDate);
+                query = query.Where(x => x.ExpansionName.Contains(filter));
             }
 
             var salesByExpansion = await query
-                .GroupBy(oi => oi.ExpansionName)
-                .Select(g => new
-                {
-                    ExpansionName = g.Key,
-                    TotalRevenue = g.Sum(oi => oi.Price * oi.Quantity),
-                    OrderCount = g.Select(oi => oi.OrderId).Distinct().Count()
-                })
-                .OrderByDescending(x => x.TotalRevenue)
+                .OrderByDescending(x => x.TotaleVenduto)
                 .Take(limit)
                 .ToListAsync();
 
-            var totalRevenue = salesByExpansion.Sum(s => s.TotalRevenue);
+            var totalRevenue = salesByExpansion.Sum(s => s.TotaleVenduto);
 
             var result = salesByExpansion.Select(s => new SalesByExpansionDto
             {
                 ExpansionName = s.ExpansionName,
-                TotalRevenue = s.TotalRevenue,
-                OrderCount = s.OrderCount,
-                Percentage = totalRevenue > 0 ? (s.TotalRevenue / totalRevenue) * 100 : 0
+                TotalRevenue = s.TotaleVenduto,
+                OrderCount = 0, // Not available in view
+                Percentage = totalRevenue > 0 ? (s.TotaleVenduto / totalRevenue) * 100 : 0
             }).ToList();
 
             return Ok(ApiResponse<List<SalesByExpansionDto>>.SuccessResult(result));
@@ -603,15 +590,23 @@ public class ReportingController : ControllerBase
     /// </summary>
     [HttpGet("profitability/by-expansion")]
     public async Task<ActionResult<ApiResponse<List<ExpansionProfitabilityDto>>>> GetExpansionProfitability(
-        [FromQuery] int limit = 10)
+        [FromQuery] int limit = 10,
+        [FromQuery] string? filter = null)
     {
         try
         {
-            _logger.LogInformation("Fetching expansion profitability from view");
+            _logger.LogInformation("Fetching expansion profitability from view with filter {Filter}", filter);
 
-            var roiData = await _context.ExpansionsROI
-                .AsNoTracking()
-                .OrderBy(x => x.Differenza)
+            var query = _context.ExpansionsROI
+                .AsNoTracking();
+
+            if (!string.IsNullOrWhiteSpace(filter))
+            {
+                query = query.Where(x => x.ExpansionName.Contains(filter));
+            }
+
+            var roiData = await query
+                .OrderByDescending(x => x.TotaleAcquistato > 0 ? x.Differenza / x.TotaleAcquistato : 0)
                 .Take(limit)
                 .ToListAsync();
 

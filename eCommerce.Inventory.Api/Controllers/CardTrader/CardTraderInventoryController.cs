@@ -173,11 +173,45 @@ public class CardTraderInventoryController : ControllerBase
         if (!string.IsNullOrEmpty(request.Condition))
             item.Condition = request.Condition;
 
+        if (!string.IsNullOrEmpty(request.Language))
+            item.Language = request.Language;
+
+        if (!string.IsNullOrEmpty(request.Tag))
+            item.Tag = request.Tag;
+
+        if (request.IsFoil.HasValue)
+            item.IsFoil = request.IsFoil.Value;
+
+        if (request.IsSigned.HasValue)
+            item.IsSigned = request.IsSigned.Value;
+
+        if (request.IsAltered.HasValue)
+            item.IsAltered = request.IsAltered.Value;
+
         if (!string.IsNullOrEmpty(request.Location))
             item.Location = request.Location;
 
         await _inventoryItemRepository.UpdateAsync(item, cancellationToken);
-        _logger.LogInformation("Inventory item {ItemId} updated successfully", id);
+        _logger.LogInformation("Inventory item {ItemId} updated successfully in local database", id);
+
+        // Sync to Card Trader if the item has a CardTraderProductId
+        if (item.CardTraderProductId.HasValue)
+        {
+            try
+            {
+                await _cardTraderApiService.UpdateProductOnCardTraderAsync(item, cancellationToken);
+                _logger.LogInformation("Inventory item {ItemId} synced to Card Trader successfully", id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to sync inventory item {ItemId} to Card Trader", id);
+                // Continue anyway - local update succeeded
+            }
+        }
+        else
+        {
+            _logger.LogWarning("Inventory item {ItemId} does not have a CardTraderProductId, skipping Card Trader sync", id);
+        }
 
         return Ok(Models.ApiResponse<InventoryItem>.SuccessResult(item, "Inventory item updated successfully"));
     }
@@ -282,6 +316,11 @@ public class UpdateInventoryItemRequest
 {
     public decimal? ListingPrice { get; set; }
     public int? Quantity { get; set; }
-    public string Condition { get; set; }
-    public string Location { get; set; }
+    public string? Condition { get; set; }
+    public string? Language { get; set; }
+    public string? Tag { get; set; }
+    public bool? IsFoil { get; set; }
+    public bool? IsSigned { get; set; }
+    public bool? IsAltered { get; set; }
+    public string? Location { get; set; }
 }

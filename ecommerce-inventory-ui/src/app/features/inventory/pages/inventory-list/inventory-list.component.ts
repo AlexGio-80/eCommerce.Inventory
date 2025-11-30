@@ -11,9 +11,12 @@ import { AgGridAngular } from 'ag-grid-angular';
 import { ColDef, GridApi, GridReadyEvent, IDatasource, IGetRowsParams } from 'ag-grid-community';
 import { CardTraderApiService } from '../../../../core/services/cardtrader-api.service';
 import { GridStateService } from '../../../../core/services/grid-state.service';
+import { TabManagerService } from '../../../../core/services/tab-manager.service';
 import { InventoryItem } from '../../../../core/models/inventory-item';
 
 import { ImageCellRendererComponent } from '../../../../shared/components/image-cell-renderer/image-cell-renderer.component';
+import { ConditionCellRendererComponent } from '../../../../shared/components/condition-cell-renderer/condition-cell-renderer.component';
+import { LanguageCellRendererComponent } from '../../../../shared/components/language-cell-renderer/language-cell-renderer.component';
 
 @Component({
   selector: 'app-inventory-list',
@@ -109,14 +112,16 @@ export class InventoryListComponent implements OnInit {
       field: 'condition',
       sortable: false,
       filter: true,
-      width: 100
+      width: 100,
+      cellRenderer: ConditionCellRendererComponent
     },
     {
       headerName: 'Language',
       field: 'language',
       sortable: false,
       filter: true,
-      width: 100
+      width: 100,
+      cellRenderer: LanguageCellRendererComponent
     },
     {
       headerName: 'Foil',
@@ -161,18 +166,17 @@ export class InventoryListComponent implements OnInit {
       field: 'actions',
       sortable: false,
       filter: false,
-      width: 150,
+      width: 100,
       cellRenderer: (params: any) => {
         if (!params.data) return ''; // Loading row
-        return `<button class="action-btn edit-btn">Edit</button>
-                <button class="action-btn delete-btn">Delete</button>`;
+        return `<button class="action-btn link-btn" title="Apri su CardTrader">
+                  <mat-icon>open_in_new</mat-icon>
+                </button>`;
       },
       onCellClicked: (params) => {
         const target = params.event?.target as HTMLElement;
-        if (target.classList.contains('edit-btn')) {
-          this.editItem(params.data);
-        } else if (target.classList.contains('delete-btn')) {
-          this.deleteItem(params.data);
+        if (target.classList.contains('link-btn') || target.closest('.link-btn')) {
+          this.openOnCardTrader(params.data);
         }
       }
     }
@@ -206,6 +210,7 @@ export class InventoryListComponent implements OnInit {
   constructor(
     private apiService: CardTraderApiService,
     private gridStateService: GridStateService,
+    private tabManager: TabManagerService,
     private snackBar: MatSnackBar
   ) { }
 
@@ -293,23 +298,12 @@ export class InventoryListComponent implements OnInit {
     this.showSnackBar('Grid configuration reset to defaults');
   }
 
-  editItem(item: InventoryItem): void {
-    console.log('Edit item:', item);
-    // TODO: Open dialog to edit item
-  }
-
-  deleteItem(item: InventoryItem): void {
-    if (confirm(`Sei sicuro di voler eliminare ${item.blueprint?.name}?`)) {
-      this.apiService.deleteInventoryItem(item.id).subscribe({
-        next: () => {
-          this.showSnackBar('Item deleted successfully');
-          this.gridApi.refreshInfiniteCache(); // Reload data
-        },
-        error: (err) => {
-          console.error('Error deleting item:', err);
-          this.showSnackBar('Error deleting item');
-        }
-      });
+  openOnCardTrader(item: InventoryItem): void {
+    if (item.blueprint?.cardTraderId) {
+      const url = `https://www.cardtrader.com/cards/${item.blueprint.cardTraderId}`;
+      window.open(url, '_blank');
+    } else {
+      this.showSnackBar('Questa carta non ha un ID CardTrader');
     }
   }
 
@@ -358,5 +352,10 @@ export class InventoryListComponent implements OnInit {
     if (params.colDef.field === 'blueprint.imageUrl') {
       this.previewImage = null;
     }
+  }
+
+  openCreateListing(): void {
+    const tabId = this.tabManager.openTab('/layout/products/create', 'Nuovo Articolo', 'add_circle');
+    this.tabManager.setActiveTab(tabId);
   }
 }

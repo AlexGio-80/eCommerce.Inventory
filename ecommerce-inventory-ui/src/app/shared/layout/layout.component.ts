@@ -1,4 +1,4 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterOutlet, RouterLink, Router } from '@angular/router';
 import { MatSidenavModule } from '@angular/material/sidenav';
@@ -36,7 +36,7 @@ interface NavItem {
   templateUrl: './layout.component.html',
   styleUrls: ['./layout.component.scss'],
 })
-export class LayoutComponent {
+export class LayoutComponent implements OnInit {
   isSidenavOpen = signal(true);
 
   navItems: NavItem[] = [
@@ -59,6 +59,17 @@ export class LayoutComponent {
     private tabManager: TabManagerService,
     private authService: AuthService
   ) { }
+
+  ngOnInit(): void {
+    // Initialize tab based on current route
+    const currentRoute = this.router.url;
+    const navItem = this.navItems.find(item => item.route === currentRoute);
+
+    if (navItem) {
+      const tabId = this.tabManager.openTab(navItem.route, navItem.label, navItem.icon);
+      this.tabManager.setActiveTab(tabId);
+    }
+  }
 
   logout(): void {
     this.authService.logout();

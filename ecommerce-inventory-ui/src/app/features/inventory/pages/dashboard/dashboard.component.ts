@@ -11,8 +11,8 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { RouterModule, Router } from '@angular/router';
-import { Observable, forkJoin, of } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { Observable, forkJoin, of, BehaviorSubject } from 'rxjs';
+import { map, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 
 import { CardTraderApiService } from '../../../../core/services';
 import { PagedResponse, SalesByExpansion, ExpansionProfitability } from '../../../../core/models';
@@ -51,7 +51,11 @@ export class DashboardComponent implements OnInit {
   expansionProfitability$!: Observable<ExpansionProfitability[]>;
   isLoading = true;
 
-  // Filter properties
+  // Filter subjects
+  private salesFilterSubject = new BehaviorSubject<string>('');
+  private roiFilterSubject = new BehaviorSubject<string>('');
+
+  // Filter properties for binding
   salesFilter = '';
   roiFilter = '';
 
@@ -86,8 +90,17 @@ export class DashboardComponent implements OnInit {
       }))
     );
 
-    this.salesByExpansion$ = this.apiService.getSalesByExpansion(undefined, undefined, 10);
-    this.expansionProfitability$ = this.apiService.getExpansionProfitability(undefined, undefined, 10);
+    this.salesByExpansion$ = this.salesFilterSubject.pipe(
+      debounceTime(300),
+      distinctUntilChanged(),
+      switchMap(filter => this.apiService.getSalesByExpansion(undefined, undefined, 10, filter))
+    );
+
+    this.expansionProfitability$ = this.roiFilterSubject.pipe(
+      debounceTime(300),
+      distinctUntilChanged(),
+      switchMap(filter => this.apiService.getExpansionProfitability(undefined, undefined, 10, filter))
+    );
 
     this.isLoading = false;
   }
@@ -97,19 +110,11 @@ export class DashboardComponent implements OnInit {
     this.router.navigate([route]);
   }
 
-  filterSales(sales: SalesByExpansion[]): SalesByExpansion[] {
-    if (!this.salesFilter.trim()) {
-      return sales;
-    }
-    const filter = this.salesFilter.toLowerCase();
-    return sales.filter(s => s.expansionName.toLowerCase().includes(filter));
+  onSalesFilterChange(filter: string): void {
+    this.salesFilterSubject.next(filter);
   }
 
-  filterROI(profitability: ExpansionProfitability[]): ExpansionProfitability[] {
-    if (!this.roiFilter.trim()) {
-      return profitability;
-    }
-    const filter = this.roiFilter.toLowerCase();
-    return profitability.filter(p => p.expansionName.toLowerCase().includes(filter));
+  onRoiFilterChange(filter: string): void {
+    this.roiFilterSubject.next(filter);
   }
 }

@@ -250,6 +250,24 @@
     - Real-time filtering as user types
     - Search icon in filter field for better UX
 
+✅ **Phase 8: Inventory Actions Refinement ✅ DONE (2025-11-30)**
+  - **Simplified Actions**:
+    - Removed "Edit" and "Delete" actions from inventory grid
+    - Replaced with single "Open on CardTrader" link button (🔗)
+    - Removed `EditInventoryDialogComponent` and related logic
+    - "New Item" button now redirects to Create Listing tab
+  - **Rationale**: User prefers managing item details directly on CardTrader website
+
+✅ **Phase 9: Dashboard Final Polish ✅ DONE (2025-11-30)**
+  - **Profitability Analytics**:
+    - Inverted sort order to Descending
+    - Changed sort metric to **ROI Percentage** (instead of absolute value)
+    - Shows highest performing expansions (relative to cost) at the top
+  - **Sales Analytics**:
+    - Switched data source to `dbo.ExpansionsROI` view
+    - Sorted by `TotaleVenduto` (Total Sales) Descending
+    - Ensures consistency with database view logic
+
 ⏳ **Next Steps**: 
   - Additional features and enhancements as needed
   - Continue improving reporting and analytics

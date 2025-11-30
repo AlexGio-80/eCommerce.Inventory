@@ -213,11 +213,12 @@ export class CardTraderApiService {
   }
 
   // Reporting
-  getSalesByExpansion(from?: string, to?: string, limit: number = 10): Observable<any[]> {
+  getSalesByExpansion(from?: string, to?: string, limit: number = 10, filter?: string): Observable<any[]> {
     let params = new HttpParams();
     if (from) params = params.set('from', from);
     if (to) params = params.set('to', to);
     params = params.set('limit', limit.toString());
+    if (filter) params = params.set('filter', filter);
 
     return this.http.get<ApiResponse<any[]>>(`${environment.api.baseUrl}/api/reporting/sales/by-expansion`, { params }).pipe(
       map(response => {
@@ -229,11 +230,12 @@ export class CardTraderApiService {
     );
   }
 
-  getExpansionProfitability(from?: string, to?: string, limit: number = 10): Observable<any[]> {
+  getExpansionProfitability(from?: string, to?: string, limit: number = 10, filter?: string): Observable<any[]> {
     let params = new HttpParams();
     if (from) params = params.set('from', from);
     if (to) params = params.set('to', to);
     params = params.set('limit', limit.toString());
+    if (filter) params = params.set('filter', filter);
 
     return this.http.get<ApiResponse<any[]>>(`${environment.api.baseUrl}/api/reporting/profitability/by-expansion`, { params }).pipe(
       map(response => {

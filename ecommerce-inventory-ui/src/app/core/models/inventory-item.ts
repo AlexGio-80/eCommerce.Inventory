@@ -6,9 +6,14 @@ export interface InventoryItem {
   blueprint?: Blueprint;
   quantity: number;
   price: number;
+  purchasePrice?: number;
+  listingPrice?: number;
+  condition?: string;
+  language?: string;
   isFoil: boolean;
   isSigned: boolean;
   isAltered: boolean;
+  tag?: string;
   cardTraderProductId?: number;
   status: 'active' | 'inactive' | 'sold';
   createdAt: Date;

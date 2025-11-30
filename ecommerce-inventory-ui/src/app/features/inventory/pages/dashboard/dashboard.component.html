@@ -73,11 +73,12 @@
       <mat-card-content>
         <mat-form-field appearance="outline" class="filter-field">
           <mat-label>Filtra espansione</mat-label>
-          <input matInput [(ngModel)]="salesFilter" placeholder="Cerca...">
+          <input matInput [(ngModel)]="salesFilter" (ngModelChange)="onSalesFilterChange($event)"
+            placeholder="Cerca...">
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
         <mat-list *ngIf="salesByExpansion$ | async as sales">
-          <mat-list-item *ngFor="let item of filterSales(sales)" class="analytics-item">
+          <mat-list-item *ngFor="let item of sales" class="analytics-item">
             <div matLine class="item-header">
               <span class="item-name">{{ item.expansionName }}</span>
               <span class="item-value">€ {{ item.totalRevenue | number: '1.2-2' }}</span>
@@ -98,11 +99,11 @@
       <mat-card-content>
         <mat-form-field appearance="outline" class="filter-field">
           <mat-label>Filtra espansione</mat-label>
-          <input matInput [(ngModel)]="roiFilter" placeholder="Cerca...">
+          <input matInput [(ngModel)]="roiFilter" (ngModelChange)="onRoiFilterChange($event)" placeholder="Cerca...">
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
         <mat-list *ngIf="expansionProfitability$ | async as profitability">
-          <mat-list-item *ngFor="let item of filterROI(profitability)" class="analytics-item roi-item">
+          <mat-list-item *ngFor="let item of profitability" class="analytics-item roi-item">
             <div matLine class="item-header">
               <span class="item-name">{{ item.expansionName }}</span>
               <span class="item-value" [class.negative-roi]="item.percentualeDifferenza < 0"
