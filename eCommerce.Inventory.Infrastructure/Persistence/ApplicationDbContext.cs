@@ -21,6 +21,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<Order> Orders { get; set; }
     public DbSet<OrderItem> OrderItems { get; set; }
     public DbSet<User> Users { get; set; }
+    public DbSet<ExpansionROI> ExpansionsROI { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -160,5 +161,10 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
         modelBuilder.Entity<PendingListing>()
             .HasIndex(pl => pl.CreatedAt)
             .HasDatabaseName("IX_PendingListing_CreatedAt");
+
+        // Configure ExpansionROI as a keyless view
+        modelBuilder.Entity<ExpansionROI>()
+            .HasNoKey()
+            .ToView("ExpansionsROI");
     }
 }

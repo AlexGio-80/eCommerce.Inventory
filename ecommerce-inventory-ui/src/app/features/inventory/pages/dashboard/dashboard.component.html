@@ -2,7 +2,7 @@
   <mat-toolbar color="primary" class="dashboard-header">
     <h1>📊 Dashboard</h1>
     <span class="spacer"></span>
-    <button mat-raised-button color="accent">
+    <button mat-raised-button color="accent" (click)="ngOnInit()">
       <mat-icon>refresh</mat-icon>
       Aggiorna
     </button>
@@ -17,7 +17,7 @@
         </div>
         <mat-card-title>Prodotti</mat-card-title>
       </mat-card-header>
-      <mat-card-content>
+      <mat-card-content class="padded-content">
         <div class="stat-value">{{ stats.totalProducts }}</div>
         <p class="stat-label">Articoli in magazzino</p>
       </mat-card-content>
@@ -30,7 +30,7 @@
         </div>
         <mat-card-title>Ordini</mat-card-title>
       </mat-card-header>
-      <mat-card-content>
+      <mat-card-content class="padded-content">
         <div class="stat-value">{{ stats.totalOrders }}</div>
         <p class="stat-label">Ordini totali</p>
       </mat-card-content>
@@ -39,13 +39,13 @@
     <mat-card class="stat-card">
       <mat-card-header>
         <div mat-card-avatar class="stat-icon warn">
-          <mat-icon>games</mat-icon>
+          <mat-icon>assignment_late</mat-icon>
         </div>
-        <mat-card-title>Giochi</mat-card-title>
+        <mat-card-title>Da Preparare</mat-card-title>
       </mat-card-header>
-      <mat-card-content>
-        <div class="stat-value">{{ stats.gameCount }}</div>
-        <p class="stat-label">Giochi disponibili</p>
+      <mat-card-content class="padded-content">
+        <div class="stat-value">{{ stats.unpreparedItemsCount }}</div>
+        <p class="stat-label">Oggetti da preparare</p>
       </mat-card-content>
     </mat-card>
 
@@ -56,43 +56,70 @@
         </div>
         <mat-card-title>Ultimo Sync</mat-card-title>
       </mat-card-header>
-      <mat-card-content>
+      <mat-card-content class="padded-content">
         <div class="stat-value">{{ stats.lastSync | date: 'short' }}</div>
         <p class="stat-label">Data ultimo aggiornamento</p>
       </mat-card-content>
     </mat-card>
   </div>
 
-  <!-- Recent Orders -->
-  <div class="recent-section">
-    <mat-card>
+  <!-- Analytics Section -->
+  <div class="analytics-grid">
+    <!-- Sales by Expansion -->
+    <mat-card class="analytics-card">
       <mat-card-header>
-        <mat-card-title>📋 Ordini Recenti</mat-card-title>
+        <mat-card-title>📈 Vendite per Espansione</mat-card-title>
       </mat-card-header>
       <mat-card-content>
-        <mat-list *ngIf="recentOrders$ | async as orders; else noOrders">
-          <mat-list-item *ngFor="let order of orders">
-            <mat-icon matListItemIcon [color]="getOrderStatusColor(order.state)">
-              {{ order.state === 'delivered' ? 'check_circle' : 'schedule' }}
-            </mat-icon>
-            <div matLine>
-              <strong>Ordine #{{ order.code }}</strong>
+        <mat-form-field appearance="outline" class="filter-field">
+          <mat-label>Filtra espansione</mat-label>
+          <input matInput [(ngModel)]="salesFilter" placeholder="Cerca...">
+          <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
+        <mat-list *ngIf="salesByExpansion$ | async as sales">
+          <mat-list-item *ngFor="let item of filterSales(sales)" class="analytics-item">
+            <div matLine class="item-header">
+              <span class="item-name">{{ item.expansionName }}</span>
+              <span class="item-value">€ {{ item.totalRevenue | number: '1.2-2' }}</span>
             </div>
             <div matLine>
-              Status: <mat-chip [color]="getOrderStatusColor(order.state)" selected>
-                {{ order.state }}
-              </mat-chip>
-            </div>
-            <div matLine class="secondary-text">
-              € {{ order.sellerTotal | number: '1.2-2' }} •
-              {{ order.paidAt | date: 'short' }}
+              <mat-progress-bar mode="determinate" [value]="item.percentage"></mat-progress-bar>
             </div>
           </mat-list-item>
         </mat-list>
+      </mat-card-content>
+    </mat-card>
 
-        <ng-template #noOrders>
-          <p class="no-data-text">Nessun ordine disponibile</p>
-        </ng-template>
+    <!-- Profitability -->
+    <mat-card class="analytics-card">
+      <mat-card-header>
+        <mat-card-title>💰 Redditività (ROI)</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <mat-form-field appearance="outline" class="filter-field">
+          <mat-label>Filtra espansione</mat-label>
+          <input matInput [(ngModel)]="roiFilter" placeholder="Cerca...">
+          <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
+        <mat-list *ngIf="expansionProfitability$ | async as profitability">
+          <mat-list-item *ngFor="let item of filterROI(profitability)" class="analytics-item roi-item">
+            <div matLine class="item-header">
+              <span class="item-name">{{ item.expansionName }}</span>
+              <span class="item-value" [class.negative-roi]="item.percentualeDifferenza < 0"
+                [class.neutral-roi]="item.percentualeDifferenza === 0"
+                [class.positive-roi]="item.percentualeDifferenza > 0">
+                {{ item.percentualeDifferenza | number: '1.1-1' }}%
+              </span>
+            </div>
+            <div matLine class="secondary-text">
+              Differenza: € {{ item.differenza | number: '1.2-2' }}
+            </div>
+            <div matLine class="secondary-text">
+              Venduto: € {{ item.totaleVenduto | number: '1.2-2' }} • Acquistato: € {{ item.totaleAcquistato | number:
+              '1.2-2' }}
+            </div>
+          </mat-list-item>
+        </mat-list>
       </mat-card-content>
     </mat-card>
   </div>
@@ -104,21 +131,25 @@
         <mat-card-title>⚡ Azioni Rapide</mat-card-title>
       </mat-card-header>
       <mat-card-content class="actions-grid">
-        <button mat-raised-button color="primary" class="action-btn">
+        <button mat-raised-button color="primary" class="action-btn"
+          (click)="openTab('/layout/products/create', 'Nuovo Articolo', 'add_circle')">
           <mat-icon>add_circle</mat-icon>
           Nuovo Articolo
         </button>
-        <button mat-raised-button color="accent" class="action-btn">
+        <button mat-raised-button color="accent" class="action-btn"
+          (click)="openTab('/layout/sync', 'Sincronizza', 'sync')">
           <mat-icon>sync</mat-icon>
           Sincronizza
         </button>
-        <button mat-raised-button color="warn" class="action-btn">
+        <button mat-raised-button color="warn" class="action-btn"
+          (click)="openTab('/layout/inventory', 'Inventario', 'list')">
           <mat-icon>list</mat-icon>
           Visualizza Inventario
         </button>
-        <button mat-raised-button class="action-btn">
-          <mat-icon>settings</mat-icon>
-          Impostazioni
+        <button mat-raised-button class="action-btn"
+          (click)="openTab('/layout/orders/unprepared', 'Da Preparare', 'assignment_late')">
+          <mat-icon>assignment_late</mat-icon>
+          Da Preparare
         </button>
       </mat-card-content>
     </mat-card>

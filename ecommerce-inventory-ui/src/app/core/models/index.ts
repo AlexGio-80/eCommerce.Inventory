@@ -6,3 +6,4 @@ export * from './order';
 export * from './unprepared-item-dto';
 export * from './api-response';
 export * from './marketplace-stats';
+export * from './reporting';

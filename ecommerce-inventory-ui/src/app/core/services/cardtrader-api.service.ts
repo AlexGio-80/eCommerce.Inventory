@@ -211,4 +211,37 @@ export class CardTraderApiService {
   getMarketplaceStats(blueprintId: number): Observable<MarketplaceStats> {
     return this.http.get<MarketplaceStats>(`${this.apiUrl}/inventory/marketplace-stats/${blueprintId}`);
   }
+
+  // Reporting
+  getSalesByExpansion(from?: string, to?: string, limit: number = 10): Observable<any[]> {
+    let params = new HttpParams();
+    if (from) params = params.set('from', from);
+    if (to) params = params.set('to', to);
+    params = params.set('limit', limit.toString());
+
+    return this.http.get<ApiResponse<any[]>>(`${environment.api.baseUrl}/api/reporting/sales/by-expansion`, { params }).pipe(
+      map(response => {
+        if (!response.success || !response.data) {
+          throw new Error(response.message || 'Failed to fetch sales by expansion');
+        }
+        return response.data;
+      })
+    );
+  }
+
+  getExpansionProfitability(from?: string, to?: string, limit: number = 10): Observable<any[]> {
+    let params = new HttpParams();
+    if (from) params = params.set('from', from);
+    if (to) params = params.set('to', to);
+    params = params.set('limit', limit.toString());
+
+    return this.http.get<ApiResponse<any[]>>(`${environment.api.baseUrl}/api/reporting/profitability/by-expansion`, { params }).pipe(
+      map(response => {
+        if (!response.success || !response.data) {
+          throw new Error(response.message || 'Failed to fetch expansion profitability');
+        }
+        return response.data;
+      })
+    );
+  }
 }

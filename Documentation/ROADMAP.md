@@ -229,6 +229,27 @@
       - Frontend path detection fixed with proper publish root calculation
       - Enhanced logging for troubleshooting
 
+✅ **Phase 7: Dashboard Improvements ✅ DONE (2025-11-29)**
+  - **Dashboard Fixes**:
+    - Fixed dashboard duplication issue (removed duplicate HTML content)
+    - Fixed Quick Actions navigation to open pages in new tabs using `TabManagerService`
+    - Replaced "Impostazioni" button with "Da Preparare" button
+    - Fixed Sales by Expansion query to default to all-time data (instead of last month)
+  - **ROI Widget Enhancement**:
+    - Integrated with `dbo.ExpansionsROI` database view for accurate profitability data
+    - Display columns: `ExpansionName`, `Differenza`, `TotaleVenduto`, `TotaleAcquistato`, `PercentualeDifferenza`
+    - Color-coded percentage display:
+      - **Red**: Negative (loss)
+      - **Blue**: Zero (break-even)
+      - **Green**: Positive (profit)
+    - Backend: Created `ExpansionROI` entity, updated `ExpansionProfitabilityDto`, modified `ReportingController`
+    - Frontend: Updated models, component logic, and template with new columns
+  - **Filter Functionality**:
+    - Added text filter inputs to both "Vendite per Espansione" and "Redditività (ROI)" widgets
+    - Client-side filtering with "like" search (case-insensitive, partial match)
+    - Real-time filtering as user types
+    - Search icon in filter field for better UX
+
 ⏳ **Next Steps**: 
   - Additional features and enhancements as needed
   - Continue improving reporting and analytics

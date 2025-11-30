@@ -536,6 +536,107 @@ public class ReportingController : ControllerBase
 
     #endregion
 
+    #region Expansion Analytics
+
+    /// <summary>
+    /// Get sales by expansion
+    /// </summary>
+    [HttpGet("sales/by-expansion")]
+    public async Task<ActionResult<ApiResponse<List<SalesByExpansionDto>>>> GetSalesByExpansion(
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null,
+        [FromQuery] int limit = 10)
+    {
+        try
+        {
+            var fromDate = from ?? DateTime.MinValue;
+            var toDate = to ?? DateTime.MaxValue;
+
+            _logger.LogInformation("Fetching sales by expansion from {FromDate} to {ToDate}", fromDate, toDate);
+
+            var query = _context.OrderItems
+                .AsNoTracking()
+                .Include(oi => oi.Blueprint)
+                    .ThenInclude(b => b.Expansion)
+                .Where(oi => oi.Blueprint != null);
+
+            if (from.HasValue || to.HasValue)
+            {
+                query = query.Where(oi => oi.Order.PaidAt != null &&
+                            oi.Order.PaidAt >= fromDate &&
+                            oi.Order.PaidAt <= toDate);
+            }
+
+            var salesByExpansion = await query
+                .GroupBy(oi => oi.ExpansionName)
+                .Select(g => new
+                {
+                    ExpansionName = g.Key,
+                    TotalRevenue = g.Sum(oi => oi.Price * oi.Quantity),
+                    OrderCount = g.Select(oi => oi.OrderId).Distinct().Count()
+                })
+                .OrderByDescending(x => x.TotalRevenue)
+                .Take(limit)
+                .ToListAsync();
+
+            var totalRevenue = salesByExpansion.Sum(s => s.TotalRevenue);
+
+            var result = salesByExpansion.Select(s => new SalesByExpansionDto
+            {
+                ExpansionName = s.ExpansionName,
+                TotalRevenue = s.TotalRevenue,
+                OrderCount = s.OrderCount,
+                Percentage = totalRevenue > 0 ? (s.TotalRevenue / totalRevenue) * 100 : 0
+            }).ToList();
+
+            return Ok(ApiResponse<List<SalesByExpansionDto>>.SuccessResult(result));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching sales by expansion");
+            return StatusCode(500, ApiResponse<List<SalesByExpansionDto>>.ErrorResult("Failed to fetch sales by expansion", ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// Get expansion profitability from ExpansionsROI view
+    /// </summary>
+    [HttpGet("profitability/by-expansion")]
+    public async Task<ActionResult<ApiResponse<List<ExpansionProfitabilityDto>>>> GetExpansionProfitability(
+        [FromQuery] int limit = 10)
+    {
+        try
+        {
+            _logger.LogInformation("Fetching expansion profitability from view");
+
+            var roiData = await _context.ExpansionsROI
+                .AsNoTracking()
+                .OrderBy(x => x.Differenza)
+                .Take(limit)
+                .ToListAsync();
+
+            var result = roiData.Select(x => new ExpansionProfitabilityDto
+            {
+                ExpansionName = x.ExpansionName,
+                Differenza = x.Differenza,
+                TotaleVenduto = x.TotaleVenduto,
+                TotaleAcquistato = x.TotaleAcquistato,
+                PercentualeDifferenza = x.TotaleAcquistato > 0
+                    ? (x.Differenza / x.TotaleAcquistato) * 100
+                    : 0
+            }).ToList();
+
+            return Ok(ApiResponse<List<ExpansionProfitabilityDto>>.SuccessResult(result));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching expansion profitability");
+            return StatusCode(500, ApiResponse<List<ExpansionProfitabilityDto>>.ErrorResult("Failed to fetch expansion profitability", ex.Message));
+        }
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private static int GetWeekNumber(DateTime date)
