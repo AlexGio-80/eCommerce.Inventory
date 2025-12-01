@@ -56,7 +56,7 @@ export class ReportingService {
         }
 
         return this.http.get<ApiResponse<TopProduct[]>>(`${this.apiUrl}/sales/top-products`, { params })
-            .pipe(map(response => response.data!));
+            .pipe(map(response => response.data ?? []));
     }
 
     getSalesByGame(dateRange?: DateRange): Observable<SalesByGame[]> {
@@ -67,7 +67,7 @@ export class ReportingService {
         }
 
         return this.http.get<ApiResponse<SalesByGame[]>>(`${this.apiUrl}/sales/by-game`, { params })
-            .pipe(map(response => response.data!));
+            .pipe(map(response => response.data ?? []));
     }
 
     // Inventory Analytics
@@ -78,13 +78,13 @@ export class ReportingService {
 
     getInventoryDistribution(): Observable<InventoryDistribution[]> {
         return this.http.get<ApiResponse<InventoryDistribution[]>>(`${this.apiUrl}/inventory/distribution`)
-            .pipe(map(response => response.data!));
+            .pipe(map(response => response.data ?? []));
     }
 
     getSlowMovers(days: number = 90): Observable<SlowMover[]> {
         const params = new HttpParams().set('days', days.toString());
         return this.http.get<ApiResponse<SlowMover[]>>(`${this.apiUrl}/inventory/slow-movers`, { params })
-            .pipe(map(response => response.data!));
+            .pipe(map(response => response.data ?? []));
     }
 
     // Profitability Analytics
@@ -107,6 +107,6 @@ export class ReportingService {
         }
 
         return this.http.get<ApiResponse<TopPerformer[]>>(`${this.apiUrl}/profitability/top-performers`, { params })
-            .pipe(map(response => response.data!));
+            .pipe(map(response => response.data ?? []));
     }
 }

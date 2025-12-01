@@ -16,19 +16,19 @@ export class ProfitabilityAnalysisComponent implements OnInit {
 
     // AG-Grid Column Definitions
     topPerformersColumnDefs: ColDef[] = [
-        { field: 'cardName', headerName: 'Card' },
-        { field: 'expansionName', headerName: 'Expansion' },
+        { field: 'cardName', headerName: 'Carta' },
+        { field: 'expansionName', headerName: 'Espansione' },
         {
             field: 'profitMarginPercentage',
-            headerName: 'Profit Margin',
+            headerName: 'Margine Profitto',
             valueFormatter: (params: ValueFormatterParams) => params.value + '%'
         },
         {
             field: 'totalProfit',
-            headerName: 'Total Profit',
+            headerName: 'Profitto Totale',
             valueFormatter: (params: ValueFormatterParams) => '€' + params.value
         },
-        { field: 'quantitySold', headerName: 'Qty Sold' }
+        { field: 'quantitySold', headerName: 'Qta Venduta' }
     ];
 
     constructor(private reportingService: ReportingService) { }

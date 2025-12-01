@@ -23,28 +23,28 @@ export class SalesDashboard implements OnInit {
 
   // AG-Grid Column Definitions
   topProductsColumnDefs: ColDef[] = [
-    { field: 'cardName', headerName: 'Card' },
-    { field: 'expansionName', headerName: 'Expansion' },
-    { field: 'gameName', headerName: 'Game' },
-    { field: 'quantitySold', headerName: 'Qty Sold' },
+    { field: 'cardName', headerName: 'Carta' },
+    { field: 'expansionName', headerName: 'Espansione' },
+    { field: 'gameName', headerName: 'Gioco' },
+    { field: 'quantitySold', headerName: 'Qta Venduta' },
     {
       field: 'totalRevenue',
-      headerName: 'Revenue',
-      valueFormatter: (params: ValueFormatterParams) => '$' + params.value
+      headerName: 'Fatturato',
+      valueFormatter: (params: ValueFormatterParams) => '€' + params.value
     }
   ];
 
   salesByGameColumnDefs: ColDef[] = [
-    { field: 'gameName', headerName: 'Game' },
+    { field: 'gameName', headerName: 'Gioco' },
     {
       field: 'totalRevenue',
-      headerName: 'Revenue',
-      valueFormatter: (params: ValueFormatterParams) => '$' + params.value
+      headerName: 'Fatturato',
+      valueFormatter: (params: ValueFormatterParams) => '€' + params.value
     },
-    { field: 'orderCount', headerName: 'Orders' },
+    { field: 'orderCount', headerName: 'Ordini' },
     {
       field: 'percentage',
-      headerName: '% of Total',
+      headerName: '% del Totale',
       valueFormatter: (params: ValueFormatterParams) => params.value + '%'
     }
   ];

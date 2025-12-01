@@ -286,6 +286,12 @@
     - Root cause: Services expected raw arrays but API returns `ApiResponse<T>` wrapper
     - Solution: Import `ApiResponse` type and use `.pipe(map(response => response.data))` pattern
     - Applied to all service methods: `getGames()`, `getExpansions()`, `updateGame()`, `syncBlueprints()`
+  - **Reporting Pages**:
+    - Localized menu items ("Report Vendite", "Report Inventario", "Report Redditività")
+    - Localized Sales Dashboard (KPIs, Charts, Grids)
+    - Localized Inventory Analytics (KPIs, Charts, Grids)
+    - Localized Profitability Analysis (KPIs, Grids)
+    - Fixed data display issue in `ReportingService` by registering `AllCommunityModule` and improving null safety
 
 ⏳ **Next Steps**: 
   - Additional features and enhancements as needed

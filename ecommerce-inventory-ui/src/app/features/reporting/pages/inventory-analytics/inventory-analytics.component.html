@@ -1,29 +1,29 @@
 <div class="inventory-analytics">
-    <h2>Inventory Analytics</h2>
+    <h2>Analisi Inventario</h2>
 
     <!-- KPI Metrics -->
     <div class="metrics" *ngIf="inventoryValue">
         <div class="metric-item">
-            <h3>Total Value</h3>
-            <p>{{ inventoryValue.totalValue | currency:'EUR' }}</p>
+            <h3>Valore Totale</h3>
+            <p>{{ inventoryValue.totalValue | currency:'EUR':'symbol':'1.2-2' }}</p>
         </div>
         <div class="metric-item">
-            <h3>Total Items</h3>
+            <h3>Totale Articoli</h3>
             <p>{{ inventoryValue.totalItems }}</p>
         </div>
     </div>
 
     <!-- Distribution Chart -->
     <div class="chart-container" *ngIf="distributionValues.length > 0">
-        <h3>Value Distribution by Game</h3>
+        <h3>Distribuzione Valore per Gioco</h3>
         <canvas baseChart
-            [data]="{ datasets: [{ data: distributionValues, label: 'Value' }], labels: distributionLabels }"
+            [data]="{ datasets: [{ data: distributionValues, label: 'Valore' }], labels: distributionLabels }"
             [options]="chartOptions" [legend]="true" chartType="pie">
         </canvas>
     </div>
 
     <!-- Slow Movers Grid -->
-    <h3>Slow Movers (>90 days)</h3>
+    <h3>Articoli a Bassa Rotazione (>90 giorni)</h3>
     <ag-grid-angular class="ag-theme-alpine" style="width: 100%; height: 400px;" [rowData]="slowMovers"
         [columnDefs]="slowMoversColumnDefs">
     </ag-grid-angular>

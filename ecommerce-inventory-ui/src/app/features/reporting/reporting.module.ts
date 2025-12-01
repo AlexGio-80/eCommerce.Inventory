@@ -9,6 +9,11 @@ import { SalesDashboard } from './pages/sales-dashboard/sales-dashboard';
 import { InventoryAnalyticsComponent } from './pages/inventory-analytics/inventory-analytics.component';
 import { ProfitabilityAnalysisComponent } from './pages/profitability-analysis/profitability-analysis.component';
 
+import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community';
+
+// Register AG Grid modules
+ModuleRegistry.registerModules([AllCommunityModule]);
+
 @NgModule({
     declarations: [
         SalesDashboard,

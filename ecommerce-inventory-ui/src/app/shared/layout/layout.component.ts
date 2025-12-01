@@ -46,12 +46,11 @@ export class LayoutComponent implements OnInit {
     { label: 'Games', route: '/layout/games', icon: 'casino' },
     { label: 'Expansions', route: '/layout/expansions', icon: 'extension' },
     { label: 'Nuovo Prodotto', route: '/layout/products/create', icon: 'add_circle' },
-    { label: 'Prodotti', route: '/layout/products', icon: 'shopping_bag' },
     { label: 'Ordini', route: '/layout/orders', icon: 'shopping_cart' },
     { label: 'Da Preparare', route: '/layout/orders/unprepared', icon: 'checklist' },
-    { label: 'Sales Report', route: '/layout/reporting/sales', icon: 'monetization_on' },
-    { label: 'Inventory Report', route: '/layout/reporting/inventory', icon: 'inventory' },
-    { label: 'Profitability Report', route: '/layout/reporting/profitability', icon: 'trending_up' },
+    { label: 'Report Vendite', route: '/layout/reporting/sales', icon: 'monetization_on' },
+    { label: 'Report Inventario', route: '/layout/reporting/inventory', icon: 'inventory' },
+    { label: 'Report Redditività', route: '/layout/reporting/profitability', icon: 'trending_up' },
   ];
 
   constructor(

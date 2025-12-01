@@ -1,14 +1,14 @@
 <div class="profitability-analysis">
-    <h2>Profitability Analysis</h2>
+    <h2>Analisi Redditività</h2>
 
     <!-- KPI Metrics -->
     <div class="metrics" *ngIf="overview">
         <div class="metric-item">
-            <h3>Total Profit</h3>
-            <p>{{ overview.grossProfit | currency:'EUR' }}</p>
+            <h3>Profitto Totale</h3>
+            <p>{{ overview.grossProfit | currency:'EUR':'symbol':'1.2-2' }}</p>
         </div>
         <div class="metric-item">
-            <h3>Average Margin</h3>
+            <h3>Margine Medio</h3>
             <p>{{ overview.profitMarginPercentage }}%</p>
         </div>
         <div class="metric-item">
@@ -18,7 +18,7 @@
     </div>
 
     <!-- Top Performers Grid -->
-    <h3>Top Performers</h3>
+    <h3>Migliori Performance</h3>
     <ag-grid-angular class="ag-theme-alpine" style="width: 100%; height: 400px;" [rowData]="topPerformers"
         [columnDefs]="topPerformersColumnDefs">
     </ag-grid-angular>

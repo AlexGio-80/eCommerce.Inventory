@@ -799,6 +799,7 @@ Tutte le stringhe visibili all'utente nell'interfaccia Angular DEVONO essere in 
 
 #### Titoli e Headers
 - Titoli di pagina (es. "Gestione Giochi", "Gestione Espansioni")
+- Titoli di report (es. "Report Vendite", "Report Inventario", "Report Redditività")
 - Sottotitoli e sezioni
 - Titoli di card e pannelli
 

@@ -22,13 +22,13 @@ export class InventoryAnalyticsComponent implements OnInit {
 
     // AG-Grid Column Definitions
     slowMoversColumnDefs: ColDef[] = [
-        { field: 'cardName', headerName: 'Card' },
-        { field: 'expansionName', headerName: 'Expansion' },
-        { field: 'daysInInventory', headerName: 'Days in Inventory' },
-        { field: 'quantity', headerName: 'Quantity' },
+        { field: 'cardName', headerName: 'Carta' },
+        { field: 'expansionName', headerName: 'Espansione' },
+        { field: 'daysInInventory', headerName: 'Giorni in Inventario' },
+        { field: 'quantity', headerName: 'Quantità' },
         {
             field: 'listingPrice',
-            headerName: 'Price',
+            headerName: 'Prezzo',
             valueFormatter: (params: ValueFormatterParams) => '€' + params.value
         }
     ];
