@@ -37,7 +37,7 @@ ModuleRegistry.registerModules([AllCommunityModule]);
   ],
   template: `
     <div class="expansions-container">
-      <h1>Expansions Management</h1>
+      <h1>Gestione Espansioni</h1>
 
       <!-- Header Card with Selected Expansion Details -->
       <mat-card class="header-card" *ngIf="selectedExpansion()">
@@ -77,7 +77,7 @@ ModuleRegistry.registerModules([AllCommunityModule]);
       <mat-card class="grid-card">
         <mat-card-content>
           <div class="grid-header">
-            <h2>Expansions List</h2>
+            <h2>Lista Espansioni</h2>
             
             <!-- Grid Options Menu -->
             <button mat-icon-button [matMenuTriggerFor]="gridMenu" matTooltip="Grid Options">
@@ -226,10 +226,10 @@ export class ExpansionsPageComponent implements OnInit {
   columnDefs: ColDef[] = [
     { field: 'id', headerName: 'ID', width: 80, filter: 'agNumberColumnFilter' },
     { field: 'cardTraderId', headerName: 'CT ID', width: 100, filter: 'agNumberColumnFilter' },
-    { field: 'name', headerName: 'Name', flex: 2, filter: 'agTextColumnFilter' },
-    { field: 'code', headerName: 'Code', width: 120, filter: 'agTextColumnFilter' },
-    { field: 'gameName', headerName: 'Game', flex: 1, filter: 'agTextColumnFilter' },
-    { field: 'gameCode', headerName: 'Game Code', width: 120, filter: 'agTextColumnFilter' }
+    { field: 'name', headerName: 'Nome', flex: 2, filter: 'agTextColumnFilter' },
+    { field: 'code', headerName: 'Codice', width: 120, filter: 'agTextColumnFilter' },
+    { field: 'gameName', headerName: 'Gioco', flex: 1, filter: 'agTextColumnFilter' },
+    { field: 'gameCode', headerName: 'Codice Gioco', width: 120, filter: 'agTextColumnFilter' }
   ];
 
   defaultColDef: ColDef = {

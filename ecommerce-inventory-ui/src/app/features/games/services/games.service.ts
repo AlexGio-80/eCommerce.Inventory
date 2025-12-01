@@ -1,7 +1,9 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { environment } from '../../../../environments/environment';
+import { ApiResponse } from '../../../core/models/api-response';
 
 export interface Game {
     id: number;
@@ -31,22 +33,32 @@ export class GamesService {
     constructor(private http: HttpClient) { }
 
     getGames(): Observable<Game[]> {
-        return this.http.get<Game[]>(this.apiUrl);
+        return this.http.get<ApiResponse<Game[]>>(this.apiUrl).pipe(
+            map(response => response.data ?? [])
+        );
     }
 
     getGame(id: number): Observable<Game> {
-        return this.http.get<Game>(`${this.apiUrl}/${id}`);
+        return this.http.get<ApiResponse<Game>>(`${this.apiUrl}/${id}`).pipe(
+            map(response => response.data!)
+        );
     }
 
     updateGame(id: number, isEnabled: boolean): Observable<Game> {
-        return this.http.put<Game>(`${this.apiUrl}/${id}`, { isEnabled });
+        return this.http.put<ApiResponse<Game>>(`${this.apiUrl}/${id}`, { isEnabled }).pipe(
+            map(response => response.data!)
+        );
     }
 
     syncExpansions(id: number): Observable<SyncResponse> {
-        return this.http.post<SyncResponse>(`${this.apiUrl}/${id}/sync-expansions`, {});
+        return this.http.post<ApiResponse<SyncResponse>>(`${this.apiUrl}/${id}/sync-expansions`, {}).pipe(
+            map(response => response.data!)
+        );
     }
 
     syncAll(id: number): Observable<SyncResponse> {
-        return this.http.post<SyncResponse>(`${this.apiUrl}/${id}/sync-all`, {});
+        return this.http.post<ApiResponse<SyncResponse>>(`${this.apiUrl}/${id}/sync-all`, {}).pipe(
+            map(response => response.data!)
+        );
     }
 }

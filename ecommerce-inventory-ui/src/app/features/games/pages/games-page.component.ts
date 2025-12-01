@@ -136,11 +136,11 @@ export class GamesPageComponent implements OnInit {
     columnDefs: ColDef[] = [
         { field: 'id', headerName: 'ID', width: 80, filter: 'agNumberColumnFilter' },
         { field: 'cardTraderId', headerName: 'CT ID', width: 100, filter: 'agNumberColumnFilter' },
-        { field: 'name', headerName: 'Name', flex: 2, filter: 'agTextColumnFilter' },
-        { field: 'code', headerName: 'Code', width: 120, filter: 'agTextColumnFilter' },
+        { field: 'name', headerName: 'Nome', flex: 2, filter: 'agTextColumnFilter' },
+        { field: 'code', headerName: 'Codice', width: 120, filter: 'agTextColumnFilter' },
         {
             field: 'isEnabled',
-            headerName: 'Enabled',
+            headerName: 'Abilitato',
             width: 120,
             cellRenderer: (params: any) => {
                 return `<input type="checkbox" ${params.value ? 'checked' : ''} disabled />`;

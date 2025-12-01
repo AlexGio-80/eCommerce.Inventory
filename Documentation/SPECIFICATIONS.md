@@ -788,6 +788,96 @@ Nuove griglie DEVONO usare AG-Grid da subito.
 
 ---
 
+## 17. Localizzazione Italiana (OBBLIGATORIO)
+
+Tutte le stringhe visibili all'utente nell'interfaccia Angular DEVONO essere in italiano.
+
+### Regola Fondamentale
+**L'applicazione è destinata esclusivamente al mercato italiano. Tutte le stringhe UI devono essere in italiano.**
+
+### Ambito di Applicazione
+
+#### Titoli e Headers
+- Titoli di pagina (es. "Gestione Giochi", "Gestione Espansioni")
+- Sottotitoli e sezioni
+- Titoli di card e pannelli
+
+#### Grid e Tabelle
+- Intestazioni colonne (es. "Nome", "Codice", "Abilitato")
+- Messaggi di stato (es. "Nessun dato da visualizzare")
+- Tooltip e menu contestuali
+
+#### Form e Input
+- Label dei campi
+- Placeholder text
+- Messaggi di validazione
+- Testi dei pulsanti
+
+#### Messaggi e Notifiche
+- SnackBar messages
+- Dialog di conferma
+- Messaggi di errore
+- Messaggi di successo
+
+### Implementazione
+
+✅ **CORRETTO**:
+```typescript
+// Component template
+<h1>Gestione Giochi</h1>
+<h2>Lista Giochi</h2>
+
+// Column definitions
+columnDefs: ColDef[] = [
+  { field: 'id', headerName: 'ID', ... },
+  { field: 'name', headerName: 'Nome', ... },
+  { field: 'code', headerName: 'Codice', ... },
+  { field: 'isEnabled', headerName: 'Abilitato', ... }
+];
+
+// Snackbar messages
+this.snackBar.open('Gioco aggiornato con successo', 'Chiudi', { duration: 3000 });
+this.snackBar.open('Errore durante il caricamento dei dati', 'Chiudi', { duration: 3000 });
+```
+
+❌ **SBAGLIATO**:
+```typescript
+// NO - Testi in inglese
+<h1>Games Management</h1>
+<h2>Games List</h2>
+
+columnDefs: ColDef[] = [
+  { field: 'name', headerName: 'Name', ... },  // NO!
+  { field: 'code', headerName: 'Code', ... },  // NO!
+];
+
+this.snackBar.open('Game updated successfully', 'Close', ...);  // NO!
+```
+
+### Eccezioni
+Le seguenti stringhe possono rimanere in inglese:
+- **Codici tecnici**: ID, CT ID (CardTrader ID)
+- **Nomi di entità API**: se provengono direttamente dall'API esterna
+- **Log messages**: i log del backend possono rimanere in inglese
+- **Commenti nel codice**: possono essere in italiano o inglese
+
+### Verifica
+Prima di ogni commit, verificare:
+- [ ] Tutti i titoli di pagina sono in italiano
+- [ ] Tutte le intestazioni di colonne sono in italiano
+- [ ] Tutti i messaggi utente (snackbar, dialog) sono in italiano
+- [ ] Tutti i testi dei pulsanti sono in italiano
+- [ ] Nessuna stringa inglese visibile nell'interfaccia utente
+
+### Note per il Futuro
+Se in futuro si decidesse di supportare più lingue:
+1. Implementare `@ngx-translate/core`
+2. Creare file di traduzione `it.json`, `en.json`
+3. Migrare tutte le stringhe hardcoded ai file di traduzione
+4. Per ora, **hardcoded italiano è accettabile** data la destinazione esclusiva al mercato italiano
+
+---
+
 ## Checklist per Nuovo Feature
 
 Prima di fare un commit, verificare:
@@ -868,6 +958,7 @@ bulkDelete(): void {
 - [ ] **[SE GRIGLIA DATI]** Usato AG-Grid con tutte le funzionalità obbligatorie (sezione 15)
 - [ ] **[SE GRIGLIA DATI]** GridStateService configurato per persistenza
 - [ ] **[SE GRIGLIA DATI]** SideBar abilitato per column visibility
+- [ ] **[SE UI ANGULAR]** Tutte le stringhe visibili all'utente sono in italiano (sezione 17)
 
 ---
 

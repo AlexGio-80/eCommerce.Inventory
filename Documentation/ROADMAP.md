@@ -268,6 +268,25 @@
     - Sorted by `TotaleVenduto` (Total Sales) Descending
     - Ensures consistency with database view logic
 
+✅ **Phase 10: UI Localization & Data Display Fixes ✅ DONE (2025-12-01)**
+  - **Games Page**:
+    - Localized all titles and headers to Italian ("Gestione Giochi", "Lista Giochi")
+    - Localized column headers ("Nome", "Codice", "Abilitato")
+    - Fixed data display issue: Updated `GamesService` to handle `ApiResponse<T>` wrapper
+    - Added RxJS `map` operator to extract data from API responses
+  - **Expansions Page**:
+    - Localized all titles and headers to Italian ("Gestione Espansioni", "Lista Espansioni")
+    - Localized column headers ("Nome", "Codice", "Gioco", "Codice Gioco")
+    - Fixed data display issue: Updated `ExpansionsService` to handle `ApiResponse<T>` wrapper
+  - **Documentation**:
+    - Added Section 17 "Localizzazione Italiana (OBBLIGATORIO)" to SPECIFICATIONS.md
+    - Documented requirement for Italian-only UI strings
+    - Added localization checklist item for Angular UI features
+  - **Technical Details**:
+    - Root cause: Services expected raw arrays but API returns `ApiResponse<T>` wrapper
+    - Solution: Import `ApiResponse` type and use `.pipe(map(response => response.data))` pattern
+    - Applied to all service methods: `getGames()`, `getExpansions()`, `updateGame()`, `syncBlueprints()`
+
 ⏳ **Next Steps**: 
   - Additional features and enhancements as needed
   - Continue improving reporting and analytics
