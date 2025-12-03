@@ -136,7 +136,11 @@ if (-not (Test-Path $logsDir)) {
 
 # Grant full control to NetworkService using icacls
 Write-Host "[*] Setting permissions for NetworkService..." -ForegroundColor Yellow
-icacls $apiPublishDir /grant "NETWORK SERVICE:(OI)(CI)F" /T /Q | Out-Null
+try {
+    icacls $apiPublishDir /grant "NT AUTHORITY\NETWORK SERVICE:(OI)(CI)F" /T /Q 2>$null | Out-Null
+} catch {
+    Write-Warning "[!] Could not set NetworkService permissions. Service may have issues writing logs."
+}
 
 # Install/Update Windows Service
 if (-not $service) {
@@ -166,8 +170,30 @@ else {
     }
 }
 
-# Restart IIS (only serves UI on port 80)
+# Configure IIS (create AppPool and Site if they don't exist)
 if (Test-Path $appCmd) {
+    # Check if AppPool exists
+    $appPoolExists = & $appCmd list apppool "$iisPoolName" 2>$null
+    if (-not $appPoolExists) {
+        Write-Host "[*] Creating AppPool: $iisPoolName" -ForegroundColor Yellow
+        & $appCmd add apppool /name:"$iisPoolName" /managedRuntimeVersion:"" /managedPipelineMode:"Integrated"
+        & $appCmd set apppool "$iisPoolName" /processModel.identityType:NetworkService
+    }
+    
+    # Check if Site exists
+    $siteExists = & $appCmd list site "$iisSiteName" 2>$null
+    if (-not $siteExists) {
+        Write-Host "[*] Creating IIS Site: $iisSiteName" -ForegroundColor Yellow
+        & $appCmd add site /name:"$iisSiteName" /physicalPath:"$uiPublishDir" /bindings:"http/*:80:inventory.local"
+        & $appCmd set site "$iisSiteName" /[path='/'].applicationPool:"$iisPoolName"
+    }
+    else {
+        # Update physical path in case it changed
+        Write-Host "[*] Updating IIS Site physical path..." -ForegroundColor Yellow
+        & $appCmd set site "$iisSiteName" /[path='/'].physicalPath:"$uiPublishDir"
+    }
+    
+    # Start AppPool and Site
     Write-Host "[+] Starting AppPool: $iisPoolName" -ForegroundColor Green
     & $appCmd start apppool "$iisPoolName" 2>$null
 
