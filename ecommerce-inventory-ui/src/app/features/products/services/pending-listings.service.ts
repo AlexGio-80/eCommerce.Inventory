@@ -22,6 +22,15 @@ export interface PendingListing {
     syncError?: string;
     cardTraderProductId?: number;
     inventoryItemId?: number;
+    // Grading data
+    gradingScore?: number;
+    gradingConditionCode?: string;
+    gradingCentering?: number;
+    gradingCorners?: number;
+    gradingEdges?: number;
+    gradingSurface?: number;
+    gradingConfidence?: number;
+    gradingImagesCount?: number;
 }
 
 export interface CreatePendingListingDto {
@@ -35,6 +44,15 @@ export interface CreatePendingListingDto {
     isSigned: boolean;
     location?: string;
     tag?: string;
+    // Grading data
+    gradingScore?: number;
+    gradingConditionCode?: string;
+    gradingCentering?: number;
+    gradingCorners?: number;
+    gradingEdges?: number;
+    gradingSurface?: number;
+    gradingConfidence?: number;
+    gradingImagesCount?: number;
 }
 
 @Injectable({

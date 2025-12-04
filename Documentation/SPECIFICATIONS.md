@@ -960,6 +960,78 @@ bulkDelete(): void {
 - [ ] **[SE GRIGLIA DATI]** GridStateService configurato per persistenza
 - [ ] **[SE GRIGLIA DATI]** SideBar abilitato per column visibility
 - [ ] **[SE UI ANGULAR]** Tutte le stringhe visibili all'utente sono in italiano (sezione 17)
+- [ ] **[SE GRADING INTEGRATION]** Dati grading salvati in PendingListing (sezione 18)
+
+---
+
+## 18. AI Card Grading (OPZIONALE)
+
+L'applicazione supporta la valutazione automatica della condizione delle carte tramite AI.
+
+### Componenti Backend
+
+#### IGradingService
+```csharp
+public interface IGradingService
+{
+    Task<GradingResultDto> GradeCardAsync(Stream imageStream, CancellationToken cancellationToken = default);
+    Task<GradingResultDto> GradeCardFromMultipleImagesAsync(List<Stream> imageStreams, CancellationToken cancellationToken = default);
+}
+```
+
+#### GradingResultDto
+```csharp
+public class GradingResultDto
+{
+    public decimal OverallGrade { get; set; }    // 0.0 - 10.0
+    public decimal Centering { get; set; }
+    public decimal Corners { get; set; }
+    public decimal Edges { get; set; }
+    public decimal Surface { get; set; }
+    public decimal Confidence { get; set; }
+    public string Provider { get; set; }
+    public string ConditionCode { get; set; }    // NM, SP, MP, PL, PO
+    public string ConditionName { get; set; }    // Near Mint, Slightly Played, etc.
+    public int ImagesAnalyzed { get; set; }
+}
+```
+
+### Mapping Condizioni CardTrader
+
+| Score Range | Code | Name             | Color   |
+|-------------|------|------------------|---------|
+| 8.0 - 10.0  | NM   | Near Mint        | Green   |
+| 6.0 - 7.9   | SP   | Slightly Played  | Lt Green|
+| 4.0 - 5.9   | MP   | Moderately Played| Orange  |
+| 2.0 - 3.9   | PL   | Played           | Dp Orange|
+| 0.0 - 1.9   | PO   | Poor             | Red     |
+
+### Multi-Photo Strategy
+
+Quando vengono fornite più immagini, si applica la strategia **"Worst Grade"**:
+- Il punteggio finale per ogni categoria è il **minimo** tra tutte le immagini
+- Garantisce una valutazione conservativa e realistica
+
+### Campi PendingListing
+
+```csharp
+// Grading data (optional)
+public decimal? GradingScore { get; set; }
+public string? GradingConditionCode { get; set; }
+public decimal? GradingCentering { get; set; }
+public decimal? GradingCorners { get; set; }
+public decimal? GradingEdges { get; set; }
+public decimal? GradingSurface { get; set; }
+public decimal? GradingConfidence { get; set; }
+public int? GradingImagesCount { get; set; }
+```
+
+### Gestione Duplicati
+
+Quando si aggiunge un item alla coda pending con le stesse caratteristiche di uno esistente:
+- **NON** viene rifiutato con errore 409
+- Le **quantità vengono sommate**
+- I dati di grading vengono aggiornati con gli ultimi valori (se forniti)
 
 ---
 

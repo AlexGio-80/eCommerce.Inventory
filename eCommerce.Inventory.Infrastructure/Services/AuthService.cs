@@ -38,7 +38,7 @@ public class AuthService : IAuthService
             Token = token,
             Username = user.Username,
             Role = user.Role,
-            ExpiresIn = 86400 // 24 hours
+            ExpiresIn = 604800 // 7 days
         };
     }
 
@@ -66,7 +66,7 @@ public class AuthService : IAuthService
             Token = token,
             Username = user.Username,
             Role = user.Role,
-            ExpiresIn = 86400
+            ExpiresIn = 604800 // 7 days
         };
     }
 
@@ -90,7 +90,7 @@ public class AuthService : IAuthService
                 new Claim(ClaimTypes.Name, user.Username),
                 new Claim(ClaimTypes.Role, user.Role)
             }),
-            Expires = DateTime.UtcNow.AddDays(1),
+            Expires = DateTime.UtcNow.AddDays(7),
             SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature),
             Issuer = jwtSettings["Issuer"],
             Audience = jwtSettings["Audience"]

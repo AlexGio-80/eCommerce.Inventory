@@ -21,6 +21,7 @@ import { BlueprintSelectorComponent } from '../../../../shared/components/bluepr
 import { ProductsService } from '../../services/products.service';
 import { PendingListingsService, PendingListing, CreatePendingListingDto } from '../../services/pending-listings.service';
 import { Blueprint } from '../../../../core/models';
+import { GradingService, GradingResult } from '../../../../core/services/grading.service';
 
 @Component({
   selector: 'app-create-listing',
@@ -134,6 +135,13 @@ import { Blueprint } from '../../../../core/models';
       from { opacity: 0; transform: translateY(20px); }
       to { opacity: 1; transform: translateY(0); }
     }
+
+    /* Grading condition colors */
+    .condition-nm { background-color: #4caf50 !important; }
+    .condition-sp { background-color: #8bc34a !important; }
+    .condition-mp { background-color: #ff9800 !important; }
+    .condition-pl { background-color: #ff5722 !important; }
+    .condition-po { background-color: #f44336 !important; }
   `]
 })
 export class CreateListingComponent {
@@ -154,12 +162,20 @@ export class CreateListingComponent {
   conditions = ['Near Mint', 'Slightly Played', 'Moderately Played', 'Played', 'Poor'];
   languages = ['English', 'Italian', 'Japanese', 'French', 'German', 'Spanish', 'Chinese'];
 
+  // Grading state
+  showGrading = signal(false);
+  gradingImages = signal<{ dataUrl: string; label: string }[]>([]);
+  gradingResult = signal<GradingResult | null>(null);
+  isGrading = signal(false);
+  currentGradingLabel = signal('Fronte');
+
   constructor(
     private fb: FormBuilder,
     private productsService: ProductsService,
     private pendingListingsService: PendingListingsService,
     private snackBar: MatSnackBar,
-    private cardTraderService: CardTraderApiService
+    private cardTraderService: CardTraderApiService,
+    private gradingService: GradingService
   ) {
     const defaults = this.loadDefaults();
     this.listingForm = this.fb.group({
@@ -469,7 +485,16 @@ export class CreateListingComponent {
       isSigned: formValue.isSigned,
       location: formValue.location,
       tag: formValue.tag,
-      purchasePrice: formValue.purchasePrice
+      purchasePrice: formValue.purchasePrice,
+      // Include grading data if available
+      gradingScore: this.gradingResult()?.overallGrade,
+      gradingConditionCode: this.gradingResult()?.conditionCode,
+      gradingCentering: this.gradingResult()?.centering,
+      gradingCorners: this.gradingResult()?.corners,
+      gradingEdges: this.gradingResult()?.edges,
+      gradingSurface: this.gradingResult()?.surface,
+      gradingConfidence: this.gradingResult()?.confidence,
+      gradingImagesCount: this.gradingResult()?.imagesAnalyzed
     };
 
     if (this.editingId()) {
@@ -511,6 +536,105 @@ export class CreateListingComponent {
           }
         }
       });
+    }
+  }
+
+  // Grading methods
+  toggleGrading() {
+    this.showGrading.update(v => !v);
+    if (!this.showGrading()) {
+      this.resetGrading();
+    }
+  }
+
+  resetGrading() {
+    this.gradingImages.set([]);
+    this.gradingResult.set(null);
+    this.currentGradingLabel.set('Fronte');
+  }
+
+  onGradingFilesSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      for (let i = 0; i < input.files.length; i++) {
+        const file = input.files[i];
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const images = this.gradingImages();
+          images.push({
+            dataUrl: e.target?.result as string,
+            label: this.currentGradingLabel()
+          });
+          this.gradingImages.set([...images]);
+          this.updateGradingLabel();
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  }
+
+  removeGradingImage(index: number) {
+    const images = this.gradingImages();
+    images.splice(index, 1);
+    this.gradingImages.set([...images]);
+    this.updateGradingLabel();
+  }
+
+  updateGradingLabel() {
+    const count = this.gradingImages().length;
+    if (count === 0) this.currentGradingLabel.set('Fronte');
+    else if (count === 1) this.currentGradingLabel.set('Retro');
+    else this.currentGradingLabel.set(`Foto ${count + 1}`);
+  }
+
+  async analyzeGrading() {
+    const images = this.gradingImages();
+    if (images.length === 0) return;
+
+    this.isGrading.set(true);
+
+    try {
+      const files: File[] = [];
+      for (const img of images) {
+        const res = await fetch(img.dataUrl);
+        const blob = await res.blob();
+        files.push(new File([blob], `card-${img.label.toLowerCase()}.jpg`, { type: 'image/jpeg' }));
+      }
+
+      this.gradingService.analyzeCardMultiple(files).subscribe({
+        next: (result) => {
+          this.gradingResult.set(result);
+          this.isGrading.set(false);
+          // Auto-apply condition
+          this.applyGradingCondition(result.conditionName);
+        },
+        error: (err) => {
+          console.error('Grading error:', err);
+          this.snackBar.open('Errore durante l\'analisi', 'Chiudi', { duration: 3000 });
+          this.isGrading.set(false);
+        }
+      });
+    } catch (err) {
+      console.error('Error:', err);
+      this.isGrading.set(false);
+    }
+  }
+
+  applyGradingCondition(conditionName: string) {
+    this.listingForm.patchValue({ condition: conditionName });
+    this.snackBar.open(`Condizione impostata: ${conditionName}`, 'OK', { duration: 2000 });
+  }
+
+  getConditionClass(): string {
+    const result = this.gradingResult();
+    if (!result) return '';
+    switch (result.conditionCode) {
+      case 'NM': return 'condition-nm';
+      case 'SP': return 'condition-sp';
+      case 'MP': return 'condition-mp';
+      case 'PL': return 'condition-pl';
+      case 'PO': return 'condition-po';
+      default: return '';
     }
   }
 }

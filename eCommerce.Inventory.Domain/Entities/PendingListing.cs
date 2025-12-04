@@ -33,4 +33,14 @@ public class PendingListing
     public int? CardTraderProductId { get; set; }
     public int? InventoryItemId { get; set; } // Link to created InventoryItem
     public virtual InventoryItem? InventoryItem { get; set; }
+
+    // AI Grading data (optional - populated when user uses grading feature)
+    public decimal? GradingScore { get; set; }
+    public string? GradingConditionCode { get; set; }  // NM, SP, MP, PL, PO
+    public decimal? GradingCentering { get; set; }
+    public decimal? GradingCorners { get; set; }
+    public decimal? GradingEdges { get; set; }
+    public decimal? GradingSurface { get; set; }
+    public decimal? GradingConfidence { get; set; }
+    public int? GradingImagesCount { get; set; }
 }

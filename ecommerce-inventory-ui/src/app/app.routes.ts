@@ -65,6 +65,11 @@ export const routes: Routes = [
         path: 'reporting',
         loadChildren: () => import('./features/reporting/reporting.module').then(m => m.ReportingModule),
         data: { title: 'Reporting' }
+      },
+      {
+        path: 'grading',
+        loadChildren: () => import('./features/grading/grading.module').then(m => m.GradingModule),
+        data: { title: 'AI Grading' }
       }
     ]
   },

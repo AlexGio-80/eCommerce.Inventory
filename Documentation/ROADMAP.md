@@ -258,6 +258,7 @@
     - "New Item" button now redirects to Create Listing tab
   - **Rationale**: User prefers managing item details directly on CardTrader website
 
+
 ✅ **Phase 9: Dashboard Final Polish ✅ DONE (2025-11-30)**
   - **Profitability Analytics**:
     - Inverted sort order to Descending
@@ -292,6 +293,30 @@
     - Localized Inventory Analytics (KPIs, Charts, Grids)
     - Localized Profitability Analysis (KPIs, Grids)
     - Fixed data display issue in `ReportingService` by registering `AllCommunityModule` and improving null safety
+
+✅ **Phase 11: AI Card Grading Feature ✅ DONE (2025-12-04)**
+  - **Backend**:
+    - `GradingResultDto` with `ConditionCode`, `ConditionName`, and `ImagesAnalyzed` properties
+    - `IGradingService` with `GradeCardAsync` and `GradeCardFromMultipleImagesAsync` methods
+    - `XimilarGradingService` with mock grading implementation (real API requires subscription)
+    - CardTrader condition mapping: NM (8-10), SP (6-7.9), MP (4-5.9), PL (2-3.9), PO (0-1.9)
+    - **Multi-photo grading** with "worst grade" strategy (minimum score across all images)
+    - `GradingController` with endpoints `/api/grading/analyze` and `/api/grading/analyze-multi`
+  - **Frontend**:
+    - **Grading Page** (`/grading`): Standalone page for card condition analysis
+    - Camera/webcam integration for photo capture
+    - Multi-image gallery with labels (Fronte, Retro, Foto X)
+    - Condition badge display with color coding
+  - **Integration in Product Creation Form**:
+    - **AI Grading button** in Create Listing form (next to Condition field)
+    - Collapsible photo gallery section
+    - Automatic condition field population after grading
+    - **Grading data persistence**: `PendingListing` entity stores grading results
+    - New fields: `GradingScore`, `GradingConditionCode`, `GradingCentering`, `GradingCorners`, `GradingEdges`, `GradingSurface`, `GradingConfidence`, `GradingImagesCount`
+  - **Duplicate Handling Improvement**:
+    - Changed behavior: Duplicate items now **sum quantities** instead of being rejected
+    - Applies to items with same Blueprint, Condition, Language, IsFoil, IsSigned, SellingPrice
+  - **Database**: EF Core migration `AddGradingFieldsToPendingListing`
 
 ⏳ **Next Steps**: 
   - Additional features and enhancements as needed

@@ -129,6 +129,9 @@ builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJ
 builder.Services.Configure<BackupSettings>(builder.Configuration.GetSection("Backup"));
 builder.Services.AddHostedService<BackupService>();
 
+// Register Grading Service
+builder.Services.AddHttpClient<IGradingService, XimilarGradingService>();
+
 // Register SignalR
 builder.Services.AddSignalR();
 

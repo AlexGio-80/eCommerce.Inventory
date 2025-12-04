@@ -1,0 +1,109 @@
+<div class="grading-container">
+  <mat-card class="camera-card" *ngIf="!gradingResult">
+    <mat-card-header>
+      <mat-card-title>📸 AI Card Grading</mat-card-title>
+      <mat-card-subtitle>Scatta foto della carta (fronte e retro) per una valutazione completa</mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content class="camera-content">
+      <!-- Camera Preview -->
+      <div class="video-wrapper">
+        <video #videoElement autoplay playsinline></video>
+        <div class="overlay-guide">
+          <span class="capture-label">{{currentLabel}}</span>
+        </div>
+      </div>
+
+      <canvas #canvasElement style="display: none;"></canvas>
+
+      <!-- Captured Images Gallery -->
+      <div class="image-gallery" *ngIf="capturedImages.length > 0">
+        <div class="gallery-item" *ngFor="let img of capturedImages; let i = index">
+          <img [src]="img.dataUrl" [alt]="img.label">
+          <span class="image-label">{{img.label}}</span>
+          <button mat-icon-button class="remove-btn" (click)="removeImage(i)" [disabled]="isLoading">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      </div>
+
+      <div class="error-message" *ngIf="error">
+        <mat-icon color="warn">error</mat-icon>
+        <span>{{error}}</span>
+      </div>
+    </mat-card-content>
+
+    <mat-card-actions align="end">
+      <input type="file" #fileInput style="display: none" (change)="onFilesSelected($event)" accept="image/*" multiple>
+
+      <button mat-button (click)="fileInput.click()" [disabled]="isLoading">
+        <mat-icon>upload</mat-icon> Carica Foto
+      </button>
+
+      <button mat-stroked-button color="warn" (click)="retakeAll()" *ngIf="capturedImages.length > 0"
+        [disabled]="isLoading">
+        <mat-icon>refresh</mat-icon> Ricomincia
+      </button>
+
+      <button mat-raised-button color="primary" (click)="captureImage()" *ngIf="!error" [disabled]="isLoading">
+        <mat-icon>camera_alt</mat-icon> Scatta {{currentLabel}}
+      </button>
+
+      <button mat-raised-button color="accent" (click)="analyzeImages()" *ngIf="capturedImages.length > 0"
+        [disabled]="isLoading">
+        <mat-icon *ngIf="!isLoading">analytics</mat-icon>
+        <mat-spinner *ngIf="isLoading" diameter="20"></mat-spinner>
+        {{ isLoading ? 'Analisi...' : 'Analizza (' + capturedImages.length + ' foto)' }}
+      </button>
+    </mat-card-actions>
+  </mat-card>
+
+  <mat-card class="result-card" *ngIf="gradingResult">
+    <mat-card-header>
+      <div mat-card-avatar class="grade-avatar" [ngClass]="getConditionClass()">
+        {{gradingResult.overallGrade | number:'1.1-1'}}
+      </div>
+      <mat-card-title>
+        <span class="condition-badge" [ngClass]="getConditionClass()">{{gradingResult.conditionCode}}</span>
+        {{gradingResult.conditionName}}
+      </mat-card-title>
+      <mat-card-subtitle>
+        Provider: {{gradingResult.provider}} |
+        Foto analizzate: {{gradingResult.imagesAnalyzed}} |
+        Confidenza: {{gradingResult.confidence | percent}}
+      </mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      <div class="grades-grid">
+        <div class="grade-item">
+          <span class="label">Centering</span>
+          <mat-progress-bar mode="determinate" [value]="gradingResult.centering * 10"></mat-progress-bar>
+          <span class="value">{{gradingResult.centering | number:'1.1-1'}}</span>
+        </div>
+
+        <div class="grade-item">
+          <span class="label">Corners</span>
+          <mat-progress-bar mode="determinate" [value]="gradingResult.corners * 10"></mat-progress-bar>
+          <span class="value">{{gradingResult.corners | number:'1.1-1'}}</span>
+        </div>
+
+        <div class="grade-item">
+          <span class="label">Edges</span>
+          <mat-progress-bar mode="determinate" [value]="gradingResult.edges * 10"></mat-progress-bar>
+          <span class="value">{{gradingResult.edges | number:'1.1-1'}}</span>
+        </div>
+
+        <div class="grade-item">
+          <span class="label">Surface</span>
+          <mat-progress-bar mode="determinate" [value]="gradingResult.surface * 10"></mat-progress-bar>
+          <span class="value">{{gradingResult.surface | number:'1.1-1'}}</span>
+        </div>
+      </div>
+    </mat-card-content>
+
+    <mat-card-actions align="end">
+      <button mat-stroked-button (click)="retakeAll()">Nuova Scansione</button>
+    </mat-card-actions>
+  </mat-card>
+</div>

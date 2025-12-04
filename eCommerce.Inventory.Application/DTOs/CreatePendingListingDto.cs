@@ -30,4 +30,14 @@ public class CreatePendingListingDto
     public string? Tag { get; set; }
 
     public decimal PurchasePrice { get; set; }
+
+    // Optional AI Grading data
+    public decimal? GradingScore { get; set; }
+    public string? GradingConditionCode { get; set; }
+    public decimal? GradingCentering { get; set; }
+    public decimal? GradingCorners { get; set; }
+    public decimal? GradingEdges { get; set; }
+    public decimal? GradingSurface { get; set; }
+    public decimal? GradingConfidence { get; set; }
+    public int? GradingImagesCount { get; set; }
 }

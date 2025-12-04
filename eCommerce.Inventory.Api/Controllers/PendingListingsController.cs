@@ -73,7 +73,7 @@ public class PendingListingsController : ControllerBase
     }
 
     /// <summary>
-    /// Add a listing to the pending queue
+    /// Add a listing to the pending queue. If duplicate exists, sum quantities.
     /// </summary>
     [HttpPost]
     public async Task<ActionResult<Models.ApiResponse<PendingListing>>> CreatePendingListing(
@@ -89,9 +89,9 @@ public class PendingListingsController : ControllerBase
             return BadRequest(Models.ApiResponse<PendingListing>.ErrorResult("Blueprint not found"));
         }
 
-        // Duplicate check (only against unsynced items)
-        var isDuplicate = await _dbContext.PendingListings
-            .AnyAsync(p =>
+        // Check for existing duplicate (only against unsynced items)
+        var existingItem = await _dbContext.PendingListings
+            .FirstOrDefaultAsync(p =>
                 !p.IsSynced &&
                 p.BlueprintId == dto.BlueprintId &&
                 p.Condition == dto.Condition &&
@@ -101,9 +101,29 @@ public class PendingListingsController : ControllerBase
                 p.IsSigned == dto.IsSigned,
                 cancellationToken);
 
-        if (isDuplicate)
+        if (existingItem != null)
         {
-            return Conflict(Models.ApiResponse<PendingListing>.ErrorResult("Duplicate pending listing exists"));
+            // Sum quantities instead of rejecting duplicate
+            existingItem.Quantity += dto.Quantity;
+
+            // Update grading data if provided (use latest)
+            if (dto.GradingScore.HasValue)
+            {
+                existingItem.GradingScore = dto.GradingScore;
+                existingItem.GradingConditionCode = dto.GradingConditionCode;
+                existingItem.GradingCentering = dto.GradingCentering;
+                existingItem.GradingCorners = dto.GradingCorners;
+                existingItem.GradingEdges = dto.GradingEdges;
+                existingItem.GradingSurface = dto.GradingSurface;
+                existingItem.GradingConfidence = dto.GradingConfidence;
+                existingItem.GradingImagesCount = dto.GradingImagesCount;
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            return Ok(Models.ApiResponse<PendingListing>.SuccessResult(
+                existingItem,
+                $"Quantity added to existing item. New total: {existingItem.Quantity}"));
         }
 
         var pendingListing = new PendingListing
@@ -119,7 +139,16 @@ public class PendingListingsController : ControllerBase
             Location = dto.Location ?? string.Empty,
             Tag = dto.Tag,
             CreatedAt = DateTime.UtcNow,
-            IsSynced = false
+            IsSynced = false,
+            // Grading data
+            GradingScore = dto.GradingScore,
+            GradingConditionCode = dto.GradingConditionCode,
+            GradingCentering = dto.GradingCentering,
+            GradingCorners = dto.GradingCorners,
+            GradingEdges = dto.GradingEdges,
+            GradingSurface = dto.GradingSurface,
+            GradingConfidence = dto.GradingConfidence,
+            GradingImagesCount = dto.GradingImagesCount
         };
 
         _dbContext.PendingListings.Add(pendingListing);
