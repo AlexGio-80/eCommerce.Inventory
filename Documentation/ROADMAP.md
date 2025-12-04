@@ -324,6 +324,12 @@
 
 ⏳ **TODO**: Additional enhancements and optimizations
 
+📋 **Future Enhancements (Post-Evaluation)**:
+  - **AI Grading - Servizio Reale**: Valutare costi abbonamento Ximilar API e passare dal mock al servizio AI vero
+    - Attualmente: Mock service con risultati simulati
+    - Futuro: Integrazione API Ximilar con token abbonamento
+    - Nota: Richiede valutazione costi/benefici prima dell'attivazione
+
 ---
 
 ## Phase 1: Database & Migrations (PRIORITY: HIGH)
