@@ -1067,6 +1067,33 @@ L'applicazione è destinata esclusivamente al mercato italiano. Tutte le stringh
 
 ---
 
+## 20. Deployment & Hosting Requirements (OBBLIGATORIO)
+
+L'applicazione viene ospitata su un server locale Windows usando **IIS** per il frontend e un **Windows Service** per il backend.
+
+### IIS Configuration (Frontend)
+- **Site Name**: `InventorySite`
+- **Host**: `inventory.local`
+- **Physical Path**: `C:\Lavoro\eCommerce.Inventory\Publish\ui`
+- **Routing**: È obbligatorio l'uso di un file `web.config` nella root del sito per gestire il routing SPA (Single Page Application) e il cache-control.
+- **Cache-Control**: Il file `index.html` deve avere il caching disabilitato (`no-cache, no-store, must-revalidate`) per garantire il caricamento degli ultimi bundle JavaScript compilati.
+
+### Windows Service (Backend)
+- **Service Name**: `eCommerce.Inventory`
+- **Binary Path**: `C:\Lavoro\eCommerce.Inventory\Publish\api\eCommerce.Inventory.Api.exe`
+- **Port**: `5152`
+- **Environment**: Production (usa `appsettings.Production.json`)
+- **Logging**: Scrive log strutturati in `Publish/api/logs/` usando Serilog con path assoluti.
+
+### Automated Deployment (`publish.ps1`)
+Qualsiasi aggiornamento dello script di deploy deve garantire:
+1. **IIS Stop/Start**: Uso di `appcmd` per fermare e avviare Site e AppPool.
+2. **Physical Path Update**: Uso di `appcmd set vdir` per aggiornare il percorso fisico.
+3. **Cache Clearing**: Esecuzione di `iisreset` per svuotare le cache di sistema (kernel/user-mode).
+4. **Permissions**: Grant di `Full Control` alla cartella di pubblicazione per l'utente `NetworkService`.
+
+---
+
 ## Contatti e Domande
 
 Consultare:

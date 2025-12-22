@@ -190,6 +190,9 @@
       - Adds `inventory.local` to hosts file
   - **Configuration Fixes**:
     - Fixed `web.config` MIME type duplicates (added `<remove>` tags)
+    - Added comprehensive `web.config` with SPA routing and cache control headers
+    - Fixed `publish.ps1` syntax for updating IIS site physical path (use `set vdir`)
+    - Added `iisreset` to `publish.ps1` to clear kernel/user-mode caches during deployment
     - Corrected frontend API routes (`api/games` instead of `api/cardtrader/games`)
     - Removed legacy AG-Grid CSS import
     - Fixed IIS permissions on `wwwroot` folder

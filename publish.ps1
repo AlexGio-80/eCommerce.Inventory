@@ -138,7 +138,8 @@ if (-not (Test-Path $logsDir)) {
 Write-Host "[*] Setting permissions for NetworkService..." -ForegroundColor Yellow
 try {
     icacls $apiPublishDir /grant "NT AUTHORITY\NETWORK SERVICE:(OI)(CI)F" /T /Q 2>$null | Out-Null
-} catch {
+}
+catch {
     Write-Warning "[!] Could not set NetworkService permissions. Service may have issues writing logs."
 }
 
@@ -190,7 +191,7 @@ if (Test-Path $appCmd) {
     else {
         # Update physical path in case it changed
         Write-Host "[*] Updating IIS Site physical path..." -ForegroundColor Yellow
-        & $appCmd set site "$iisSiteName" /[path='/'].physicalPath:"$uiPublishDir"
+        & $appCmd set vdir "$iisSiteName/" /physicalPath:"$uiPublishDir"
     }
     
     # Start AppPool and Site
@@ -199,6 +200,9 @@ if (Test-Path $appCmd) {
 
     Write-Host "[+] Starting IIS Site: $iisSiteName" -ForegroundColor Green
     & $appCmd start site "$iisSiteName" 2>$null
+
+    Write-Host "[*] Forcing IIS Reset to clear kernels caches..." -ForegroundColor Yellow
+    iisreset /noforce
 }
 
 # Start Windows Service (serves API on port 5152)
