@@ -335,6 +335,12 @@
     - Real-time progress notifications and snackbar feedback.
     - **UI Optimization**: Increased data limits (TOP 15/12/10) for dashboard widgets to improve layout balance.
 
+⏳ **Phase 12.1: Performance Optimization & Configuration ✅ DONE (2025-12-22)**
+  - **Performance**: Optimized marketplace price fetching using batch requests (50 blueprints per call), reducing API calls by 98%.
+  - **Configuration**: Added `SyncSettings:RunAnalyticsDuringSync` in `appsettings.json` to allow disabling of automatic analytics during nightly sync (set to `false` by default to avoid system stalls).
+  - **API Refactoring**: Extended `ICardTraderApiService` and `CardTraderApiClient` with `GetMarketplaceProductsBatchAsync`.
+  - **Service Improvement**: Refactored `ExpansionAnalyticsService` to process blueprints in batches.
+
 ⏳ **Next Steps**: 
   - Additional features and enhancements as needed
   - Continue improving reporting and analytics

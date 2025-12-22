@@ -534,10 +534,11 @@ public class InventoryItemRepositoryTests
 - ✅ AsNoTracking() per query read-only
 - ✅ Pagination per large datasets (TODO: implement)
 
-### HTTP Client
+### HTTP Client (CardTrader API)
 - ✅ Reuse HttpClientFactory (non creare nuovi HttpClient)
 - ✅ Configurare timeout
-- ✅ Implement retry logic con Polly (TODO)
+- ✅ Implement retry logic con Polly
+- ✅ **Batch Requests**: Usare sempre `blueprint_id[]` (batching) per il recupero dei prezzi del marketplace (`marketplace/products`) per minimizzare le chiamate API e rispettare i rate limit (massimo 50-100 per chiamata consigliati).
 
 ### Caching
 - TODO: Implement caching strategy

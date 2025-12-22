@@ -431,14 +431,28 @@ public class CardTraderApiClient : ICardTraderApiService
     /// </summary>
     public async Task<IEnumerable<CardTraderMarketplaceProductDto>> GetMarketplaceProductsAsync(int blueprintId, CancellationToken cancellationToken = default)
     {
+        return await GetMarketplaceProductsBatchAsync(new[] { blueprintId }, cancellationToken);
+    }
+
+    public async Task<IEnumerable<CardTraderMarketplaceProductDto>> GetMarketplaceProductsBatchAsync(IEnumerable<int> blueprintIds, CancellationToken cancellationToken = default)
+    {
+        if (blueprintIds == null || !blueprintIds.Any())
+        {
+            return new List<CardTraderMarketplaceProductDto>();
+        }
+
         try
         {
-            _logger.LogInformation("Fetching marketplace products for blueprint {BlueprintId} from Card Trader API", blueprintId);
+            var ids = blueprintIds.ToList();
+            _logger.LogInformation("Fetching marketplace products for {Count} blueprints from Card Trader API", ids.Count);
 
-            _logger.LogInformation("Fetching marketplace products for blueprint {BlueprintId} from Card Trader API", blueprintId);
+            // Construct query string with blueprint_id[] parameter
+            var queryParams = ids.Select(id => $"blueprint_id[]={id}");
+            var queryString = string.Join("&", queryParams);
+            var endpoint = $"marketplace/products?{queryString}";
 
             await _rateLimiter.AcquireAsync(cancellationToken);
-            var response = await _httpClient.GetAsync($"marketplace/products?blueprint_id={blueprintId}", cancellationToken);
+            var response = await _httpClient.GetAsync(endpoint, cancellationToken);
             response.EnsureSuccessStatusCode();
 
             var jsonContent = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -448,12 +462,12 @@ public class CardTraderApiClient : ICardTraderApiService
 
             var products = productsDict?.Values.SelectMany(x => x).ToList() ?? new List<CardTraderMarketplaceProductDto>();
 
-            _logger.LogInformation("Fetched {ProductCount} marketplace products for blueprint {BlueprintId}", products.Count, blueprintId);
+            _logger.LogInformation("Fetched {ProductCount} marketplace products for {BlueprintCount} blueprints", products.Count, ids.Count);
             return products;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching marketplace products for blueprint {BlueprintId}", blueprintId);
+            _logger.LogError(ex, "Error fetching marketplace products for {Count} blueprints", blueprintIds.Count());
             return new List<CardTraderMarketplaceProductDto>();
         }
     }

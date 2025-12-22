@@ -33,21 +33,33 @@ public class ExpansionAnalyticsService : IExpansionAnalyticsService
             return;
         }
 
-        _logger.LogInformation("Starting value analysis for expansion {ExpansionName} ({ExpansionId})", expansion.Name, expansionId);
+        _logger.LogInformation("Starting value analysis for expansion {ExpansionName} ({ExpansionId}) - Blueprints: {Count}",
+            expansion.Name, expansionId, expansion.Blueprints.Count);
 
         decimal totalMinPrice = 0;
         int cardCount = 0;
 
-        foreach (var blueprint in expansion.Blueprints)
+        // Batch blueprints to reduce API calls (e.g., 50 at a time)
+        const int batchSize = 50;
+        var blueprints = expansion.Blueprints.ToList();
+
+        for (int i = 0; i < blueprints.Count; i += batchSize)
         {
+            var batch = blueprints.Skip(i).Take(batchSize).ToList();
+            var batchIds = batch.Select(b => b.CardTraderId).ToList();
+
             try
             {
-                var stats = await _cardTraderApiService.GetMarketplaceProductsAsync(blueprint.CardTraderId, cancellationToken);
+                var allProducts = await _cardTraderApiService.GetMarketplaceProductsBatchAsync(batchIds, cancellationToken);
 
-                // Group by blueprint and calculate min
-                if (stats != null && stats.Any())
+                // Group products by blueprint to find min price for each blueprint in the batch
+                var productsByBlueprint = allProducts
+                    .Where(p => p.PriceCents > 0)
+                    .GroupBy(p => p.BlueprintId);
+
+                foreach (var group in productsByBlueprint)
                 {
-                    var minPriceCents = stats.Where(p => p.PriceCents > 0).Min(p => (int?)p.PriceCents) ?? 0;
+                    var minPriceCents = group.Min(p => p.PriceCents);
                     if (minPriceCents > 0)
                     {
                         totalMinPrice += (decimal)minPriceCents / 100m;
@@ -57,7 +69,7 @@ public class ExpansionAnalyticsService : IExpansionAnalyticsService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error fetching marketplace stats for blueprint {BlueprintId}", blueprint.CardTraderId);
+                _logger.LogError(ex, "Error fetching marketplace stats for batch starting at {Index}", i);
             }
         }
 
