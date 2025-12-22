@@ -1035,9 +1035,41 @@ Quando si aggiunge un item alla coda pending con le stesse caratteristiche di un
 
 ---
 
+## 18. Analisi Valore Espansioni (NUOVO)
+
+### Obiettivo
+Identificare le espansioni con il miglior valore medio per carta basato sul prezzo minimo di vendita (Min Price) del marketplace Card Trader.
+
+### Requisiti Tecnici
+1. **Frequenza di aggiornamento**:
+   - On-demand via UI per singola espansione o collettivamente.
+   - Background (notturno) configurabile via `appsettings.json` (`SyncSettings:RunAnalyticsDuringSync`).
+2. **Algoritmo di calcolo**:
+   - Recupero di tutti i blueprint abilitati per l'espansione.
+   - Recupero dei dati di mercato (marketplace products) per ogni blueprint.
+   - Calcolo del `MinPrice` (prezzo minimo > 0).
+   - Aggregazione: `TotalMinPrice = sum(MinPrice)`, `AverageCardValue = TotalMinPrice / count(Blueprints)`.
+3. **Ottimizzazione**:
+   - Utilizzo obbligatorio di `CardTraderRateLimiter` per rispettare i limiti API.
+   - Persistenza su DB: campi `AverageCardValue`, `TotalMinPrice`, `LastValueAnalysisUpdate` nella tabella `Expansions`.
+4. **Visualizzazione**:
+   - Griglia Espansioni: colonne AG-Grid con formattazione valuta e data. Aggiunta colonna **"Azioni" bloccata a destra** per analisi rapida.
+   - Dashboard Principale: widget "Espansioni più Convenienti" (TOP 10) integrato nella home.
+   - Dashboard Secondarie: widget integrato in `SalesDashboard` e `InventoryAnalytics`.
+   - Layout: limiti di visualizzazione ottimizzati (15/12/10 record) per il bilanciamento estetico della Dashboard.
+
+---
+
+## 19. Localizzazione Italiana (OBBLIGATORIO)
+
+### Regola Fondamentale
+L'applicazione è destinata esclusivamente al mercato italiano. Tutte le stringhe UI e i nomi delle azioni devono essere in italiano.
+
+---
+
 ## Contatti e Domande
 
 Consultare:
 - `ARCHITECTURE.md` per overview dell'architettura
 - `IMPLEMENTATION.md` per dettagli implementativi
-- `ROADMAP.md` per i prossimi passi
+- `ROADMAP.md` per i passi successivi

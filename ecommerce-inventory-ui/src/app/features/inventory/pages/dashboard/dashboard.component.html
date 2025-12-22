@@ -123,6 +123,29 @@
         </mat-list>
       </mat-card-content>
     </mat-card>
+
+    <!-- Top Expansions by Value -->
+    <mat-card class="analytics-card">
+      <mat-card-header>
+        <mat-card-title>💎 Espansioni più Convenienti (Valore Medio)</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <p class="secondary-text" style="padding: 0 16px; margin-bottom: 8px;">
+          Le espansioni con il miglior valore medio per carta (prezzo minimo).
+        </p>
+        <mat-list *ngIf="topExpansionsByValue$ | async as topValues">
+          <mat-list-item *ngFor="let item of topValues" class="analytics-item">
+            <div matLine class="item-header">
+              <span class="item-name">{{ item.expansionName }}</span>
+              <span class="item-value">€ {{ item.averageCardValue | number: '1.2-2' }}</span>
+            </div>
+            <div matLine class="secondary-text">
+              Valore Totale (Min): € {{ item.totalMinPrice | number: '1.2-2' }} • {{ item.gameName }}
+            </div>
+          </mat-list-item>
+        </mat-list>
+      </mat-card-content>
+    </mat-card>
   </div>
 
   <!-- Quick Actions -->

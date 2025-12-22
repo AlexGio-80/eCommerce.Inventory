@@ -318,6 +318,20 @@
     - Applies to items with same Blueprint, Condition, Language, IsFoil, IsSigned, SellingPrice
   - **Database**: EF Core migration `AddGradingFieldsToPendingListing`
 
+⏳ **Phase 12: Expansion Analytics ✅ DONE (2025-12-21)**
+  - **Backend**:
+    - Add `AverageCardValue`, `TotalMinPrice`, and `LastValueAnalysisUpdate` to `Expansion` entity.
+    - Implement `ExpansionAnalyticsService` to calculate average card values per expansion using Card Trader marketplace stats.
+    - Integration with `CardTraderSyncOrchestrator` for on-demand and scheduled analysis.
+    - New API endpoints in `ExpansionsController` and `ReportingController` (`top-values`).
+    - Integrated with nighty background sync worker.
+  - **Frontend**:
+    - Update `Expansion` interface and service.
+    - Add analytics columns and pinned "Azioni" column with "Analizza Valore" in `ExpansionsPage`.
+    - Integrated "Top Expansions" interactive widget in Home Dashboard, `SalesDashboard` and `InventoryAnalytics`.
+    - Real-time progress notifications and snackbar feedback.
+    - **UI Optimization**: Increased data limits (TOP 15/12/10) for dashboard widgets to improve layout balance.
+
 ⏳ **Next Steps**: 
   - Additional features and enhancements as needed
   - Continue improving reporting and analytics

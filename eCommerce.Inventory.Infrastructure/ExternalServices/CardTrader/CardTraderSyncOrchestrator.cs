@@ -21,6 +21,7 @@ public class CardTraderSyncOrchestrator
     private readonly CardTraderDtoMapper _dtoMapper;
     private readonly ApplicationDbContext _dbContext;
     private readonly InventorySyncService _inventorySyncService;
+    private readonly IExpansionAnalyticsService _expansionAnalyticsService;
     private readonly ILogger<CardTraderSyncOrchestrator> _logger;
 
     public CardTraderSyncOrchestrator(
@@ -28,12 +29,14 @@ public class CardTraderSyncOrchestrator
         CardTraderDtoMapper dtoMapper,
         ApplicationDbContext dbContext,
         InventorySyncService inventorySyncService,
+        IExpansionAnalyticsService expansionAnalyticsService,
         ILogger<CardTraderSyncOrchestrator> logger)
     {
         _cardTraderApiService = cardTraderApiService;
         _dtoMapper = dtoMapper;
         _dbContext = dbContext;
         _inventorySyncService = inventorySyncService;
+        _expansionAnalyticsService = expansionAnalyticsService;
         _logger = logger;
     }
 
@@ -98,6 +101,12 @@ public class CardTraderSyncOrchestrator
                 await SyncInventoryAsync(response, cancellationToken);
             }
 
+            // Sync Analytics (Expansion values)
+            if (request.SyncAnalytics)
+            {
+                await SyncAnalyticsAsync(response, cancellationToken);
+            }
+
             response.SyncEndTime = DateTime.UtcNow;
             _logger.LogInformation("Sync completed successfully. Added: {Added}, Updated: {Updated}, Failed: {Failed}, Skipped: {Skipped}, Duration: {Duration}ms",
                 response.Added, response.Updated, response.Failed, response.Skipped, response.Duration.TotalMilliseconds);
@@ -110,6 +119,33 @@ public class CardTraderSyncOrchestrator
         }
 
         return response;
+    }
+
+    /// <summary>
+    /// Syncs expansion analytics (average card values)
+    /// </summary>
+    private async Task SyncAnalyticsAsync(SyncResponseDto response, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogInformation("Starting Expansion Analytics sync");
+
+            var result = await _expansionAnalyticsService.AnalyzeAllExpansionsValueAsync(cancellationToken);
+
+            response.Analytics.WasRequested = true;
+            response.Analytics.Added = result.SuccessCount;
+            response.Analytics.Failed = result.FailedCount;
+
+            _logger.LogInformation("Expansion Analytics sync completed. Success: {Success}, Failed: {Failed}",
+                result.SuccessCount, result.FailedCount);
+        }
+        catch (Exception ex)
+        {
+            response.Analytics.WasRequested = true;
+            response.Analytics.ErrorMessage = ex.Message;
+            response.Failed++;
+            _logger.LogError(ex, "Error syncing expansion analytics");
+        }
     }
 
     /// <summary>

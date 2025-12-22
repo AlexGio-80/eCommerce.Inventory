@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { ReportingService } from '../../../../core/services/reporting.service';
-import { SalesMetrics, TopProduct, SalesByGame, SalesChartData } from '../../../../core/models/reporting.models';
+import { SalesMetrics, TopProduct, SalesByGame, SalesChartData, TopExpansionValue } from '../../../../core/models/reporting.models';
 import { firstValueFrom } from 'rxjs';
 import { ColDef, ValueFormatterParams } from 'ag-grid-community';
 
@@ -15,6 +15,7 @@ export class SalesDashboard implements OnInit {
   topProducts: TopProduct[] = [];
   salesByGame: SalesByGame[] = [];
   salesChartData?: SalesChartData;
+  topExpansionsByValue: TopExpansionValue[] = [];
 
   // Chart.js data
   chartLabels: string[] = [];
@@ -49,24 +50,43 @@ export class SalesDashboard implements OnInit {
     }
   ];
 
+  topExpansionsColumnDefs: ColDef[] = [
+    { field: 'expansionName', headerName: 'Espansione', flex: 2 },
+    {
+      field: 'averageCardValue',
+      headerName: 'Val. Medio Carta',
+      flex: 1,
+      valueFormatter: (params: ValueFormatterParams) => '€' + params.value.toFixed(2)
+    },
+    {
+      field: 'totalMinPrice',
+      headerName: 'Valore Totale (Min)',
+      flex: 1,
+      valueFormatter: (params: ValueFormatterParams) => '€' + params.value.toFixed(2)
+    }
+  ];
+
   constructor(private reportingService: ReportingService) { }
 
   async ngOnInit(): Promise<void> {
     try {
       console.log('Fetching sales dashboard data...');
-      const [metrics, top, byGame, chart] = await Promise.all([
+      const [metrics, top, byGame, chart, topValues] = await Promise.all([
         firstValueFrom(this.reportingService.getSalesMetrics()),
         firstValueFrom(this.reportingService.getTopProducts()),
         firstValueFrom(this.reportingService.getSalesByGame()),
-        firstValueFrom(this.reportingService.getSalesChart())
+        firstValueFrom(this.reportingService.getSalesChart()),
+        firstValueFrom(this.reportingService.getTopExpansionsByValue(5))
       ]);
 
-      console.log('Sales dashboard data fetched successfully', { metrics, top, byGame, chart });
+      console.log('Sales dashboard data fetched successfully', { metrics, top, byGame, chart, topValues });
 
       this.salesMetrics = metrics;
       this.topProducts = top;
       this.salesByGame = byGame;
       this.salesChartData = chart;
+      this.topExpansionsByValue = topValues;
+
       if (chart) {
         this.chartLabels = chart.labels;
         this.chartValues = chart.values;
@@ -76,4 +96,3 @@ export class SalesDashboard implements OnInit {
     }
   }
 }
-

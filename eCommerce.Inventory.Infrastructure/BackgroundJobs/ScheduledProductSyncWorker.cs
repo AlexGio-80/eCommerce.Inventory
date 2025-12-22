@@ -74,7 +74,8 @@ public class ScheduledProductSyncWorker : BackgroundService
             SyncExpansions = true,
             SyncBlueprints = true,
             SyncInventory = true,
-            SyncOrders = true
+            SyncOrders = true,
+            SyncAnalytics = _configuration.GetValue<bool>("SyncSettings:RunAnalyticsDuringSync")
         };
 
         var result = await orchestrator.SyncAsync(request, stoppingToken);

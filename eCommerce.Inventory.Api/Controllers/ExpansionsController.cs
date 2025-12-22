@@ -13,17 +13,20 @@ public class ExpansionsController : ControllerBase
     private readonly ApplicationDbContext _dbContext;
     private readonly CardTraderSyncOrchestrator _syncOrchestrator;
     private readonly ICardTraderApiService _cardTraderApiService;
+    private readonly IExpansionAnalyticsService _expansionAnalyticsService;
     private readonly ILogger<ExpansionsController> _logger;
 
     public ExpansionsController(
         ApplicationDbContext dbContext,
         CardTraderSyncOrchestrator syncOrchestrator,
         ICardTraderApiService cardTraderApiService,
+        IExpansionAnalyticsService expansionAnalyticsService,
         ILogger<ExpansionsController> logger)
     {
         _dbContext = dbContext;
         _syncOrchestrator = syncOrchestrator;
         _cardTraderApiService = cardTraderApiService;
+        _expansionAnalyticsService = expansionAnalyticsService;
         _logger = logger;
     }
 
@@ -63,7 +66,10 @@ public class ExpansionsController : ControllerBase
                 Code = e.Code,
                 GameId = e.GameId,
                 GameName = e.Game.Name,
-                GameCode = e.Game.Code
+                GameCode = e.Game.Code,
+                AverageCardValue = e.AverageCardValue,
+                TotalMinPrice = e.TotalMinPrice,
+                LastValueAnalysisUpdate = e.LastValueAnalysisUpdate
             })
             .ToListAsync(cancellationToken);
 
@@ -87,7 +93,10 @@ public class ExpansionsController : ControllerBase
                 Code = e.Code,
                 GameId = e.GameId,
                 GameName = e.Game.Name,
-                GameCode = e.Game.Code
+                GameCode = e.Game.Code,
+                AverageCardValue = e.AverageCardValue,
+                TotalMinPrice = e.TotalMinPrice,
+                LastValueAnalysisUpdate = e.LastValueAnalysisUpdate
             })
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -127,6 +136,42 @@ public class ExpansionsController : ControllerBase
             return NotFound(Models.ApiResponse<object>.ErrorResult(ex.Message));
         }
     }
+
+    /// <summary>
+    /// Trigger value analysis for a specific expansion
+    /// </summary>
+    [HttpPost("{id}/analyze-value")]
+    public async Task<ActionResult<Models.ApiResponse<object>>> AnalyzeValue(int id, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _expansionAnalyticsService.AnalyzeExpansionValueAsync(id, cancellationToken);
+            return Ok(Models.ApiResponse<object>.SuccessResult(null, "Value analysis completed successfully"));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during value analysis for expansion {ExpansionId}", id);
+            return StatusCode(500, Models.ApiResponse<object>.ErrorResult(ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// Trigger value analysis for all enabled expansions
+    /// </summary>
+    [HttpPost("analyze-all-values")]
+    public async Task<ActionResult<Models.ApiResponse<object>>> AnalyzeAllValues(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var result = await _expansionAnalyticsService.AnalyzeAllExpansionsValueAsync(cancellationToken);
+            return Ok(Models.ApiResponse<object>.SuccessResult(result, $"Value analysis completed. Success: {result.SuccessCount}, Failed: {result.FailedCount}"));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during bulk value analysis");
+            return StatusCode(500, Models.ApiResponse<object>.ErrorResult(ex.Message));
+        }
+    }
 }
 
 public class ExpansionDto
@@ -138,4 +183,7 @@ public class ExpansionDto
     public int GameId { get; set; }
     public string GameName { get; set; } = string.Empty;
     public string GameCode { get; set; } = string.Empty;
+    public decimal? AverageCardValue { get; set; }
+    public decimal? TotalMinPrice { get; set; }
+    public DateTime? LastValueAnalysisUpdate { get; set; }
 }

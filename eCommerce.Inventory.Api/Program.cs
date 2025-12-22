@@ -67,6 +67,7 @@ builder.Services.AddScoped<CardTraderSyncOrchestrator>();
 builder.Services.AddSingleton<CardTraderRateLimiter>(); // Singleton to share rate limit across all scopes
 builder.Services.AddScoped<INotificationService, eCommerce.Inventory.Api.Services.SignalRNotificationService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IExpansionAnalyticsService, ExpansionAnalyticsService>();
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");

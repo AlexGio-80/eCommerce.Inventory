@@ -24,7 +24,18 @@
 
     <!-- Slow Movers Grid -->
     <h3>Articoli a Bassa Rotazione (>90 giorni)</h3>
-    <ag-grid-angular class="ag-theme-alpine" style="width: 100%; height: 400px;" [rowData]="slowMovers"
+    <ag-grid-angular class="ag-theme-alpine" style="width: 100%; height: 300px; margin-bottom: 24px;" [rowData]="slowMovers"
         [columnDefs]="slowMoversColumnDefs">
     </ag-grid-angular>
+
+    <!-- Top Expansions Grid -->
+    <div class="top-expansions-section" *ngIf="topExpansionsByValue.length > 0">
+        <h3>Espansioni più Convenienti (Valore Medio Carta)</h3>
+        <p style="font-size: 14px; color: #666; margin-bottom: 8px;">
+            Basato sul prezzo minimo di vendita di tutte le carte dell'espansione.
+        </p>
+        <ag-grid-angular class="ag-theme-alpine" style="width: 100%; height: 400px;" [rowData]="topExpansionsByValue"
+            [columnDefs]="topExpansionsColumnDefs">
+        </ag-grid-angular>
+    </div>
 </div>

@@ -6,4 +6,7 @@ export interface Expansion {
   cardTraderEmberId?: string;
   createdAt: Date;
   updatedAt: Date;
+  averageCardValue?: number;
+  totalMinPrice?: number;
+  lastValueAnalysisUpdate?: Date;
 }

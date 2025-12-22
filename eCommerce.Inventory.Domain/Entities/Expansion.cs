@@ -10,4 +10,8 @@ public class Expansion
     public int GameId { get; set; }
     public virtual Game Game { get; set; }
     public virtual ICollection<Blueprint> Blueprints { get; set; } = new List<Blueprint>();
+
+    public decimal? AverageCardValue { get; set; }
+    public decimal? TotalMinPrice { get; set; }
+    public DateTime? LastValueAnalysisUpdate { get; set; }
 }

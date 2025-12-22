@@ -14,8 +14,8 @@ import { RouterModule, Router } from '@angular/router';
 import { Observable, forkJoin, of, BehaviorSubject } from 'rxjs';
 import { map, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 
-import { CardTraderApiService } from '../../../../core/services';
-import { PagedResponse, SalesByExpansion, ExpansionProfitability } from '../../../../core/models';
+import { CardTraderApiService, ReportingService } from '../../../../core/services';
+import { PagedResponse, SalesByExpansion, ExpansionProfitability, TopExpansionValue } from '../../../../core/models';
 import { TabManagerService } from '../../../../core/services/tab-manager.service';
 
 interface DashboardStats {
@@ -49,6 +49,7 @@ export class DashboardComponent implements OnInit {
   stats$!: Observable<DashboardStats>;
   salesByExpansion$!: Observable<SalesByExpansion[]>;
   expansionProfitability$!: Observable<ExpansionProfitability[]>;
+  topExpansionsByValue$!: Observable<TopExpansionValue[]>;
   isLoading = true;
 
   // Filter subjects
@@ -61,6 +62,7 @@ export class DashboardComponent implements OnInit {
 
   constructor(
     private apiService: CardTraderApiService,
+    private reportingService: ReportingService,
     private tabManager: TabManagerService,
     private router: Router
   ) { }
@@ -93,14 +95,16 @@ export class DashboardComponent implements OnInit {
     this.salesByExpansion$ = this.salesFilterSubject.pipe(
       debounceTime(300),
       distinctUntilChanged(),
-      switchMap(filter => this.apiService.getSalesByExpansion(undefined, undefined, 10, filter))
+      switchMap(filter => this.apiService.getSalesByExpansion(undefined, undefined, 15, filter))
     );
 
     this.expansionProfitability$ = this.roiFilterSubject.pipe(
       debounceTime(300),
       distinctUntilChanged(),
-      switchMap(filter => this.apiService.getExpansionProfitability(undefined, undefined, 10, filter))
+      switchMap(filter => this.apiService.getExpansionProfitability(undefined, undefined, 12, filter))
     );
+
+    this.topExpansionsByValue$ = this.reportingService.getTopExpansionsByValue(10);
 
     this.isLoading = false;
   }

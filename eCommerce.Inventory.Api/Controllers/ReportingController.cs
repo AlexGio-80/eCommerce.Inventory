@@ -630,6 +630,43 @@ public class ReportingController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Get top expansions by average card value
+    /// </summary>
+    [HttpGet("expansions/top-values")]
+    public async Task<ActionResult<ApiResponse<List<TopExpansionValueDto>>>> GetTopExpansionsByValue(
+        [FromQuery] int limit = 10)
+    {
+        try
+        {
+            _logger.LogInformation("Fetching top {Limit} expansions by average card value", limit);
+
+            var topExpansions = await _context.Expansions
+                .AsNoTracking()
+                .Include(e => e.Game)
+                .Where(e => e.AverageCardValue > 0)
+                .OrderByDescending(e => e.AverageCardValue)
+                .Take(limit)
+                .Select(e => new TopExpansionValueDto
+                {
+                    ExpansionId = e.Id,
+                    ExpansionName = e.Name,
+                    GameName = e.Game.Name,
+                    AverageCardValue = e.AverageCardValue ?? 0,
+                    TotalMinPrice = e.TotalMinPrice ?? 0,
+                    LastUpdate = e.LastValueAnalysisUpdate
+                })
+                .ToListAsync();
+
+            return Ok(ApiResponse<List<TopExpansionValueDto>>.SuccessResult(topExpansions));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching top expansions by value");
+            return StatusCode(500, ApiResponse<List<TopExpansionValueDto>>.ErrorResult("Failed to fetch top expansions by value", ex.Message));
+        }
+    }
+
     #endregion
 
     #region Helper Methods

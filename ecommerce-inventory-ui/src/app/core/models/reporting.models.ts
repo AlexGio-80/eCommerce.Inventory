@@ -89,3 +89,13 @@ export interface DateRange {
     from: Date;
     to: Date;
 }
+
+// Top Expansion Value
+export interface TopExpansionValue {
+    expansionId: number;
+    expansionName: string;
+    gameName: string;
+    averageCardValue: number;
+    totalMinPrice: number;
+    lastUpdate?: Date;
+}

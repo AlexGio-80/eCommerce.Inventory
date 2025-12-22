@@ -36,6 +36,7 @@ public class SyncResponseDto
     public SyncEntityResultDto Properties { get; set; } = new();
     public SyncEntityResultDto Inventory { get; set; } = new();
     public SyncEntityResultDto Orders { get; set; } = new();
+    public SyncEntityResultDto Analytics { get; set; } = new();
 
     /// <summary>
     /// Timestamp when sync started

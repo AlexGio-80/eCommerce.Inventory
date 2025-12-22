@@ -12,7 +12,8 @@ import {
     SlowMover,
     ProfitabilityOverview,
     TopPerformer,
-    DateRange
+    DateRange,
+    TopExpansionValue
 } from '../models/reporting.models';
 import { ApiResponse } from '../models/api-response';
 import { environment } from '../../../environments/environment';
@@ -107,6 +108,13 @@ export class ReportingService {
         }
 
         return this.http.get<ApiResponse<TopPerformer[]>>(`${this.apiUrl}/profitability/top-performers`, { params })
+            .pipe(map(response => response.data ?? []));
+    }
+
+    // Expansion Analytics
+    getTopExpansionsByValue(limit: number = 10): Observable<TopExpansionValue[]> {
+        const params = new HttpParams().set('limit', limit.toString());
+        return this.http.get<ApiResponse<TopExpansionValue[]>>(`${this.apiUrl}/expansions/top-values`, { params })
             .pipe(map(response => response.data ?? []));
     }
 }

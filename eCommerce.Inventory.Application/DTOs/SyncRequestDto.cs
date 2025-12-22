@@ -42,7 +42,12 @@ public class SyncRequestDto
     public bool SyncOrders { get; set; } = false;
 
     /// <summary>
+    /// Sync Analytics (Expansion average card values)
+    /// </summary>
+    public bool SyncAnalytics { get; set; } = false;
+
+    /// <summary>
     /// Determine if any sync is requested
     /// </summary>
-    public bool IsEmpty => !SyncGames && !SyncCategories && !SyncExpansions && !SyncBlueprints && !SyncProperties && !SyncInventory && !SyncOrders;
+    public bool IsEmpty => !SyncGames && !SyncCategories && !SyncExpansions && !SyncBlueprints && !SyncProperties && !SyncInventory && !SyncOrders && !SyncAnalytics;
 }

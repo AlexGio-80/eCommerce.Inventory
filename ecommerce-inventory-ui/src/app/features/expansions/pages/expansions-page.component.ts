@@ -59,6 +59,18 @@ ModuleRegistry.registerModules([AllCommunityModule]);
               <label>Code:</label>
               <span>{{ selectedExpansion()?.code }}</span>
             </div>
+            <div class="detail-row" *ngIf="selectedExpansion()?.averageCardValue">
+              <label>Valore Medio Carta:</label>
+              <span class="value-highlight">€{{ selectedExpansion()?.averageCardValue?.toFixed(2) }}</span>
+            </div>
+            <div class="detail-row" *ngIf="selectedExpansion()?.totalMinPrice">
+              <label>Valore Totale (Min):</label>
+              <span class="value-highlight">€{{ selectedExpansion()?.totalMinPrice?.toFixed(2) }}</span>
+            </div>
+            <div class="detail-row" *ngIf="selectedExpansion()?.lastValueAnalysisUpdate">
+              <label>Ultima Analisi:</label>
+              <span>{{ selectedExpansion()?.lastValueAnalysisUpdate | date:'dd/MM/yyyy HH:mm' }}</span>
+            </div>
           </div>
         </mat-card-content>
         <mat-card-actions>
@@ -68,7 +80,15 @@ ModuleRegistry.registerModules([AllCommunityModule]);
             (click)="syncBlueprints()"
             [disabled]="isSyncing()">
             <mat-spinner *ngIf="isSyncing()" diameter="20"></mat-spinner>
-            {{ isSyncing() ? 'Syncing...' : 'Sync Blueprints for this Expansion' }}
+            {{ isSyncing() ? 'Syncing...' : 'Sync Blueprints' }}
+          </button>
+          <button 
+            mat-raised-button 
+            color="accent" 
+            (click)="analyzeValue()"
+            [disabled]="isAnalyzing()">
+            <mat-spinner *ngIf="isAnalyzing()" diameter="20"></mat-spinner>
+            {{ isAnalyzing() ? 'Analyzing...' : 'Analizza Valore' }}
           </button>
         </mat-card-actions>
       </mat-card>
@@ -78,6 +98,12 @@ ModuleRegistry.registerModules([AllCommunityModule]);
         <mat-card-content>
           <div class="grid-header">
             <h2>Lista Espansioni</h2>
+            <div class="header-actions">
+              <button mat-button color="primary" (click)="analyzeAllValues()" [disabled]="isAnalyzingAll()">
+                <mat-spinner *ngIf="isAnalyzingAll()" diameter="18"></mat-spinner>
+                Analizza Tutte
+              </button>
+            </div>
             
             <!-- Grid Options Menu -->
             <button mat-icon-button [matMenuTriggerFor]="gridMenu" matTooltip="Grid Options">
@@ -167,6 +193,17 @@ ModuleRegistry.registerModules([AllCommunityModule]);
       color: #333;
     }
 
+    .value-highlight {
+      font-weight: 500;
+      color: #2e7d32 !important;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
     mat-card-actions button {
       margin: 8px;
     }
@@ -210,6 +247,34 @@ ModuleRegistry.registerModules([AllCommunityModule]);
       padding: 4px 8px;
     }
 
+    .grid-actions {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+    }
+
+    .analysis-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #3f51b5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+      border-radius: 50%;
+      transition: background-color 0.2s;
+    }
+
+    .analysis-btn:hover {
+      background-color: rgba(63, 81, 181, 0.1);
+    }
+
+    .analysis-btn mat-icon, .analysis-btn .material-icons {
+      font-size: 20px;
+    }
+
     ::ng-deep .mat-mdc-menu-content {
       padding: 0 !important;
     }
@@ -219,6 +284,8 @@ export class ExpansionsPageComponent implements OnInit {
   expansions = signal<Expansion[]>([]);
   selectedExpansion = signal<Expansion | null>(null);
   isSyncing = signal(false);
+  isAnalyzing = signal(false);
+  isAnalyzingAll = signal(false);
 
   private gridApi!: GridApi;
   private readonly GRID_ID = 'expansions-grid';
@@ -229,7 +296,49 @@ export class ExpansionsPageComponent implements OnInit {
     { field: 'name', headerName: 'Nome', flex: 2, filter: 'agTextColumnFilter' },
     { field: 'code', headerName: 'Codice', width: 120, filter: 'agTextColumnFilter' },
     { field: 'gameName', headerName: 'Gioco', flex: 1, filter: 'agTextColumnFilter' },
-    { field: 'gameCode', headerName: 'Codice Gioco', width: 120, filter: 'agTextColumnFilter' }
+    {
+      field: 'averageCardValue',
+      headerName: 'Val. Medio',
+      width: 120,
+      filter: 'agNumberColumnFilter',
+      valueFormatter: (params: any) => params.value ? `€${params.value.toFixed(2)}` : '-'
+    },
+    {
+      field: 'totalMinPrice',
+      headerName: 'Val. Totale',
+      width: 120,
+      filter: 'agNumberColumnFilter',
+      valueFormatter: (params: any) => params.value ? `€${params.value.toFixed(2)}` : '-'
+    },
+    {
+      field: 'lastValueAnalysisUpdate',
+      headerName: 'Ultima Analisi',
+      width: 150,
+      valueFormatter: (params: any) => params.value ? new Date(params.value).toLocaleString() : '-'
+    },
+    { field: 'gameCode', headerName: 'Codice Gioco', width: 120, filter: 'agTextColumnFilter' },
+    {
+      headerName: 'Azioni',
+      field: 'actions',
+      width: 100,
+      pinned: 'right',
+      cellRenderer: (params: any) => {
+        if (!params.data) return '';
+        return `
+          <div class="grid-actions">
+            <button class="analysis-btn" title="Analizza Valore">
+              <i class="material-icons">analytics</i>
+            </button>
+          </div>
+        `;
+      },
+      onCellClicked: (params: any) => {
+        const target = params.event?.target as HTMLElement;
+        if (target.classList.contains('analysis-btn') || target.closest('.analysis-btn')) {
+          this.analyzeExpansionValue(params.data);
+        }
+      }
+    }
   ];
 
   defaultColDef: ColDef = {
@@ -306,6 +415,46 @@ export class ExpansionsPageComponent implements OnInit {
         this.isSyncing.set(false);
         console.error('Error syncing blueprints:', error);
         this.snackBar.open(`Error: ${error.error?.error || 'Failed to sync blueprints'}`, 'Close', { duration: 5000 });
+      }
+    });
+  }
+
+  analyzeValue() {
+    const expansion = this.selectedExpansion();
+    if (!expansion) return;
+    this.analyzeExpansionValue(expansion);
+  }
+
+  analyzeExpansionValue(expansion: Expansion) {
+    if (this.isAnalyzing()) return;
+
+    this.isAnalyzing.set(true);
+    this.expansionsService.analyzeValue(expansion.id).subscribe({
+      next: () => {
+        this.isAnalyzing.set(false);
+        this.snackBar.open(`Analisi per ${expansion.name} completata`, 'Chiudi', { duration: 3000 });
+        this.loadExpansions(); // Refresh to get updated values
+      },
+      error: (error) => {
+        this.isAnalyzing.set(false);
+        console.error('Error analyzing expansion value:', error);
+        this.snackBar.open('Errore durante l\'analisi', 'Chiudi', { duration: 5000 });
+      }
+    });
+  }
+
+  analyzeAllValues() {
+    this.isAnalyzingAll.set(true);
+    this.expansionsService.analyzeAllValues().subscribe({
+      next: (response: any) => {
+        this.isAnalyzingAll.set(false);
+        this.snackBar.open(`Analisi collettiva completata: ${response.data.successCount} completate, ${response.data.failedCount} fallite`, 'Chiudi', { duration: 5000 });
+        this.loadExpansions();
+      },
+      error: (error) => {
+        this.isAnalyzingAll.set(false);
+        console.error('Error in bulk analytics:', error);
+        this.snackBar.open('Errore nell\'analisi collettiva', 'Chiudi', { duration: 5000 });
       }
     });
   }

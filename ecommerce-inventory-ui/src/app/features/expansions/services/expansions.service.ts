@@ -13,6 +13,9 @@ export interface Expansion {
     gameId: number;
     gameName: string;
     gameCode: string;
+    averageCardValue?: number;
+    totalMinPrice?: number;
+    lastValueAnalysisUpdate?: string;
 }
 
 export interface SyncBlueprintsResponse {
@@ -51,5 +54,13 @@ export class ExpansionsService {
         return this.http.post<ApiResponse<SyncBlueprintsResponse>>(`${this.apiUrl}/${id}/sync-blueprints`, {}).pipe(
             map(response => response.data!)
         );
+    }
+
+    analyzeValue(id: number): Observable<any> {
+        return this.http.post<ApiResponse<any>>(`${this.apiUrl}/${id}/analyze-value`, {});
+    }
+
+    analyzeAllValues(): Observable<any> {
+        return this.http.post<ApiResponse<any>>(`${this.apiUrl}/analyze-all-values`, {});
     }
 }

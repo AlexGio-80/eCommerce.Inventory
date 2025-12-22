@@ -62,6 +62,14 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             .HasForeignKey(b => b.ExpansionId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        modelBuilder.Entity<Expansion>()
+            .Property(e => e.AverageCardValue)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<Expansion>()
+            .Property(e => e.TotalMinPrice)
+            .HasPrecision(18, 2);
+
         // Blueprint -> InventoryItem (One-to-Many)
         modelBuilder.Entity<Blueprint>()
             .HasMany(b => b.InventoryItems)
