@@ -2,6 +2,7 @@ using eCommerce.Inventory.Application.Interfaces;
 using eCommerce.Inventory.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.IO;
 
 namespace eCommerce.Inventory.Infrastructure.Services;
 
@@ -21,7 +22,7 @@ public class ExpansionAnalyticsService : IExpansionAnalyticsService
         _logger = logger;
     }
 
-    public async Task AnalyzeExpansionValueAsync(int expansionId, CancellationToken cancellationToken = default)
+    public async Task<ExpansionAnalysisResult> AnalyzeExpansionValueAsync(int expansionId, CancellationToken cancellationToken = default)
     {
         var expansion = await _dbContext.Expansions
             .Include(e => e.Blueprints)
@@ -30,63 +31,94 @@ public class ExpansionAnalyticsService : IExpansionAnalyticsService
         if (expansion == null)
         {
             _logger.LogWarning("Expansion {ExpansionId} not found for analysis", expansionId);
-            return;
+            throw new ArgumentException($"Espansione con ID {expansionId} non trovata.");
         }
 
-        _logger.LogInformation("Starting value analysis for expansion {ExpansionName} ({ExpansionId}) - Blueprints: {Count}",
-            expansion.Name, expansionId, expansion.Blueprints.Count);
-
-        decimal totalMinPrice = 0;
-        int cardCount = 0;
-
-        // Batch blueprints to reduce API calls (e.g., 50 at a time)
-        const int batchSize = 50;
-        var blueprints = expansion.Blueprints.ToList();
-
-        for (int i = 0; i < blueprints.Count; i += batchSize)
+        if (expansion.Blueprints.Count == 0)
         {
-            var batch = blueprints.Skip(i).Take(batchSize).ToList();
-            var batchIds = batch.Select(b => b.CardTraderId).ToList();
+            _logger.LogWarning("No blueprints found for expansion {ExpansionName} ({ExpansionId})", expansion.Name, expansionId);
+            throw new InvalidOperationException($"Nessun blueprint trovato per l'espansione '{expansion.Name}'. Eseguire prima la sincronizzazione dei blueprint.");
+        }
 
-            try
+        _logger.LogInformation("Starting value analysis for expansion {ExpansionName} ({ExpansionId}) via expansion_id filter",
+            expansion.Name, expansionId);
+
+        var blueprints = expansion.Blueprints.ToList();
+        var prices = new Dictionary<int, int>(); // blueprintId -> minPriceCents
+
+        try
+        {
+            var marketplaceProducts = await _cardTraderApiService.GetMarketplaceProductsByExpansionAsync(expansion.CardTraderId, cancellationToken);
+
+            // Filter: only include playable cards (those having "tournament_legal" in properties_hash)
+            // This excludes boxes, fat packs, and other non-card items.
+            var cardOnlyProducts = marketplaceProducts
+                .Where(p => p.PropertiesHash != null && p.PropertiesHash.ContainsKey("tournament_legal"))
+                .ToList();
+
+            _logger.LogInformation("Filtered {Total} products down to {CardsOnly} playable cards for expansion {ExpansionId}",
+                marketplaceProducts.Count(), cardOnlyProducts.Count, expansionId);
+
+            // Group by blueprint and calculate min
+            var stats = cardOnlyProducts.GroupBy(p => p.BlueprintId);
+
+            foreach (var group in stats)
             {
-                var allProducts = await _cardTraderApiService.GetMarketplaceProductsBatchAsync(batchIds, cancellationToken);
-
-                // Group products by blueprint to find min price for each blueprint in the batch
-                var productsByBlueprint = allProducts
-                    .Where(p => p.PriceCents > 0)
-                    .GroupBy(p => p.BlueprintId);
-
-                foreach (var group in productsByBlueprint)
+                var minPrice = group.Where(p => p.PriceCents > 0).Min(p => (int?)p.PriceCents);
+                if (minPrice.HasValue)
                 {
-                    var minPriceCents = group.Min(p => p.PriceCents);
-                    if (minPriceCents > 0)
-                    {
-                        totalMinPrice += (decimal)minPriceCents / 100m;
-                        cardCount++;
-                    }
+                    prices[group.Key] = minPrice.Value;
                 }
             }
-            catch (Exception ex)
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching marketplace products for expansion {ExpansionId}", expansionId);
+            throw;
+        }
+
+        // Calculate metrics
+        int cardCount = 0;
+        decimal totalMinPrice = 0;
+
+        // PREPARE DEBUG BREAKDOWN
+        var debugFile = Path.Combine(Directory.GetCurrentDirectory(), $"debug_expansion_{expansionId}.csv");
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("BlueprintId;Name;Version;MinPriceCents;MinPriceEuro");
+
+        foreach (var blueprint in blueprints)
+        {
+            if (prices.TryGetValue(blueprint.CardTraderId, out int minPriceCents))
             {
-                _logger.LogError(ex, "Error fetching marketplace stats for batch starting at {Index}", i);
+                decimal priceEuro = (decimal)minPriceCents / 100m;
+                sb.AppendLine($"{blueprint.CardTraderId};{blueprint.Name};{blueprint.Version};{minPriceCents};{priceEuro:F2}");
+                totalMinPrice += priceEuro;
+                cardCount++;
+            }
+            else
+            {
+                sb.AppendLine($"{blueprint.CardTraderId};{blueprint.Name};{blueprint.Version};0;0.00");
             }
         }
 
-        if (cardCount > 0)
-        {
-            expansion.TotalMinPrice = totalMinPrice;
-            expansion.AverageCardValue = totalMinPrice / cardCount;
-            expansion.LastValueAnalysisUpdate = DateTime.UtcNow;
+        try { File.WriteAllText(debugFile, sb.ToString()); } catch { /* Ignore debug file errors */ }
 
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            _logger.LogInformation("Analysis completed for {ExpansionName}. Avg Value: {AvgValue}, Total Min: {TotalMin}, Cards analyzed: {CardCount}",
-                expansion.Name, expansion.AverageCardValue, expansion.TotalMinPrice, cardCount);
-        }
-        else
+        _logger.LogInformation("Analysis results for {ExpansionName}: {CardCount} cards with prices found out of {TotalCards} blueprints. Total: €{Total:F2}. Breakdown saved to: {DebugFile}",
+            expansion.Name, cardCount, blueprints.Count, totalMinPrice, debugFile);
+
+        expansion.TotalMinPrice = totalMinPrice;
+        expansion.AverageCardValue = cardCount > 0 ? totalMinPrice / cardCount : 0;
+        expansion.LastValueAnalysisUpdate = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return new ExpansionAnalysisResult
         {
-            _logger.LogWarning("No card prices found for expansion {ExpansionName}", expansion.Name);
-        }
+            BlueprintCount = blueprints.Count,
+            CardsAnalyzedCount = cardCount,
+            AverageValue = expansion.AverageCardValue ?? 0,
+            TotalValue = expansion.TotalMinPrice ?? 0
+        };
     }
 
     public async Task<AnalyticsSyncResult> AnalyzeAllExpansionsValueAsync(CancellationToken cancellationToken = default)

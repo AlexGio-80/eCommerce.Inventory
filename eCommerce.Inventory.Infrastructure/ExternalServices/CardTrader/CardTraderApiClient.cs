@@ -444,31 +444,71 @@ public class CardTraderApiClient : ICardTraderApiService
         try
         {
             var ids = blueprintIds.ToList();
-            _logger.LogInformation("Fetching marketplace products for {Count} blueprints from Card Trader API", ids.Count);
+            _logger.LogInformation("Fetching marketplace products for {Count} blueprints from Card Trader API (parallel fallback)", ids.Count);
 
-            // Construct query string with blueprint_id[] parameter
-            var queryParams = ids.Select(id => $"blueprint_id[]={id}");
-            var queryString = string.Join("&", queryParams);
-            var endpoint = $"marketplace/products?{queryString}";
+            var tasks = ids.Select(id => GetMarketplaceProductsAsync(id, cancellationToken));
+            var results = await Task.WhenAll(tasks);
+
+            return results.SelectMany(r => r).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching marketplace products in parallel fallback");
+            throw;
+        }
+    }
+
+    public async Task<IEnumerable<CardTraderMarketplaceProductDto>> GetMarketplaceProductsByExpansionAsync(int expansionId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Fetching marketplace products for expansion {ExpansionId} from Card Trader API", expansionId);
+
+            var endpoint = $"marketplace/products?expansion_id={expansionId}";
+            _logger.LogInformation("Calling Card Trader endpoint: {Endpoint}", endpoint);
 
             await _rateLimiter.AcquireAsync(cancellationToken);
             var response = await _httpClient.GetAsync(endpoint, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogError("Card Trader API error for expansion. Status: {StatusCode}, Response: {Response}, URL: {Url}",
+                    response.StatusCode, errorContent, endpoint);
+            }
+
             response.EnsureSuccessStatusCode();
 
             var jsonContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogInformation("Raw Marketplace Response for expansion (first 500 chars): {Response}",
+                jsonContent.Length > 500 ? jsonContent.Substring(0, 500) : jsonContent);
 
             // The endpoint returns a dictionary where keys are Blueprint IDs (strings) and values are LISTS of product objects
             var productsDict = JsonSerializer.Deserialize<Dictionary<string, List<CardTraderMarketplaceProductDto>>>(jsonContent);
 
-            var products = productsDict?.Values.SelectMany(x => x).ToList() ?? new List<CardTraderMarketplaceProductDto>();
+            var products = new List<CardTraderMarketplaceProductDto>();
+            if (productsDict != null)
+            {
+                foreach (var kvp in productsDict)
+                {
+                    if (int.TryParse(kvp.Key, out int blueprintId))
+                    {
+                        foreach (var product in kvp.Value)
+                        {
+                            product.BlueprintId = blueprintId;
+                            products.Add(product);
+                        }
+                    }
+                }
+            }
 
-            _logger.LogInformation("Fetched {ProductCount} marketplace products for {BlueprintCount} blueprints", products.Count, ids.Count);
+            _logger.LogInformation("Found {Count} products for expansion {ExpansionId}", products.Count, expansionId);
             return products;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching marketplace products for {Count} blueprints", blueprintIds.Count());
-            return new List<CardTraderMarketplaceProductDto>();
+            _logger.LogError(ex, "Error fetching marketplace products for expansion {ExpansionId}", expansionId);
+            throw;
         }
     }
 }

@@ -341,6 +341,14 @@
   - **API Refactoring**: Extended `ICardTraderApiService` and `CardTraderApiClient` with `GetMarketplaceProductsBatchAsync`.
   - **Service Improvement**: Refactored `ExpansionAnalyticsService` to process blueprints in batches.
 
+⏳ **Phase 12.2: Analytics Bug Fixes ✅ DONE (2025-12-23)**
+  - **Bug Fix**: Resolved "400 Bad Request" error caused by unsupported `blueprint_id[]` parameter.
+  - **Solution**: Switched to `expansion_id` filter for fetching all products in a single efficient call.
+  - **Enhancement**: Added `tournament_legal` filter to exclude non-card products (boxes, fat packs) from calculations.
+  - **New Method**: `GetMarketplaceProductsByExpansionAsync` in `CardTraderApiClient`.
+  - **DTO Update**: Added `PropertiesHash` to `CardTraderMarketplaceProductDto` for property-based filtering.
+  - **Debug Mode**: Temporary CSV file generation (`debug_expansion_{id}.csv`) for calculation auditing.
+
 ⏳ **Next Steps**: 
   - Additional features and enhancements as needed
   - Continue improving reporting and analytics

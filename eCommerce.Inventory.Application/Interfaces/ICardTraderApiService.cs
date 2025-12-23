@@ -25,6 +25,7 @@ public interface ICardTraderApiService
     Task<IEnumerable<dynamic>> GetOrdersAsync(DateTime? from = null, DateTime? to = null, CancellationToken cancellationToken = default);
     Task<IEnumerable<CardTraderMarketplaceProductDto>> GetMarketplaceProductsAsync(int blueprintId, CancellationToken cancellationToken = default);
     Task<IEnumerable<CardTraderMarketplaceProductDto>> GetMarketplaceProductsBatchAsync(IEnumerable<int> blueprintIds, CancellationToken cancellationToken = default);
+    Task<IEnumerable<CardTraderMarketplaceProductDto>> GetMarketplaceProductsByExpansionAsync(int expansionId, CancellationToken cancellationToken = default);
 
     // Mutation methods - operate on Card Trader marketplace
     Task<int> CreateProductOnCardTraderAsync(InventoryItem item, CancellationToken cancellationToken = default);

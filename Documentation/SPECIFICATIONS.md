@@ -1046,11 +1046,12 @@ Identificare le espansioni con il miglior valore medio per carta basato sul prez
    - On-demand via UI per singola espansione o collettivamente.
    - Background (notturno) configurabile via `appsettings.json` (`SyncSettings:RunAnalyticsDuringSync`).
 2. **Algoritmo di calcolo**:
-   - Recupero di tutti i blueprint abilitati per l'espansione.
-   - Recupero dei dati di mercato (marketplace products) per ogni blueprint.
-   - Calcolo del `MinPrice` (prezzo minimo > 0).
-   - Aggregazione: `TotalMinPrice = sum(MinPrice)`, `AverageCardValue = TotalMinPrice / count(Blueprints)`.
+   - Recupero di tutti i prodotti marketplace tramite `expansion_id` (singola chiamata API).
+   - **Filtro carte giocabili**: Includere solo prodotti con la proprietà `tournament_legal` in `properties_hash` per escludere box, fat pack e altri prodotti non-carta.
+   - Calcolo del `MinPrice` per ogni blueprint (prezzo minimo > 0).
+   - Aggregazione: `TotalMinPrice = sum(MinPrice)`, `AverageCardValue = TotalMinPrice / count(CardsWithPrice)`.
 3. **Ottimizzazione**:
+   - Utilizzo del metodo `GetMarketplaceProductsByExpansionAsync` per massima efficienza (1 chiamata per espansione).
    - Utilizzo obbligatorio di `CardTraderRateLimiter` per rispettare i limiti API.
    - Persistenza su DB: campi `AverageCardValue`, `TotalMinPrice`, `LastValueAnalysisUpdate` nella tabella `Expansions`.
 4. **Visualizzazione**:

@@ -145,8 +145,15 @@ public class ExpansionsController : ControllerBase
     {
         try
         {
-            await _expansionAnalyticsService.AnalyzeExpansionValueAsync(id, cancellationToken);
-            return Ok(Models.ApiResponse<object>.SuccessResult(null, "Value analysis completed successfully"));
+            var result = await _expansionAnalyticsService.AnalyzeExpansionValueAsync(id, cancellationToken);
+            return Ok(Models.ApiResponse<object>.SuccessResult(result,
+                $"Analisi completata: {result.CardsAnalyzedCount} carte analizzate su {result.BlueprintCount} blueprints. " +
+                $"Valore medio: €{result.AverageValue:F2}"));
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Specifically handling the "no blueprints" case with a 400 Bad Request
+            return BadRequest(Models.ApiResponse<object>.ErrorResult(ex.Message));
         }
         catch (Exception ex)
         {

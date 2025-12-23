@@ -25,6 +25,9 @@ public class CardTraderMarketplaceProductDto
     [JsonPropertyName("properties")]
     public CardTraderMarketplacePropertiesDto Properties { get; set; } = new();
 
+    [JsonPropertyName("properties_hash")]
+    public Dictionary<string, object> PropertiesHash { get; set; } = new();
+
     [JsonPropertyName("user")]
     public CardTraderMarketplaceUserDto User { get; set; } = new();
 }
