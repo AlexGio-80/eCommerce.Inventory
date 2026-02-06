@@ -18,6 +18,7 @@ public class CardTraderSyncOrchestratorTests
     private readonly Mock<ICardTraderApiService> _apiServiceMock;
     private readonly Mock<ILogger<CardTraderSyncOrchestrator>> _loggerMock;
     private readonly Mock<ILogger<CardTraderDtoMapper>> _mapperLoggerMock;
+    private readonly Mock<IExpansionAnalyticsService> _analyticsServiceMock;
     private readonly ApplicationDbContext _dbContext;
     private readonly CardTraderDtoMapper _mapper;
     private readonly InventorySyncService _inventorySyncService;
@@ -28,6 +29,7 @@ public class CardTraderSyncOrchestratorTests
         _apiServiceMock = new Mock<ICardTraderApiService>();
         _loggerMock = new Mock<ILogger<CardTraderSyncOrchestrator>>();
         _mapperLoggerMock = new Mock<ILogger<CardTraderDtoMapper>>();
+        _analyticsServiceMock = new Mock<IExpansionAnalyticsService>();
 
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
@@ -49,6 +51,7 @@ public class CardTraderSyncOrchestratorTests
             _mapper,
             _dbContext,
             _inventorySyncService,
+            _analyticsServiceMock.Object,
             _loggerMock.Object);
     }
 
@@ -88,6 +91,56 @@ public class CardTraderSyncOrchestratorTests
         Assert.NotNull(blueprint);
         Assert.Equal("Black Lotus", blueprint.Name);
         Assert.Equal("Rare", blueprint.Rarity);
+    }
+
+    [Fact]
+    public async Task SyncAsync_SyncBlueprints_ShouldUpdateExistingBlueprints()
+    {
+        // Arrange: Create existing blueprint with old ImageUrl
+        var game = new Game { Id = 1, CardTraderId = 100, Name = "Magic", Code = "MTG", IsEnabled = true };
+        var expansion = new Expansion { Id = 1, CardTraderId = 200, GameId = 1, Name = "Alpha", Code = "LEA" };
+        var existingBlueprint = new Blueprint
+        {
+            Id = 1,
+            CardTraderId = 300,
+            ExpansionId = 1,
+            GameId = 1,
+            Name = "Black Lotus",
+            Version = "Regular",
+            ImageUrl = "https://old-url.com/preview_old.jpg"
+        };
+
+        _dbContext.Games.Add(game);
+        _dbContext.Expansions.Add(expansion);
+        _dbContext.Blueprints.Add(existingBlueprint);
+        await _dbContext.SaveChangesAsync();
+
+        // API returns updated blueprint with new ImageUrl
+        var blueprintDto = new CardTraderBlueprintDto
+        {
+            Id = 300,
+            Name = "Black Lotus",
+            ExpansionId = 200,
+            GameId = 100,
+            ImageUrl = "https://new-url.com/final_image.jpg",
+            FixedProperties = new Dictionary<string, object> { { "rarity", "Rare" } }
+        };
+
+        _apiServiceMock.Setup(x => x.SyncBlueprintsForExpansionAsync(200, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<dynamic> { blueprintDto });
+
+        var request = new SyncRequestDto { SyncBlueprints = true };
+
+        // Act
+        var result = await _orchestrator.SyncAsync(request);
+
+        // Assert: Blueprint should be updated, not added
+        Assert.Equal(0, result.Blueprints.Added);
+        Assert.Equal(1, result.Blueprints.Updated);
+
+        var updatedBlueprint = await _dbContext.Blueprints.FirstOrDefaultAsync(b => b.CardTraderId == 300);
+        Assert.NotNull(updatedBlueprint);
+        Assert.Equal("https://new-url.com/final_image.jpg", updatedBlueprint.ImageUrl);
     }
 
     [Fact]

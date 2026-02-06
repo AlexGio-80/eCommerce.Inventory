@@ -652,10 +652,21 @@ public class CardTraderSyncOrchestrator
                 }
                 else
                 {
+                    // Update ALL fields to ensure data stays in sync with Card Trader API
                     existingBlueprint.Name = blueprint.Name;
                     existingBlueprint.Rarity = blueprint.Rarity;
                     existingBlueprint.Version = blueprint.Version;
                     existingBlueprint.ExpansionId = blueprint.ExpansionId;
+                    existingBlueprint.ImageUrl = blueprint.ImageUrl;
+                    existingBlueprint.BackImageUrl = blueprint.BackImageUrl;
+                    existingBlueprint.CategoryId = blueprint.CategoryId;
+                    existingBlueprint.GameId = blueprint.GameId;
+                    existingBlueprint.FixedProperties = blueprint.FixedProperties;
+                    existingBlueprint.EditableProperties = blueprint.EditableProperties;
+                    existingBlueprint.CardMarketIds = blueprint.CardMarketIds;
+                    existingBlueprint.TcgPlayerId = blueprint.TcgPlayerId;
+                    existingBlueprint.ScryfallId = blueprint.ScryfallId;
+                    existingBlueprint.UpdatedAt = DateTime.UtcNow;
                     _dbContext.Blueprints.Update(existingBlueprint);
                     updated++;
                 }

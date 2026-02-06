@@ -349,6 +349,12 @@
   - **DTO Update**: Added `PropertiesHash` to `CardTraderMarketplaceProductDto` for property-based filtering.
   - **Debug Mode**: Temporary CSV file generation (`debug_expansion_{id}.csv`) for calculation auditing.
 
+⏳ **Phase 12.3: Blueprint Sync Bug Fix ✅ DONE (2026-02-06)**
+  - **Bug Fix**: I Blueprints esistenti non venivano aggiornati durante la sincronizzazione da Card Trader.
+  - **Causa**: La funzione `UpsertBlueprintsAsync` aggiornava solo 4 campi su 14.
+  - **Soluzione**: Aggiunto aggiornamento per `ImageUrl`, `BackImageUrl`, `CategoryId`, `GameId`, `FixedProperties`, `EditableProperties`, `CardMarketIds`, `TcgPlayerId`, `ScryfallId`, `UpdatedAt`.
+  - **Test**: Nuovo test `SyncAsync_SyncBlueprints_ShouldUpdateExistingBlueprints` aggiunto.
+
 ⏳ **Next Steps**: 
   - Additional features and enhancements as needed
   - Continue improving reporting and analytics

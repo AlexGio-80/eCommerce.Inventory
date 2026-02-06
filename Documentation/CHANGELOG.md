@@ -4,6 +4,38 @@ Questo file traccia le principali feature e bug fix implementate nel progetto, c
 
 ---
 
+## [2026-02-06] Blueprint Sync - Fix Aggiornamento Dati Esistenti
+
+### Problema
+I Blueprints vengono inseriti correttamente durante la sincronizzazione da Card Trader, ma i record esistenti non vengono aggiornati con i nuovi dati. Questo causa URL immagini obsolete (es. `preview_winnowing-lorwyn-eclipsed(2).jpg` invece della versione finale).
+
+### Causa Radice
+La funzione `UpsertBlueprintsAsync` in `CardTraderSyncOrchestrator.cs` aggiornava solo 4 campi (`Name`, `Rarity`, `Version`, `ExpansionId`) ma ignorava altri 10 campi importanti.
+
+### Soluzione Implementata
+
+**`CardTraderSyncOrchestrator.cs`**
+- Aggiunto aggiornamento per tutti i campi rimanenti:
+  - `ImageUrl`, `BackImageUrl`
+  - `CategoryId`, `GameId`
+  - `FixedProperties`, `EditableProperties`
+  - `CardMarketIds`, `TcgPlayerId`, `ScryfallId`
+  - `UpdatedAt` (timestamp aggiornamento)
+
+**`CardTraderSyncOrchestratorTests.cs`**
+- Aggiunto mock per `IExpansionAnalyticsService`
+- Nuovo test: `SyncAsync_SyncBlueprints_ShouldUpdateExistingBlueprints`
+
+### Verifica
+- Il progetto Infrastructure compila con successo (0 errori)
+- Il fix aggiorna tutti i campi durante la sincronizzazione notturna e manuale
+
+### Note Tecniche
+- La sincronizzazione notturna (`ScheduledProductSyncWorker`) era già attiva e funzionante
+- Il fix si applica sia alla sync manuale che a quella schedulata
+
+---
+
 ## [2025-12-23] Expansion Analytics - Fix Calcolo Valori
 
 ### Problema
