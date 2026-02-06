@@ -3,6 +3,11 @@ using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader;
 using eCommerce.Inventory.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Threading.Tasks;
+using System.Linq;
+using System;
+using System.Collections.Generic;
+using System.Threading;
 
 namespace eCommerce.Inventory.Api.Controllers;
 
@@ -30,9 +35,6 @@ public class ExpansionsController : ControllerBase
         _logger = logger;
     }
 
-    /// <summary>
-    /// Get all expansions with optional filtering
-    /// </summary>
     [HttpGet]
     public async Task<ActionResult<Models.ApiResponse<List<ExpansionDto>>>> GetExpansions(
         [FromQuery] int? gameId = null,
@@ -55,62 +57,108 @@ public class ExpansionsController : ControllerBase
                 e.Code.Contains(search));
         }
 
-        var expansions = await query
-            .OrderBy(e => e.Game.Name)
-            .ThenBy(e => e.Name)
-            .Select(e => new ExpansionDto
-            {
-                Id = e.Id,
-                CardTraderId = e.CardTraderId,
-                Name = e.Name,
-                Code = e.Code,
-                GameId = e.GameId,
-                GameName = e.Game.Name,
-                GameCode = e.Game.Code,
-                AverageCardValue = e.AverageCardValue,
-                TotalMinPrice = e.TotalMinPrice,
-                LastValueAnalysisUpdate = e.LastValueAnalysisUpdate
-            })
-            .ToListAsync(cancellationToken);
+        // Efficiently join with ExpansionROI view using LINQ Query Syntax for reliable SQL translation
+        // Use Left Join (DefaultIfEmpty) to include Expansions even if no ROI data exists
+        var expansionsQuery = from e in query
+                              join r in _dbContext.ExpansionsROI on e.Name equals r.ExpansionName into rois
+                              from roi in rois.DefaultIfEmpty()
+                              orderby e.Game.Name, e.Name
+                              select new ExpansionDto
+                              {
+                                  Id = e.Id,
+                                  CardTraderId = e.CardTraderId,
+                                  Name = e.Name,
+                                  Code = e.Code,
+                                  GameId = e.GameId,
+                                  GameName = e.Game.Name,
+                                  GameCode = e.Game.Code,
+                                  AverageCardValue = e.AverageCardValue,
+                                  TotalMinPrice = e.TotalMinPrice,
+                                  LastValueAnalysisUpdate = e.LastValueAnalysisUpdate,
+                                  AvgValueCommon = e.AvgValueCommon,
+                                  AvgValueUncommon = e.AvgValueUncommon,
+                                  AvgValueRare = e.AvgValueRare,
+                                  AvgValueMythic = e.AvgValueMythic,
+
+                                  // Financials from ROI View - roi can be null from LEFT JOIN, properties handle nulls
+                                  TotalSales = roi.TotaleVenduto ?? 0m,
+                                  TotalProfit = roi.Differenza ?? 0m,
+                                  TotalAmountSpent = roi.TotaleAcquistato ?? 0m,
+                                  RoiPercentage = (roi.TotaleAcquistato ?? 0m) > 0
+                                      ? ((roi.Differenza ?? 0m) / (roi.TotaleAcquistato ?? 0m)) * 100
+                                      : 0m
+                              };
+
+        var expansions = await expansionsQuery.ToListAsync(cancellationToken);
 
         return Ok(Models.ApiResponse<List<ExpansionDto>>.SuccessResult(expansions));
     }
 
-    /// <summary>
-    /// Get a single expansion by ID
-    /// </summary>
     [HttpGet("{id}")]
     public async Task<ActionResult<Models.ApiResponse<ExpansionDto>>> GetExpansion(int id, CancellationToken cancellationToken = default)
     {
         var expansion = await _dbContext.Expansions
             .Include(e => e.Game)
-            .Where(e => e.Id == id)
-            .Select(e => new ExpansionDto
-            {
-                Id = e.Id,
-                CardTraderId = e.CardTraderId,
-                Name = e.Name,
-                Code = e.Code,
-                GameId = e.GameId,
-                GameName = e.Game.Name,
-                GameCode = e.Game.Code,
-                AverageCardValue = e.AverageCardValue,
-                TotalMinPrice = e.TotalMinPrice,
-                LastValueAnalysisUpdate = e.LastValueAnalysisUpdate
-            })
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
 
         if (expansion == null)
         {
             return NotFound(Models.ApiResponse<ExpansionDto>.ErrorResult($"Expansion with ID {id} not found"));
         }
 
-        return Ok(Models.ApiResponse<ExpansionDto>.SuccessResult(expansion));
+        var dto = new ExpansionDto
+        {
+            Id = expansion.Id,
+            CardTraderId = expansion.CardTraderId,
+            Name = expansion.Name,
+            Code = expansion.Code,
+            GameId = expansion.GameId,
+            GameName = expansion.Game.Name,
+            GameCode = expansion.Game.Code,
+            AverageCardValue = expansion.AverageCardValue,
+            TotalMinPrice = expansion.TotalMinPrice,
+            LastValueAnalysisUpdate = expansion.LastValueAnalysisUpdate,
+            AvgValueCommon = expansion.AvgValueCommon,
+            AvgValueUncommon = expansion.AvgValueUncommon,
+            AvgValueRare = expansion.AvgValueRare,
+            AvgValueMythic = expansion.AvgValueMythic
+        };
+
+        try
+        {
+            var roi = await _dbContext.Set<Domain.Entities.ExpansionROI>()
+                .FirstOrDefaultAsync(r => r.ExpansionName == expansion.Name, cancellationToken);
+
+            if (roi != null)
+            {
+                decimal sales = roi.TotaleVenduto ?? 0m;
+                decimal profit = roi.Differenza ?? 0m;
+                decimal spent = roi.TotaleAcquistato ?? 0m;
+
+                dto.TotalSales = sales;
+                dto.TotalProfit = profit;
+                dto.TotalAmountSpent = spent;
+
+                // Calculate ROI %: (Profit / Cost) * 100
+                if (spent > 0)
+                {
+                    dto.RoiPercentage = (profit / spent) * 100m;
+                }
+                else
+                {
+                    dto.RoiPercentage = 0m;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to fetch ROI for expansion {ExpansionId}", id);
+            // Non-blocking, just return DTO without ROI
+        }
+
+        return Ok(Models.ApiResponse<ExpansionDto>.SuccessResult(dto));
     }
 
-    /// <summary>
-    /// Sync blueprints for a specific expansion
-    /// </summary>
     [HttpPost("{id}/sync-blueprints")]
     public async Task<ActionResult<Models.ApiResponse<object>>> SyncBlueprints(int id, CancellationToken cancellationToken = default)
     {
@@ -137,9 +185,6 @@ public class ExpansionsController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// Trigger value analysis for a specific expansion
-    /// </summary>
     [HttpPost("{id}/analyze-value")]
     public async Task<ActionResult<Models.ApiResponse<object>>> AnalyzeValue(int id, CancellationToken cancellationToken = default)
     {
@@ -152,7 +197,6 @@ public class ExpansionsController : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
-            // Specifically handling the "no blueprints" case with a 400 Bad Request
             return BadRequest(Models.ApiResponse<object>.ErrorResult(ex.Message));
         }
         catch (Exception ex)
@@ -162,9 +206,6 @@ public class ExpansionsController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// Trigger value analysis for all enabled expansions
-    /// </summary>
     [HttpPost("analyze-all-values")]
     public async Task<ActionResult<Models.ApiResponse<object>>> AnalyzeAllValues(CancellationToken cancellationToken = default)
     {
@@ -193,4 +234,16 @@ public class ExpansionDto
     public decimal? AverageCardValue { get; set; }
     public decimal? TotalMinPrice { get; set; }
     public DateTime? LastValueAnalysisUpdate { get; set; }
+
+    // Rarity Stats
+    public decimal? AvgValueCommon { get; set; }
+    public decimal? AvgValueUncommon { get; set; }
+    public decimal? AvgValueRare { get; set; }
+    public decimal? AvgValueMythic { get; set; }
+
+    // Financials
+    public decimal? TotalSales { get; set; }
+    public decimal? TotalProfit { get; set; }
+    public decimal? TotalAmountSpent { get; set; }
+    public decimal? RoiPercentage { get; set; }
 }

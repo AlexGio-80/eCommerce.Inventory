@@ -169,17 +169,17 @@ namespace eCommerce.Inventory.Infrastructure.Migrations
 
             modelBuilder.Entity("eCommerce.Inventory.Domain.Entities.ExpansionROI", b =>
                 {
-                    b.Property<decimal>("Differenza")
+                    b.Property<decimal?>("Differenza")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("ExpansionName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<decimal>("TotaleAcquistato")
+                    b.Property<decimal?>("TotaleAcquistato")
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("TotaleVenduto")
+                    b.Property<decimal?>("TotaleVenduto")
                         .HasColumnType("decimal(18,2)");
 
                     b.ToTable((string)null);

@@ -42,40 +42,97 @@ ModuleRegistry.registerModules([AllCommunityModule]);
       <!-- Header Card with Selected Expansion Details -->
       <mat-card class="header-card" *ngIf="selectedExpansion()">
         <mat-card-header>
-          <mat-card-title>{{ selectedExpansion()?.name }}</mat-card-title>
-          <mat-card-subtitle>{{ selectedExpansion()?.gameName }} ({{ selectedExpansion()?.gameCode }})</mat-card-subtitle>
+          <div class="header-title-group">
+            <mat-card-title>{{ selectedExpansion()?.name }}</mat-card-title>
+            <mat-card-subtitle>{{ selectedExpansion()?.gameName }} ({{ selectedExpansion()?.gameCode }})</mat-card-subtitle>
+            <div class="expansion-meta">
+              <span class="meta-tag">ID: {{ selectedExpansion()?.id }}</span>
+              <span class="meta-tag">CT ID: {{ selectedExpansion()?.cardTraderId }}</span>
+              <span class="meta-tag">Code: {{ selectedExpansion()?.code }}</span>
+            </div>
+          </div>
         </mat-card-header>
         <mat-card-content>
-          <div class="expansion-details">
-            <div class="detail-row">
-              <label>ID:</label>
-              <span>{{ selectedExpansion()?.id }}</span>
+          <div class="expansion-dashboard">
+            <!-- Market Value Section -->
+            <div class="dashboard-section">
+              <h3>Valore Mercato</h3>
+              <div class="stat-grid">
+                <div class="stat-item">
+                  <span class="stat-label">Valore Medio Carta</span>
+                  <span class="stat-value secondary">€{{ selectedExpansion()?.averageCardValue?.toFixed(2) || '0.00' }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Valore Totale (Min)</span>
+                  <span class="stat-value secondary">€{{ selectedExpansion()?.totalMinPrice?.toFixed(2) || '0.00' }}</span>
+                </div>
+                <div class="stat-item full-width">
+                  <span class="stat-label">Ultima Analisi</span>
+                  <span class="stat-value text-small">{{ (selectedExpansion()?.lastValueAnalysisUpdate | date:'dd/MM/yyyy HH:mm') || 'Mai' }}</span>
+                </div>
+              </div>
             </div>
-            <div class="detail-row">
-              <label>Card Trader ID:</label>
-              <span>{{ selectedExpansion()?.cardTraderId }}</span>
+
+            <!-- Financials Section -->
+            <div class="dashboard-section">
+              <h3>Performance Vendite</h3>
+              <div class="stat-grid">
+                <div class="stat-item">
+                  <span class="stat-label">Vendite Totali</span>
+                  <span class="stat-value">€{{ selectedExpansion()?.totalSales?.toFixed(2) || '0.00' }}</span>
+                </div>
+                 <div class="stat-item">
+                  <span class="stat-label">Spesa Totale</span>
+                  <span class="stat-value">€{{ selectedExpansion()?.totalAmountSpent?.toFixed(2) || '0.00' }}</span>
+                </div>
+                 <div class="stat-item">
+                  <span class="stat-label">Profitto</span>
+                   <span class="stat-value" 
+                    [class.positive]="(selectedExpansion()?.totalProfit || 0) > 0"
+                    [class.negative]="(selectedExpansion()?.totalProfit || 0) < 0">
+                    €{{ selectedExpansion()?.totalProfit?.toFixed(2) || '0.00' }}
+                  </span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">ROI %</span>
+                  <span class="stat-value" 
+                    [class.positive]="(selectedExpansion()?.roiPercentage || 0) > 0"
+                    [class.negative]="(selectedExpansion()?.roiPercentage || 0) < 0">
+                    {{ selectedExpansion()?.roiPercentage?.toFixed(1) || '0.0' }}%
+                    <mat-icon inline="true" *ngIf="(selectedExpansion()?.roiPercentage || 0) > 0">trending_up</mat-icon>
+                    <mat-icon inline="true" *ngIf="(selectedExpansion()?.roiPercentage || 0) < 0">trending_down</mat-icon>
+                  </span>
+                </div>
+              </div>
             </div>
-            <div class="detail-row">
-              <label>Code:</label>
-              <span>{{ selectedExpansion()?.code }}</span>
-            </div>
-            <div class="detail-row" *ngIf="selectedExpansion()?.averageCardValue">
-              <label>Valore Medio Carta:</label>
-              <span class="value-highlight">€{{ selectedExpansion()?.averageCardValue?.toFixed(2) }}</span>
-            </div>
-            <div class="detail-row" *ngIf="selectedExpansion()?.totalMinPrice">
-              <label>Valore Totale (Min):</label>
-              <span class="value-highlight">€{{ selectedExpansion()?.totalMinPrice?.toFixed(2) }}</span>
-            </div>
-            <div class="detail-row" *ngIf="selectedExpansion()?.lastValueAnalysisUpdate">
-              <label>Ultima Analisi:</label>
-              <span>{{ selectedExpansion()?.lastValueAnalysisUpdate | date:'dd/MM/yyyy HH:mm' }}</span>
+
+            <!-- Rarity Stats Section -->
+            <div class="dashboard-section">
+              <h3>Media per Rarità</h3>
+              <div class="rarity-grid">
+                <div class="rarity-item common">
+                  <span class="rarity-label">Comune</span>
+                  <span class="rarity-value">€{{ selectedExpansion()?.avgValueCommon?.toFixed(2) || '0.00' }}</span>
+                </div>
+                <div class="rarity-item uncommon">
+                  <span class="rarity-label">Non Comune</span>
+                  <span class="rarity-value">€{{ selectedExpansion()?.avgValueUncommon?.toFixed(2) || '0.00' }}</span>
+                </div>
+                <div class="rarity-item rare">
+                  <span class="rarity-label">Rara</span>
+                  <span class="rarity-value">€{{ selectedExpansion()?.avgValueRare?.toFixed(2) || '0.00' }}</span>
+                </div>
+                <div class="rarity-item mythic">
+                  <span class="rarity-label">Mitica</span>
+                  <span class="rarity-value">€{{ selectedExpansion()?.avgValueMythic?.toFixed(2) || '0.00' }}</span>
+                </div>
+              </div>
             </div>
           </div>
         </mat-card-content>
-        <mat-card-actions>
+        <mat-card-actions align="end">
           <button 
-            mat-raised-button 
+            mat-stroked-button 
             color="primary" 
             (click)="syncBlueprints()"
             [disabled]="isSyncing()">
@@ -161,51 +218,162 @@ ModuleRegistry.registerModules([AllCommunityModule]);
   styles: [`
     .expansions-container {
       padding: 24px;
+      max-width: 1400px;
+      margin: 0 auto;
     }
 
     h1 {
       margin-bottom: 24px;
       color: #333;
+      font-weight: 400;
     }
 
     .header-card {
       margin-bottom: 24px;
+      border-radius: 8px;
     }
 
-    .expansion-details {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 16px;
-      margin-top: 16px;
-    }
-
-    .detail-row {
+    /* Header Title Group */
+    .header-title-group {
       display: flex;
+      flex-direction: column;
       gap: 8px;
     }
 
-    .detail-row label {
-      font-weight: 500;
-      color: #666;
+    .expansion-meta {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 4px;
     }
 
-    .detail-row span {
+    .meta-tag {
+      background-color: #f5f5f5;
+      color: #666;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      border: 1px solid #e0e0e0;
+    }
+
+    /* Dashboard Layout */
+    .expansion-dashboard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+      padding: 16px 0;
+    }
+
+    .dashboard-section {
+      background: #fafafa;
+      padding: 16px;
+      border-radius: 8px;
+      border: 1px solid #eee;
+    }
+
+    .dashboard-section h3 {
+      margin: 0 0 16px 0;
+      color: #555;
+      font-size: 1rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 2px solid #ddd;
+      padding-bottom: 8px;
+      display: inline-block;
+    }
+
+    /* Stats Grid */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stat-item.full-width {
+      grid-column: 1 / -1;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px dashed #e0e0e0;
+    }
+
+    .stat-label {
+      font-size: 0.85rem;
+      color: #777;
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #333;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .stat-value.secondary {
+      color: #1976d2;
+    }
+
+    .stat-value.text-small {
+      font-size: 0.9rem;
+      font-weight: 400;
+    }
+
+    /* Financial Indicators */
+    .stat-value.positive {
+      color: #2e7d32; /* Green */
+    }
+
+    .stat-value.negative {
+      color: #c62828; /* Red */
+    }
+
+    /* Rarity Grid */
+    .rarity-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .rarity-item {
+      display: flex;
+      flex-direction: column;
+      padding: 8px;
+      border-radius: 4px;
+      background: #fff;
+      border-left: 4px solid #ccc;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .rarity-item.common { border-left-color: #000; } /* Black/Grey */
+    .rarity-item.uncommon { border-left-color: #b0bec5; } /* Silver/Blueish */
+    .rarity-item.rare { border-left-color: #ffd700; } /* Gold */
+    .rarity-item.mythic { border-left-color: #ff5722; } /* Orange/Red */
+
+    .rarity-label {
+      font-size: 0.75rem;
+      color: #666;
+      text-transform: uppercase;
+    }
+
+    .rarity-value {
+      font-size: 1.1rem;
+      font-weight: 500;
       color: #333;
     }
 
-    .value-highlight {
-      font-weight: 500;
-      color: #2e7d32 !important;
-    }
-
+    /* General Grid & Actions */
     .header-actions {
       display: flex;
       gap: 8px;
       align-items: center;
-    }
-
-    mat-card-actions button {
-      margin: 8px;
     }
 
     mat-spinner {
@@ -218,16 +386,16 @@ ModuleRegistry.registerModules([AllCommunityModule]);
     }
     
     .grid-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
     }
     
     .grid-header h2 {
-        margin: 0;
-        font-size: 18px;
-        font-weight: 500;
+      margin: 0;
+      font-size: 18px;
+      font-weight: 500;
     }
 
     :host ::ng-deep .ag-theme-material {
@@ -300,6 +468,34 @@ export class ExpansionsPageComponent implements OnInit {
       field: 'averageCardValue',
       headerName: 'Val. Medio',
       width: 120,
+      filter: 'agNumberColumnFilter',
+      valueFormatter: (params: any) => params.value ? `€${params.value.toFixed(2)}` : '-'
+    },
+    {
+      field: 'avgValueCommon',
+      headerName: 'Avg Com',
+      width: 100,
+      filter: 'agNumberColumnFilter',
+      valueFormatter: (params: any) => params.value ? `€${params.value.toFixed(2)}` : '-'
+    },
+    {
+      field: 'avgValueUncommon',
+      headerName: 'Avg Unc',
+      width: 100,
+      filter: 'agNumberColumnFilter',
+      valueFormatter: (params: any) => params.value ? `€${params.value.toFixed(2)}` : '-'
+    },
+    {
+      field: 'avgValueRare',
+      headerName: 'Avg Rare',
+      width: 100,
+      filter: 'agNumberColumnFilter',
+      valueFormatter: (params: any) => params.value ? `€${params.value.toFixed(2)}` : '-'
+    },
+    {
+      field: 'avgValueMythic',
+      headerName: 'Avg Myt',
+      width: 100,
       filter: 'agNumberColumnFilter',
       valueFormatter: (params: any) => params.value ? `€${params.value.toFixed(2)}` : '-'
     },
@@ -433,7 +629,38 @@ export class ExpansionsPageComponent implements OnInit {
       next: () => {
         this.isAnalyzing.set(false);
         this.snackBar.open(`Analisi per ${expansion.name} completata`, 'Chiudi', { duration: 3000 });
-        this.loadExpansions(); // Refresh to get updated values
+
+        // Refresh only the single expansion to maintain focus and selection
+        this.expansionsService.getExpansion(expansion.id).subscribe(updatedExpansion => {
+          const currentList = this.expansions();
+          const index = currentList.findIndex(e => e.id === updatedExpansion.id);
+          if (index !== -1) {
+            const newList = [...currentList];
+            newList[index] = updatedExpansion;
+            this.expansions.set(newList);
+
+            // Update selected expansion if it's the one we just analyzed
+            if (this.selectedExpansion()?.id === updatedExpansion.id) {
+              this.selectedExpansion.set(updatedExpansion);
+            }
+
+            // Update grid row data and maintain selection
+            if (this.gridApi) {
+              // Apply the transaction to update the row data
+              this.gridApi.applyTransaction({ update: [updatedExpansion] });
+
+              // CRITICAL: Re-select the row to maintain visual selection and keep panel open
+              // We need to do this after the transaction to ensure the row is updated first
+              setTimeout(() => {
+                this.gridApi.forEachNode(node => {
+                  if (node.data?.id === updatedExpansion.id) {
+                    node.setSelected(true, true); // true = selected, true = clear other selections
+                  }
+                });
+              }, 0);
+            }
+          }
+        });
       },
       error: (error) => {
         this.isAnalyzing.set(false);

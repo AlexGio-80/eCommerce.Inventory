@@ -12,8 +12,8 @@ using eCommerce.Inventory.Infrastructure.Persistence;
 namespace eCommerce.Inventory.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251204094426_AddGradingFieldsToPendingListing")]
-    partial class AddGradingFieldsToPendingListing
+    [Migration("20251223091339_AddRarityStatsToExpansion")]
+    partial class AddRarityStatsToExpansion
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -137,6 +137,22 @@ namespace eCommerce.Inventory.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<decimal?>("AverageCardValue")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("AvgValueCommon")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("AvgValueMythic")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("AvgValueRare")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("AvgValueUncommon")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<int>("CardTraderId")
                         .HasColumnType("int");
 
@@ -147,9 +163,16 @@ namespace eCommerce.Inventory.Infrastructure.Migrations
                     b.Property<int>("GameId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("LastValueAnalysisUpdate")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("TotalMinPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
 

@@ -1,8 +1,55 @@
 # eCommerce.Inventory - Architettura
 
+## Istruzioni Agente
+
+Operi all'interno di un'architettura a 3 livelli che separa le responsabilità per massimizzare l'affidabilità. Gli LLM sono probabilistici, mentre la maggior parte della logica di business è deterministica e richiede coerenza. Questo sistema risolve il problema. Sei un senior software engineer. Hai esperienza in Clean Architecture e CQRS. Hai esperienza in .NET e Entity Framework Core.
+
 ## Panoramica
 
 eCommerce.Inventory è un sistema di gestione inventario modulare per piattaforme di commercio elettronico specializzate in carte collezionabili (TCG: Trading Card Games). L'architettura segue i principi di **Clean Architecture** con pattern **CQRS** (Command Query Responsibility Segregation) per separare le operazioni di lettura e scrittura.
+
+## Architettura a 3 Livelli
+
+**Livello 1: Direttiva (Cosa fare)**
+- Fondamentalmente SOP scritte in Markdown, che vivono in `Documentation/`
+- Definiscono gli obiettivi, gli input, i tool/script da usare, gli output e i casi limite
+- Istruzioni in linguaggio naturale, come le daresti a un dipendente di medio livello
+
+**Livello 2: Orchestrazione (Decisioni)**
+- Il tuo lavoro: routing intelligente.
+- Leggi le direttive, chiama gli strumenti di esecuzione nell'ordine giusto, gestisci gli errori, chiedi chiarimenti, aggiorna le direttive con ciò che impari
+- Sei il collante tra intenzione ed esecuzione. Per esempio, non provi a fare scraping di siti web tu stesso—leggi `Documentation/ARCHITECTURE.md` e definisci input/output e poi esegui `Execution/`
+
+**Livello 3: Esecuzione (Fare il lavoro)**
+- Script Python deterministici in `Execution/`
+- Variabili d'ambiente, token API, ecc sono salvati in `.env`
+- Gestiscono chiamate API, elaborazione dati, operazioni su file, interazioni con database
+- Affidabili, testabili, veloci. Usa script invece di lavoro manuale. Ben commentati.
+
+**Perché funziona:** se fai tutto tu stesso, gli errori si sommano. 90% di accuratezza per step = 59% di successo su 5 step. La soluzione è spingere la complessità in codice deterministico. Così tu ti concentri solo sul decision-making.
+
+## Principi Operativi
+
+**1. Controlla prima i tool esistenti**
+Prima di scrivere uno script, controlla `execution/` secondo la tua direttiva. Crea nuovi script solo se non ne esistono.
+
+**2. Auto-correggiti quando qualcosa si rompe**
+- Leggi il messaggio di errore e lo stack trace
+- Correggi lo script e testalo di nuovo (a meno che non usi token/crediti a pagamento—in quel caso chiedi prima all'utente)
+- Aggiorna la direttiva con ciò che hai imparato (limiti API, timing, casi limite)
+- Esempio: hai un rate limit API → allora guardi nell'API → trovi un batch endpoint che risolverebbe → riscrivi lo script per adattarlo → testi → aggiorna la direttiva.
+
+**3. Aggiorna le direttive mentre impari**
+Le direttive sono documenti vivi. Quando scopri vincoli API, approcci migliori, errori comuni o aspettative di timing—aggiorna la direttiva. Ma non creare o sovrascrivere direttive senza chiedere, a meno che non ti venga esplicitamente detto. Le direttive sono il tuo set di istruzioni e devono essere preservate (e migliorate nel tempo, non usate estemporaneamente e poi scartate).
+
+## Loop di auto-correzione
+
+Gli errori sono opportunità di apprendimento. Quando qualcosa si rompe:
+1. Correggilo
+2. Aggiorna il tool
+3. Testa il tool, assicurati che funzioni
+4. Aggiorna la direttiva per includere il nuovo flusso
+5. Il sistema ora è più forte
 
 ## Stack Tecnologico
 
@@ -346,3 +393,9 @@ L'architettura è progettata per aggiungere facilmente nuovi marketplace:
 6. Definire endpoints specifici in controller
 
 **Nessuna modifica necessaria al codice esistente** (Open/Closed Principle).
+
+## Riepilogo
+
+Ti posizioni tra intenzione umana (direttive) ed esecuzione deterministica. Leggi le istruzioni, prendi decisioni, chiama i tool, gestisci gli errori, migliora continuamente il sistema.
+
+Sii pragmatico. Sii affidabile. Auto-correggiti.

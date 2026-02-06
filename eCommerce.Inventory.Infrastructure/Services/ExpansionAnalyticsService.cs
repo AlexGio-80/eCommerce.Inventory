@@ -3,6 +3,8 @@ using eCommerce.Inventory.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System.IO;
+using System.Linq;
+using System;
 
 namespace eCommerce.Inventory.Infrastructure.Services;
 
@@ -58,6 +60,50 @@ public class ExpansionAnalyticsService : IExpansionAnalyticsService
 
             _logger.LogInformation("Filtered {Total} products down to {CardsOnly} playable cards for expansion {ExpansionId}",
                 marketplaceProducts.Count(), cardOnlyProducts.Count, expansionId);
+
+            // --- RARITY ANALYSIS START ---
+            // Helper to get rarity from properties_hash
+            string GetRarity(Dictionary<string, object> props)
+            {
+                if (props != null && props.TryGetValue("mtg_rarity", out var rarityObj))
+                {
+                    return rarityObj?.ToString()?.ToLowerInvariant() ?? "";
+                }
+                return "";
+            }
+
+            var productsByRarity = cardOnlyProducts.GroupBy(p => GetRarity(p.PropertiesHash));
+
+            // Helper to calculate average for a specific rarity group
+            decimal CalculateRarityAverage(string targetRarity)
+            {
+                var rarityGroup = productsByRarity.FirstOrDefault(g => g.Key.Equals(targetRarity, StringComparison.OrdinalIgnoreCase));
+                if (rarityGroup == null || !rarityGroup.Any()) return 0;
+
+                // We need to calculate the average of the MINIMUM price of each card in that rarity
+                var blueprintsInRarity = rarityGroup.GroupBy(p => p.BlueprintId);
+                var minPrices = new List<decimal>();
+
+                foreach (var bpGroup in blueprintsInRarity)
+                {
+                    var minPrice = bpGroup.Where(p => p.PriceCents > 0).Min(p => (int?)p.PriceCents);
+                    if (minPrice.HasValue)
+                    {
+                        minPrices.Add((decimal)minPrice.Value / 100m);
+                    }
+                }
+
+                return minPrices.Any() ? minPrices.Average() : 0;
+            }
+
+            expansion.AvgValueCommon = CalculateRarityAverage("common");
+            expansion.AvgValueUncommon = CalculateRarityAverage("uncommon");
+            expansion.AvgValueRare = CalculateRarityAverage("rare");
+            expansion.AvgValueMythic = CalculateRarityAverage("mythic");
+
+            _logger.LogInformation("Rarity Averages for {Expansion}: C={C:F2}, U={U:F2}, R={R:F2}, M={M:F2}",
+                expansion.Name, expansion.AvgValueCommon, expansion.AvgValueUncommon, expansion.AvgValueRare, expansion.AvgValueMythic);
+            // --- RARITY ANALYSIS END ---
 
             // Group by blueprint and calculate min
             var stats = cardOnlyProducts.GroupBy(p => p.BlueprintId);

@@ -566,14 +566,14 @@ public class ReportingController : ControllerBase
                 .Take(limit)
                 .ToListAsync();
 
-            var totalRevenue = salesByExpansion.Sum(s => s.TotaleVenduto);
+            var totalRevenue = salesByExpansion.Sum(s => s.TotaleVenduto ?? 0);
 
             var result = salesByExpansion.Select(s => new SalesByExpansionDto
             {
                 ExpansionName = s.ExpansionName,
-                TotalRevenue = s.TotaleVenduto,
+                TotalRevenue = s.TotaleVenduto ?? 0,
                 OrderCount = 0, // Not available in view
-                Percentage = totalRevenue > 0 ? (s.TotaleVenduto / totalRevenue) * 100 : 0
+                Percentage = totalRevenue > 0 ? ((s.TotaleVenduto ?? 0) / totalRevenue) * 100 : 0
             }).ToList();
 
             return Ok(ApiResponse<List<SalesByExpansionDto>>.SuccessResult(result));
@@ -606,18 +606,18 @@ public class ReportingController : ControllerBase
             }
 
             var roiData = await query
-                .OrderByDescending(x => x.TotaleAcquistato > 0 ? x.Differenza / x.TotaleAcquistato : 0)
+                .OrderByDescending(x => (x.TotaleAcquistato ?? 0) > 0 ? (x.Differenza ?? 0) / (x.TotaleAcquistato ?? 0) : 0)
                 .Take(limit)
                 .ToListAsync();
 
             var result = roiData.Select(x => new ExpansionProfitabilityDto
             {
                 ExpansionName = x.ExpansionName,
-                Differenza = x.Differenza,
-                TotaleVenduto = x.TotaleVenduto,
-                TotaleAcquistato = x.TotaleAcquistato,
-                PercentualeDifferenza = x.TotaleAcquistato > 0
-                    ? (x.Differenza / x.TotaleAcquistato) * 100
+                Differenza = x.Differenza ?? 0,
+                TotaleVenduto = x.TotaleVenduto ?? 0,
+                TotaleAcquistato = x.TotaleAcquistato ?? 0,
+                PercentualeDifferenza = (x.TotaleAcquistato ?? 0) > 0
+                    ? ((x.Differenza ?? 0) / (x.TotaleAcquistato ?? 0)) * 100
                     : 0
             }).ToList();
 

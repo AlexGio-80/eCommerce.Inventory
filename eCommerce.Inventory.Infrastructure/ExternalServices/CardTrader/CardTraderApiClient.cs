@@ -431,7 +431,116 @@ public class CardTraderApiClient : ICardTraderApiService
     /// </summary>
     public async Task<IEnumerable<CardTraderMarketplaceProductDto>> GetMarketplaceProductsAsync(int blueprintId, CancellationToken cancellationToken = default)
     {
-        return await GetMarketplaceProductsBatchAsync(new[] { blueprintId }, cancellationToken);
+        try
+        {
+            _logger.LogInformation("Fetching marketplace products for blueprint {BlueprintId} from Card Trader API", blueprintId);
+
+            var endpoint = $"marketplace/products?blueprint_id={blueprintId}";
+            _logger.LogInformation("Calling Card Trader endpoint: {Endpoint}", endpoint);
+
+            await _rateLimiter.AcquireAsync(cancellationToken);
+            var response = await _httpClient.GetAsync(endpoint, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogError("Card Trader API error for blueprint. Status: {StatusCode}, Response: {Response}, URL: {Url}",
+                    response.StatusCode, errorContent, endpoint);
+            }
+
+            response.EnsureSuccessStatusCode();
+
+            var jsonContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogInformation("Raw Marketplace Response for blueprint (first 500 chars): {Response}",
+                jsonContent.Length > 500 ? jsonContent.Substring(0, 500) : jsonContent);
+
+            var dtos = new List<CardTraderMarketplaceProductDto>();
+
+            if (!string.IsNullOrWhiteSpace(jsonContent))
+            {
+                var trimmed = jsonContent.TrimStart();
+
+                // Fast-path: JSON array
+                if (trimmed.StartsWith('['))
+                {
+                    dtos = JsonSerializer.Deserialize<List<CardTraderMarketplaceProductDto>>(jsonContent)
+                        ?? new List<CardTraderMarketplaceProductDto>();
+                }
+                // JSON object: could be a dictionary keyed by blueprint id, a wrapper with "resource"/"data",
+                // or a single product object. Try several shapes defensively.
+                else if (trimmed.StartsWith('{'))
+                {
+                    using var doc = JsonDocument.Parse(jsonContent);
+                    var root = doc.RootElement;
+
+                    // 1) Object keyed by blueprint id: { "12527": [ ... ] }
+                    if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty(blueprintId.ToString(), out var byId) && byId.ValueKind == JsonValueKind.Array)
+                    {
+                        dtos = JsonSerializer.Deserialize<List<CardTraderMarketplaceProductDto>>(byId.GetRawText())
+                            ?? new List<CardTraderMarketplaceProductDto>();
+                    }
+                    // 2) Wrapper with "resource" or "data"
+                    else if (root.ValueKind == JsonValueKind.Object && (root.TryGetProperty("resource", out var resource) || root.TryGetProperty("data", out resource)))
+                    {
+                        if (resource.ValueKind == JsonValueKind.Array)
+                        {
+                            dtos = JsonSerializer.Deserialize<List<CardTraderMarketplaceProductDto>>(resource.GetRawText())
+                                ?? new List<CardTraderMarketplaceProductDto>();
+                        }
+                        else if (resource.ValueKind == JsonValueKind.Object)
+                        {
+                            var single = JsonSerializer.Deserialize<CardTraderMarketplaceProductDto>(resource.GetRawText());
+                            if (single != null) dtos.Add(single);
+                        }
+                    }
+                    else
+                    {
+                        // 3) Dictionary-like object where values are arrays or single objects.
+                        foreach (var prop in root.EnumerateObject())
+                        {
+                            if (prop.Value.ValueKind == JsonValueKind.Array)
+                            {
+                                var list = JsonSerializer.Deserialize<List<CardTraderMarketplaceProductDto>>(prop.Value.GetRawText());
+                                if (list != null && list.Count > 0)
+                                    dtos.AddRange(list);
+                            }
+                            else if (prop.Value.ValueKind == JsonValueKind.Object)
+                            {
+                                var single = JsonSerializer.Deserialize<CardTraderMarketplaceProductDto>(prop.Value.GetRawText());
+                                if (single != null) dtos.Add(single);
+                            }
+                        }
+                    }
+                }
+
+                // 4) Final fallback: maybe it's a single product object not wrapped
+                if (dtos.Count == 0)
+                {
+                    try
+                    {
+                        var single = JsonSerializer.Deserialize<CardTraderMarketplaceProductDto>(jsonContent);
+                        if (single != null) dtos.Add(single);
+                    }
+                    catch
+                    {
+                        // ignore - we'll log and return empty list below
+                    }
+                }
+            }
+
+            // Ensure BlueprintId is set on each product
+            foreach (var p in dtos)
+                p.BlueprintId = blueprintId;
+
+            _logger.LogInformation("Found {Count} marketplace products for blueprint {BlueprintId}", dtos.Count, blueprintId);
+            return dtos;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching marketplace products for blueprint {BlueprintId}", blueprintId);
+            // Return empty list to keep behavior consistent with other methods
+            return new List<CardTraderMarketplaceProductDto>();
+        }
     }
 
     public async Task<IEnumerable<CardTraderMarketplaceProductDto>> GetMarketplaceProductsBatchAsync(IEnumerable<int> blueprintIds, CancellationToken cancellationToken = default)
@@ -446,6 +555,7 @@ public class CardTraderApiClient : ICardTraderApiService
             var ids = blueprintIds.ToList();
             _logger.LogInformation("Fetching marketplace products for {Count} blueprints from Card Trader API (parallel fallback)", ids.Count);
 
+            // Fan out to the single-blueprint fetch method (now performs the actual HTTP call)
             var tasks = ids.Select(id => GetMarketplaceProductsAsync(id, cancellationToken));
             var results = await Task.WhenAll(tasks);
 

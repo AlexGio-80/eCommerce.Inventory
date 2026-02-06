@@ -13,5 +13,11 @@ public class Expansion
 
     public decimal? AverageCardValue { get; set; }
     public decimal? TotalMinPrice { get; set; }
+
+    public decimal? AvgValueCommon { get; set; }
+    public decimal? AvgValueUncommon { get; set; }
+    public decimal? AvgValueRare { get; set; }
+    public decimal? AvgValueMythic { get; set; }
+
     public DateTime? LastValueAnalysisUpdate { get; set; }
 }

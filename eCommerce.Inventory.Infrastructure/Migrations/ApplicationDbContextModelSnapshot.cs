@@ -135,6 +135,19 @@ namespace eCommerce.Inventory.Infrastructure.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<decimal?>("AverageCardValue")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("AvgValueCommon")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("AvgValueMythic")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("AvgValueRare")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("AvgValueUncommon")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("CardTraderId")
@@ -155,6 +168,7 @@ namespace eCommerce.Inventory.Infrastructure.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal?>("TotalMinPrice")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
@@ -166,17 +180,17 @@ namespace eCommerce.Inventory.Infrastructure.Migrations
 
             modelBuilder.Entity("eCommerce.Inventory.Domain.Entities.ExpansionROI", b =>
                 {
-                    b.Property<decimal>("Differenza")
+                    b.Property<decimal?>("Differenza")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("ExpansionName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<decimal>("TotaleAcquistato")
+                    b.Property<decimal?>("TotaleAcquistato")
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("TotaleVenduto")
+                    b.Property<decimal?>("TotaleVenduto")
                         .HasColumnType("decimal(18,2)");
 
                     b.ToTable((string)null);

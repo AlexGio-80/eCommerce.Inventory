@@ -16,6 +16,18 @@ export interface Expansion {
     averageCardValue?: number;
     totalMinPrice?: number;
     lastValueAnalysisUpdate?: string;
+
+    // Rarity Stats
+    avgValueCommon?: number;
+    avgValueUncommon?: number;
+    avgValueRare?: number;
+    avgValueMythic?: number;
+
+    // Financials
+    totalSales?: number;
+    totalProfit?: number;
+    totalAmountSpent?: number;
+    roiPercentage?: number;
 }
 
 export interface SyncBlueprintsResponse {
