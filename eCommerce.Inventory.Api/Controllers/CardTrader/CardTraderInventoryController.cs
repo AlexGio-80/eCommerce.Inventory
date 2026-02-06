@@ -240,7 +240,12 @@ public class CardTraderInventoryController : ControllerBase
     /// Get marketplace statistics for a blueprint (Min, Max, Avg price)
     /// </summary>
     [HttpGet("marketplace-stats/{blueprintId}")]
-    public async Task<ActionResult<Application.DTOs.MarketplaceStatsDto>> GetMarketplaceStats(int blueprintId)
+    public async Task<ActionResult<Application.DTOs.MarketplaceStatsDto>> GetMarketplaceStats(
+        int blueprintId,
+        [FromQuery] string? condition = null,
+        [FromQuery] string? language = null,
+        [FromQuery] bool? isFoil = null,
+        [FromQuery] bool? isSigned = null)
     {
         try
         {
@@ -258,8 +263,36 @@ public class CardTraderInventoryController : ControllerBase
                 });
             }
 
-            // Filter out products with 0 price or invalid data if necessary
-            var validProducts = products.Where(p => p.PriceCents > 0).ToList();
+            // Filter products based on parameters
+            var query = products.Where(p => p.PriceCents > 0);
+
+            // Apply price cap (1000 EUR = 100,000 cents)
+            // Users often upload cards with absurd values (placeholder)
+            query = query.Where(p => p.PriceCents <= 100000);
+
+            if (!string.IsNullOrWhiteSpace(condition))
+            {
+                query = query.Where(p => p.Properties.Condition != null &&
+                                       p.Properties.Condition.Equals(condition, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (!string.IsNullOrWhiteSpace(language))
+            {
+                query = query.Where(p => p.Properties.Language != null &&
+                                       p.Properties.Language.Equals(language, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (isFoil.HasValue)
+            {
+                query = query.Where(p => p.Properties.IsFoil == isFoil.Value);
+            }
+
+            if (isSigned.HasValue)
+            {
+                query = query.Where(p => p.Properties.IsSigned == isSigned.Value);
+            }
+
+            var validProducts = query.ToList();
 
             if (!validProducts.Any())
             {
@@ -276,9 +309,6 @@ public class CardTraderInventoryController : ControllerBase
             var minPriceCents = validProducts.Min(p => p.PriceCents);
             var maxPriceCents = validProducts.Max(p => p.PriceCents);
             var avgPriceCents = validProducts.Average(p => p.PriceCents);
-
-            // Convert cents to EUR (assuming cents are in the currency of the response, usually EUR or USD depending on account, but Card Trader API usually returns cents)
-            // We'll assume EUR for now as per user context
 
             return Ok(new Application.DTOs.MarketplaceStatsDto
             {

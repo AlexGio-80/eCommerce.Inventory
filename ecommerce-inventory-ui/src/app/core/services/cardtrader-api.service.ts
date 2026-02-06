@@ -208,8 +208,20 @@ export class CardTraderApiService {
     return this.http.post<ApiResponse<any>>(`${this.apiUrl}/sync`, request);
   }
 
-  getMarketplaceStats(blueprintId: number): Observable<MarketplaceStats> {
-    return this.http.get<MarketplaceStats>(`${this.apiUrl}/inventory/marketplace-stats/${blueprintId}`);
+  getMarketplaceStats(blueprintId: number, filters?: {
+    condition?: string;
+    language?: string;
+    isFoil?: boolean;
+    isSigned?: boolean;
+  }): Observable<MarketplaceStats> {
+    let params = new HttpParams();
+    if (filters) {
+      if (filters.condition) params = params.set('condition', filters.condition);
+      if (filters.language) params = params.set('language', filters.language);
+      if (filters.isFoil !== undefined) params = params.set('isFoil', filters.isFoil.toString());
+      if (filters.isSigned !== undefined) params = params.set('isSigned', filters.isSigned.toString());
+    }
+    return this.http.get<MarketplaceStats>(`${this.apiUrl}/inventory/marketplace-stats/${blueprintId}`, { params });
   }
 
   // Reporting

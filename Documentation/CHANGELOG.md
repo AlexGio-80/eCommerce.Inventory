@@ -4,6 +4,29 @@ Questo file traccia le principali feature e bug fix implementate nel progetto, c
 
 ---
 
+## [2026-02-06] Create Listing - Prezzi Suggeriti Filtrati
+
+### Problema
+I prezzi suggeriti (Min, Medio, Max) nella maschera di creazione prodotto erano generici per il Blueprint, senza considerare condition, lingua o flag foil/signed, portando a suggerimenti poco accurati. Inoltre, inserzioni placeholder con prezzi esorbitanti falsavano le statistiche.
+
+### Soluzione Implementata
+
+**`CardTraderInventoryController.cs`**
+- Endpoint `GetMarketplaceStats` ora supporta filtri opzionali: `condition`, `language`, `isFoil`, `isSigned`.
+- Implementato tetto massimo di **1000€** per ignorare inserzioni "preliminari" o fuori mercato.
+
+**`cardtrader-api.service.ts`**
+- Passaggio dei filtri come parametri HTTP.
+
+**`create-listing.component.ts`**
+- Refresh automatico delle statistiche di mercato al variare dei campi rilevanti del form (usando RxJS per debouncing).
+
+### Verifica
+- Suggerimenti di prezzo ora riflettono la configurazione selezionata della carta.
+- Eliminazione del rumore statistico causato da prezzi sopra i 1000€.
+
+---
+
 ## [2026-02-06] Blueprint Sync - Fix Aggiornamento Dati Esistenti
 
 ### Problema

@@ -355,6 +355,12 @@
   - **Soluzione**: Aggiunto aggiornamento per `ImageUrl`, `BackImageUrl`, `CategoryId`, `GameId`, `FixedProperties`, `EditableProperties`, `CardMarketIds`, `TcgPlayerId`, `ScryfallId`, `UpdatedAt`.
   - **Test**: Nuovo test `SyncAsync_SyncBlueprints_ShouldUpdateExistingBlueprints` aggiunto.
 
+⏳ **Phase 13: Filtered Price Suggestions ✅ DONE (2026-02-06)**
+  - **Feature**: Suggerimenti di prezzo (Min/Medio/Max) filtrati per configurazione carta.
+  - **Filtri**: Condizione, Lingua, Foil, Signed.
+  - **Miglioramento**: Tetto di 1000€ per escludere prezzi placeholder.
+  - **UX**: Aggiornamento automatico in tempo reale durante la compilazione del form.
+
 ⏳ **Next Steps**: 
   - Additional features and enhancements as needed
   - Continue improving reporting and analytics

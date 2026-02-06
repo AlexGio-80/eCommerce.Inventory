@@ -1,6 +1,7 @@
 import { Component, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Subject, Subscription, debounceTime, distinctUntilChanged } from 'rxjs';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -158,6 +159,7 @@ export class CreateListingComponent {
   isSyncing = signal(false);
 
   private readonly STORAGE_KEY = 'listing_defaults';
+  private formSubscription?: Subscription;
 
   conditions = ['Near Mint', 'Slightly Played', 'Moderately Played', 'Played', 'Poor'];
   languages = ['English', 'Italian', 'Japanese', 'French', 'German', 'Spanish', 'Chinese'];
@@ -190,7 +192,31 @@ export class CreateListingComponent {
       purchasePrice: [0, [Validators.required, Validators.min(0)]]
     });
     this.saveDefaults.set(defaults.saveEnabled);
+  }
+
+  ngOnInit() {
     this.loadPendingListings();
+
+    // Listen for form changes to refresh marketplace stats
+    this.formSubscription = this.listingForm.valueChanges.pipe(
+      debounceTime(500),
+      distinctUntilChanged((prev, curr) => {
+        return prev.condition === curr.condition &&
+          prev.language === curr.language &&
+          prev.isFoil === curr.isFoil &&
+          prev.isSigned === curr.isSigned;
+      })
+    ).subscribe(() => {
+      if (this.selectedBlueprint()) {
+        this.loadMarketplaceStats();
+      }
+    });
+  }
+
+  ngOnDestroy() {
+    if (this.formSubscription) {
+      this.formSubscription.unsubscribe();
+    }
   }
 
   private loadDefaults() {
@@ -247,8 +273,8 @@ export class CreateListingComponent {
     this.selectedBlueprint.set(blueprint);
     // Reset form but keep defaults if enabled
     this.resetFormState();
-    // Load marketplace stats
-    this.loadMarketplaceStats(blueprint.cardTraderId);
+    // Load marketplace stats with current filters
+    this.loadMarketplaceStats();
   }
 
   loadNextBlueprint(): void {
@@ -442,11 +468,22 @@ export class CreateListingComponent {
   marketplaceStats = signal<import('../../../../core/models').MarketplaceStats | null>(null);
   isLoadingStats = signal(false);
 
-  loadMarketplaceStats(blueprintId: number) {
-    this.isLoadingStats.set(true);
-    this.marketplaceStats.set(null);
+  loadMarketplaceStats() {
+    const blueprint = this.selectedBlueprint();
+    if (!blueprint) return;
 
-    this.cardTraderService.getMarketplaceStats(blueprintId).subscribe({
+    this.isLoadingStats.set(true);
+
+    // Get current form filters
+    const formValue = this.listingForm.value;
+    const filters = {
+      condition: formValue.condition,
+      language: formValue.language,
+      isFoil: formValue.isFoil,
+      isSigned: formValue.isSigned
+    };
+
+    this.cardTraderService.getMarketplaceStats(blueprint.cardTraderId, filters).subscribe({
       next: (stats) => {
         this.marketplaceStats.set(stats);
         this.isLoadingStats.set(false);
