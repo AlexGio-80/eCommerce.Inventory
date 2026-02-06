@@ -8,7 +8,7 @@ Analisi tecnica del problema.
 
 ### Soluzione Implementata
 - **Backend (`CardTraderInventoryController.cs`)**: Modificato l'endpoint `GetMarketplaceStats` per accettare filtri `condition`, `language`, `isFoil`, `isSigned`.
-- **Logica di Filtraggio**: Implementato filtro lato server sui prodotti del marketplace di Card Trader.
+- **Logica di Filtraggio**: Implementato filtro lato server sui prodotti del marketplace di Card Trader con supporto robusto per `JsonElement` e mapping flessibile per abbreviazioni (NM, SP, etc.) e codici lingua (en, it, etc.).
 - **Price Cap**: Inserito un tetto massimo di **1000€ (100.000 cent)** per escludere inserzioni placeholder esorbitanti che falsificano la media.
 - **Frontend Service (`cardtrader-api.service.ts`)**: Aggiornato `getMarketplaceStats` per inviare i parametri di filtraggio.
 - **Frontend Component (`create-listing.component.ts`)**: 
@@ -18,7 +18,9 @@ Analisi tecnica del problema.
 ### Verifica
 - Build superato con successo.
 - Test manuale: Variando i parametri nel form, la chiamata API verso `marketplace-stats` include correttamente i filtri e aggiorna i valori Min/Avg/Max proposti.
+- Fix: Risolto problema di prezzi a zero dovuto alla mancata deserializzazione delle proprietà annidate nel JSON di Card Trader.
 
 ### Note Tecniche
 - Il filtraggio viene effettuato in memoria sui prodotti recuperati per il Blueprint specifico.
-- I nomi dei campi proprietà nell'API Card Trader sono stati mappati correttamente (`condition`, `language`, `mtg_foil`, `signed`).
+- I nomi dei campi proprietà nell'API Card Trader sono stati mappati correttamente (`condition`, `language`, `mtg_language`, `mtg_foil`, `signed`).
+- Utilizzati helper `GetStringFromHash` e `GetBoolFromHash` per estrarre valori da `JsonElement`.

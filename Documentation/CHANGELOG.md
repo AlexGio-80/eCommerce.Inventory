@@ -14,6 +14,7 @@ I prezzi suggeriti (Min, Medio, Max) nella maschera di creazione prodotto erano 
 **`CardTraderInventoryController.cs`**
 - Endpoint `GetMarketplaceStats` ora supporta filtri opzionali: `condition`, `language`, `isFoil`, `isSigned`.
 - Implementato tetto massimo di **1000€** per ignorare inserzioni "preliminari" o fuori mercato.
+- **Fix**: Gestione robusta dei `JsonElement` per l'estrazione delle proprietà `condition` e `language`, risolvendo il problema dei prezzi suggeriti a zero.
 
 **`cardtrader-api.service.ts`**
 - Passaggio dei filtri come parametri HTTP.
