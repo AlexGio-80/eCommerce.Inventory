@@ -270,29 +270,94 @@ public class CardTraderInventoryController : ControllerBase
             // Users often upload cards with absurd values (placeholder)
             query = query.Where(p => p.PriceCents <= 100000);
 
+            var filteredProducts = query.ToList();
+            _logger.LogInformation("Blueprint {BlueprintId}: {Total} products after price cap filter", blueprintId, filteredProducts.Count);
+
             if (!string.IsNullOrWhiteSpace(condition))
             {
-                query = query.Where(p => p.Properties.Condition != null &&
-                                       p.Properties.Condition.Equals(condition, StringComparison.OrdinalIgnoreCase));
+                // Card Trader uses both full names "Near Mint" and abbreviations "Nm" or "Mint"
+                // We'll try to be flexible
+                filteredProducts = filteredProducts.Where(p =>
+                {
+                    var prodCondition = p.Properties.Condition ?? (p.PropertiesHash.TryGetValue("condition", out var c) ? c?.ToString() : null);
+                    if (prodCondition == null) return false;
+
+                    if (prodCondition.Equals(condition, StringComparison.OrdinalIgnoreCase)) return true;
+
+                    // Common abbreviations
+                    if (condition.Equals("Near Mint", StringComparison.OrdinalIgnoreCase) &&
+                        (prodCondition.Equals("Nm", StringComparison.OrdinalIgnoreCase) || prodCondition.Equals("Mint", StringComparison.OrdinalIgnoreCase))) return true;
+                    if (condition.Equals("Slightly Played", StringComparison.OrdinalIgnoreCase) && prodCondition.Equals("Sp", StringComparison.OrdinalIgnoreCase)) return true;
+                    if (condition.Equals("Moderately Played", StringComparison.OrdinalIgnoreCase) && prodCondition.Equals("Mp", StringComparison.OrdinalIgnoreCase)) return true;
+                    if (condition.Equals("Played", StringComparison.OrdinalIgnoreCase) && prodCondition.Equals("Pl", StringComparison.OrdinalIgnoreCase)) return true;
+                    if (condition.Equals("Poor", StringComparison.OrdinalIgnoreCase) && prodCondition.Equals("Po", StringComparison.OrdinalIgnoreCase)) return true;
+
+                    return false;
+                }).ToList();
+                _logger.LogInformation("After condition filter ({Condition}): {Count} products", condition, filteredProducts.Count);
             }
 
             if (!string.IsNullOrWhiteSpace(language))
             {
-                query = query.Where(p => p.Properties.Language != null &&
-                                       p.Properties.Language.Equals(language, StringComparison.OrdinalIgnoreCase));
+                // Card Trader uses both names "English" and codes "en"
+                filteredProducts = filteredProducts.Where(p =>
+                {
+                    var prodLanguage = p.Properties.Language ?? (p.PropertiesHash.TryGetValue("language", out var l) ? l?.ToString() : null);
+                    if (prodLanguage == null)
+                    {
+                        // Some games might use mtg_language
+                        prodLanguage = p.PropertiesHash.TryGetValue("mtg_language", out var ml) ? ml?.ToString() : null;
+                    }
+
+                    if (prodLanguage == null) return false;
+
+                    if (prodLanguage.Equals(language, StringComparison.OrdinalIgnoreCase)) return true;
+
+                    // Check codes
+                    var code = language.ToLowerInvariant() switch
+                    {
+                        "english" => "en",
+                        "italian" => "it",
+                        "japanese" => "ja",
+                        "french" => "fr",
+                        "german" => "de",
+                        "spanish" => "es",
+                        "chinese" => "zh",
+                        _ => null
+                    };
+
+                    return code != null && prodLanguage.Equals(code, StringComparison.OrdinalIgnoreCase);
+                }).ToList();
+                _logger.LogInformation("After language filter ({Language}): {Count} products", language, filteredProducts.Count);
             }
 
             if (isFoil.HasValue)
             {
-                query = query.Where(p => p.Properties.IsFoil == isFoil.Value);
+                filteredProducts = filteredProducts.Where(p => p.Properties.IsFoil == isFoil.Value).ToList();
+                _logger.LogInformation("After foil filter ({IsFoil}): {Count} products", isFoil.Value, filteredProducts.Count);
             }
 
             if (isSigned.HasValue)
             {
-                query = query.Where(p => p.Properties.IsSigned == isSigned.Value);
+                filteredProducts = filteredProducts.Where(p => p.Properties.IsSigned == isSigned.Value).ToList();
+                _logger.LogInformation("After signed filter ({IsSigned}): {Count} products", isSigned.Value, filteredProducts.Count);
             }
 
-            var validProducts = query.ToList();
+            if (!filteredProducts.Any() && products.Any())
+            {
+                // Log sample properties to help debug if no products matched
+                var sample = products.Take(3).Select(p => new
+                {
+                    Cond = p.Properties.Condition,
+                    Lang = p.Properties.Language,
+                    Foil = p.Properties.IsFoil,
+                    Signed = p.Properties.IsSigned,
+                    Hash = p.PropertiesHash
+                });
+                _logger.LogWarning("Zero listings found for Blueprint {BlueprintId} with filters. Sample products: {@Sample}", blueprintId, sample);
+            }
+
+            var validProducts = filteredProducts;
 
             if (!validProducts.Any())
             {
