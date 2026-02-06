@@ -276,15 +276,17 @@ public class CardTraderInventoryController : ControllerBase
             if (!string.IsNullOrWhiteSpace(condition))
             {
                 // Card Trader uses both full names "Near Mint" and abbreviations "Nm" or "Mint"
-                // We'll try to be flexible
                 filteredProducts = filteredProducts.Where(p =>
                 {
-                    var prodCondition = p.Properties.Condition ?? (p.PropertiesHash.TryGetValue("condition", out var c) ? c?.ToString() : null);
-                    if (prodCondition == null) return false;
+                    var prodCondition = string.IsNullOrWhiteSpace(p.Properties.Condition)
+                        ? GetStringFromHash(p.PropertiesHash, "condition")
+                        : p.Properties.Condition;
+
+                    if (string.IsNullOrWhiteSpace(prodCondition)) return false;
 
                     if (prodCondition.Equals(condition, StringComparison.OrdinalIgnoreCase)) return true;
 
-                    // Common abbreviations
+                    // Common abbreviations mapping
                     if (condition.Equals("Near Mint", StringComparison.OrdinalIgnoreCase) &&
                         (prodCondition.Equals("Nm", StringComparison.OrdinalIgnoreCase) || prodCondition.Equals("Mint", StringComparison.OrdinalIgnoreCase))) return true;
                     if (condition.Equals("Slightly Played", StringComparison.OrdinalIgnoreCase) && prodCondition.Equals("Sp", StringComparison.OrdinalIgnoreCase)) return true;
@@ -302,14 +304,11 @@ public class CardTraderInventoryController : ControllerBase
                 // Card Trader uses both names "English" and codes "en"
                 filteredProducts = filteredProducts.Where(p =>
                 {
-                    var prodLanguage = p.Properties.Language ?? (p.PropertiesHash.TryGetValue("language", out var l) ? l?.ToString() : null);
-                    if (prodLanguage == null)
-                    {
-                        // Some games might use mtg_language
-                        prodLanguage = p.PropertiesHash.TryGetValue("mtg_language", out var ml) ? ml?.ToString() : null;
-                    }
+                    var prodLanguage = string.IsNullOrWhiteSpace(p.Properties.Language)
+                        ? (GetStringFromHash(p.PropertiesHash, "language") ?? GetStringFromHash(p.PropertiesHash, "mtg_language"))
+                        : p.Properties.Language;
 
-                    if (prodLanguage == null) return false;
+                    if (string.IsNullOrWhiteSpace(prodLanguage)) return false;
 
                     if (prodLanguage.Equals(language, StringComparison.OrdinalIgnoreCase)) return true;
 
@@ -333,13 +332,25 @@ public class CardTraderInventoryController : ControllerBase
 
             if (isFoil.HasValue)
             {
-                filteredProducts = filteredProducts.Where(p => p.Properties.IsFoil == isFoil.Value).ToList();
+                filteredProducts = filteredProducts.Where(p =>
+                {
+                    var prodFoil = (p.Properties.IsFoil == false && p.PropertiesHash.ContainsKey("mtg_foil"))
+                        ? GetBoolFromHash(p.PropertiesHash, "mtg_foil")
+                        : p.Properties.IsFoil;
+                    return prodFoil == isFoil.Value;
+                }).ToList();
                 _logger.LogInformation("After foil filter ({IsFoil}): {Count} products", isFoil.Value, filteredProducts.Count);
             }
 
             if (isSigned.HasValue)
             {
-                filteredProducts = filteredProducts.Where(p => p.Properties.IsSigned == isSigned.Value).ToList();
+                filteredProducts = filteredProducts.Where(p =>
+                {
+                    var prodSigned = (p.Properties.IsSigned == false && p.PropertiesHash.ContainsKey("signed"))
+                        ? GetBoolFromHash(p.PropertiesHash, "signed")
+                        : p.Properties.IsSigned;
+                    return prodSigned == isSigned.Value;
+                }).ToList();
                 _logger.LogInformation("After signed filter ({IsSigned}): {Count} products", isSigned.Value, filteredProducts.Count);
             }
 
@@ -350,8 +361,6 @@ public class CardTraderInventoryController : ControllerBase
                 {
                     Cond = p.Properties.Condition,
                     Lang = p.Properties.Language,
-                    Foil = p.Properties.IsFoil,
-                    Signed = p.Properties.IsSigned,
                     Hash = p.PropertiesHash
                 });
                 _logger.LogWarning("Zero listings found for Blueprint {BlueprintId} with filters. Sample products: {@Sample}", blueprintId, sample);
@@ -391,6 +400,33 @@ public class CardTraderInventoryController : ControllerBase
             return StatusCode(500, "Error getting marketplace stats");
         }
     }
+
+    private string? GetStringFromHash(Dictionary<string, object> hash, string key)
+    {
+        if (hash.TryGetValue(key, out var val))
+        {
+            if (val is System.Text.Json.JsonElement elem)
+            {
+                return elem.ValueKind == System.Text.Json.JsonValueKind.String ? elem.GetString() : elem.ToString();
+            }
+            return val?.ToString();
+        }
+        return null;
+    }
+
+    private bool? GetBoolFromHash(Dictionary<string, object> hash, string key)
+    {
+        if (hash.TryGetValue(key, out var val))
+        {
+            if (val is System.Text.Json.JsonElement elem)
+            {
+                if (elem.ValueKind == System.Text.Json.JsonValueKind.True) return true;
+                if (elem.ValueKind == System.Text.Json.JsonValueKind.False) return false;
+            }
+            if (val is bool b) return b;
+        }
+        return null;
+    }
 }
 
 public class CreateInventoryItemRequest
@@ -399,12 +435,12 @@ public class CreateInventoryItemRequest
     public decimal PurchasePrice { get; set; }
     public int Quantity { get; set; }
     public decimal ListingPrice { get; set; }
-    public string Condition { get; set; }
-    public string Language { get; set; }
+    public string Condition { get; set; } = string.Empty;
+    public string Language { get; set; } = string.Empty;
     public bool IsFoil { get; set; }
     public bool IsSigned { get; set; }
     public bool IsAltered { get; set; }
-    public string Location { get; set; }
+    public string Location { get; set; } = string.Empty;
 }
 
 public class UpdateInventoryItemRequest
