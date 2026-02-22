@@ -4,6 +4,35 @@ Questo file traccia le principali feature e bug fix implementate nel progetto, c
 
 ---
 
+## [2026-02-22] Items to Prepare - Icone Espansione, Date e Miglioramenti UI
+
+### Problema
+La griglia "Items to Prepare" mancava di alcune funzionalità chiave per l'efficienza operativa:
+1. L'anteprima dell'immagine richiedeva l'hover sul widget immagine, rendendo lenta la navigazione.
+2. La checkbox per marcare gli articoli come "preparati" era troppo piccola.
+3. Mancava la possibilità di ordinare le carte per data di rilascio dell'espansione.
+4. Mancavano riferimenti visivi (icone) per le espansioni.
+
+### Soluzione Implementata
+
+#### Backend & Data Sync
+- **Integrazione Scryfall**: Implementato `ScryfallApiClient` per recuperare metadati delle espansioni (data uscita e URL icona SVG).
+- **Core Orchestrator**: Modificato `CardTraderSyncOrchestrator` per arricchire i dati Card Trader con i metadati Scryfall durante la sincronizzazione.
+- **DTOs & Repositories**: Aggiornati `ExpansionDto`, `UnpreparedItemDto` e `OrderRepository` per gestire e trasportare `ReleaseDate` e `IconSvgUri`.
+
+#### Frontend (Angular & AG-Grid)
+- **Hover Row-Level**: L'anteprima dell'immagine ora si attiva al passaggio del mouse su qualsiasi cella della riga.
+- **Icone & Date**: Aggiunte colonne "Icon" (SVG Scryfall) e "Rel. Date" alle griglie "Items to Prepare" ed "Expansions".
+- **Sorting Multi-Colonna**: Configurato ordinamento predefinito per Data Uscita (ASC) e poi Collector Number (ASC).
+- **Nuovo Pulsante Prepare**: Sostituita la checkbox con un pulsante verde ad alta visibilità.
+
+### Verifica
+- Build API ed Infrastructure completate con successo.
+- Testata l'integrazione API con Scryfall (endpoint `/sets`).
+- Verifica visiva delle icone e dell'ordinamento nelle griglie AG-Grid.
+
+---
+
 ## [2026-02-06] Create Listing - Prezzi Suggeriti Filtrati
 
 ### Problema

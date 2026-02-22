@@ -8,6 +8,8 @@ using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Mappers;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Policies;
 using eCommerce.Inventory.Infrastructure.Services;
+using eCommerce.Inventory.Infrastructure.ExternalServices.Scryfall;
+using eCommerce.Inventory.Infrastructure.ExternalServices.Scryfall.DTOs;
 using eCommerce.Inventory.Application.Settings;
 using MediatR;
 
@@ -132,6 +134,14 @@ builder.Services.AddHostedService<BackupService>();
 
 // Register Grading Service
 builder.Services.AddHttpClient<IGradingService, XimilarGradingService>();
+
+// Register Scryfall API Client
+builder.Services.AddHttpClient<IScryfallApiClient, ScryfallApiClient>(client =>
+{
+    client.BaseAddress = new Uri("https://api.scryfall.com/");
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+    client.DefaultRequestHeaders.Add("User-Agent", "eCommerceInventory/1.0");
+});
 
 // Register SignalR
 builder.Services.AddSignalR();

@@ -117,3 +117,26 @@
         transform: translateY(0);
     }
 }
+
+/* Prepare Button */
+.prepare-btn {
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 13px;
+    transition: background-color 0.2s;
+    width: 100%;
+}
+
+.prepare-btn:hover {
+    background-color: #388e3c;
+}
+
+/* Highlight row on hover to show the preview focus */
+::ng-deep .ag-row-hover {
+    background-color: #f0f7ff !important;
+}

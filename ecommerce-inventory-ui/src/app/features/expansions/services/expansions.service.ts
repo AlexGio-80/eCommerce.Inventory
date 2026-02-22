@@ -28,6 +28,8 @@ export interface Expansion {
     totalProfit?: number;
     totalAmountSpent?: number;
     roiPercentage?: number;
+    releaseDate?: string;
+    iconSvgUri?: string;
 }
 
 export interface SyncBlueprintsResponse {

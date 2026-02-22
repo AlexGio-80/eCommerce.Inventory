@@ -8,6 +8,8 @@ using eCommerce.Inventory.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using System.Linq;
+using eCommerce.Inventory.Infrastructure.ExternalServices.Scryfall;
 
 namespace eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader;
 
@@ -22,6 +24,7 @@ public class CardTraderSyncOrchestrator
     private readonly ApplicationDbContext _dbContext;
     private readonly InventorySyncService _inventorySyncService;
     private readonly IExpansionAnalyticsService _expansionAnalyticsService;
+    private readonly IScryfallApiClient _scryfallApiClient;
     private readonly ILogger<CardTraderSyncOrchestrator> _logger;
 
     public CardTraderSyncOrchestrator(
@@ -30,6 +33,7 @@ public class CardTraderSyncOrchestrator
         ApplicationDbContext dbContext,
         InventorySyncService inventorySyncService,
         IExpansionAnalyticsService expansionAnalyticsService,
+        IScryfallApiClient scryfallApiClient,
         ILogger<CardTraderSyncOrchestrator> logger)
     {
         _cardTraderApiService = cardTraderApiService;
@@ -37,6 +41,7 @@ public class CardTraderSyncOrchestrator
         _dbContext = dbContext;
         _inventorySyncService = inventorySyncService;
         _expansionAnalyticsService = expansionAnalyticsService;
+        _scryfallApiClient = scryfallApiClient;
         _logger = logger;
     }
 
@@ -204,8 +209,12 @@ public class CardTraderSyncOrchestrator
 
             _logger.LogInformation("Fetched {ExpansionCount} expansions from Card Trader API", expansions.Count);
 
+            // Fetch metadata from Scryfall
+            var scryfallSets = await _scryfallApiClient.GetSetsAsync(cancellationToken);
+            var scryfallMap = scryfallSets.ToDictionary(s => s.Code.ToLower(), s => s);
+
             // Upsert expansions into database
-            var result = await UpsertExpansionsAsync(expansions, cancellationToken);
+            var result = await UpsertExpansionsAsync(expansions, scryfallMap, cancellationToken);
 
             response.Expansions.WasRequested = true;
             response.Expansions.Added = result.Added;
@@ -564,7 +573,10 @@ public class CardTraderSyncOrchestrator
     /// <summary>
     /// Upserts expansions into database (insert if not exists, update if exists)
     /// </summary>
-    private async Task<(int Added, int Updated, int Failed, int Skipped)> UpsertExpansionsAsync(List<Expansion> expansions, CancellationToken cancellationToken)
+    private async Task<(int Added, int Updated, int Failed, int Skipped)> UpsertExpansionsAsync(
+        List<Expansion> expansions,
+        Dictionary<string, eCommerce.Inventory.Infrastructure.ExternalServices.Scryfall.DTOs.ScryfallSetDto> scryfallMap,
+        CancellationToken cancellationToken)
     {
         var added = 0;
         var updated = 0;
@@ -606,6 +618,22 @@ public class CardTraderSyncOrchestrator
                 {
                     // Set the correct GameId (database ID) before inserting
                     expansion.GameId = gameEntity.Id;
+
+                    // Apply Scryfall metadata
+                    if (scryfallMap.TryGetValue(expansion.Code.ToLower(), out var scryfallSet))
+                    {
+                        _logger.LogInformation("Matched expansion {ExpansionCode} with Scryfall set. Icon: {Icon}", expansion.Code, scryfallSet.IconSvgUri);
+                        if (DateTime.TryParse(scryfallSet.ReleasedAt, out var releaseDate))
+                        {
+                            expansion.ReleaseDate = releaseDate;
+                        }
+                        expansion.IconSvgUri = scryfallSet.IconSvgUri;
+                    }
+                    else
+                    {
+                        _logger.LogWarning("No Scryfall match for expansion code: {ExpansionCode}", expansion.Code);
+                    }
+
                     _dbContext.Expansions.Add(expansion);
                     added++;
                 }
@@ -614,6 +642,22 @@ public class CardTraderSyncOrchestrator
                     existingExpansion.Name = expansion.Name;
                     existingExpansion.Code = expansion.Code;
                     existingExpansion.GameId = gameEntity.Id; // Use the database Game Id
+
+                    // Apply Scryfall metadata
+                    if (scryfallMap.TryGetValue(expansion.Code.ToLower(), out var scryfallSet))
+                    {
+                        _logger.LogInformation("Matched expansion {ExpansionCode} with Scryfall set. Icon: {Icon}", expansion.Code, scryfallSet.IconSvgUri);
+                        if (DateTime.TryParse(scryfallSet.ReleasedAt, out var releaseDate))
+                        {
+                            existingExpansion.ReleaseDate = releaseDate;
+                        }
+                        existingExpansion.IconSvgUri = scryfallSet.IconSvgUri;
+                    }
+                    else
+                    {
+                        _logger.LogWarning("No Scryfall match for expansion code: {ExpansionCode}", expansion.Code);
+                    }
+
                     _dbContext.Expansions.Update(existingExpansion);
                     updated++;
                 }

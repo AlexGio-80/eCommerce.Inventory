@@ -86,7 +86,9 @@ public class ExpansionsController : ControllerBase
                                   TotalAmountSpent = roi.TotaleAcquistato ?? 0m,
                                   RoiPercentage = (roi.TotaleAcquistato ?? 0m) > 0
                                       ? ((roi.Differenza ?? 0m) / (roi.TotaleAcquistato ?? 0m)) * 100
-                                      : 0m
+                                      : 0m,
+                                  ReleaseDate = e.ReleaseDate,
+                                  IconSvgUri = e.IconSvgUri
                               };
 
         var expansions = await expansionsQuery.ToListAsync(cancellationToken);
@@ -121,7 +123,9 @@ public class ExpansionsController : ControllerBase
             AvgValueCommon = expansion.AvgValueCommon,
             AvgValueUncommon = expansion.AvgValueUncommon,
             AvgValueRare = expansion.AvgValueRare,
-            AvgValueMythic = expansion.AvgValueMythic
+            AvgValueMythic = expansion.AvgValueMythic,
+            ReleaseDate = expansion.ReleaseDate,
+            IconSvgUri = expansion.IconSvgUri
         };
 
         try
@@ -246,4 +250,6 @@ public class ExpansionDto
     public decimal? TotalProfit { get; set; }
     public decimal? TotalAmountSpent { get; set; }
     public decimal? RoiPercentage { get; set; }
+    public DateTime? ReleaseDate { get; set; }
+    public string? IconSvgUri { get; set; }
 }

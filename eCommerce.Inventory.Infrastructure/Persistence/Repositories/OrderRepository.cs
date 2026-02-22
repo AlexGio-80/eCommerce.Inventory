@@ -85,7 +85,9 @@ public class OrderRepository : IOrderRepository
                 IsAltered = oi.IsAltered,
                 Tag = oi.UserDataField,
                 CollectorNumber = oi.Blueprint != null ? oi.Blueprint.FixedProperties : null,
-                CardTraderBlueprintId = oi.Blueprint != null ? oi.Blueprint.CardTraderId : null
+                CardTraderBlueprintId = oi.Blueprint != null ? oi.Blueprint.CardTraderId : null,
+                ExpansionReleaseDate = oi.Blueprint != null && oi.Blueprint.Expansion != null ? oi.Blueprint.Expansion.ReleaseDate : null,
+                IconSvgUri = oi.Blueprint != null && oi.Blueprint.Expansion != null ? oi.Blueprint.Expansion.IconSvgUri : null
             })
             .ToListAsync(cancellationToken);
 

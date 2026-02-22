@@ -1,0 +1,963 @@
+{
+  "$schema": "http://json.schemastore.org/sarif-1.0.0",
+  "version": "1.0.0",
+  "runs": [
+    {
+      "tool": {
+        "name": "Compilatore Microsoft (R) Visual C#",
+        "version": "4.11.0.0",
+        "fileVersion": "4.11.0-3.25569.22 (3fb752d4)",
+        "semanticVersion": "4.11.0",
+        "language": "it-IT"
+      },
+      "results": [
+        {
+          "ruleId": "CS8618",
+          "level": "warning",
+          "message": "L'elemento proprietà 'Type' non nullable deve contenere un valore non Null all'uscita dal costruttore. Prendere in considerazione l'aggiunta del modificatore 'required' o la dichiarazione di proprietà come nullable.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderWebhooksController.cs",
+                "region": {
+                  "startLine": 55,
+                  "startColumn": 19,
+                  "endLine": 55,
+                  "endColumn": 23
+                }
+              }
+            }
+          ],
+          "relatedLocations": [
+            {
+              "physicalLocation": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderWebhooksController.cs",
+                "region": {
+                  "startLine": 55,
+                  "startColumn": 19,
+                  "endLine": 55,
+                  "endColumn": 23
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CS8618",
+          "level": "warning",
+          "message": "L'elemento proprietà 'Data' non nullable deve contenere un valore non Null all'uscita dal costruttore. Prendere in considerazione l'aggiunta del modificatore 'required' o la dichiarazione di proprietà come nullable.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderWebhooksController.cs",
+                "region": {
+                  "startLine": 57,
+                  "startColumn": 19,
+                  "endLine": 57,
+                  "endColumn": 23
+                }
+              }
+            }
+          ],
+          "relatedLocations": [
+            {
+              "physicalLocation": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderWebhooksController.cs",
+                "region": {
+                  "startLine": 57,
+                  "startColumn": 19,
+                  "endLine": 57,
+                  "endColumn": 23
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CS8618",
+          "level": "warning",
+          "message": "L'elemento proprietà 'Message' non nullable deve contenere un valore non Null all'uscita dal costruttore. Prendere in considerazione l'aggiunta del modificatore 'required' o la dichiarazione di proprietà come nullable.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderSeedingController.cs",
+                "region": {
+                  "startLine": 167,
+                  "startColumn": 19,
+                  "endLine": 167,
+                  "endColumn": 26
+                }
+              }
+            }
+          ],
+          "relatedLocations": [
+            {
+              "physicalLocation": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderSeedingController.cs",
+                "region": {
+                  "startLine": 167,
+                  "startColumn": 19,
+                  "endLine": 167,
+                  "endColumn": 26
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CS8604",
+          "level": "warning",
+          "message": "Possibile argomento di riferimento Null per il parametro 'input' in 'string CardTraderBlueprintsController.PadNumbers(string input)'.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderBlueprintsController.cs",
+                "region": {
+                  "startLine": 209,
+                  "startColumn": 38,
+                  "endLine": 209,
+                  "endColumn": 55
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CS8625",
+          "level": "warning",
+          "message": "Non è possibile convertire il valore letterale Null in tipo riferimento che non ammette i valori Null.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderInventoryController.cs",
+                "region": {
+                  "startLine": 237,
+                  "startColumn": 60,
+                  "endLine": 237,
+                  "endColumn": 64
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CS8625",
+          "level": "warning",
+          "message": "Non è possibile convertire il valore letterale Null in tipo riferimento che non ammette i valori Null.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/PendingListingsController.cs",
+                "region": {
+                  "startLine": 235,
+                  "startColumn": 60,
+                  "endLine": 235,
+                  "endColumn": 64
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CS0246",
+          "level": "error",
+          "message": "Il nome di tipo o di spazio dei nomi 'IScryfallApiClient' non è stato trovato. Probabilmente manca una direttiva using o un riferimento all'assembly.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Program.cs",
+                "region": {
+                  "startLine": 137,
+                  "startColumn": 32,
+                  "endLine": 137,
+                  "endColumn": 50
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "CS1643",
+          "level": "error",
+          "message": "Non tutti i percorsi del codice restituiscono un valore in espressione lambda di tipo 'Func<HttpClient, ScryfallApiClient>'",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Program.cs",
+                "region": {
+                  "startLine": 137,
+                  "startColumn": 139,
+                  "endLine": 137,
+                  "endColumn": 141
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "CS8604",
+          "level": "warning",
+          "message": "Possibile argomento di riferimento Null per il parametro 'urls' in 'IWebHostBuilder HostingAbstractionsWebHostBuilderExtensions.UseUrls(IWebHostBuilder hostBuilder, params string[] urls)'.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Program.cs",
+                "region": {
+                  "startLine": 36,
+                  "startColumn": 25,
+                  "endLine": 36,
+                  "endColumn": 35
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CS8602",
+          "level": "warning",
+          "message": "Dereferenziamento di un possibile riferimento Null.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/ReportingController.cs",
+                "region": {
+                  "startLine": 175,
+                  "startColumn": 39,
+                  "endLine": 175,
+                  "endColumn": 40
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CS8602",
+          "level": "warning",
+          "message": "Dereferenziamento di un possibile riferimento Null.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/ReportingController.cs",
+                "region": {
+                  "startLine": 229,
+                  "startColumn": 39,
+                  "endLine": 229,
+                  "endColumn": 40
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CS8602",
+          "level": "warning",
+          "message": "Dereferenziamento di un possibile riferimento Null.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/ReportingController.cs",
+                "region": {
+                  "startLine": 474,
+                  "startColumn": 39,
+                  "endLine": 474,
+                  "endColumn": 40
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1829",
+          "level": "note",
+          "message": "Usare la proprietà \"Count\" invece di Enumerable.Count()",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderSyncController.cs",
+                "region": {
+                  "startLine": 154,
+                  "startColumn": 87,
+                  "endLine": 154,
+                  "endColumn": 103
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1,
+            "customProperties": {
+              "PropertyNameKey": "Count"
+            }
+          }
+        },
+        {
+          "ruleId": "CA1829",
+          "level": "note",
+          "message": "Usare la proprietà \"Count\" invece di Enumerable.Count()",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderSyncController.cs",
+                "region": {
+                  "startLine": 155,
+                  "startColumn": 79,
+                  "endLine": 155,
+                  "endColumn": 95
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1,
+            "customProperties": {
+              "PropertyNameKey": "Count"
+            }
+          }
+        },
+        {
+          "ruleId": "CA1869",
+          "level": "note",
+          "message": "Evitare di creare una nuova istanza di 'JsonSerializerOptions' per ogni operazione di serializzazione. Memorizzare nella cache le istanze e riutilizzarle.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Middleware/GlobalExceptionMiddleware.cs",
+                "region": {
+                  "startLine": 65,
+                  "startColumn": 27,
+                  "endLine": 68,
+                  "endColumn": 10
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1862",
+          "level": "note",
+          "message": "Preferire l'uso di \"string.Equals(string, StringComparison)\" per eseguire un confronto senza distinzione tra maiuscole e minuscole, ma tenere presente che ciò potrebbe causare lievi modifiche nel comportamento, quindi assicurarsi di eseguire test completi dopo l'applicazione del suggerimento o, se non è necessario un confronto sensibile a livello di cultura, provare a usare \"StringComparison.OrdinalIgnoreCase\"",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderBlueprintsController.cs",
+                "region": {
+                  "startLine": 219,
+                  "startColumn": 27,
+                  "endLine": 219,
+                  "endColumn": 56
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1,
+            "customProperties": {
+              "LeftOffendingMethod": "ToLower",
+              "RightOffendingMethod": null
+            }
+          }
+        },
+        {
+          "ruleId": "CA1829",
+          "level": "note",
+          "message": "Usare la proprietà \"Count\" invece di Enumerable.Count()",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderSyncController.cs",
+                "region": {
+                  "startLine": 205,
+                  "startColumn": 52,
+                  "endLine": 205,
+                  "endColumn": 68
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1,
+            "customProperties": {
+              "PropertyNameKey": "Count"
+            }
+          }
+        },
+        {
+          "ruleId": "CA1829",
+          "level": "note",
+          "message": "Usare la proprietà \"Count\" invece di Enumerable.Count()",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderSyncController.cs",
+                "region": {
+                  "startLine": 212,
+                  "startColumn": 28,
+                  "endLine": 212,
+                  "endColumn": 44
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1,
+            "customProperties": {
+              "PropertyNameKey": "Count"
+            }
+          }
+        },
+        {
+          "ruleId": "CA1866",
+          "level": "note",
+          "message": "Usare 'string.EndsWith(char)' invece di 'string.EndsWith(string)' quando è disponibile una stringa con un singolo carattere",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Program.cs",
+                "region": {
+                  "startLine": 115,
+                  "startColumn": 42,
+                  "endLine": 115,
+                  "endColumn": 47
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1862",
+          "level": "note",
+          "message": "Preferire l'uso di \"string.Equals(string, StringComparison)\" per eseguire un confronto senza distinzione tra maiuscole e minuscole, ma tenere presente che ciò potrebbe causare lievi modifiche nel comportamento, quindi assicurarsi di eseguire test completi dopo l'applicazione del suggerimento o, se non è necessario un confronto sensibile a livello di cultura, provare a usare \"StringComparison.OrdinalIgnoreCase\"",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/ReportingController.cs",
+                "region": {
+                  "startLine": 112,
+                  "startColumn": 17,
+                  "endLine": 112,
+                  "endColumn": 43
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1,
+            "customProperties": {
+              "LeftOffendingMethod": "ToLower",
+              "RightOffendingMethod": null
+            }
+          }
+        },
+        {
+          "ruleId": "CA1862",
+          "level": "note",
+          "message": "Preferire l'uso di \"string.Equals(string, StringComparison)\" per eseguire un confronto senza distinzione tra maiuscole e minuscole, ma tenere presente che ciò potrebbe causare lievi modifiche nel comportamento, quindi assicurarsi di eseguire test completi dopo l'applicazione del suggerimento o, se non è necessario un confronto sensibile a livello di cultura, provare a usare \"StringComparison.OrdinalIgnoreCase\"",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/ReportingController.cs",
+                "region": {
+                  "startLine": 123,
+                  "startColumn": 22,
+                  "endLine": 123,
+                  "endColumn": 49
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1,
+            "customProperties": {
+              "LeftOffendingMethod": "ToLower",
+              "RightOffendingMethod": null
+            }
+          }
+        },
+        {
+          "ruleId": "CA1862",
+          "level": "note",
+          "message": "Preferire l'uso di \"string.Equals(string, StringComparison)\" per eseguire un confronto senza distinzione tra maiuscole e minuscole, ma tenere presente che ciò potrebbe causare lievi modifiche nel comportamento, quindi assicurarsi di eseguire test completi dopo l'applicazione del suggerimento o, se non è necessario un confronto sensibile a livello di cultura, provare a usare \"StringComparison.OrdinalIgnoreCase\"",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/ReportingController.cs",
+                "region": {
+                  "startLine": 134,
+                  "startColumn": 22,
+                  "endLine": 134,
+                  "endColumn": 50
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1,
+            "customProperties": {
+              "LeftOffendingMethod": "ToLower",
+              "RightOffendingMethod": null
+            }
+          }
+        },
+        {
+          "ruleId": "SYSLIB1045",
+          "level": "note",
+          "message": "Usare 'GeneratedRegexAttribute' per generare l'implementazione dell'espressione regolare in fase di compilazione.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderBlueprintsController.cs",
+                "region": {
+                  "startLine": 249,
+                  "startColumn": 16,
+                  "endLine": 249,
+                  "endColumn": 116
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1854",
+          "level": "note",
+          "message": "Preferisci una chiamata 'TryGetValue' a un accesso all'indicizzatore Dictionary controllato da una verifica 'ContainsKey' per evitare una doppia ricerca",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/ReportingController.cs",
+                "region": {
+                  "startLine": 425,
+                  "startColumn": 32,
+                  "endLine": 425,
+                  "endColumn": 74
+                }
+              }
+            }
+          ],
+          "relatedLocations": [
+            {
+              "physicalLocation": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/ReportingController.cs",
+                "region": {
+                  "startLine": 425,
+                  "startColumn": 77,
+                  "endLine": 425,
+                  "endColumn": 107
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1854",
+          "level": "note",
+          "message": "Preferisci una chiamata 'TryGetValue' a un accesso all'indicizzatore Dictionary controllato da una verifica 'ContainsKey' per evitare una doppia ricerca",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/ReportingController.cs",
+                "region": {
+                  "startLine": 507,
+                  "startColumn": 35,
+                  "endLine": 507,
+                  "endColumn": 79
+                }
+              }
+            }
+          ],
+          "relatedLocations": [
+            {
+              "physicalLocation": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/ReportingController.cs",
+                "region": {
+                  "startLine": 507,
+                  "startColumn": 82,
+                  "endLine": 507,
+                  "endColumn": 114
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1822",
+          "level": "note",
+          "message": "Il membro GetCollectorNumber non accede ai dati di istanza e può essere contrassegnato come static",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderBlueprintsController.cs",
+                "region": {
+                  "startLine": 229,
+                  "startColumn": 21,
+                  "endLine": 229,
+                  "endColumn": 39
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1822",
+          "level": "note",
+          "message": "Il membro PadNumbers non accede ai dati di istanza e può essere contrassegnato come static",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderBlueprintsController.cs",
+                "region": {
+                  "startLine": 247,
+                  "startColumn": 20,
+                  "endLine": 247,
+                  "endColumn": 30
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1860",
+          "level": "note",
+          "message": "Preferire il confronto 'Count' con 0 anziché usare 'Any()', sia per chiarezza che per prestazioni.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderInventoryController.cs",
+                "region": {
+                  "startLine": 357,
+                  "startColumn": 18,
+                  "endLine": 357,
+                  "endColumn": 40
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1,
+            "customProperties": {
+              "DiagnosticPropertyKey": "Count"
+            }
+          }
+        },
+        {
+          "ruleId": "CA1860",
+          "level": "note",
+          "message": "Preferire il confronto 'Count' con 0 anziché usare 'Any()', sia per chiarezza che per prestazioni.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderInventoryController.cs",
+                "region": {
+                  "startLine": 371,
+                  "startColumn": 18,
+                  "endLine": 371,
+                  "endColumn": 37
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1,
+            "customProperties": {
+              "DiagnosticPropertyKey": "Count"
+            }
+          }
+        },
+        {
+          "ruleId": "CA1822",
+          "level": "note",
+          "message": "Il membro GetStringFromHash non accede ai dati di istanza e può essere contrassegnato come static",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderInventoryController.cs",
+                "region": {
+                  "startLine": 404,
+                  "startColumn": 21,
+                  "endLine": 404,
+                  "endColumn": 38
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1822",
+          "level": "note",
+          "message": "Il membro GetBoolFromHash non accede ai dati di istanza e può essere contrassegnato come static",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///C:/Lavoro/eCommerce.Inventory/eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderInventoryController.cs",
+                "region": {
+                  "startLine": 417,
+                  "startColumn": 19,
+                  "endLine": 417,
+                  "endColumn": 34
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        }
+      ],
+      "rules": {
+        "CA1822": {
+          "id": "CA1822",
+          "shortDescription": "Contrassegnare i membri come static",
+          "fullDescription": "I membri che non accedono ai dati di istanza o non chiamano metodi di istanza possono essere contrassegnati come static. Dopo aver contrassegnato i metodi come static, il compilatore creerà siti di chiamata non virtual per questi membri. Si potrà così ottenere un sensibile miglioramento delle prestazioni per il codice sensibile alle prestazioni.",
+          "defaultLevel": "note",
+          "helpUri": "https://learn.microsoft.com/dotnet/fundamentals/code-analysis/quality-rules/ca1822",
+          "properties": {
+            "category": "Performance",
+            "isEnabledByDefault": true,
+            "tags": [
+              "PortedFromFxCop",
+              "Telemetry",
+              "EnabledRuleInAggressiveMode"
+            ]
+          }
+        },
+        "CA1829": {
+          "id": "CA1829",
+          "shortDescription": "Usare la proprietà Length/Count invece di Count() quando disponibile",
+          "fullDescription": "Enumerable.Count() enumera potenzialmente la sequenza mentre una proprietà Length/Count è un accesso diretto.",
+          "defaultLevel": "note",
+          "helpUri": "https://learn.microsoft.com/dotnet/fundamentals/code-analysis/quality-rules/ca1829",
+          "properties": {
+            "category": "Performance",
+            "isEnabledByDefault": true,
+            "tags": [
+              "Telemetry",
+              "EnabledRuleInAggressiveMode"
+            ]
+          }
+        },
+        "CA1854": {
+          "id": "CA1854",
+          "shortDescription": "Preferisci il metodo 'IDictionary.TryGetValue(TKey, out TValue)'",
+          "fullDescription": "Preferire una chiamata 'TryGetValue' a un accesso all'indicizzatore Dictionary controllato da una verifica 'ContainsKey'. 'ContainsKey' e l'indicizzatore ricercherebbero entrambi la chiave sotto il cofano, quindi l'uso di 'TryGetValue' rimuoverà la ricerca aggiuntiva.",
+          "defaultLevel": "note",
+          "helpUri": "https://learn.microsoft.com/dotnet/fundamentals/code-analysis/quality-rules/ca1854",
+          "properties": {
+            "category": "Performance",
+            "isEnabledByDefault": true,
+            "tags": [
+              "Telemetry",
+              "EnabledRuleInAggressiveMode"
+            ]
+          }
+        },
+        "CA1860": {
+          "id": "CA1860",
+          "shortDescription": "Evitare di usare il metodo di estensione 'Enumerable.Any()'",
+          "fullDescription": "Preferire l’uso delle proprietà 'IsEmpty', 'Count' o 'Length' se disponibili, anziché chiamare 'Enumerable.Any()'. La finalità è più chiara ed è più efficiente rispetto all'uso del metodo di estensione 'Enumerable.Any()'.",
+          "defaultLevel": "note",
+          "helpUri": "https://learn.microsoft.com/dotnet/fundamentals/code-analysis/quality-rules/ca1860",
+          "properties": {
+            "category": "Performance",
+            "isEnabledByDefault": true,
+            "tags": [
+              "Telemetry",
+              "EnabledRuleInAggressiveMode"
+            ]
+          }
+        },
+        "CA1862": {
+          "id": "CA1862",
+          "shortDescription": "Usa gli overload del metodo “StringComparison” per confrontare le stringhe senza distinzione tra maiuscole e minuscole",
+          "fullDescription": "Si sconsiglia di chiamare i metodi \"ToLower\", \"ToUpper\", \"ToLowerInvariant\" e \"ToUpperInvariant\" per confrontare le stringhe senza distinzione tra maiuscole e minuscole, come in \"string.ToLower() == string.ToLower()\", perché portano a un'allocazione. Usare invece \"string.Equals(string, StringComparison)\" per eseguire confronti senza distinzione tra maiuscole e minuscole. Il passaggio all'uso di un overload che richiede un valore \"StringComparison\" potrebbe causare lievi modifiche nel comportamento, quindi è importante eseguire test completi dopo aver applicato il suggerimento. Inoltre, se non è necessario un confronto sensibile a livello di cultura, provare a usare \"StringComparison.OrdinalIgnoreCase\".",
+          "defaultLevel": "note",
+          "helpUri": "https://learn.microsoft.com/dotnet/fundamentals/code-analysis/quality-rules/ca1862",
+          "properties": {
+            "category": "Performance",
+            "isEnabledByDefault": true,
+            "tags": [
+              "Telemetry",
+              "EnabledRuleInAggressiveMode"
+            ]
+          }
+        },
+        "CA1866": {
+          "id": "CA1866",
+          "shortDescription": "Usa overload char",
+          "fullDescription": "L'overload char è un overload con prestazioni migliori rispetto a una stringa con un singolo char.",
+          "defaultLevel": "note",
+          "helpUri": "https://learn.microsoft.com/dotnet/fundamentals/code-analysis/quality-rules/ca1866",
+          "properties": {
+            "category": "Performance",
+            "isEnabledByDefault": true,
+            "tags": [
+              "Telemetry",
+              "EnabledRuleInAggressiveMode"
+            ]
+          }
+        },
+        "CA1869": {
+          "id": "CA1869",
+          "shortDescription": "Memorizza nella cache e riutilizza le istanze di 'JsonSerializerOptions'",
+          "fullDescription": "Evitare di creare una nuova istanza di 'JsonSerializerOptions' per ogni operazione di serializzazione. Memorizzare nella cache le istanze e riutilizzarle. Le istanze monouso di 'JsonSerializerOptions' possono ridurre notevolmente le prestazioni dell'applicazione.",
+          "defaultLevel": "note",
+          "helpUri": "https://learn.microsoft.com/dotnet/fundamentals/code-analysis/quality-rules/ca1869",
+          "properties": {
+            "category": "Performance",
+            "isEnabledByDefault": true,
+            "tags": [
+              "Telemetry",
+              "EnabledRuleInAggressiveMode"
+            ]
+          }
+        },
+        "CS0246": {
+          "id": "CS0246",
+          "defaultLevel": "error",
+          "helpUri": "https://msdn.microsoft.com/query/roslyn.query?appId=roslyn&k=k(CS0246)",
+          "properties": {
+            "category": "Compiler",
+            "isEnabledByDefault": true,
+            "tags": [
+              "Compiler",
+              "Telemetry",
+              "NotConfigurable"
+            ]
+          }
+        },
+        "CS1643": {
+          "id": "CS1643",
+          "defaultLevel": "error",
+          "helpUri": "https://msdn.microsoft.com/query/roslyn.query?appId=roslyn&k=k(CS1643)",
+          "properties": {
+            "category": "Compiler",
+            "isEnabledByDefault": true,
+            "tags": [
+              "Compiler",
+              "Telemetry",
+              "NotConfigurable"
+            ]
+          }
+        },
+        "CS8602": {
+          "id": "CS8602",
+          "shortDescription": "Dereferenziamento di un possibile riferimento Null.",
+          "defaultLevel": "warning",
+          "helpUri": "https://msdn.microsoft.com/query/roslyn.query?appId=roslyn&k=k(CS8602)",
+          "properties": {
+            "category": "Compiler",
+            "isEnabledByDefault": true,
+            "tags": [
+              "Compiler",
+              "Telemetry"
+            ]
+          }
+        },
+        "CS8604": {
+          "id": "CS8604",
+          "shortDescription": "Possibile argomento di riferimento Null.",
+          "defaultLevel": "warning",
+          "helpUri": "https://msdn.microsoft.com/query/roslyn.query?appId=roslyn&k=k(CS8604)",
+          "properties": {
+            "category": "Compiler",
+            "isEnabledByDefault": true,
+            "tags": [
+              "Compiler",
+              "Telemetry"
+            ]
+          }
+        },
+        "CS8618": {
+          "id": "CS8618",
+          "shortDescription": "Il campo non nullable deve contenere un valore non Null all'uscita dal costruttore. Prendere in considerazione l'aggiunta del modificatore 'required' o la dichiarazione come nullable.",
+          "defaultLevel": "warning",
+          "helpUri": "https://msdn.microsoft.com/query/roslyn.query?appId=roslyn&k=k(CS8618)",
+          "properties": {
+            "category": "Compiler",
+            "isEnabledByDefault": true,
+            "tags": [
+              "Compiler",
+              "Telemetry"
+            ]
+          }
+        },
+        "CS8625": {
+          "id": "CS8625",
+          "shortDescription": "Non è possibile convertire il valore letterale Null in tipo riferimento che non ammette i valori Null.",
+          "defaultLevel": "warning",
+          "helpUri": "https://msdn.microsoft.com/query/roslyn.query?appId=roslyn&k=k(CS8625)",
+          "properties": {
+            "category": "Compiler",
+            "isEnabledByDefault": true,
+            "tags": [
+              "Compiler",
+              "Telemetry"
+            ]
+          }
+        },
+        "SYSLIB1045": {
+          "id": "SYSLIB1045",
+          "shortDescription": "Converti in 'GeneratedRegexAttribute'.",
+          "defaultLevel": "note",
+          "helpUri": "https://learn.microsoft.com/dotnet/fundamentals/syslib-diagnostics/syslib1045",
+          "properties": {
+            "category": "Performance",
+            "isEnabledByDefault": true
+          }
+        }
+      }
+    }
+  ]
+}

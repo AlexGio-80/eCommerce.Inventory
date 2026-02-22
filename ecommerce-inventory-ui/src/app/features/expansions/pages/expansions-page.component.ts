@@ -460,9 +460,27 @@ export class ExpansionsPageComponent implements OnInit {
 
   columnDefs: ColDef[] = [
     { field: 'id', headerName: 'ID', width: 80, filter: 'agNumberColumnFilter' },
+    {
+      headerName: 'Icon',
+      field: 'iconSvgUri',
+      width: 70,
+      cellRenderer: (params: any) => {
+        if (!params.value) {
+          return `<span style="color: #ccc; font-size: 10px;">No Icon</span>`;
+        }
+        return `<img src="${params.value}" title="${params.value}" style="width: 32px; height: 32px; vertical-align: middle;" />`;
+      }
+    },
     { field: 'cardTraderId', headerName: 'CT ID', width: 100, filter: 'agNumberColumnFilter' },
     { field: 'name', headerName: 'Nome', flex: 2, filter: 'agTextColumnFilter' },
     { field: 'code', headerName: 'Codice', width: 120, filter: 'agTextColumnFilter' },
+    {
+      field: 'releaseDate',
+      headerName: 'Data Uscita',
+      width: 120,
+      filter: 'agDateColumnFilter',
+      valueFormatter: (params: any) => params.value ? new Date(params.value).toLocaleDateString() : '-'
+    },
     { field: 'gameName', headerName: 'Gioco', flex: 1, filter: 'agTextColumnFilter' },
     {
       field: 'averageCardValue',

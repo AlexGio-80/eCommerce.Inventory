@@ -21,4 +21,6 @@ public class UnpreparedItemDto
     public string? Tag { get; set; }
     public string? CollectorNumber { get; set; }
     public int? CardTraderBlueprintId { get; set; }
+    public DateTime? ExpansionReleaseDate { get; set; }
+    public string? IconSvgUri { get; set; }
 }

@@ -92,6 +92,17 @@ export class UnpreparedItemsComponent implements OnInit, OnDestroy {
             width: 250
         },
         {
+            headerName: 'Icon',
+            field: 'iconSvgUri',
+            width: 70,
+            cellRenderer: (params: any) => {
+                if (!params.value) {
+                    return `<span style="color: #ccc; font-size: 10px;">No Icon</span>`;
+                }
+                return `<img src="${params.value}" title="${params.value}" style="width: 32px; height: 32px; vertical-align: middle;" />`;
+            }
+        },
+        {
             headerName: 'Expansion',
             field: 'expansionName',
             sortable: true,
@@ -183,13 +194,22 @@ export class UnpreparedItemsComponent implements OnInit, OnDestroy {
             filter: false,
             width: 100,
             cellRenderer: (params: any) => {
-                return `<input type="checkbox" ${params.value ? 'checked' : ''} data-action-type="toggle-prepared">`;
+                return `<button class="prepare-btn" data-action-type="toggle-prepared">Prepare</button>`;
             },
             onCellClicked: (params: any) => {
                 if (params.event.target.getAttribute('data-action-type') === 'toggle-prepared') {
                     this.toggleItemPreparation(params.data, params.event.target);
                 }
             }
+        },
+        {
+            headerName: 'Rel. Date',
+            field: 'expansionReleaseDate',
+            sortable: true,
+            filter: 'agDateColumnFilter',
+            width: 120,
+            hide: false, // Visible as requested
+            valueFormatter: (params) => params.value ? new Date(params.value).toLocaleDateString() : ''
         }
     ];
 
@@ -247,6 +267,14 @@ export class UnpreparedItemsComponent implements OnInit, OnDestroy {
         if (savedState?.columnState) {
             this.gridApi.applyColumnState({ state: savedState.columnState, applyOrder: true });
         } else {
+            // Default sort: Release Date (asc) and Collector Number (asc) as requested
+            this.gridApi.applyColumnState({
+                state: [
+                    { colId: 'expansionReleaseDate', sort: 'asc' },
+                    { colId: 'collectorNumber', sort: 'asc' }
+                ],
+                defaultState: { sort: null }
+            });
             this.gridApi.sizeColumnsToFit();
         }
     }
@@ -360,7 +388,6 @@ export class UnpreparedItemsComponent implements OnInit, OnDestroy {
                 this.showSnackBar('Error updating item status');
                 // Revert
                 item.isPrepared = !newValue;
-                checkboxElement.checked = !newValue;
             }
         });
     }
@@ -422,17 +449,14 @@ export class UnpreparedItemsComponent implements OnInit, OnDestroy {
     previewPosition = { top: 0, left: 0 };
 
     onCellMouseOver(params: any): void {
-        if (params.colDef.field === 'imageUrl' && params.value) {
-            this.previewImage = params.value;
-            // Position logic can be handled here or just fixed CSS
-            // For fixed sidebar, we don't need mouse position
+        const imageUrl = params.data.imageUrl;
+        if (imageUrl) {
+            this.previewImage = imageUrl;
         }
     }
 
     onCellMouseOut(params: any): void {
-        if (params.colDef.field === 'imageUrl') {
-            this.previewImage = null;
-        }
+        this.previewImage = null;
     }
 
     private showSnackBar(message: string): void {

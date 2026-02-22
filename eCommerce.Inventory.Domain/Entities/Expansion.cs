@@ -20,4 +20,6 @@ public class Expansion
     public decimal? AvgValueMythic { get; set; }
 
     public DateTime? LastValueAnalysisUpdate { get; set; }
+    public DateTime? ReleaseDate { get; set; }
+    public string? IconSvgUri { get; set; }
 }

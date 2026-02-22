@@ -18,4 +18,6 @@ export interface UnpreparedItemDto {
     isAltered?: boolean;
     tag?: string;
     collectorNumber?: string;
+    expansionReleaseDate?: string;
+    iconSvgUri?: string;
 }
