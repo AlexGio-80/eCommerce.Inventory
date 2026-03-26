@@ -54,6 +54,25 @@ public class CardTraderOrdersController : ControllerBase
         return Ok(Models.ApiResponse<List<UnpreparedItemDto>>.SuccessResult(items.ToList()));
     }
 
+    [HttpPost("{cardTraderOrderId}/sync")]
+    public async Task<ActionResult<Models.ApiResponse<object>>> SyncSingleOrder(int cardTraderOrderId, CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Syncing single order {OrderId}", cardTraderOrderId);
+
+        var detail = await _cardTraderApiService.GetOrderDetailAsync(cardTraderOrderId, cancellationToken)
+            as Infrastructure.ExternalServices.CardTrader.DTOs.CardTraderOrderDto;
+
+        if (detail == null)
+            return NotFound(Models.ApiResponse<object>.ErrorResult($"Order {cardTraderOrderId} not found on CardTrader"));
+
+        await _inventorySyncService.SyncOrdersAsync(new List<Infrastructure.ExternalServices.CardTrader.DTOs.CardTraderOrderDto> { detail }, cancellationToken);
+
+        return Ok(Models.ApiResponse<object>.SuccessResult(
+            data: new { cardTraderOrderId, itemCount = detail.OrderItems?.Count ?? 0 },
+            message: $"Order {cardTraderOrderId} synced"
+        ));
+    }
+
     [HttpPost("sync")]
     public async Task<ActionResult<Models.ApiResponse<object>>> SyncOrders([FromBody] SyncOrdersRequest request)
     {

@@ -83,7 +83,7 @@ public class OrderRepository : IOrderRepository
                 IsFoil = oi.IsFoil,
                 IsSigned = oi.IsSigned,
                 IsAltered = oi.IsAltered,
-                Tag = oi.UserDataField,
+                Tag = oi.Tag,
                 CollectorNumber = oi.Blueprint != null ? oi.Blueprint.FixedProperties : null,
                 CardTraderBlueprintId = oi.Blueprint != null ? oi.Blueprint.CardTraderId : null,
                 ExpansionReleaseDate = oi.Blueprint != null && oi.Blueprint.Expansion != null ? oi.Blueprint.Expansion.ReleaseDate : null,

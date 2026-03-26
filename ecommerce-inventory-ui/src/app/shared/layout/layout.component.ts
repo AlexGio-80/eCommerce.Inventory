@@ -52,6 +52,7 @@ export class LayoutComponent implements OnInit {
     { label: 'Report Vendite', route: '/layout/reporting/sales', icon: 'monetization_on' },
     { label: 'Report Inventario', route: '/layout/reporting/inventory', icon: 'inventory' },
     { label: 'Report Redditività', route: '/layout/reporting/profitability', icon: 'trending_up' },
+    { label: 'Redditività per Tag', route: '/layout/reporting/profitability/tags', icon: 'label' },
   ];
 
   constructor(

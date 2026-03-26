@@ -669,6 +669,168 @@ public class ReportingController : ControllerBase
 
     #endregion
 
+    #region Tag Profitability Analytics
+
+    /// <summary>
+    /// Get profitability analysis grouped by Tag
+    /// </summary>
+    [HttpGet("profitability/by-tag")]
+    public async Task<ActionResult<ApiResponse<List<TagProfitabilityDto>>>> GetTagProfitability(
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null)
+    {
+        try
+        {
+            var fromDate = from ?? new DateTime(2000, 1, 1);
+            var toDate = to ?? DateTime.UtcNow;
+
+            _logger.LogInformation("Fetching tag profitability from {FromDate} to {ToDate}", fromDate, toDate);
+
+            // Aggregate venduto per tag direttamente in DB
+            var vendutoPerTag = await _context.OrderItems
+                .AsNoTracking()
+                .Where(oi => oi.Tag != null && oi.Tag != "" &&
+                             oi.Order.PaidAt != null &&
+                             oi.Order.PaidAt >= fromDate &&
+                             oi.Order.PaidAt <= toDate)
+                .GroupBy(oi => oi.Tag)
+                .Select(g => new
+                {
+                    Tag = g.Key!,
+                    TotaleVenduto = g.Sum(oi => oi.Price * oi.Quantity),
+                    QuantitaVenduta = g.Sum(oi => oi.Quantity)
+                })
+                .ToListAsync();
+
+            if (!vendutoPerTag.Any())
+                return Ok(ApiResponse<List<TagProfitabilityDto>>.SuccessResult(new List<TagProfitabilityDto>()));
+
+            var tags = vendutoPerTag.Select(x => x.Tag).ToList();
+
+            // Costo d'acquisto da PendingListings, aggregato per tag in DB
+            var acquistatoPerTag = await _context.PendingListings
+                .AsNoTracking()
+                .Where(pl => pl.Tag != null && tags.Contains(pl.Tag))
+                .GroupBy(pl => pl.Tag)
+                .Select(g => new
+                {
+                    Tag = g.Key!,
+                    TotaleAcquistato = g.Sum(pl => pl.PurchasePrice * pl.Quantity)
+                })
+                .ToListAsync();
+
+            var acquistatoLookup = acquistatoPerTag.ToDictionary(x => x.Tag, x => x.TotaleAcquistato);
+
+            var result = vendutoPerTag
+                .Select(v =>
+                {
+                    var totaleAcquistato = acquistatoLookup.TryGetValue(v.Tag, out var acq) ? acq : 0m;
+                    var differenza = v.TotaleVenduto - totaleAcquistato;
+                    return new TagProfitabilityDto
+                    {
+                        Tag = v.Tag,
+                        TotaleAcquistato = totaleAcquistato,
+                        TotaleVenduto = v.TotaleVenduto,
+                        Differenza = differenza,
+                        PercentualeDifferenza = totaleAcquistato > 0
+                            ? (differenza / totaleAcquistato) * 100
+                            : 0,
+                        QuantitaVenduta = v.QuantitaVenduta
+                    };
+                })
+                .OrderByDescending(t => t.TotaleVenduto)
+                .ToList();
+
+            return Ok(ApiResponse<List<TagProfitabilityDto>>.SuccessResult(result));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching tag profitability");
+            return StatusCode(500, ApiResponse<List<TagProfitabilityDto>>.ErrorResult("Failed to fetch tag profitability", ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// Get profitability breakdown by expansion for a specific Tag
+    /// </summary>
+    [HttpGet("profitability/by-tag/{tag}/expansions")]
+    public async Task<ActionResult<ApiResponse<List<TagExpansionProfitabilityDto>>>> GetTagExpansionProfitability(
+        string tag,
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null)
+    {
+        try
+        {
+            var fromDate = from ?? new DateTime(2000, 1, 1);
+            var toDate = to ?? DateTime.UtcNow;
+
+            _logger.LogInformation("Fetching expansion profitability for tag '{Tag}' from {FromDate} to {ToDate}",
+                tag, fromDate, toDate);
+
+            var orderItems = await _context.OrderItems
+                .AsNoTracking()
+                .Include(oi => oi.Order)
+                .Include(oi => oi.Blueprint)
+                    .ThenInclude(b => b!.Expansion)
+                .Where(oi => oi.Tag == tag &&
+                             oi.Order.PaidAt != null &&
+                             oi.Order.PaidAt >= fromDate &&
+                             oi.Order.PaidAt <= toDate)
+                .ToListAsync();
+
+            var blueprintIds = orderItems
+                .Where(oi => oi.BlueprintId.HasValue)
+                .Select(oi => oi.BlueprintId!.Value)
+                .Distinct()
+                .ToList();
+
+            // Purchase prices from PendingListings, joined on (BlueprintId, Tag)
+            var pendingPrices = await _context.PendingListings
+                .AsNoTracking()
+                .Where(pl => blueprintIds.Contains(pl.BlueprintId) && pl.Tag == tag)
+                .GroupBy(pl => pl.BlueprintId)
+                .Select(g => new { BlueprintId = g.Key, AvgPrice = g.Average(pl => pl.PurchasePrice) })
+                .ToDictionaryAsync(x => x.BlueprintId, x => x.AvgPrice);
+
+            var result = orderItems
+                .GroupBy(oi => oi.Blueprint?.Expansion?.Name ?? oi.ExpansionName ?? "Unknown")
+                .Select(g =>
+                {
+                    var totaleVenduto = g.Sum(oi => oi.Price * oi.Quantity);
+                    var totaleAcquistato = g.Sum(oi =>
+                    {
+                        if (oi.BlueprintId.HasValue && pendingPrices.TryGetValue(oi.BlueprintId.Value, out var price))
+                            return price * oi.Quantity;
+                        return 0m;
+                    });
+                    var differenza = totaleVenduto - totaleAcquistato;
+
+                    return new TagExpansionProfitabilityDto
+                    {
+                        ExpansionName = g.Key,
+                        TotaleAcquistato = totaleAcquistato,
+                        TotaleVenduto = totaleVenduto,
+                        Differenza = differenza,
+                        PercentualeDifferenza = totaleAcquistato > 0
+                            ? (differenza / totaleAcquistato) * 100
+                            : 0,
+                        QuantitaVenduta = g.Sum(oi => oi.Quantity)
+                    };
+                })
+                .OrderByDescending(e => e.TotaleVenduto)
+                .ToList();
+
+            return Ok(ApiResponse<List<TagExpansionProfitabilityDto>>.SuccessResult(result));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching tag expansion profitability for tag '{Tag}'", tag);
+            return StatusCode(500, ApiResponse<List<TagExpansionProfitabilityDto>>.ErrorResult("Failed to fetch tag expansion profitability", ex.Message));
+        }
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private static int GetWeekNumber(DateTime date)

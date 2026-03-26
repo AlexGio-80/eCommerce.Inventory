@@ -355,7 +355,8 @@ public class CardTraderApiClient : ICardTraderApiService
     }
 
     /// <summary>
-    /// Fetch all orders from Card Trader API (returns DTOs for mapping)
+    /// Fetch all orders from Card Trader API, enriched with full detail (seller_price, tag per item).
+    /// The list endpoint does not return seller_price at item level; the detail endpoint does.
     /// </summary>
     public async Task<IEnumerable<dynamic>> GetOrdersAsync(DateTime? from = null, DateTime? to = null, CancellationToken cancellationToken = default)
     {
@@ -367,39 +368,71 @@ public class CardTraderApiClient : ICardTraderApiService
             var queryParams = new List<string>
             {
                 "sort=date.desc",
-                "limit=1000"  // Increase limit to get more orders per request
+                "limit=1000"
             };
 
             if (from.HasValue)
-            {
                 queryParams.Add($"from={from.Value:yyyy-MM-dd}");
-            }
             if (to.HasValue)
-            {
                 queryParams.Add($"to={to.Value:yyyy-MM-dd}");
-            }
 
             var queryString = string.Join("&", queryParams);
             var endpoint = $"orders?{queryString}";
-
-            _logger.LogInformation("Calling Card Trader endpoint: {Endpoint}", endpoint);
-
-            _logger.LogInformation("Calling Card Trader endpoint: {Endpoint}", endpoint);
 
             await _rateLimiter.AcquireAsync(cancellationToken);
             var response = await _httpClient.GetAsync(endpoint, cancellationToken);
             response.EnsureSuccessStatusCode();
 
             var jsonContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            var dtos = JsonSerializer.Deserialize<List<CardTraderOrderDto>>(jsonContent)
+            var listDtos = JsonSerializer.Deserialize<List<CardTraderOrderDto>>(jsonContent)
                 ?? new List<CardTraderOrderDto>();
 
-            _logger.LogInformation("Fetched {OrderCount} orders from Card Trader API", dtos.Count);
-            return dtos.Cast<dynamic>().ToList();
+            _logger.LogInformation("Fetched {OrderCount} orders from list endpoint, enriching with details...", listDtos.Count);
+
+            // Enrich each order with full detail to get seller_price and tag per item
+            var detailedDtos = new List<CardTraderOrderDto>();
+            foreach (var listOrder in listDtos)
+            {
+                try
+                {
+                    var detail = await GetOrderDetailAsync(listOrder.Id, cancellationToken) as CardTraderOrderDto;
+                    detailedDtos.Add(detail ?? listOrder);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to fetch detail for order {OrderId}, using list data", listOrder.Id);
+                    detailedDtos.Add(listOrder);
+                }
+            }
+
+            _logger.LogInformation("Enriched {OrderCount} orders with full detail", detailedDtos.Count);
+            return detailedDtos.Cast<dynamic>().ToList();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching orders from Card Trader API");
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Fetch full detail of a single order from Card Trader API (includes seller_price and tag per item)
+    /// </summary>
+    public async Task<dynamic?> GetOrderDetailAsync(int orderId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _rateLimiter.AcquireAsync(cancellationToken);
+            var response = await _httpClient.GetAsync($"orders/{orderId}", cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            var jsonContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            var dto = JsonSerializer.Deserialize<CardTraderOrderDto>(jsonContent);
+            return dto;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching detail for order {OrderId}", orderId);
             throw;
         }
     }

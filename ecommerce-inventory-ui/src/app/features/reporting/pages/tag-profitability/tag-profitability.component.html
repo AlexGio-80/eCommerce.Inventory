@@ -1,0 +1,32 @@
+<div class="tag-profitability">
+    <h2>Redditività per Tag</h2>
+
+    <div *ngIf="isLoading" class="loading">Caricamento...</div>
+
+    <!-- Tag grid -->
+    <div *ngIf="!isLoading">
+        <p class="hint">Clicca su un Tag per vedere il dettaglio per espansione.</p>
+        <ag-grid-angular
+            class="ag-theme-alpine tag-grid"
+            [rowData]="tags"
+            [columnDefs]="tagColumnDefs"
+            [rowSelection]="'single'"
+            (gridReady)="onGridReady($event)"
+            (rowClicked)="onTagRowClicked($event)">
+        </ag-grid-angular>
+    </div>
+
+    <!-- Expansion detail -->
+    <div *ngIf="selectedTag" class="expansion-detail">
+        <h3>Dettaglio espansioni — Tag: <strong>{{ selectedTag }}</strong></h3>
+
+        <div *ngIf="isLoadingExpansions" class="loading">Caricamento dettaglio...</div>
+
+        <ag-grid-angular
+            *ngIf="!isLoadingExpansions"
+            class="ag-theme-alpine expansion-grid"
+            [rowData]="expansions"
+            [columnDefs]="expansionColumnDefs">
+        </ag-grid-angular>
+    </div>
+</div>

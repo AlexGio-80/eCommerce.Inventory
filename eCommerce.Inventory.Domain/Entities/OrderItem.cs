@@ -27,6 +27,7 @@ public class OrderItem
     public bool IsAltered { get; set; }
 
     public string? UserDataField { get; set; }
+    public string? Tag { get; set; }
 
     public bool IsPrepared { get; set; }
 }

@@ -106,6 +106,12 @@ public class CardTraderSyncOrchestrator
                 await SyncInventoryAsync(response, cancellationToken);
             }
 
+            // Sync Orders (last 7 days)
+            if (request.SyncOrders)
+            {
+                await SyncOrdersAsync(response, cancellationToken);
+            }
+
             // Sync Analytics (Expansion values)
             if (request.SyncAnalytics)
             {
@@ -124,6 +130,35 @@ public class CardTraderSyncOrchestrator
         }
 
         return response;
+    }
+
+    /// <summary>
+    /// Syncs orders from Card Trader API (last 7 days rolling window)
+    /// </summary>
+    private async Task SyncOrdersAsync(SyncResponseDto response, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogInformation("Starting Orders sync (last 7 days)");
+
+            var from = DateTime.UtcNow.AddDays(-7);
+            var orderDtos = await _cardTraderApiService.GetOrdersAsync(from, null, cancellationToken);
+            var concreteDtos = orderDtos.Cast<CardTraderOrderDto>().ToList();
+
+            _logger.LogInformation("Fetched {OrderCount} orders from Card Trader API", concreteDtos.Count);
+
+            await _inventorySyncService.SyncOrdersAsync(concreteDtos, cancellationToken);
+
+            response.Orders.WasRequested = true;
+            _logger.LogInformation("Orders sync completed");
+        }
+        catch (Exception ex)
+        {
+            response.Orders.WasRequested = true;
+            response.Orders.ErrorMessage = ex.Message;
+            response.Failed++;
+            _logger.LogError(ex, "Error syncing orders");
+        }
     }
 
     /// <summary>

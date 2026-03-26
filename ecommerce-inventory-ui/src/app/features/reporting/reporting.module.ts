@@ -8,6 +8,7 @@ import { ReportingRoutingModule } from './reporting-routing.module';
 import { SalesDashboard } from './pages/sales-dashboard/sales-dashboard';
 import { InventoryAnalyticsComponent } from './pages/inventory-analytics/inventory-analytics.component';
 import { ProfitabilityAnalysisComponent } from './pages/profitability-analysis/profitability-analysis.component';
+import { TagProfitabilityComponent } from './pages/tag-profitability/tag-profitability.component';
 
 import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community';
 
@@ -18,7 +19,8 @@ ModuleRegistry.registerModules([AllCommunityModule]);
     declarations: [
         SalesDashboard,
         InventoryAnalyticsComponent,
-        ProfitabilityAnalysisComponent
+        ProfitabilityAnalysisComponent,
+        TagProfitabilityComponent
     ],
     imports: [
         CommonModule,
@@ -29,7 +31,8 @@ ModuleRegistry.registerModules([AllCommunityModule]);
     exports: [
         SalesDashboard,
         InventoryAnalyticsComponent,
-        ProfitabilityAnalysisComponent
+        ProfitabilityAnalysisComponent,
+        TagProfitabilityComponent
     ]
 })
 export class ReportingModule {

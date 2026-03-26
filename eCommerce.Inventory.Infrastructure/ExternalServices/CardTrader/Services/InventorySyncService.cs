@@ -484,17 +484,27 @@ public class InventorySyncService
                 else
                 {
                     // UPDATE: Existing order
-                    // We update basic fields and status
                     existingOrder.State = dto.State ?? existingOrder.State;
                     existingOrder.PaidAt = dto.PaidAt;
                     existingOrder.SentAt = dto.SentAt;
                     existingOrder.TransactionCode = dto.TransactionCode ?? existingOrder.TransactionCode;
 
-                    // Update items if needed? 
-                    // Usually items are immutable once ordered, but let's check if we need to add missing items
-                    // For now, we assume items don't change structure, only order status changes.
-                    // If we want to be thorough, we could delete and re-add items, or check one by one.
-                    // Given the complexity, let's stick to updating the order header for now.
+                    // Update Tag on existing OrderItems (matched by CardTraderId)
+                    if (dto.OrderItems != null)
+                    {
+                        foreach (var itemDto in dto.OrderItems)
+                        {
+                            var existingItem = existingOrder.OrderItems
+                                .FirstOrDefault(i => i.CardTraderId == itemDto.Id);
+                            if (existingItem != null)
+                            {
+                                existingItem.Tag = itemDto.Tag;
+                                var priceCents = itemDto.SellerPrice?.Cents ?? itemDto.Price?.Cents ?? 0;
+                                if (priceCents > 0)
+                                    existingItem.Price = priceCents / 100m;
+                            }
+                        }
+                    }
 
                     dbContext!.Set<Order>().Update(existingOrder);
                     updateCount++;

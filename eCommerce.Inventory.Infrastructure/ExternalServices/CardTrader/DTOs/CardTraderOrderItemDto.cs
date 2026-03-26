@@ -31,11 +31,17 @@ public class CardTraderOrderItemDto
     [JsonPropertyName("user_data_field")]
     public string? UserDataField { get; set; }
 
+    [JsonPropertyName("tag")]
+    public string? Tag { get; set; }
+
     [JsonPropertyName("properties")]
     public CardTraderItemPropertiesDto Properties { get; set; }
 
+    [JsonPropertyName("price")]
+    public CardTraderPriceDto? Price { get; set; }
+
     [JsonPropertyName("seller_price")]
-    public CardTraderPriceDto SellerPrice { get; set; }
+    public CardTraderPriceDto? SellerPrice { get; set; }
 }
 
 public class CardTraderItemPropertiesDto

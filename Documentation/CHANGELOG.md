@@ -4,6 +4,54 @@ Questo file traccia le principali feature e bug fix implementate nel progetto, c
 
 ---
 
+## [2026-03-26] Feature 003 - Import Tag Dettaglio Ordini & Report Redditività per Tag
+
+### Problema
+1. La colonna `Tag` in `dbo.OrderItems` era vuota o mostrava valori errati — il mapper usava `user_data_field` invece del campo `tag` dell'endpoint dettaglio ordine.
+2. `Price` in `OrderItems` era sempre 0 — l'endpoint lista (`GET /orders`) non restituisce `seller_price` per item; serve il dettaglio (`GET /orders/{id}`).
+3. La sincronizzazione notturna non includeva gli ordini: `ScheduledProductSyncWorker` impostava `SyncOrders = true` ma `CardTraderSyncOrchestrator` non aveva il relativo blocco.
+4. Il report "Redditività per Tag" restituiva 500 dopo 31s di timeout — caricava tutti gli OrderItems in memoria invece di usare GROUP BY SQL.
+5. `TotaleAcquistato` sempre 0 — veniva letto da `InventoryItems.PurchasePrice` invece che da `PendingListings.PurchasePrice`.
+
+### Soluzione Implementata
+
+**Domain / Infrastructure:**
+- `OrderItem.cs` — aggiunta property `Tag`
+- Migration `20260326145049_AddTagToOrderItems` — colonna `Tag` nvarchar nullable con backfill da `UserDataField`
+- `CardTraderOrderItemDto` — aggiunti `Tag`, `Price` (nullable), reso nullable `SellerPrice`
+- `CardTraderDtoMapper` — mapping corretto: `Tag = dto.Tag`, `Price = (SellerPrice?.Cents ?? Price?.Cents ?? 0) / 100m`
+- `ICardTraderApiService` + `CardTraderApiClient` — aggiunto `GetOrderDetailAsync(orderId)`; `GetOrdersAsync` arricchisce ogni ordine con il detail endpoint
+- `InventorySyncService` — branch UPDATE ora aggiorna sia `Tag` sia `Price` sugli item esistenti
+- `CardTraderSyncOrchestrator` — aggiunto blocco `SyncOrders` + metodo `SyncOrdersAsync` (ultimi 7 giorni); sync notturna ora include gli ordini
+
+**API:**
+- `CardTraderOrdersController` — nuovo endpoint `POST /api/cardtrader/orders/{cardTraderOrderId}/sync` per sync singolo ordine
+- `ReportingController.GetTagProfitability` — riscritto con GROUP BY SQL; `TotaleAcquistato` da `PendingListings`
+- Nuovi DTOs: `TagProfitabilityDto`, `TagExpansionProfitabilityDto`
+- Nuovi endpoint: `GET /api/reporting/profitability/by-tag`, `GET /api/reporting/profitability/by-tag/{tag}/expansions`
+
+**Frontend:**
+- Nuove interfacce `TagProfitability`, `TagExpansionProfitability` in `reporting.models.ts`
+- Nuovi metodi in `reporting.service.ts`
+- Nuovo componente `TagProfitabilityComponent` con drill-down per espansione al click di riga
+- Route `/profitability/tags` e voce menu "Redditività per Tag"
+
+**Test:**
+- `eCommerce.Inventory.Tests.csproj` — corretto target `net8.0`, versioni pacchetti allineate
+- `CardTraderSyncOrchestratorTests` — aggiunto mock `IScryfallApiClient` mancante
+
+### Verifica
+- Build: 0 errori
+- Sync ordini di massa (da inizio anno): Price e Tag popolati correttamente
+- Endpoint `/api/reporting/profitability/by-tag` risponde senza timeout
+
+### Note Tecniche
+- L'endpoint lista CardTrader (`GET /orders`) non include `seller_price` per item — necessario chiamare il detail per ogni ordine (N+1 API calls, gestito con rate limiter)
+- Il `TotaleAcquistato` nel report viene da `PendingListings.PurchasePrice * Quantity`, raggruppato per `Tag`
+- Rimane aperta la verifica di coerenza tra valori livello-Tag e livello-Espansione nel report (vedi Features/003)
+
+---
+
 ## [2026-02-22] Items to Prepare - Icone Espansione, Date e Miglioramenti UI
 
 ### Problema

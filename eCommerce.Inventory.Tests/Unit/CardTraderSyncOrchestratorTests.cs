@@ -5,6 +5,7 @@ using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.DTOs;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Mappers;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
+using eCommerce.Inventory.Infrastructure.ExternalServices.Scryfall;
 using eCommerce.Inventory.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -19,6 +20,7 @@ public class CardTraderSyncOrchestratorTests
     private readonly Mock<ILogger<CardTraderSyncOrchestrator>> _loggerMock;
     private readonly Mock<ILogger<CardTraderDtoMapper>> _mapperLoggerMock;
     private readonly Mock<IExpansionAnalyticsService> _analyticsServiceMock;
+    private readonly Mock<IScryfallApiClient> _scryfallApiClientMock;
     private readonly ApplicationDbContext _dbContext;
     private readonly CardTraderDtoMapper _mapper;
     private readonly InventorySyncService _inventorySyncService;
@@ -30,6 +32,7 @@ public class CardTraderSyncOrchestratorTests
         _loggerMock = new Mock<ILogger<CardTraderSyncOrchestrator>>();
         _mapperLoggerMock = new Mock<ILogger<CardTraderDtoMapper>>();
         _analyticsServiceMock = new Mock<IExpansionAnalyticsService>();
+        _scryfallApiClientMock = new Mock<IScryfallApiClient>();
 
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
@@ -38,11 +41,6 @@ public class CardTraderSyncOrchestratorTests
 
         _mapper = new CardTraderDtoMapper(_mapperLoggerMock.Object);
 
-        // Mock InventorySyncService dependencies if needed, or use a real one with mocked dependencies
-        // For now, we can pass null or a mock if we don't test Categories sync deeply
-        // But Orchestrator constructor requires it.
-        // Let's mock the service or create a simple one.
-        // InventorySyncService depends on DbContext and Logger.
         var inventoryLogger = new Mock<ILogger<InventorySyncService>>();
         _inventorySyncService = new InventorySyncService(_dbContext, _mapper, inventoryLogger.Object);
 
@@ -52,6 +50,7 @@ public class CardTraderSyncOrchestratorTests
             _dbContext,
             _inventorySyncService,
             _analyticsServiceMock.Object,
+            _scryfallApiClientMock.Object,
             _loggerMock.Object);
     }
 

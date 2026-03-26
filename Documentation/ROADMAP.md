@@ -133,6 +133,19 @@
   - **DTOs Created**: `GameDto`, `ExpansionDto` for consistent response shapes
   - **Benefits**: Standardized error handling, improved API documentation, consistent client code generation
 
+✅ **Phase 3.13: Tag Profitability Report & Order Tag/Price Fix ✅ DONE (2026-03-26)**
+  - **Feature 003**: Import Tag Dettaglio Ordini
+  - `OrderItem.Tag` column added (migration + backfill)
+  - CardTrader order sync enriched with detail endpoint to capture `seller_price` per item
+  - Nightly sync now includes orders (was silently skipped)
+  - New endpoint `POST /api/cardtrader/orders/{id}/sync` for single-order re-sync
+  - New report: Redditività per Tag (`/reporting/profitability/by-tag`) with expansion drill-down
+  - `TotaleAcquistato` from `PendingListings.PurchasePrice` (source of truth)
+  - Report rewritten with DB-side GROUP BY (fix 31s timeout/500 error)
+  - **Pending (next session)**:
+    - UI button for single-order re-sync
+    - Investigate value mismatch between Tag-level and Expansion-level report rows
+
 ✅ **Phase 3.11: Reporting & Analytics System ✅ DONE (2025-11-25)**
   - **Backend**: `ReportingController` with 10 endpoints across 3 categories
     - Sales Analytics: metrics, chart data, top products, sales by game

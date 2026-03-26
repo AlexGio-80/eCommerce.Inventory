@@ -23,6 +23,7 @@ public interface ICardTraderApiService
     Task<List<dynamic>> FetchMyProductsAsync(CancellationToken cancellationToken = default);
     Task<List<dynamic>> GetProductsExportAsync(CancellationToken cancellationToken = default);
     Task<IEnumerable<dynamic>> GetOrdersAsync(DateTime? from = null, DateTime? to = null, CancellationToken cancellationToken = default);
+    Task<dynamic?> GetOrderDetailAsync(int orderId, CancellationToken cancellationToken = default);
     Task<IEnumerable<CardTraderMarketplaceProductDto>> GetMarketplaceProductsAsync(int blueprintId, CancellationToken cancellationToken = default);
     Task<IEnumerable<CardTraderMarketplaceProductDto>> GetMarketplaceProductsBatchAsync(IEnumerable<int> blueprintIds, CancellationToken cancellationToken = default);
     Task<IEnumerable<CardTraderMarketplaceProductDto>> GetMarketplaceProductsByExpansionAsync(int expansionId, CancellationToken cancellationToken = default);

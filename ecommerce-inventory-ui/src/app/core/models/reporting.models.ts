@@ -99,3 +99,23 @@ export interface TopExpansionValue {
     totalMinPrice: number;
     lastUpdate?: Date;
 }
+
+// Tag Profitability
+export interface TagProfitability {
+    tag: string;
+    totaleAcquistato: number;
+    totaleVenduto: number;
+    differenza: number;
+    percentualeDifferenza: number;
+    quantitaVenduta: number;
+}
+
+// Tag Expansion Profitability (breakdown per espansione dentro un tag)
+export interface TagExpansionProfitability {
+    expansionName: string;
+    totaleAcquistato: number;
+    totaleVenduto: number;
+    differenza: number;
+    percentualeDifferenza: number;
+    quantitaVenduta: number;
+}

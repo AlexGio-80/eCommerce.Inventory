@@ -13,7 +13,9 @@ import {
     ProfitabilityOverview,
     TopPerformer,
     DateRange,
-    TopExpansionValue
+    TopExpansionValue,
+    TagProfitability,
+    TagExpansionProfitability
 } from '../models/reporting.models';
 import { ApiResponse } from '../models/api-response';
 import { environment } from '../../../environments/environment';
@@ -115,6 +117,28 @@ export class ReportingService {
     getTopExpansionsByValue(limit: number = 10): Observable<TopExpansionValue[]> {
         const params = new HttpParams().set('limit', limit.toString());
         return this.http.get<ApiResponse<TopExpansionValue[]>>(`${this.apiUrl}/expansions/top-values`, { params })
+            .pipe(map(response => response.data ?? []));
+    }
+
+    // Tag Analytics
+    getTagProfitability(dateRange?: DateRange): Observable<TagProfitability[]> {
+        let params = new HttpParams();
+        if (dateRange) {
+            params = params.set('from', dateRange.from.toISOString());
+            params = params.set('to', dateRange.to.toISOString());
+        }
+        return this.http.get<ApiResponse<TagProfitability[]>>(`${this.apiUrl}/profitability/by-tag`, { params })
+            .pipe(map(response => response.data ?? []));
+    }
+
+    getTagExpansionProfitability(tag: string, dateRange?: DateRange): Observable<TagExpansionProfitability[]> {
+        let params = new HttpParams();
+        if (dateRange) {
+            params = params.set('from', dateRange.from.toISOString());
+            params = params.set('to', dateRange.to.toISOString());
+        }
+        return this.http.get<ApiResponse<TagExpansionProfitability[]>>(
+            `${this.apiUrl}/profitability/by-tag/${encodeURIComponent(tag)}/expansions`, { params })
             .pipe(map(response => response.data ?? []));
     }
 }

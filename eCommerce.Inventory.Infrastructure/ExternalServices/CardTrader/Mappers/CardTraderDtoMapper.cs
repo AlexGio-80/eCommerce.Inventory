@@ -489,13 +489,14 @@ public class CardTraderDtoMapper
             Name = dto.Name ?? string.Empty,
             ExpansionName = dto.Expansion ?? string.Empty,
             Quantity = dto.Quantity,
-            Price = dto.SellerPrice?.Cents / 100m ?? 0,
+            Price = (dto.SellerPrice?.Cents ?? dto.Price?.Cents ?? 0) / 100m,
             Condition = dto.Properties?.Condition ?? string.Empty,
             Language = dto.Properties?.Language ?? string.Empty,
             IsFoil = dto.Properties?.Foil ?? false,
             IsSigned = dto.Properties?.Signed ?? false,
             IsAltered = dto.Properties?.Altered ?? false,
             UserDataField = dto.UserDataField,
+            Tag = dto.Tag,
             IsPrepared = false // Default to false
         };
     }
