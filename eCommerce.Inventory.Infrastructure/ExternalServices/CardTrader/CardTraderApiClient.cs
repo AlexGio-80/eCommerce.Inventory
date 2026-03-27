@@ -387,26 +387,8 @@ public class CardTraderApiClient : ICardTraderApiService
             var listDtos = JsonSerializer.Deserialize<List<CardTraderOrderDto>>(jsonContent)
                 ?? new List<CardTraderOrderDto>();
 
-            _logger.LogInformation("Fetched {OrderCount} orders from list endpoint, enriching with details...", listDtos.Count);
-
-            // Enrich each order with full detail to get seller_price and tag per item
-            var detailedDtos = new List<CardTraderOrderDto>();
-            foreach (var listOrder in listDtos)
-            {
-                try
-                {
-                    var detail = await GetOrderDetailAsync(listOrder.Id, cancellationToken) as CardTraderOrderDto;
-                    detailedDtos.Add(detail ?? listOrder);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to fetch detail for order {OrderId}, using list data", listOrder.Id);
-                    detailedDtos.Add(listOrder);
-                }
-            }
-
-            _logger.LogInformation("Enriched {OrderCount} orders with full detail", detailedDtos.Count);
-            return detailedDtos.Cast<dynamic>().ToList();
+            _logger.LogInformation("Fetched {OrderCount} orders from Card Trader API", listDtos.Count);
+            return listDtos.Cast<dynamic>().ToList();
         }
         catch (Exception ex)
         {

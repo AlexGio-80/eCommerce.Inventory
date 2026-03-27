@@ -118,7 +118,7 @@ builder.Services.AddHttpClient<ICardTraderApiService, CardTraderApiClient>(clien
     client.BaseAddress = new Uri(baseAddressUrl);
     client.DefaultRequestHeaders.Add("Authorization", $"Bearer {bearerToken}");
     client.DefaultRequestHeaders.Add("Accept", "application/json");
-    client.Timeout = TimeSpan.FromSeconds(30);
+    client.Timeout = TimeSpan.FromSeconds(120);
 })
 .AddPolicyHandler(CardTraderPolicies.GetRetryPolicy())
 .AddPolicyHandler(CardTraderPolicies.GetCircuitBreakerPolicy());

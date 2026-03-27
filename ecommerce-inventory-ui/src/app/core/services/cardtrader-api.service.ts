@@ -167,11 +167,10 @@ export class CardTraderApiService {
   }
 
   syncOrders(from?: string, to?: string): Observable<ApiResponse<any>> {
-    const body = {
-      from: from || null,
-      to: to || null
-    };
-    return this.http.post<ApiResponse<any>>(`${this.apiUrl}/orders/sync`, body);
+    let params = new HttpParams();
+    if (from) params = params.set('from', from);
+    if (to) params = params.set('to', to);
+    return this.http.post<ApiResponse<any>>(`${this.apiUrl}/orders/sync`, {}, { params });
   }
 
   syncSingleOrder(cardTraderOrderId: number): Observable<ApiResponse<any>> {

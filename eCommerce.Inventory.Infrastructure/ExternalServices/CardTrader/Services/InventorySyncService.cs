@@ -502,7 +502,8 @@ public class InventorySyncService
                     existingOrder.SentAt = dto.SentAt;
                     existingOrder.TransactionCode = dto.TransactionCode ?? existingOrder.TransactionCode;
 
-                    // Update Tag on existing OrderItems (matched by CardTraderId)
+                    // Aggiorna Price e Tag su OrderItems solo se il dato è disponibile
+                    // (Tag non arriva da CT API lista — arriva solo dal detail o da PendingListings)
                     if (dto.OrderItems != null)
                     {
                         foreach (var itemDto in dto.OrderItems)
@@ -511,7 +512,11 @@ public class InventorySyncService
                                 .FirstOrDefault(i => i.CardTraderId == itemDto.Id);
                             if (existingItem != null)
                             {
-                                existingItem.Tag = itemDto.Tag;
+                                // Tag: aggiorna solo se CT API restituisce un valore (non sovrascrivere con null)
+                                if (itemDto.Tag != null)
+                                    existingItem.Tag = itemDto.Tag;
+
+                                // Price: usa SellerPrice se disponibile (detail endpoint), altrimenti Price (list endpoint)
                                 var priceCents = itemDto.SellerPrice?.Cents ?? itemDto.Price?.Cents ?? 0;
                                 if (priceCents > 0)
                                     existingItem.Price = priceCents / 100m;
@@ -519,7 +524,6 @@ public class InventorySyncService
                         }
                     }
 
-                    dbContext!.Set<Order>().Update(existingOrder);
                     updateCount++;
                 }
             }
