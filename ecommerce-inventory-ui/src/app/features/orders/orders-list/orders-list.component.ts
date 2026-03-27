@@ -54,6 +54,7 @@ export class OrdersListComponent implements OnInit {
     filteredOrders: Order[] = [];
     isLoading = false;
     isSyncing = false;
+    syncingOrderIds = new Set<number>();
 
     // Date filters
     fromDate: string;
@@ -120,6 +121,23 @@ export class OrdersListComponent implements OnInit {
             filter: 'agDateColumnFilter',
             width: 150,
             valueFormatter: (params) => params.value ? new Date(params.value).toLocaleDateString() : ''
+        },
+        {
+            headerName: 'Azioni',
+            colId: 'actions',
+            sortable: false,
+            filter: false,
+            width: 100,
+            cellRenderer: (params: any) => {
+                const btn = document.createElement('button');
+                btn.title = 'Ri-sincronizza ordine da CardTrader';
+                btn.style.cssText = 'background:none;border:none;cursor:pointer;padding:4px;display:flex;align-items:center;';
+                btn.innerHTML = '<span class="material-icons" style="font-size:18px;color:#1976d2">sync</span>';
+                btn.addEventListener('click', () => {
+                    this.syncSingleOrder(params.data);
+                });
+                return btn;
+            }
         },
         {
             headerName: 'Completed',
@@ -289,6 +307,27 @@ export class OrdersListComponent implements OnInit {
                 console.error('Error updating order completion', err);
                 this.showSnackBar('Error updating order status');
                 // Refresh to revert checkbox
+                this.gridApi.refreshCells({ force: true });
+            }
+        });
+    }
+
+    syncSingleOrder(order: Order): void {
+        const id = order.cardTraderOrderId;
+        if (this.syncingOrderIds.has(id)) return;
+        this.syncingOrderIds.add(id);
+        this.gridApi.refreshCells({ force: true });
+
+        this.apiService.syncSingleOrder(id).subscribe({
+            next: (response) => {
+                this.syncingOrderIds.delete(id);
+                this.showSnackBar(response.message || `Ordine ${order.code} sincronizzato`);
+                this.loadOrders();
+            },
+            error: (err) => {
+                this.syncingOrderIds.delete(id);
+                console.error('Error syncing order', err);
+                this.showSnackBar(`Errore sync ordine ${order.code}`);
                 this.gridApi.refreshCells({ force: true });
             }
         });

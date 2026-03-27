@@ -12,7 +12,7 @@ Visto che il Tag sulle carte che metto in vendita lo volevo usare anche per fare
 ### Causa Radice
 La colonna `Tag` non esisteva nella tabella `dbo.OrderItems`, quindi il valore non veniva persistito né letto correttamente. Il campo `tag` nella griglia Items to Prepare mostrava dati assenti o errati perché si leggeva da una colonna inesistente.
 
-### Soluzione Implementata
+### Soluzione Implementata (2026-03-26)
 
 **Backend:**
 1. Aggiunta property `Tag` all'entità `OrderItem` (Domain layer)
@@ -38,17 +38,63 @@ La colonna `Tag` non esisteva nella tabella `dbo.OrderItems`, quindi il valore n
 5. `reporting-routing.module.ts` — aggiunta route `/profitability/tags`
 6. `layout.component.ts` — aggiunta voce "Redditività per Tag" nel menu laterale
 
-### Stato al 2026-03-26
+---
+
+### Fix e miglioramenti (2026-03-27)
+
+**Problema 1 — Bottone sync singolo ordine non visibile**
+Le modifiche erano rimaste nel worktree Claude e non erano state copiate nel repo principale.
+- Copiati `orders-list.component.ts` e `cardtrader-api.service.ts` dal worktree al repo.
+- La colonna "Azioni" con bottone sync icona appare correttamente nella griglia ordini.
+
+**Problema 2 — Timeout 30s su `GET /api/reporting/profitability/by-tag`**
+La query `pendingPrices` passava una lista `blueprintIds` come `OPENJSON` (potenzialmente migliaia di ID), causando timeout.
+- Sostituita la doppia query (vendutoPerTagBlueprint + pendingPrices) con un unico JOIN SQL:
+  `OrderItems GROUP BY (Tag, BlueprintId)` JOIN `PendingListings GROUP BY (BlueprintId, Tag)` → GROUP BY Tag.
+- Nessuna lista di ID passata come parametro: tutto risolto via JOIN server-side.
+
+**Problema 3 — TotaleAcquistato errato nel dettaglio espansioni**
+La query calcolava il "costo del venduto" (avg prezzo × quantità venduta) invece del totale acquistato reale.
+- Query corretta per espansione:
+  ```sql
+  SELECT e.Name, SUM(pl.Quantity * pl.PurchasePrice)
+  FROM PendingListings pl
+  INNER JOIN Blueprints b ON b.Id = pl.BlueprintId
+  INNER JOIN Expansions e ON e.Id = b.ExpansionId
+  WHERE pl.Tag = @tag
+  GROUP BY e.Name
+  ```
+
+**Problema 4 — ValoreRimanente sempre zero**
+La query moltiplicava `InventoryItems.PurchasePrice` (sempre 0 per gli item importati da CT) invece del prezzo di mercato.
+- Corretto in `ReportingController` (livello Tag e livello Espansione): ora usa `InventoryItems.ListingPrice`.
+
+**Problema 5 — Backfill Tag su OrderItems storici insufficiente**
+Il primo backfill aggiornava solo gli item con `BlueprintId IS NOT NULL` — la maggior parte degli storici ce l'ha NULL.
+- Riscritto `POST /api/cardtrader/orders/backfill-tags`:
+  - Risolve il `BlueprintId` locale tramite `OrderItem.CardTraderId → Blueprints.CardTraderId → Blueprints.Id`
+  - Aggiorna anche `OrderItem.BlueprintId` se era NULL
+  - Copertura ancora parziale: OrderItems molto vecchi con CardTraderId non presente nei Blueprints locali non vengono matchati
+
+**Nuova funzionalità — Grid State nel report Redditività per Tag**
+Aggiunta gestione completa stato griglia su entrambe le griglie del componente `TagProfitabilityComponent`:
+- Sidebar con pannello "Colonne" (mostra/nasconde colonne)
+- Persistenza in `localStorage` via `GridStateService`
+  - ID griglia Tag: `tag-profitability-tags-grid`
+  - ID griglia Espansioni: `tag-profitability-expansions-grid`
+- Ripristino automatico all'apertura della pagina
+- Salvataggio su: spostamento colonna, visibilità, ridimensionamento, ordinamento
+
+---
+
+### Stato al 2026-03-27
 - Build: 0 errori ✅
-- Sync ordini (massa da inizio anno): Price e Tag popolati correttamente ✅
-- Endpoint `/api/reporting/profitability/by-tag`: risponde senza timeout ✅
-- Valori monetari nel report: da verificare (vedi TODO)
+- Colonna "Azioni" con bottone sync visibile nella griglia ordini ✅
+- Report `by-tag` risponde senza timeout ✅
+- TotaleAcquistato allineato tra livello Tag e livello Espansione ✅
+- ValoreRimanente calcolato correttamente con ListingPrice ✅
+- Grid state (sidebar colonne + persistenza) attivo su entrambe le griglie ✅
+- Backfill Tag OrderItems storici: copertura parziale (limitata dai blueprint non importati) ⚠️
 
-### TODO (da completare nella prossima sessione)
-
-1. **UI: Bottone sync singolo ordine**
-   - Aggiungere nella griglia ordini (o nella maschera "Items to Prepare") un pulsante che chiama `POST /api/cardtrader/orders/{cardTraderOrderId}/sync` per ri-sincronizzare un singolo ordine senza dover rilanciare tutto il periodo.
-
-2. **Verifica coerenza valori report Redditività per Tag**
-   - I valori mostrati nella vista per Tag non combaciano con quelli del dettaglio per Espansione — investigare e correggere la discrepanza nel calcolo di `TotaleAcquistato` / `TotaleVenduto` tra i due livelli del report.
-
+### TODO
+- Nessun TODO aperto su questa feature.

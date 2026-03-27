@@ -174,6 +174,10 @@ export class CardTraderApiService {
     return this.http.post<ApiResponse<any>>(`${this.apiUrl}/orders/sync`, body);
   }
 
+  syncSingleOrder(cardTraderOrderId: number): Observable<ApiResponse<any>> {
+    return this.http.post<ApiResponse<any>>(`${this.apiUrl}/orders/${cardTraderOrderId}/sync`, {});
+  }
+
   toggleOrderCompletion(id: number, isCompleted: boolean): Observable<Order> {
     return this.http.put<ApiResponse<Order>>(`${this.apiUrl}/orders/${id}/complete`, isCompleted).pipe(
       map(response => {

@@ -707,25 +707,34 @@ public class ReportingController : ControllerBase
 
             var tags = vendutoPerTag.Select(x => x.Tag).ToList();
 
-            // Costo d'acquisto da PendingListings, aggregato per tag in DB
-            var acquistatoPerTag = await _context.PendingListings
+            // TotaleAcquistato = totale investimento: SUM(Quantity * PurchasePrice) da PendingListings per tag
+            // Equivalente SQL: SELECT Tag, SUM(Quantity * PurchasePrice) FROM PendingListings WHERE Tag IN (...) GROUP BY Tag
+            var acquistatoLookup = await _context.PendingListings
                 .AsNoTracking()
                 .Where(pl => pl.Tag != null && tags.Contains(pl.Tag))
-                .GroupBy(pl => pl.Tag)
+                .GroupBy(pl => pl.Tag!)
+                .Select(g => new { Tag = g.Key, TotaleAcquistato = g.Sum(pl => pl.Quantity * pl.PurchasePrice) })
+                .ToDictionaryAsync(x => x.Tag, x => x.TotaleAcquistato);
+
+            // Rimanente in inventario per tag
+            var rimanentePerTag = await _context.InventoryItems
+                .AsNoTracking()
+                .Where(ii => ii.Tag != null && tags.Contains(ii.Tag))
+                .GroupBy(ii => ii.Tag!)
                 .Select(g => new
                 {
-                    Tag = g.Key!,
-                    TotaleAcquistato = g.Sum(pl => pl.PurchasePrice * pl.Quantity)
+                    Tag = g.Key,
+                    QtaRimanente = g.Sum(ii => ii.Quantity),
+                    ValoreRimanente = g.Sum(ii => ii.Quantity * ii.ListingPrice)
                 })
-                .ToListAsync();
-
-            var acquistatoLookup = acquistatoPerTag.ToDictionary(x => x.Tag, x => x.TotaleAcquistato);
+                .ToDictionaryAsync(x => x.Tag, x => new { x.QtaRimanente, x.ValoreRimanente });
 
             var result = vendutoPerTag
                 .Select(v =>
                 {
                     var totaleAcquistato = acquistatoLookup.TryGetValue(v.Tag, out var acq) ? acq : 0m;
                     var differenza = v.TotaleVenduto - totaleAcquistato;
+                    var rim = rimanentePerTag.TryGetValue(v.Tag, out var r) ? r : null;
                     return new TagProfitabilityDto
                     {
                         Tag = v.Tag,
@@ -735,7 +744,9 @@ public class ReportingController : ControllerBase
                         PercentualeDifferenza = totaleAcquistato > 0
                             ? (differenza / totaleAcquistato) * 100
                             : 0,
-                        QuantitaVenduta = v.QuantitaVenduta
+                        QuantitaVenduta = v.QuantitaVenduta,
+                        QtaRimanente = rim?.QtaRimanente ?? 0,
+                        ValoreRimanente = rim?.ValoreRimanente ?? 0m
                     };
                 })
                 .OrderByDescending(t => t.TotaleVenduto)
@@ -778,32 +789,40 @@ public class ReportingController : ControllerBase
                              oi.Order.PaidAt <= toDate)
                 .ToListAsync();
 
-            var blueprintIds = orderItems
-                .Where(oi => oi.BlueprintId.HasValue)
-                .Select(oi => oi.BlueprintId!.Value)
-                .Distinct()
-                .ToList();
 
-            // Purchase prices from PendingListings, joined on (BlueprintId, Tag)
-            var pendingPrices = await _context.PendingListings
+            // TotaleAcquistato per espansione: SUM(Quantity * PurchasePrice) da PendingListings JOIN Blueprints JOIN Expansions
+            // Equivalente SQL: SELECT e.Name, SUM(pl.Quantity * pl.PurchasePrice) FROM PendingListings pl
+            //                  INNER JOIN Blueprints b ON b.Id = pl.BlueprintId
+            //                  INNER JOIN Expansions e ON e.Id = b.ExpansionId
+            //                  WHERE pl.Tag = @tag GROUP BY e.Name
+            var acquistatoPerExpansion = await _context.PendingListings
                 .AsNoTracking()
-                .Where(pl => blueprintIds.Contains(pl.BlueprintId) && pl.Tag == tag)
-                .GroupBy(pl => pl.BlueprintId)
-                .Select(g => new { BlueprintId = g.Key, AvgPrice = g.Average(pl => pl.PurchasePrice) })
-                .ToDictionaryAsync(x => x.BlueprintId, x => x.AvgPrice);
+                .Where(pl => pl.Tag == tag)
+                .GroupBy(pl => pl.Blueprint.Expansion.Name)
+                .Select(g => new { ExpansionName = g.Key, TotaleAcquistato = g.Sum(pl => pl.Quantity * pl.PurchasePrice) })
+                .ToDictionaryAsync(x => x.ExpansionName, x => x.TotaleAcquistato);
+
+            // Rimanente in inventario per espansione
+            var rimanentePerExpansion = await _context.InventoryItems
+                .AsNoTracking()
+                .Where(ii => ii.Tag == tag && ii.Blueprint != null && ii.Blueprint.Expansion != null)
+                .GroupBy(ii => ii.Blueprint!.Expansion!.Name)
+                .Select(g => new
+                {
+                    ExpansionName = g.Key,
+                    QtaRimanente = g.Sum(ii => ii.Quantity),
+                    ValoreRimanente = g.Sum(ii => ii.Quantity * ii.ListingPrice)
+                })
+                .ToDictionaryAsync(x => x.ExpansionName, x => new { x.QtaRimanente, x.ValoreRimanente });
 
             var result = orderItems
                 .GroupBy(oi => oi.Blueprint?.Expansion?.Name ?? oi.ExpansionName ?? "Unknown")
                 .Select(g =>
                 {
                     var totaleVenduto = g.Sum(oi => oi.Price * oi.Quantity);
-                    var totaleAcquistato = g.Sum(oi =>
-                    {
-                        if (oi.BlueprintId.HasValue && pendingPrices.TryGetValue(oi.BlueprintId.Value, out var price))
-                            return price * oi.Quantity;
-                        return 0m;
-                    });
+                    var totaleAcquistato = acquistatoPerExpansion.TryGetValue(g.Key, out var cost) ? cost : 0m;
                     var differenza = totaleVenduto - totaleAcquistato;
+                    var rim = rimanentePerExpansion.TryGetValue(g.Key, out var r) ? r : null;
 
                     return new TagExpansionProfitabilityDto
                     {
@@ -814,7 +833,9 @@ public class ReportingController : ControllerBase
                         PercentualeDifferenza = totaleAcquistato > 0
                             ? (differenza / totaleAcquistato) * 100
                             : 0,
-                        QuantitaVenduta = g.Sum(oi => oi.Quantity)
+                        QuantitaVenduta = g.Sum(oi => oi.Quantity),
+                        QtaRimanente = rim?.QtaRimanente ?? 0,
+                        ValoreRimanente = rim?.ValoreRimanente ?? 0m
                     };
                 })
                 .OrderByDescending(e => e.TotaleVenduto)

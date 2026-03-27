@@ -8,4 +8,6 @@ public class TagProfitabilityDto
     public decimal Differenza { get; set; }
     public decimal PercentualeDifferenza { get; set; }
     public int QuantitaVenduta { get; set; }
+    public int QtaRimanente { get; set; }
+    public decimal ValoreRimanente { get; set; }
 }

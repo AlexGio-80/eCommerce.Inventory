@@ -4,6 +4,37 @@ Questo file traccia le principali feature e bug fix implementate nel progetto, c
 
 ---
 
+## [2026-03-27] Feature 003 (cont.) - Fix Report Redditività per Tag, Backfill Tag, Grid State
+
+### Problema
+1. **Bottone sync singolo ordine** non visibile in griglia ordini — le modifiche erano rimaste nel worktree e non erano state copiate nel repo principale.
+2. **TotaleAcquistato** a livello Tag (911.54€) non coincideva con la somma delle espansioni di dettaglio (268.94€) — la query pendingPrices usava `OPENJSON` su una lista di `blueprintIds` enorme causando timeout 30s.
+3. **TotaleAcquistato** nelle espansioni di dettaglio mostrava il "costo del venduto" invece del totale acquistato reale — doveva usare `SUM(Quantity * PurchasePrice)` da `PendingListings` join `Blueprints` join `Expansions`.
+4. **ValoreRimanente** sempre zero — la query usava `InventoryItems.PurchasePrice` (zero) invece di `InventoryItems.ListingPrice`.
+5. **Tag mancante su OrderItems storici** — `POST /api/cardtrader/orders/backfill-tags` non matchava perché usava `OrderItem.BlueprintId` (spesso NULL) invece di risolvere via `OrderItem.CardTraderId → Blueprints.CardTraderId → Blueprints.Id`.
+
+### Soluzione Implementata
+
+**Backend:**
+- `ReportingController.GetTagProfitability` — sostituita la doppia query (vendutoPerTagBlueprint + pendingPrices con OPENJSON) con un singolo JOIN SQL tra OrderItems e PendingListings (nessuna lista blueprintIds passata come parametro)
+- `ReportingController.GetTagExpansionProfitability` — `TotaleAcquistato` ora calcolato con `SUM(pl.Quantity * pl.PurchasePrice)` via JOIN `PendingListings → Blueprints → Expansions`, allineato alla query SQL diretta
+- `ReportingController` (entrambi i livelli) — `ValoreRimanente` ora usa `InventoryItems.ListingPrice` (prezzo attuale di mercato) invece di `PurchasePrice`
+- `CardTraderOrdersController` — nuovo endpoint `POST /api/cardtrader/orders/backfill-tags` riscritto per risolvere `BlueprintId` tramite `OrderItem.CardTraderId → Blueprints.CardTraderId → Blueprints.Id` + aggiorna anche `OrderItem.BlueprintId` se era NULL
+
+**Frontend:**
+- `orders-list.component.ts` e `cardtrader-api.service.ts` — copiati dal worktree al repo principale (la colonna "Azioni" con bottone sync era già implementata ma non pubblicata)
+- `TagProfitabilityComponent` — aggiunta gestione completa stato griglia per entrambe le griglie (Tag e Espansioni):
+  - Sidebar con pannello "Colonne" per mostrare/nascondere
+  - Persistenza in `localStorage` tramite `GridStateService` con ID separati (`tag-profitability-tags-grid`, `tag-profitability-expansions-grid`)
+  - Ripristino automatico al caricamento
+  - Salvataggio su: spostamento, visibilità, ridimensionamento, ordinamento colonne
+
+### Note Tecniche
+- La query `TotaleAcquistato` corretta per espansione: `SELECT e.Name, SUM(pl.Quantity * pl.PurchasePrice) FROM PendingListings pl INNER JOIN Blueprints b ON b.Id = pl.BlueprintId INNER JOIN Expansions e ON e.Id = b.ExpansionId WHERE Tag = @tag GROUP BY e.Name`
+- Il backfill tag storici ha limitata copertura perché molti OrderItems storici hanno `CardTraderId` che non trova corrispondenza nei `Blueprints` caricati (blueprint non ancora importati nel sistema locale)
+
+---
+
 ## [2026-03-26] Feature 003 - Import Tag Dettaglio Ordini & Report Redditività per Tag
 
 ### Problema

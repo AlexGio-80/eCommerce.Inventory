@@ -10,9 +10,14 @@
             class="ag-theme-alpine tag-grid"
             [rowData]="tags"
             [columnDefs]="tagColumnDefs"
+            [gridOptions]="tagGridOptions"
             [rowSelection]="'single'"
-            (gridReady)="onGridReady($event)"
-            (rowClicked)="onTagRowClicked($event)">
+            (gridReady)="onTagGridReady($event)"
+            (rowClicked)="onTagRowClicked($event)"
+            (columnMoved)="saveTagGridState()"
+            (columnVisible)="saveTagGridState()"
+            (columnResized)="saveTagGridState()"
+            (sortChanged)="saveTagGridState()">
         </ag-grid-angular>
     </div>
 
@@ -26,7 +31,13 @@
             *ngIf="!isLoadingExpansions"
             class="ag-theme-alpine expansion-grid"
             [rowData]="expansions"
-            [columnDefs]="expansionColumnDefs">
+            [columnDefs]="expansionColumnDefs"
+            [gridOptions]="expansionGridOptions"
+            (gridReady)="onExpansionGridReady($event)"
+            (columnMoved)="saveExpansionGridState()"
+            (columnVisible)="saveExpansionGridState()"
+            (columnResized)="saveExpansionGridState()"
+            (sortChanged)="saveExpansionGridState()">
         </ag-grid-angular>
     </div>
 </div>

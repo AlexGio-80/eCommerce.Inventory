@@ -365,6 +365,10 @@ FodyWeavers.xsd
 # Serena AI Assistant
 .serena/
 
+# Claude Code
+.claude/
+lancia_claude.bat
+
 # Environment-specific configuration files
 appsettings.Development.json
 appsettings.*.json

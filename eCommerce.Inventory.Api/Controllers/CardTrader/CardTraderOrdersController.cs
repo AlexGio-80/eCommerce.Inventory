@@ -113,7 +113,7 @@ public class CardTraderOrdersController : ControllerBase
     [HttpPut("items/{itemId}/prepare")]
     public async Task<ActionResult<Models.ApiResponse<OrderItem>>> ToggleItemPreparation(int itemId, [FromBody] bool isPrepared)
     {
-        // We need to access OrderItems directly. 
+        // We need to access OrderItems directly.
         var dbContext = _context as Microsoft.EntityFrameworkCore.DbContext;
         var item = await dbContext!.Set<OrderItem>().FindAsync(itemId);
 
@@ -126,6 +126,82 @@ public class CardTraderOrdersController : ControllerBase
         await dbContext.SaveChangesAsync();
 
         return Ok(Models.ApiResponse<OrderItem>.SuccessResult(item, $"Item marked as {(isPrepared ? "prepared" : "unprepared")}"));
+    }
+
+    /// <summary>
+    /// Backfill massivo: aggiorna Tag su tutti gli OrderItem privi di Tag
+    /// cercando il Tag corrispondente in PendingListings per lo stesso BlueprintId.
+    /// In caso di più Tag per lo stesso blueprint, viene usato il più frequente.
+    /// </summary>
+    [HttpPost("backfill-tags")]
+    public async Task<ActionResult<Models.ApiResponse<object>>> BackfillOrderItemTags(CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Starting backfill of Tag on OrderItems");
+
+        var dbContext = _context as Microsoft.EntityFrameworkCore.DbContext;
+
+        // Carica il Tag più frequente per ogni Blueprint.Id (ID locale) da PendingListings
+        var tagPerBlueprint = await dbContext!.Set<PendingListing>()
+            .AsNoTracking()
+            .Where(pl => pl.Tag != null)
+            .GroupBy(pl => new { pl.BlueprintId, pl.Tag })
+            .Select(g => new { g.Key.BlueprintId, g.Key.Tag, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        // Dizionario: Blueprint.Id (locale) → Tag più frequente
+        var bestTagByBlueprintId = tagPerBlueprint
+            .GroupBy(x => x.BlueprintId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(x => x.Count).First().Tag!);
+
+        // Dizionario: Blueprint.CardTraderId → Blueprint.Id (locale)
+        // Per risolvere gli OrderItem che non hanno ancora BlueprintId popolato
+        var blueprintIdByCardTraderId = await dbContext.Set<Blueprint>()
+            .AsNoTracking()
+            .ToDictionaryAsync(b => b.CardTraderId, b => b.Id, cancellationToken);
+
+        // Carica tutti gli OrderItem senza Tag
+        var itemsWithoutTag = await dbContext.Set<OrderItem>()
+            .Where(oi => oi.Tag == null)
+            .ToListAsync(cancellationToken);
+
+        if (!itemsWithoutTag.Any())
+        {
+            return Ok(Models.ApiResponse<object>.SuccessResult(
+                new { Updated = 0, Message = "Nessun OrderItem senza Tag trovato." }));
+        }
+
+        int updated = 0;
+        foreach (var item in itemsWithoutTag)
+        {
+            // Risolvi il BlueprintId locale: usa quello già presente oppure cercalo via CardTraderId
+            var localBlueprintId = item.BlueprintId
+                ?? (blueprintIdByCardTraderId.TryGetValue(item.CardTraderId, out var id) ? id : (int?)null);
+
+            if (localBlueprintId == null) continue;
+
+            if (bestTagByBlueprintId.TryGetValue(localBlueprintId.Value, out var tag))
+            {
+                item.Tag = tag;
+                // Aggiorna anche BlueprintId se era null
+                item.BlueprintId ??= localBlueprintId;
+                updated++;
+            }
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Backfill completed: {Updated}/{Total} OrderItem aggiornati",
+            updated, itemsWithoutTag.Count);
+
+        return Ok(Models.ApiResponse<object>.SuccessResult(new
+        {
+            Updated = updated,
+            TotalWithoutTag = itemsWithoutTag.Count,
+            NotMatched = itemsWithoutTag.Count - updated,
+            Message = $"Backfill completato: {updated} OrderItem aggiornati."
+        }));
     }
 }
 

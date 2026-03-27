@@ -108,6 +108,8 @@ export interface TagProfitability {
     differenza: number;
     percentualeDifferenza: number;
     quantitaVenduta: number;
+    qtaRimanente: number;
+    valoreRimanente: number;
 }
 
 // Tag Expansion Profitability (breakdown per espansione dentro un tag)
@@ -118,4 +120,6 @@ export interface TagExpansionProfitability {
     differenza: number;
     percentualeDifferenza: number;
     quantitaVenduta: number;
+    qtaRimanente: number;
+    valoreRimanente: number;
 }
