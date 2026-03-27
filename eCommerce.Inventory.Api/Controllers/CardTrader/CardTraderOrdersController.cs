@@ -73,19 +73,21 @@ public class CardTraderOrdersController : ControllerBase
         ));
     }
 
+    /// <summary>
+    /// Sync ordini da CT API per intervallo di date.
+    /// Parametri via query string: ?from=2026-01-01&amp;to=2026-03-27
+    /// </summary>
     [HttpPost("sync")]
-    public async Task<ActionResult<Models.ApiResponse<object>>> SyncOrders([FromBody] SyncOrdersRequest request)
+    public async Task<ActionResult<Models.ApiResponse<object>>> SyncOrders(
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null)
     {
-        var from = request?.From;
-        var to = request?.To;
-
-        _logger.LogInformation("Manual sync of orders triggered");
-        _logger.LogInformation("Received parameters - from: {From}, to: {To}", from, to);
+        _logger.LogInformation("Manual sync of orders triggered - from: {From}, to: {To}", from, to);
 
         var orderDtos = await _cardTraderApiService.GetOrdersAsync(from, to);
 
-        // Cast dynamic list to concrete DTO list
-        var concreteDtos = ((IEnumerable<dynamic>)orderDtos).Cast<Infrastructure.ExternalServices.CardTrader.DTOs.CardTraderOrderDto>().ToList();
+        var concreteDtos = ((IEnumerable<dynamic>)orderDtos)
+            .Cast<Infrastructure.ExternalServices.CardTrader.DTOs.CardTraderOrderDto>().ToList();
 
         await _inventorySyncService.SyncOrdersAsync(concreteDtos);
 
@@ -93,6 +95,79 @@ public class CardTraderOrdersController : ControllerBase
             data: new { syncedCount = concreteDtos.Count },
             message: $"Synced {concreteDtos.Count} orders"
         ));
+    }
+
+    /// <summary>
+    /// Re-sync massivo: per ogni ordine nel DB nell'intervallo indicato, richiama
+    /// il detail endpoint di CT e aggiorna tutti i dati (Tag, Price, ecc.)
+    /// esattamente come farebbe il sync singolo per ordine.
+    /// Uso: POST /api/cardtrader/orders/sync-all?from=2026-01-01&amp;to=2026-03-27
+    /// </summary>
+    [HttpPost("sync-all")]
+    public async Task<ActionResult<Models.ApiResponse<object>>> SyncAllOrders(
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Bulk re-sync started - from: {From}, to: {To}", from, to);
+
+        var dbContext = _context as Microsoft.EntityFrameworkCore.DbContext;
+
+        // Carica gli ordini dal nostro DB nell'intervallo richiesto
+        var query = dbContext!.Set<Order>()
+            .AsNoTracking()
+            .Where(o => o.CardTraderOrderId > 0);
+
+        if (from.HasValue)
+            query = query.Where(o => o.PaidAt >= from.Value);
+        if (to.HasValue)
+            query = query.Where(o => o.PaidAt <= to.Value);
+
+        var orderIds = await query
+            .Select(o => o.CardTraderOrderId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        _logger.LogInformation("Found {Count} orders in DB to re-sync", orderIds.Count);
+
+        int success = 0, failed = 0;
+
+        foreach (var ctOrderId in orderIds)
+        {
+            try
+            {
+                var detail = await _cardTraderApiService.GetOrderDetailAsync(ctOrderId, cancellationToken)
+                    as Infrastructure.ExternalServices.CardTrader.DTOs.CardTraderOrderDto;
+
+                if (detail == null)
+                {
+                    _logger.LogWarning("Order {OrderId} not found on CT, skipping", ctOrderId);
+                    failed++;
+                    continue;
+                }
+
+                await _inventorySyncService.SyncOrdersAsync(
+                    new List<Infrastructure.ExternalServices.CardTrader.DTOs.CardTraderOrderDto> { detail },
+                    cancellationToken);
+
+                success++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to re-sync order {OrderId}", ctOrderId);
+                failed++;
+            }
+        }
+
+        _logger.LogInformation("Bulk re-sync completed: {Success} ok, {Failed} failed", success, failed);
+
+        return Ok(Models.ApiResponse<object>.SuccessResult(new
+        {
+            Total = orderIds.Count,
+            Success = success,
+            Failed = failed,
+            Message = $"Re-sync completato: {success}/{orderIds.Count} ordini aggiornati."
+        }));
     }
 
     [HttpPut("{orderId}/complete")]
