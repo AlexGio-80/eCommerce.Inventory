@@ -242,3 +242,15 @@ mat-list {
     height: 24px;
   }
 }
+
+.dashboard-tabs {
+  margin-top: 0;
+
+  .mat-mdc-tab-body-content {
+    overflow: visible;
+  }
+}
+
+.tab-content {
+  padding-top: 20px;
+}

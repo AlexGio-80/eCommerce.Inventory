@@ -7,20 +7,11 @@ import { Chart, registerables } from 'chart.js';
 import { ReportingRoutingModule } from './reporting-routing.module';
 import { SalesDashboard } from './pages/sales-dashboard/sales-dashboard';
 import { InventoryAnalyticsComponent } from './pages/inventory-analytics/inventory-analytics.component';
-import { ProfitabilityAnalysisComponent } from './pages/profitability-analysis/profitability-analysis.component';
-import { TagProfitabilityComponent } from './pages/tag-profitability/tag-profitability.component';
-
-import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community';
-
-// Register AG Grid modules
-ModuleRegistry.registerModules([AllCommunityModule]);
 
 @NgModule({
     declarations: [
         SalesDashboard,
-        InventoryAnalyticsComponent,
-        ProfitabilityAnalysisComponent,
-        TagProfitabilityComponent
+        InventoryAnalyticsComponent
     ],
     imports: [
         CommonModule,
@@ -30,9 +21,7 @@ ModuleRegistry.registerModules([AllCommunityModule]);
     ],
     exports: [
         SalesDashboard,
-        InventoryAnalyticsComponent,
-        ProfitabilityAnalysisComponent,
-        TagProfitabilityComponent
+        InventoryAnalyticsComponent
     ]
 })
 export class ReportingModule {

@@ -10,7 +10,9 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatTabsModule } from '@angular/material/tabs';
 import { RouterModule, Router } from '@angular/router';
+import { TagProfitabilityComponent } from '../../../reporting/pages/tag-profitability/tag-profitability.component';
 import { Observable, forkJoin, of, BehaviorSubject } from 'rxjs';
 import { map, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 
@@ -40,7 +42,9 @@ interface DashboardStats {
     MatChipsModule,
     MatFormFieldModule,
     MatInputModule,
-    RouterModule
+    MatTabsModule,
+    RouterModule,
+    TagProfitabilityComponent
   ],
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss'],
