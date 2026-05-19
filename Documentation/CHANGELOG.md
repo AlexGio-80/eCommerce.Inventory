@@ -1,6 +1,77 @@
 # eCommerce.Inventory - Changelog
 
-Questo file traccia le principali feature e bug fix implementate nel progetto, con dettagli tecnici per facilitare future analisi e manutenzione.
+> Una voce per ogni sessione di lavoro significativa. Le voci più recenti vanno in cima.
+> Formato sezioni: **Problema** (cosa non funzionava), **Soluzione** (cosa è cambiato), **Note Tecniche** (dettagli per manutenzione futura).
+
+---
+
+## [Unreleased]
+
+> Modifiche in corso, non ancora in produzione.
+
+---
+
+## [2026-05-19] Feature — Pannello "Le mie inserzioni" in Nuovo Prodotto + Update CT API
+
+### Problema
+Nella maschera "Nuovo Prodotto" non c'era visibilità sulle inserzioni già presenti su Card Trader per la carta selezionata. Era impossibile modificare un'inserzione esistente senza passare dalla griglia coda in fondo alla pagina. Inoltre, modificando un'inserzione già sincronizzata, il sistema creava una nuova inserzione su CT invece di aggiornare quella esistente, causando duplicati e dati sbagliati nei report.
+
+### Soluzione Implementata
+
+**Backend — nuovi comportamenti:**
+- `PendingListing`: aggiunto campo `IsUpdate` (bool) — quando `true`, il sync chiama `PUT /products/{id}` su CT invece di `POST /products`
+- `CreatePendingListingDto`: aggiunto `CardTraderProductId` e `IsUpdate` per supportare il caso CT-native
+- `CardTraderApiClient.UpdateProductOnCardTraderAsync`: implementato (era stub vuoto) — `PUT /products/{id}` con price, quantity, properties
+- `PendingListingsController`:
+  - Nuovo endpoint `GET /api/pending-listings/by-blueprint/{id}` — restituisce InventoryItems per blueprint con stato PendingListing associato (4 stati: `synced`, `pending-edit`, `ct-native`, `pending-new`)
+  - `SyncPendingListings`: distingue CREATE vs UPDATE; dopo UPDATE riuscito aggiorna anche l'`InventoryItem` locale (fix pannello che mostrava valori obsoleti)
+  - `UpdatePendingListing`: se la listing era già sincronizzata (`IsSynced=true`), la rimette in coda con `IsUpdate=true` invece di bloccare con 400
+  - `CreatePendingListing`: in modalità `IsUpdate=true` salta il check duplicati e salva il `CardTraderProductId`
+- Migrazione EF: `20260519073801_AddIsUpdateToPendingListings`
+
+**Frontend — nuova UX:**
+- Layout "Nuovo Prodotto" a 3 colonne: immagine | form | pannello "Le mie inserzioni"
+- Pannello destro mostra le inserzioni correnti per la carta selezionata (si aggiorna anche con le frecce di navigazione)
+- Pulsante "Carica nel form" per ogni inserzione — gestisce 3 casi:
+  1. **PendingListing non sincronizzata** → modifica il record esistente
+  2. **PendingListing già sincronizzata** → re-accoda con `IsUpdate=true` (il sync aggiornerà CT)
+  3. **CT-native** (solo in InventoryItems, mai gestita da noi) → crea nuovo PendingListing con `IsUpdate=true` e `CardTraderProductId` preimpostato
+- Banner contestuale nel form che indica la modalità di editing attiva
+- Label tasto "Salva" che cambia in base al contesto (Aggiungi / Aggiorna / Aggiungi aggiornamento)
+
+### Note Tecniche
+- `InventoryItem` viene aggiornato subito dopo un UPDATE sync riuscito — non bisogna attendere la sync notturna per vedere i valori corretti nel pannello
+- Le inserzioni "Solo CT" (`ct-native`) sono quelle presenti in `InventoryItems` ma senza corrispondente `PendingListing` — create direttamente su CT, mai passate dal nostro software
+- La distinzione CREATE/UPDATE in `SyncPendingListings` si basa su `IsUpdate && CardTraderProductId != null`
+
+---
+
+## [2026-05-19] Fix Qtà/Valore Rimanente — report Redditività per Tag
+
+### Problema
+Le colonne "Qtà Rimanente" e "Valore Rimanente €" nel report Redditività per Tag (entrambi i livelli: per Tag e per Espansione) erano sempre a zero. Analogamente, nella griglia Inventario gli InventoryItem non mostravano il Tag anche se la PendingListing corrispondente ce l'aveva.
+
+### Causa Radice
+Le query in `ReportingController` filtravano su `InventoryItem.Tag == X`, ma quel campo è quasi sempre NULL perché:
+- L'`InventoryItem` viene creato da `SyncProductsAsync` (sync da Card Trader), che propaga il Tag da `PendingListing` via `CardTraderProductId` **solo** se il product arriva nel batch di sync.
+- Prodotti già sincronizzati prima dell'introduzione del sistema di Tag, o che non rientravano nell'ultimo batch di sync, rimanevano con `Tag = null`.
+- La source of truth del Tag è `PendingListing.Tag`, non `InventoryItem.Tag`.
+
+### Soluzione Implementata
+
+**`ReportingController`** — due query riscritte:
+- `rimanentePerTag`: join `PendingListings → InventoryItems` via `CardTraderProductId` invece di `WHERE InventoryItem.Tag = X`
+- `rimanentePerExpansion`: step 1 recupera i `CardTraderProductId` dalla PendingListing con il Tag; step 2 join LINQ `InventoryItems → Blueprints → Expansions` su quell'insieme di ID
+
+**`CardTraderInventoryController`** — aggiunto endpoint `POST /api/cardtrader/inventory/backfill-tags`:
+- Copia `PendingListing.Tag` su `InventoryItem.Tag` per tutti gli item dove `CardTraderProductId` corrisponde
+- Solo per item con `Tag == null` (non sovrascrive tag impostati manualmente)
+- Da chiamare una volta per allineare gli item storici (fix griglia Inventario)
+
+### Note Tecniche
+- Il fix del report non richiede backfill: la query legge sempre la source of truth (PendingListings) a runtime
+- Il backfill è necessario solo per mostrare il Tag nella griglia Inventario (usa `InventoryItem.Tag` per display)
+- `SyncProductsAsync` già fa la propagazione Tag per i nuovi item, il problema era solo per i pre-esistenti
 
 ---
 
