@@ -11,15 +11,18 @@ public class CardTraderInventoryController : ControllerBase
 {
     private readonly IInventoryItemRepository _inventoryItemRepository;
     private readonly ICardTraderApiService _cardTraderApiService;
+    private readonly IApplicationDbContext _context;
     private readonly ILogger<CardTraderInventoryController> _logger;
 
     public CardTraderInventoryController(
         IInventoryItemRepository inventoryItemRepository,
         ICardTraderApiService cardTraderApiService,
+        IApplicationDbContext context,
         ILogger<CardTraderInventoryController> logger)
     {
         _inventoryItemRepository = inventoryItemRepository;
         _cardTraderApiService = cardTraderApiService;
+        _context = context;
         _logger = logger;
     }
 
@@ -399,6 +402,67 @@ public class CardTraderInventoryController : ControllerBase
             _logger.LogError(ex, "Error getting marketplace stats for blueprint {BlueprintId}", blueprintId);
             return StatusCode(500, "Error getting marketplace stats");
         }
+    }
+
+    /// <summary>
+    /// Backfill del campo Tag su InventoryItems: per ogni item con CardTraderProductId,
+    /// cerca il Tag nella PendingListing corrispondente e lo copia sull'InventoryItem.
+    /// Da eseguire una tantum per allineare gli item creati prima del sistema di Tag.
+    /// </summary>
+    [HttpPost("backfill-tags")]
+    public async Task<ActionResult<Models.ApiResponse<object>>> BackfillInventoryItemTags(CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Starting backfill of Tag on InventoryItems");
+
+        var dbContext = _context as Microsoft.EntityFrameworkCore.DbContext;
+
+        // Tag per CardTraderProductId da PendingListings (più recente in caso di duplicati)
+        var tagByProductId = await dbContext!.Set<PendingListing>()
+            .AsNoTracking()
+            .Where(pl => pl.Tag != null && pl.CardTraderProductId != null)
+            .GroupBy(pl => pl.CardTraderProductId!.Value)
+            .Select(g => new
+            {
+                CardTraderProductId = g.Key,
+                Tag = g.OrderByDescending(pl => pl.CreatedAt).First().Tag!
+            })
+            .ToDictionaryAsync(x => x.CardTraderProductId, x => x.Tag, cancellationToken);
+
+        if (!tagByProductId.Any())
+        {
+            return Ok(Models.ApiResponse<object>.SuccessResult(
+                new { Updated = 0, Message = "Nessuna PendingListing con Tag trovata." }));
+        }
+
+        var productIds = tagByProductId.Keys.ToList();
+
+        var itemsToUpdate = await _context.InventoryItems
+            .Where(ii => ii.CardTraderProductId != null
+                         && productIds.Contains(ii.CardTraderProductId!.Value)
+                         && ii.Tag == null)
+            .ToListAsync(cancellationToken);
+
+        int updated = 0;
+        foreach (var item in itemsToUpdate)
+        {
+            if (tagByProductId.TryGetValue(item.CardTraderProductId!.Value, out var tag))
+            {
+                item.Tag = tag;
+                updated++;
+            }
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Backfill Tag InventoryItems completato: {Updated}/{Total} aggiornati",
+            updated, itemsToUpdate.Count);
+
+        return Ok(Models.ApiResponse<object>.SuccessResult(new
+        {
+            Updated = updated,
+            TotalWithoutTag = itemsToUpdate.Count,
+            Message = $"Backfill completato: {updated} InventoryItem aggiornati."
+        }));
     }
 
     private string? GetStringFromHash(Dictionary<string, object> hash, string key)

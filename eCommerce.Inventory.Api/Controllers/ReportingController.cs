@@ -716,16 +716,24 @@ public class ReportingController : ControllerBase
                 .Select(g => new { Tag = g.Key, TotaleAcquistato = g.Sum(pl => pl.Quantity * pl.PurchasePrice) })
                 .ToDictionaryAsync(x => x.Tag, x => x.TotaleAcquistato);
 
-            // Rimanente in inventario per tag
-            var rimanentePerTag = await _context.InventoryItems
+            // Rimanente in inventario per tag: PendingListings è la source of truth del Tag;
+            // InventoryItem.Tag spesso è NULL perché viene popolato solo al momento della sync prodotti.
+            // Join via CardTraderProductId garantisce il collegamento corretto.
+            var rimanentePerTag = await _context.PendingListings
                 .AsNoTracking()
-                .Where(ii => ii.Tag != null && tags.Contains(ii.Tag))
-                .GroupBy(ii => ii.Tag!)
+                .Where(pl => pl.Tag != null && tags.Contains(pl.Tag!) && pl.CardTraderProductId != null)
+                .Join(
+                    _context.InventoryItems.AsNoTracking().Where(ii => ii.CardTraderProductId != null),
+                    pl => pl.CardTraderProductId,
+                    ii => ii.CardTraderProductId,
+                    (pl, ii) => new { pl.Tag, ii.Quantity, ii.ListingPrice }
+                )
+                .GroupBy(x => x.Tag!)
                 .Select(g => new
                 {
                     Tag = g.Key,
-                    QtaRimanente = g.Sum(ii => ii.Quantity),
-                    ValoreRimanente = g.Sum(ii => ii.Quantity * ii.ListingPrice)
+                    QtaRimanente = g.Sum(x => x.Quantity),
+                    ValoreRimanente = g.Sum(x => x.Quantity * x.ListingPrice)
                 })
                 .ToDictionaryAsync(x => x.Tag, x => new { x.QtaRimanente, x.ValoreRimanente });
 
@@ -802,18 +810,28 @@ public class ReportingController : ControllerBase
                 .Select(g => new { ExpansionName = g.Key, TotaleAcquistato = g.Sum(pl => pl.Quantity * pl.PurchasePrice) })
                 .ToDictionaryAsync(x => x.ExpansionName, x => x.TotaleAcquistato);
 
-            // Rimanente in inventario per espansione
-            var rimanentePerExpansion = await _context.InventoryItems
+            // Rimanente per espansione: PendingListings → InventoryItems via CardTraderProductId,
+            // poi join Blueprints → Expansions per il nome dell'espansione.
+            var taggedProductIds = await _context.PendingListings
                 .AsNoTracking()
-                .Where(ii => ii.Tag == tag && ii.Blueprint != null && ii.Blueprint.Expansion != null)
-                .GroupBy(ii => ii.Blueprint!.Expansion!.Name)
-                .Select(g => new
+                .Where(pl => pl.Tag == tag && pl.CardTraderProductId != null)
+                .Select(pl => pl.CardTraderProductId!.Value)
+                .Distinct()
+                .ToListAsync();
+
+            var rimanentePerExpansion = await (
+                from ii in _context.InventoryItems.AsNoTracking()
+                join bp in _context.Blueprints.AsNoTracking() on ii.BlueprintId equals bp.Id
+                join ex in _context.Expansions.AsNoTracking() on bp.ExpansionId equals ex.Id
+                where ii.CardTraderProductId != null && taggedProductIds.Contains(ii.CardTraderProductId!.Value)
+                group new { ex.Name, ii.Quantity, ii.ListingPrice } by ex.Name into g
+                select new
                 {
                     ExpansionName = g.Key,
-                    QtaRimanente = g.Sum(ii => ii.Quantity),
-                    ValoreRimanente = g.Sum(ii => ii.Quantity * ii.ListingPrice)
-                })
-                .ToDictionaryAsync(x => x.ExpansionName, x => new { x.QtaRimanente, x.ValoreRimanente });
+                    QtaRimanente = g.Sum(x => x.Quantity),
+                    ValoreRimanente = g.Sum(x => x.Quantity * x.ListingPrice)
+                }
+            ).ToDictionaryAsync(x => x.ExpansionName, x => new { x.QtaRimanente, x.ValoreRimanente });
 
             var result = orderItems
                 .GroupBy(oi => oi.Blueprint?.Expansion?.Name ?? oi.ExpansionName ?? "Unknown")
