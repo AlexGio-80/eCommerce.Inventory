@@ -31,6 +31,10 @@ public class CreatePendingListingDto
 
     public decimal PurchasePrice { get; set; }
 
+    // Update-mode: set when re-editing a synced listing or a CT-native inventory item
+    public int? CardTraderProductId { get; set; }
+    public bool IsUpdate { get; set; } = false;
+
     // Optional AI Grading data
     public decimal? GradingScore { get; set; }
     public string? GradingConditionCode { get; set; }
