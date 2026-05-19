@@ -1,12 +1,12 @@
 <div class="create-listing-container">
     <mat-card>
         <mat-card-header>
-            <mat-card-title>Create New Product Listing</mat-card-title>
-            <mat-card-subtitle>Add a new item to your local inventory</mat-card-subtitle>
+            <mat-card-title>Nuovo Prodotto</mat-card-title>
+            <mat-card-subtitle>Aggiungi un nuovo articolo alla coda di invio</mat-card-subtitle>
             <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
-                <span style="font-size: 14px; color: #666;">Save defaults</span>
+                <span style="font-size: 14px; color: #666;">Salva impostazioni</span>
                 <mat-slide-toggle [checked]="saveDefaults()" (change)="onToggleSaveDefaults()"
-                    matTooltip="Save condition, language, and properties as defaults for next listing" color="primary">
+                    matTooltip="Salva condizione, lingua e proprietà come impostazioni predefinite" color="primary">
                 </mat-slide-toggle>
             </div>
         </mat-card-header>
@@ -17,50 +17,50 @@
                 <app-blueprint-selector (selectionChange)="onBlueprintSelected($event)"></app-blueprint-selector>
             </div>
 
-            <!-- Main Content Area (2 Columns) -->
+            <!-- Main Content Area (3 Columns: image | form | my listings) -->
             <div class="listing-content" *ngIf="selectedBlueprint()"
                 style="display: flex; gap: 24px; margin-top: 16px;">
 
-                <!-- Left Column: Image -->
-                <div class="image-column" style="flex: 0 0 300px;">
+                <!-- Left Column: Image + card info -->
+                <div class="image-column" style="flex: 0 0 200px;">
                     <div class="image-container" style="position: sticky; top: 24px;">
                         <img [src]="selectedBlueprint()?.imageUrl || 'assets/placeholder-card.png'" alt="Card Image"
                             style="width: 100%; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
 
-                        <div class="blueprint-details" style="margin-top: 16px; text-align: center;">
-                            <h3 style="margin: 0 0 4px 0;">{{ selectedBlueprint()?.name }}</h3>
-                            <p style="margin: 0; color: #666;">{{ selectedBlueprint()?.expansion?.name }}</p>
-                            <p style="margin: 0; color: #666; font-size: 0.9em;">{{ selectedBlueprint()?.rarity }}</p>
+                        <div class="blueprint-details" style="margin-top: 12px; text-align: center;">
+                            <h3 style="margin: 0 0 4px 0; font-size: 14px;">{{ selectedBlueprint()?.name }}</h3>
+                            <p style="margin: 0; color: #666; font-size: 12px;">{{ selectedBlueprint()?.expansion?.name }}</p>
+                            <p style="margin: 0; color: #666; font-size: 11px;">{{ selectedBlueprint()?.rarity }}</p>
 
-                            <div style="display: flex; justify-content: center; gap: 8px; margin-top: 8px;">
-                                <button mat-icon-button (click)="loadPreviousBlueprint()" matTooltip="Previous Card">
+                            <div style="display: flex; justify-content: center; gap: 4px; margin-top: 8px;">
+                                <button mat-icon-button (click)="loadPreviousBlueprint()" matTooltip="Carta precedente">
                                     <mat-icon>chevron_left</mat-icon>
                                 </button>
-                                <button mat-icon-button (click)="loadNextBlueprint()" matTooltip="Next Card">
+                                <button mat-icon-button (click)="loadNextBlueprint()" matTooltip="Carta successiva">
                                     <mat-icon>chevron_right</mat-icon>
                                 </button>
                             </div>
 
-                            <button mat-button color="warn" (click)="onResetForm()" style="margin-top: 8px;"
-                                *ngIf="!editingId()">
-                                Change Card
+                            <button mat-button color="warn" (click)="onResetForm()" style="margin-top: 4px; font-size: 12px;"
+                                *ngIf="!editingId() && !ctNativeProductId">
+                                Cambia carta
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Right Column: Form -->
+                <!-- Center Column: Form -->
                 <div class="form-column" style="flex: 1;">
                     <form [formGroup]="listingForm" (ngSubmit)="onSubmit()">
 
                         <div class="form-row">
                             <mat-form-field appearance="outline" style="flex: 2;">
-                                <mat-label>Condition</mat-label>
+                                <mat-label>Condizione</mat-label>
                                 <mat-select formControlName="condition">
                                     <mat-option *ngFor="let c of conditions" [value]="c">{{c}}</mat-option>
                                 </mat-select>
                                 <mat-error *ngIf="listingForm.get('condition')?.hasError('required')">
-                                    Condition is required
+                                    La condizione è obbligatoria
                                 </mat-error>
                             </mat-form-field>
 
@@ -71,12 +71,12 @@
                             </button>
 
                             <mat-form-field appearance="outline" style="flex: 2;">
-                                <mat-label>Language</mat-label>
+                                <mat-label>Lingua</mat-label>
                                 <mat-select formControlName="language">
                                     <mat-option *ngFor="let l of languages" [value]="l">{{l}}</mat-option>
                                 </mat-select>
                                 <mat-error *ngIf="listingForm.get('language')?.hasError('required')">
-                                    Language is required
+                                    La lingua è obbligatoria
                                 </mat-error>
                             </mat-form-field>
                         </div>
@@ -86,15 +86,13 @@
                             style="background: #f5f5f5; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
                             <div
                                 style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                                <h4 style="margin: 0;">📸 Valutazione AI Condizione</h4>
+                                <h4 style="margin: 0;">Valutazione AI Condizione</h4>
                                 <span *ngIf="gradingResult()" class="condition-badge" [ngClass]="getConditionClass()"
                                     style="padding: 4px 12px; border-radius: 4px; color: white; font-weight: bold;">
-                                    {{gradingResult()!.conditionCode}} - {{gradingResult()!.overallGrade |
-                                    number:'1.1-1'}}
+                                    {{gradingResult()!.conditionCode}} - {{gradingResult()!.overallGrade | number:'1.1-1'}}
                                 </span>
                             </div>
 
-                            <!-- Photo Gallery -->
                             <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
                                 <div *ngFor="let img of gradingImages(); let i = index"
                                     style="position: relative; width: 80px; height: 110px; border-radius: 4px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
@@ -109,7 +107,6 @@
                                     </button>
                                 </div>
 
-                                <!-- Add Photo Button -->
                                 <div style="width: 80px; height: 110px; border: 2px dashed #999; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer;"
                                     (click)="gradingFileInput.click()">
                                     <mat-icon style="color: #666;">add_photo_alternate</mat-icon>
@@ -119,7 +116,6 @@
                                     (change)="onGradingFilesSelected($event)" accept="image/*" multiple>
                             </div>
 
-                            <!-- Grading Actions -->
                             <div style="display: flex; gap: 8px; align-items: center;">
                                 <button mat-raised-button color="accent" type="button" (click)="analyzeGrading()"
                                     [disabled]="gradingImages().length === 0 || isGrading()">
@@ -133,60 +129,58 @@
                                     Ricomincia
                                 </button>
 
-                                <!-- Result Display -->
                                 <div *ngIf="gradingResult()" style="margin-left: auto; font-size: 12px; color: #666;">
-                                    Confidenza: {{gradingResult()!.confidence | percent}} | Foto:
-                                    {{gradingResult()!.imagesAnalyzed}}
+                                    Confidenza: {{gradingResult()!.confidence | percent}} | Foto: {{gradingResult()!.imagesAnalyzed}}
                                 </div>
                             </div>
                         </div>
 
                         <div class="form-row">
                             <mat-form-field appearance="outline">
-                                <mat-label>Quantity</mat-label>
+                                <mat-label>Quantità</mat-label>
                                 <input matInput type="number" formControlName="quantity" min="1">
                                 <mat-error *ngIf="listingForm.get('quantity')?.hasError('min')">
-                                    Quantity must be at least 1
+                                    Quantità minima: 1
                                 </mat-error>
                             </mat-form-field>
 
                             <mat-form-field appearance="outline">
-                                <mat-label>Selling Price (€)</mat-label>
+                                <mat-label>Prezzo di vendita (€)</mat-label>
                                 <input matInput type="number" formControlName="sellingPrice" min="0" step="0.01">
                                 <span matPrefix>€&nbsp;</span>
-                                <mat-hint>Price for Card Trader listing</mat-hint>
+                                <mat-hint>Prezzo per l'inserzione su Card Trader</mat-hint>
                                 <mat-error *ngIf="listingForm.get('sellingPrice')?.hasError('required')">
-                                    Selling price is required
+                                    Il prezzo di vendita è obbligatorio
                                 </mat-error>
                             </mat-form-field>
                         </div>
 
                         <div class="form-row">
                             <mat-form-field appearance="outline">
-                                <mat-label>Purchase Price (€)</mat-label>
+                                <mat-label>Prezzo di acquisto (€)</mat-label>
                                 <input matInput type="number" formControlName="purchasePrice" min="0" step="0.01">
                                 <span matPrefix>€&nbsp;</span>
-                                <mat-hint>Cost of goods sold (internal only)</mat-hint>
+                                <mat-hint>Costo di acquisto (solo interno)</mat-hint>
                             </mat-form-field>
 
                             <mat-form-field appearance="outline">
-                                <mat-label>Location</mat-label>
-                                <input matInput formControlName="location" placeholder="e.g. Box A, Binder 1">
+                                <mat-label>Posizione</mat-label>
+                                <input matInput formControlName="location" placeholder="es. Scatola A, Raccoglitore 1">
                             </mat-form-field>
                         </div>
 
                         <div class="form-row">
                             <mat-form-field appearance="outline">
                                 <mat-label>Tag</mat-label>
-                                <input matInput formControlName="tag" placeholder="e.g. #old, #reserved">
-                                <mat-hint>Custom tag for organization</mat-hint>
+                                <input matInput formControlName="tag" placeholder="es. #old, #reserved">
+                                <mat-hint>Tag personalizzato per organizzazione</mat-hint>
                             </mat-form-field>
                         </div>
 
                         <!-- Price Suggestions -->
                         <div *ngIf="marketplaceStats()" style="margin-bottom: 16px;">
                             <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                                <span style="font-size: 14px; color: #666;">Suggested prices:</span>
+                                <span style="font-size: 14px; color: #666;">Prezzi suggeriti:</span>
                                 <mat-chip-listbox>
                                     <mat-chip-option (click)="applyPrice(marketplaceStats()!.minPrice)"
                                         style="background-color: #e3f2fd;">
@@ -194,24 +188,34 @@
                                     </mat-chip-option>
                                     <mat-chip-option (click)="applyPrice(marketplaceStats()!.averagePrice)"
                                         style="background-color: #fff3e0;">
-                                        Avg: €{{ marketplaceStats()!.averagePrice.toFixed(2) }}
+                                        Media: €{{ marketplaceStats()!.averagePrice.toFixed(2) }}
                                     </mat-chip-option>
                                     <mat-chip-option (click)="applyPrice(marketplaceStats()!.maxPrice)"
                                         style="background-color: #ffebee;">
                                         Max: €{{ marketplaceStats()!.maxPrice.toFixed(2) }}
                                     </mat-chip-option>
                                 </mat-chip-listbox>
-                                <span style="font-size: 12px; color: #999;">({{ marketplaceStats()!.totalListings }}
-                                    listings)</span>
+                                <span style="font-size: 12px; color: #999;">({{ marketplaceStats()!.totalListings }} inserzioni)</span>
                             </div>
                         </div>
                         <div *ngIf="isLoadingStats()" style="margin-bottom: 16px; color: #666; font-size: 14px;">
-                            Loading price suggestions...
+                            Caricamento prezzi...
                         </div>
 
                         <div class="checkbox-row">
                             <mat-checkbox formControlName="isFoil">Foil</mat-checkbox>
-                            <mat-checkbox formControlName="isSigned">Signed</mat-checkbox>
+                            <mat-checkbox formControlName="isSigned">Firmata</mat-checkbox>
+                        </div>
+
+                        <!-- Edit mode banner -->
+                        <div *ngIf="editingId() || ctNativeProductId"
+                            style="padding: 8px 12px; background: #fff3e0; border-radius: 4px; margin-bottom: 12px; font-size: 13px; color: #e65100; display: flex; align-items: center; gap: 8px;">
+                            <mat-icon style="font-size: 16px; height: 16px; width: 16px;">edit</mat-icon>
+                            <span *ngIf="editingId()">Stai modificando un'inserzione esistente — verrà aggiornata in coda e poi sincronizzata su CT.</span>
+                            <span *ngIf="!editingId() && ctNativeProductId">Stai modificando un'inserzione Solo CT — verrà aggiunta alla coda come aggiornamento.</span>
+                            <button mat-icon-button type="button" (click)="onCancelEdit()" style="margin-left: auto;" matTooltip="Annulla modifica">
+                                <mat-icon>close</mat-icon>
+                            </button>
                         </div>
 
                         <div class="actions" style="display: flex; gap: 16px;">
@@ -219,38 +223,98 @@
                                 [disabled]="listingForm.invalid || isSubmitting()" style="flex: 1;">
                                 <mat-spinner *ngIf="isSubmitting()" diameter="20"
                                     style="display:inline-block; margin-right: 8px"></mat-spinner>
-                                {{ editingId() ? 'Update Queue' : (isSubmitting() ? 'Adding...' : 'Add to Queue') }}
-                            </button>
-
-                            <button mat-stroked-button color="warn" type="button" *ngIf="editingId()"
-                                (click)="onCancelEdit()">
-                                Cancel Edit
+                                <ng-container *ngIf="editingId()">Aggiorna in coda</ng-container>
+                                <ng-container *ngIf="!editingId() && ctNativeProductId">Aggiungi aggiornamento alla coda</ng-container>
+                                <ng-container *ngIf="!editingId() && !ctNativeProductId">
+                                    {{ isSubmitting() ? 'Aggiunta...' : 'Aggiungi alla coda' }}
+                                </ng-container>
                             </button>
                         </div>
 
                     </form>
                 </div>
+
+                <!-- Right Column: Le mie inserzioni per questa carta -->
+                <div class="listings-column" style="flex: 0 0 250px;">
+                    <div style="position: sticky; top: 24px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                            <h4 style="margin: 0; font-size: 14px; font-weight: 600; color: #333;">Le mie inserzioni</h4>
+                            <mat-spinner *ngIf="isLoadingBlueprintListings()" diameter="16"></mat-spinner>
+                        </div>
+
+                        <!-- Empty state -->
+                        <div *ngIf="!isLoadingBlueprintListings() && blueprintListings().length === 0"
+                            style="color: #999; font-size: 13px; text-align: center; padding: 16px 0;">
+                            Nessuna inserzione presente per questa carta
+                        </div>
+
+                        <!-- Listing cards -->
+                        <div *ngFor="let item of blueprintListings()">
+                            <div class="listing-card" [class.is-editing]="isListingBeingEdited(item)">
+                                <div class="listing-card-row">
+                                    <div class="listing-card-info">
+                                        <div class="listing-price">€{{ item.sellingPrice | number:'1.2-2' }}
+                                            <span class="listing-qty" style="font-size: 12px; font-weight: 400;"> · {{ item.quantity }}x</span>
+                                        </div>
+                                        <div class="listing-details">
+                                            {{ item.condition }} · {{ item.language }}
+                                            <span *ngIf="item.isFoil"> · Foil</span>
+                                            <span *ngIf="item.isSigned"> · Firmata</span>
+                                        </div>
+                                        <div class="listing-details" *ngIf="item.tag">
+                                            Tag: {{ item.tag }}
+                                        </div>
+                                    </div>
+                                    <button mat-icon-button style="width: 28px; height: 28px; line-height: 28px; flex-shrink: 0;"
+                                        (click)="onLoadExistingListing(item)"
+                                        [color]="isListingBeingEdited(item) ? 'warn' : 'primary'"
+                                        [matTooltip]="isListingBeingEdited(item) ? 'In modifica' : 'Carica nel form'"
+                                        [disabled]="isListingBeingEdited(item)">
+                                        <mat-icon style="font-size: 16px; height: 16px; width: 16px;">
+                                            {{ isListingBeingEdited(item) ? 'edit' : 'file_upload' }}
+                                        </mat-icon>
+                                    </button>
+                                </div>
+                                <div style="margin-top: 6px;">
+                                    <span class="listing-status-badge" [ngClass]="getStatusBadgeClass(item.status)">
+                                        {{ getStatusLabel(item.status) }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Legend -->
+                        <div *ngIf="blueprintListings().length > 0"
+                            style="margin-top: 12px; font-size: 11px; color: #999; line-height: 1.8;">
+                            <div><span class="listing-status-badge badge-synced">Sincronizzato</span> Su CT, nessuna modifica in attesa</div>
+                            <div style="margin-top: 4px;"><span class="listing-status-badge badge-pending-edit">Modifica in coda</span> Aggiornamento in attesa di sync</div>
+                            <div style="margin-top: 4px;"><span class="listing-status-badge badge-ct-native">Solo CT</span> Mai gestito da qui</div>
+                            <div style="margin-top: 4px;"><span class="listing-status-badge badge-pending-new">In coda</span> Non ancora su CT</div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </mat-card-content>
     </mat-card>
 
-    <!-- Pending Listings Grid -->
+    <!-- Pending Listings Grid (global queue) -->
     <mat-card style="margin-top: 24px;">
         <mat-card-header>
-            <mat-card-title>Pending Listings ({{ (pendingListings() || []).length }})</mat-card-title>
+            <mat-card-title>Coda inserzioni ({{ (pendingListings() || []).length }})</mat-card-title>
             <div style="margin-left: auto; display: flex; gap: 16px; align-items: center;">
                 <mat-button-toggle-group [value]="filterStatus()" (change)="onFilterChange($event.value)">
-                    <mat-button-toggle value="unsynced">To Send</mat-button-toggle>
-                    <mat-button-toggle value="error">Errors</mat-button-toggle>
-                    <mat-button-toggle value="synced">Synced</mat-button-toggle>
-                    <mat-button-toggle value="all">All</mat-button-toggle>
+                    <mat-button-toggle value="unsynced">Da inviare</mat-button-toggle>
+                    <mat-button-toggle value="error">Errori</mat-button-toggle>
+                    <mat-button-toggle value="synced">Inviati</mat-button-toggle>
+                    <mat-button-toggle value="all">Tutti</mat-button-toggle>
                 </mat-button-toggle-group>
 
                 <button mat-raised-button color="accent" (click)="onSyncAll()"
                     [disabled]="isSyncing() || (pendingListings() || []).length === 0">
                     <mat-spinner *ngIf="isSyncing()" diameter="20"
                         style="display:inline-block; margin-right: 8px"></mat-spinner>
-                    Sync All to Card Trader
+                    Sincronizza tutto su Card Trader
                 </button>
             </div>
         </mat-card-header>
@@ -258,7 +322,7 @@
             <table mat-table [dataSource]="pendingListings()" class="full-width">
                 <!-- Image Column -->
                 <ng-container matColumnDef="image">
-                    <th mat-header-cell *matHeaderCellDef> Card </th>
+                    <th mat-header-cell *matHeaderCellDef> Carta </th>
                     <td mat-cell *matCellDef="let element">
                         <img [src]="element.blueprint?.imageUrl || 'assets/placeholder-card.png'"
                             style="width: 30px; height: 42px; object-fit: cover; border-radius: 2px;">
@@ -267,54 +331,53 @@
 
                 <!-- Name Column -->
                 <ng-container matColumnDef="name">
-                    <th mat-header-cell *matHeaderCellDef> Name </th>
+                    <th mat-header-cell *matHeaderCellDef> Nome </th>
                     <td mat-cell *matCellDef="let element">
                         {{ element.blueprint?.name }}
                         <span *ngIf="element.isFoil" style="color: #ffd700; font-weight: bold;">(Foil)</span>
-                        <span *ngIf="element.isSigned" style="color: #ff4081; font-weight: bold;">(Signed)</span>
+                        <span *ngIf="element.isSigned" style="color: #ff4081; font-weight: bold;">(Firmata)</span>
+                        <span *ngIf="element.isUpdate" style="color: #e65100; font-size: 11px; margin-left: 4px;">[UPDATE]</span>
                     </td>
                 </ng-container>
 
                 <!-- Condition Column -->
                 <ng-container matColumnDef="condition">
-                    <th mat-header-cell *matHeaderCellDef> Cond/Lang </th>
+                    <th mat-header-cell *matHeaderCellDef> Cond/Lingua </th>
                     <td mat-cell *matCellDef="let element"> {{ element.condition }} / {{ element.language }} </td>
                 </ng-container>
 
                 <!-- Quantity Column -->
                 <ng-container matColumnDef="quantity">
-                    <th mat-header-cell *matHeaderCellDef> Qty </th>
+                    <th mat-header-cell *matHeaderCellDef> Qtà </th>
                     <td mat-cell *matCellDef="let element"> {{ element.quantity }} </td>
                 </ng-container>
 
                 <!-- Price Column -->
                 <ng-container matColumnDef="price">
-                    <th mat-header-cell *matHeaderCellDef> Price </th>
+                    <th mat-header-cell *matHeaderCellDef> Prezzo </th>
                     <td mat-cell *matCellDef="let element"> € {{ element.sellingPrice | number:'1.2-2' }} </td>
                 </ng-container>
 
                 <!-- Status Column -->
                 <ng-container matColumnDef="status">
-                    <th mat-header-cell *matHeaderCellDef> Status </th>
+                    <th mat-header-cell *matHeaderCellDef> Stato </th>
                     <td mat-cell *matCellDef="let element">
-                        <mat-icon *ngIf="element.isSynced" color="primary" matTooltip="Synced">check_circle</mat-icon>
-                        <mat-icon *ngIf="!element.isSynced && !element.syncError" color="accent"
-                            matTooltip="Pending">hourglass_empty</mat-icon>
-                        <mat-icon *ngIf="element.syncError" color="warn"
-                            [matTooltip]="element.syncError">error</mat-icon>
+                        <mat-icon *ngIf="element.isSynced" color="primary" matTooltip="Sincronizzato">check_circle</mat-icon>
+                        <mat-icon *ngIf="!element.isSynced && !element.syncError" color="accent" matTooltip="In attesa">hourglass_empty</mat-icon>
+                        <mat-icon *ngIf="element.syncError" color="warn" [matTooltip]="element.syncError">error</mat-icon>
                     </td>
                 </ng-container>
 
                 <!-- Actions Column -->
                 <ng-container matColumnDef="actions">
-                    <th mat-header-cell *matHeaderCellDef> Actions </th>
+                    <th mat-header-cell *matHeaderCellDef> Azioni </th>
                     <td mat-cell *matCellDef="let element">
                         <button mat-icon-button color="primary" (click)="onEditPending(element)"
-                            [disabled]="element.isSynced" matTooltip="Edit">
+                            matTooltip="Modifica">
                             <mat-icon>edit</mat-icon>
                         </button>
                         <button mat-icon-button color="warn" (click)="onDeletePending(element.id)"
-                            [disabled]="element.isSynced" matTooltip="Delete">
+                            [disabled]="element.isSynced" matTooltip="Elimina">
                             <mat-icon>delete</mat-icon>
                         </button>
                     </td>
@@ -325,4 +388,9 @@
             </table>
         </mat-card-content>
     </mat-card>
+
+    <!-- Card image preview on hover -->
+    <div class="image-preview-panel" *ngIf="previewImage()">
+        <img [src]="previewImage()!" alt="Preview">
+    </div>
 </div>

@@ -16,11 +16,12 @@ import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatChipsModule } from '@angular/material/chips';
+import { MatDividerModule } from '@angular/material/divider';
 import { CardTraderApiService } from '../../../../core/services/cardtrader-api.service';
 import { Router } from '@angular/router';
 import { BlueprintSelectorComponent } from '../../../../shared/components/blueprint-selector/blueprint-selector.component';
 import { ProductsService } from '../../services/products.service';
-import { PendingListingsService, PendingListing, CreatePendingListingDto } from '../../services/pending-listings.service';
+import { PendingListingsService, PendingListing, CreatePendingListingDto, BlueprintListingInfo } from '../../services/pending-listings.service';
 import { Blueprint } from '../../../../core/models';
 import { GradingService, GradingResult } from '../../../../core/services/grading.service';
 
@@ -44,13 +45,14 @@ import { GradingService, GradingResult } from '../../../../core/services/grading
     MatIconModule,
     MatButtonToggleModule,
     MatChipsModule,
+    MatDividerModule,
     BlueprintSelectorComponent
   ],
   templateUrl: './create-listing.component.html',
   styles: [`
     .create-listing-container {
       padding: 24px;
-      max-width: 1200px; /* Increased max-width for side-by-side layout */
+      max-width: 1400px;
       margin: 0 auto;
     }
 
@@ -77,32 +79,6 @@ import { GradingService, GradingResult } from '../../../../core/services/grading
       display: flex;
       gap: 24px;
       margin: 16px 0;
-    }
-
-    .selected-blueprint-info {
-      margin-bottom: 24px;
-      padding: 16px;
-      background-color: #f5f5f5;
-      border-radius: 4px;
-      display: flex;
-      gap: 16px;
-      align-items: center;
-    }
-
-    .blueprint-image {
-      width: 60px;
-      height: 85px;
-      object-fit: cover;
-      border-radius: 4px;
-    }
-
-    .blueprint-details h3 {
-      margin: 0 0 4px 0;
-    }
-
-    .blueprint-details p {
-      margin: 0;
-      color: #666;
     }
 
     /* Image Preview Panel */
@@ -143,6 +119,64 @@ import { GradingService, GradingResult } from '../../../../core/services/grading
     .condition-mp { background-color: #ff9800 !important; }
     .condition-pl { background-color: #ff5722 !important; }
     .condition-po { background-color: #f44336 !important; }
+
+    /* Blueprint listings panel */
+    .listing-card {
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 10px 12px;
+      background: #fafafa;
+      font-size: 13px;
+      line-height: 1.5;
+      margin-bottom: 8px;
+    }
+
+    .listing-card.is-editing {
+      border-color: #1976d2;
+      background: #e3f2fd;
+    }
+
+    .listing-card-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .listing-card-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .listing-price {
+      font-weight: 600;
+      font-size: 14px;
+      color: #1976d2;
+    }
+
+    .listing-qty {
+      color: #555;
+    }
+
+    .listing-details {
+      color: #777;
+      font-size: 12px;
+    }
+
+    .listing-status-badge {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .badge-synced { background: #e8f5e9; color: #2e7d32; }
+    .badge-pending-edit { background: #fff3e0; color: #e65100; }
+    .badge-ct-native { background: #f3e5f5; color: #6a1b9a; }
+    .badge-pending-new { background: #e3f2fd; color: #1565c0; }
   `]
 })
 export class CreateListingComponent {
@@ -152,11 +186,19 @@ export class CreateListingComponent {
   saveDefaults = signal(false);
   editingId = signal<number | null>(null);
 
-  // Pending Listings
+  // When loading a CT-native item (no PendingListing record), store its CT product ID
+  // so the new PendingListing is created with IsUpdate=true
+  ctNativeProductId: number | null = null;
+
+  // Pending Listings (global queue, bottom panel)
   pendingListings = signal<PendingListing[]>([]);
   displayedColumns: string[] = ['image', 'name', 'condition', 'quantity', 'price', 'status', 'actions'];
   filterStatus = signal<'all' | 'synced' | 'unsynced' | 'error'>('unsynced');
   isSyncing = signal(false);
+
+  // Blueprint-specific listings (right panel)
+  blueprintListings = signal<BlueprintListingInfo[]>([]);
+  isLoadingBlueprintListings = signal(false);
 
   private readonly STORAGE_KEY = 'listing_defaults';
   private formSubscription?: Subscription;
@@ -197,7 +239,6 @@ export class CreateListingComponent {
   ngOnInit() {
     this.loadPendingListings();
 
-    // Listen for form changes to refresh marketplace stats
     this.formSubscription = this.listingForm.valueChanges.pipe(
       debounceTime(500),
       distinctUntilChanged((prev, curr) => {
@@ -247,7 +288,6 @@ export class CreateListingComponent {
   onToggleSaveDefaults() {
     const newValue = !this.saveDefaults();
     this.saveDefaults.set(newValue);
-
     if (newValue) {
       this.saveCurrentDefaults();
     } else {
@@ -271,10 +311,74 @@ export class CreateListingComponent {
 
   onBlueprintSelected(blueprint: Blueprint) {
     this.selectedBlueprint.set(blueprint);
-    // Reset form but keep defaults if enabled
     this.resetFormState();
-    // Load marketplace stats with current filters
     this.loadMarketplaceStats();
+    this.loadBlueprintListings(blueprint.id);
+  }
+
+  loadBlueprintListings(blueprintId: number) {
+    this.isLoadingBlueprintListings.set(true);
+    this.blueprintListings.set([]);
+    this.pendingListingsService.getListingsByBlueprint(blueprintId).subscribe({
+      next: (response) => {
+        this.blueprintListings.set(response.data || []);
+        this.isLoadingBlueprintListings.set(false);
+      },
+      error: () => this.isLoadingBlueprintListings.set(false)
+    });
+  }
+
+  /**
+   * Load an existing listing into the form.
+   * - Has pendingListingId → edit that PendingListing (backend re-queues as update if synced)
+   * - No pendingListingId (ct-native) → create new PendingListing with IsUpdate=true
+   */
+  onLoadExistingListing(item: BlueprintListingInfo) {
+    this.listingForm.patchValue({
+      condition: item.condition,
+      language: item.language,
+      quantity: item.quantity,
+      sellingPrice: item.sellingPrice,
+      purchasePrice: item.purchasePrice,
+      location: item.location,
+      tag: item.tag,
+      isFoil: item.isFoil,
+      isSigned: item.isSigned
+    });
+
+    if (item.pendingListingId) {
+      this.editingId.set(item.pendingListingId);
+      this.ctNativeProductId = null;
+    } else {
+      this.editingId.set(null);
+      this.ctNativeProductId = item.cardTraderProductId ?? null;
+    }
+  }
+
+  isListingBeingEdited(item: BlueprintListingInfo): boolean {
+    if (item.pendingListingId && this.editingId() === item.pendingListingId) return true;
+    if (!item.pendingListingId && this.ctNativeProductId !== null && this.ctNativeProductId === item.cardTraderProductId) return true;
+    return false;
+  }
+
+  getStatusBadgeClass(status: string): string {
+    switch (status) {
+      case 'synced': return 'badge-synced';
+      case 'pending-edit': return 'badge-pending-edit';
+      case 'ct-native': return 'badge-ct-native';
+      case 'pending-new': return 'badge-pending-new';
+      default: return '';
+    }
+  }
+
+  getStatusLabel(status: string): string {
+    switch (status) {
+      case 'synced': return 'Sincronizzato';
+      case 'pending-edit': return 'Modifica in coda';
+      case 'ct-native': return 'Solo CT';
+      case 'pending-new': return 'In coda';
+      default: return status;
+    }
   }
 
   loadNextBlueprint(): void {
@@ -301,10 +405,7 @@ export class CreateListingComponent {
             this.snackBar.open('No next card found', 'Close', { duration: 2000 });
           }
         },
-        error: (err) => {
-          console.error('Error fetching next blueprint', err);
-          this.snackBar.open('Error fetching next card', 'Close', { duration: 2000 });
-        }
+        error: () => this.snackBar.open('Error fetching next card', 'Close', { duration: 2000 })
       });
   }
 
@@ -332,10 +433,7 @@ export class CreateListingComponent {
             this.snackBar.open('No previous card found', 'Close', { duration: 2000 });
           }
         },
-        error: (err) => {
-          console.error('Error fetching previous blueprint', err);
-          this.snackBar.open('Error fetching previous card', 'Close', { duration: 2000 });
-        }
+        error: () => this.snackBar.open('Error fetching previous card', 'Close', { duration: 2000 })
       });
   }
 
@@ -364,10 +462,15 @@ export class CreateListingComponent {
   onResetForm() {
     this.selectedBlueprint.set(null);
     this.editingId.set(null);
+    this.ctNativeProductId = null;
+    this.blueprintListings.set([]);
     this.resetFormState();
   }
 
   private resetFormState() {
+    this.editingId.set(null);
+    this.ctNativeProductId = null;
+
     if (this.saveDefaults()) {
       const defaults = this.loadDefaults();
       this.listingForm.patchValue({
@@ -397,9 +500,8 @@ export class CreateListingComponent {
   }
 
   onEditPending(item: PendingListing) {
-    if (item.isSynced) return;
-
     this.editingId.set(item.id);
+    this.ctNativeProductId = null;
     this.selectedBlueprint.set(item.blueprint || null);
 
     this.listingForm.patchValue({
@@ -417,20 +519,23 @@ export class CreateListingComponent {
 
   onCancelEdit() {
     this.editingId.set(null);
-    this.onResetForm();
+    this.ctNativeProductId = null;
+    this.resetFormState();
   }
 
   onDeletePending(id: number) {
-    if (confirm('Are you sure you want to delete this pending listing?')) {
+    if (confirm('Sei sicuro di voler eliminare questa inserzione dalla coda?')) {
       this.pendingListingsService.deletePendingListing(id).subscribe({
         next: () => {
-          this.snackBar.open('Listing removed from queue', 'Close', { duration: 3000 });
+          this.snackBar.open('Inserzione rimossa dalla coda', 'Chiudi', { duration: 3000 });
           this.loadPendingListings();
           if (this.editingId() === id) {
             this.onCancelEdit();
           }
+          const bp = this.selectedBlueprint();
+          if (bp) this.loadBlueprintListings(bp.id);
         },
-        error: () => this.snackBar.open('Failed to delete listing', 'Close', { duration: 3000 })
+        error: () => this.snackBar.open('Errore durante l\'eliminazione', 'Chiudi', { duration: 3000 })
       });
     }
   }
@@ -440,13 +545,16 @@ export class CreateListingComponent {
     this.pendingListingsService.syncPendingListings().subscribe({
       next: (result) => {
         this.isSyncing.set(false);
-        const message = `Synced: ${result.success}, Errors: ${result.errors}`;
-        this.snackBar.open(message, 'Close', { duration: 5000 });
+        const d = result.data || result;
+        const message = `Sincronizzati: ${d.success ?? d.Success}, Errori: ${d.errors ?? d.Errors}`;
+        this.snackBar.open(message, 'Chiudi', { duration: 5000 });
         this.loadPendingListings();
+        const bp = this.selectedBlueprint();
+        if (bp) this.loadBlueprintListings(bp.id);
       },
-      error: (error) => {
+      error: () => {
         this.isSyncing.set(false);
-        this.snackBar.open('Sync failed', 'Close', { duration: 5000 });
+        this.snackBar.open('Errore durante la sincronizzazione', 'Chiudi', { duration: 5000 });
       }
     });
   }
@@ -455,9 +563,7 @@ export class CreateListingComponent {
   previewImage = signal<string | null>(null);
 
   showPreview(url: string | undefined) {
-    if (url) {
-      this.previewImage.set(url);
-    }
+    if (url) this.previewImage.set(url);
   }
 
   hidePreview() {
@@ -474,7 +580,6 @@ export class CreateListingComponent {
 
     this.isLoadingStats.set(true);
 
-    // Get current form filters
     const formValue = this.listingForm.value;
     const filters = {
       condition: formValue.condition,
@@ -515,7 +620,7 @@ export class CreateListingComponent {
     const dto: CreatePendingListingDto = {
       blueprintId: this.selectedBlueprint()!.id,
       quantity: formValue.quantity,
-      price: formValue.sellingPrice, // Map sellingPrice to price
+      price: formValue.sellingPrice,
       condition: formValue.condition,
       language: formValue.language,
       isFoil: formValue.isFoil,
@@ -523,7 +628,6 @@ export class CreateListingComponent {
       location: formValue.location,
       tag: formValue.tag,
       purchasePrice: formValue.purchasePrice,
-      // Include grading data if available
       gradingScore: this.gradingResult()?.overallGrade,
       gradingConditionCode: this.gradingResult()?.conditionCode,
       gradingCentering: this.gradingResult()?.centering,
@@ -535,41 +639,63 @@ export class CreateListingComponent {
     };
 
     if (this.editingId()) {
-      // Update existing
+      // Update existing PendingListing (backend re-queues as update if it was synced)
       this.pendingListingsService.updatePendingListing(this.editingId()!, dto).subscribe({
-        next: (updated) => {
-          this.snackBar.open('Listing updated', 'Close', { duration: 3000 });
+        next: () => {
+          this.snackBar.open('Inserzione aggiornata in coda', 'Chiudi', { duration: 3000 });
           this.isSubmitting.set(false);
-          this.editingId.set(null);
           this.loadPendingListings();
+          const bp = this.selectedBlueprint();
+          if (bp) this.loadBlueprintListings(bp.id);
           this.resetFormState();
         },
         error: (err) => {
           console.error('Error updating listing', err);
-          this.snackBar.open(err.error?.message || 'Error updating listing', 'Close', { duration: 3000 });
+          this.snackBar.open(err.error?.message || 'Errore durante l\'aggiornamento', 'Chiudi', { duration: 3000 });
+          this.isSubmitting.set(false);
+        }
+      });
+    } else if (this.ctNativeProductId) {
+      // CT-native: create new PendingListing as UPDATE operation
+      dto.cardTraderProductId = this.ctNativeProductId;
+      dto.isUpdate = true;
+      this.pendingListingsService.createPendingListing(dto).subscribe({
+        next: () => {
+          this.snackBar.open('Modifica aggiunta alla coda (aggiornerà CT)', 'Chiudi', { duration: 3000 });
+          this.isSubmitting.set(false);
+          this.loadPendingListings();
+          const bp = this.selectedBlueprint();
+          if (bp) this.loadBlueprintListings(bp.id);
+          this.resetFormState();
+        },
+        error: (err) => {
+          console.error('Error creating update listing', err);
+          this.snackBar.open('Errore durante l\'aggiunta alla coda', 'Chiudi', { duration: 3000 });
           this.isSubmitting.set(false);
         }
       });
     } else {
-      // Create new
+      // New listing
       this.pendingListingsService.createPendingListing(dto).subscribe({
-        next: (item) => {
+        next: (response) => {
           this.isSubmitting.set(false);
-          this.snackBar.open('Added to queue', 'Undo', { duration: 3000 })
+          const item = response.data || response;
+          this.snackBar.open('Aggiunto alla coda', 'Annulla', { duration: 3000 })
             .onAction().subscribe(() => {
               this.onDeletePending(item.id);
             });
-
           this.loadPendingListings();
+          const bp = this.selectedBlueprint();
+          if (bp) this.loadBlueprintListings(bp.id);
           this.resetFormState();
         },
         error: (error) => {
           this.isSubmitting.set(false);
           console.error('Error creating pending listing:', error);
           if (error.status === 409) {
-            this.snackBar.open('Duplicate listing already in queue', 'Close', { duration: 5000 });
+            this.snackBar.open('Inserzione duplicata già in coda', 'Chiudi', { duration: 5000 });
           } else {
-            this.snackBar.open('Failed to add to queue', 'Close', { duration: 5000 });
+            this.snackBar.open('Errore durante l\'aggiunta alla coda', 'Chiudi', { duration: 5000 });
           }
         }
       });
@@ -642,7 +768,6 @@ export class CreateListingComponent {
         next: (result) => {
           this.gradingResult.set(result);
           this.isGrading.set(false);
-          // Auto-apply condition
           this.applyGradingCondition(result.conditionName);
         },
         error: (err) => {

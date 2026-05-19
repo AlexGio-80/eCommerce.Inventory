@@ -263,6 +263,36 @@ public class CardTraderApiClient : ICardTraderApiService
                 return;
             }
 
+            _logger.LogInformation("Updating product {ProductId} on Card Trader", item.CardTraderProductId.Value);
+
+            var payload = new
+            {
+                price = item.ListingPrice,
+                quantity = item.Quantity,
+                user_data_field = item.Location,
+                tag = item.Tag,
+                properties = new Dictionary<string, object>
+                {
+                    { "condition", item.Condition },
+                    { "mtg_language", GetLanguageCode(item.Language) },
+                    { "mtg_foil", item.IsFoil },
+                    { "signed", item.IsSigned },
+                    { "altered", false }
+                }
+            };
+
+            await _rateLimiter.AcquireAsync(cancellationToken);
+            var response = await _httpClient.PutAsJsonAsync($"products/{item.CardTraderProductId.Value}", payload, cancellationToken);
+            var jsonResponse = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogError("Failed to update product {ProductId} on Card Trader. Status: {StatusCode}, Response: {Response}",
+                    item.CardTraderProductId.Value, response.StatusCode, jsonResponse);
+                response.EnsureSuccessStatusCode();
+            }
+
+            _logger.LogInformation("Updated product {ProductId} on Card Trader", item.CardTraderProductId.Value);
         }
         catch (Exception ex)
         {

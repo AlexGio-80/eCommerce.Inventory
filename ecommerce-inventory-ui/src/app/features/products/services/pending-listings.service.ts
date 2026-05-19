@@ -17,6 +17,7 @@ export interface PendingListing {
     location: string;
     tag?: string;
     isSynced: boolean;
+    isUpdate: boolean;
     createdAt: Date;
     syncedAt?: Date;
     syncError?: string;
@@ -44,6 +45,9 @@ export interface CreatePendingListingDto {
     isSigned: boolean;
     location?: string;
     tag?: string;
+    // Update-mode fields
+    cardTraderProductId?: number;
+    isUpdate?: boolean;
     // Grading data
     gradingScore?: number;
     gradingConditionCode?: string;
@@ -53,6 +57,23 @@ export interface CreatePendingListingDto {
     gradingSurface?: number;
     gradingConfidence?: number;
     gradingImagesCount?: number;
+}
+
+export interface BlueprintListingInfo {
+    inventoryItemId?: number;
+    pendingListingId?: number;
+    cardTraderProductId?: number;
+    quantity: number;
+    sellingPrice: number;
+    purchasePrice: number;
+    condition: string;
+    language: string;
+    isFoil: boolean;
+    isSigned: boolean;
+    location: string;
+    tag?: string;
+    /** synced | pending-edit | ct-native | pending-new */
+    status: string;
 }
 
 @Injectable({
@@ -70,12 +91,16 @@ export class PendingListingsService {
         return this.http.get<any>(this.apiUrl, { params });
     }
 
-    createPendingListing(dto: CreatePendingListingDto): Observable<PendingListing> {
-        return this.http.post<PendingListing>(this.apiUrl, dto);
+    getListingsByBlueprint(blueprintId: number): Observable<any> {
+        return this.http.get<any>(`${this.apiUrl}/by-blueprint/${blueprintId}`);
     }
 
-    updatePendingListing(id: number, dto: CreatePendingListingDto): Observable<PendingListing> {
-        return this.http.put<PendingListing>(`${this.apiUrl}/${id}`, dto);
+    createPendingListing(dto: CreatePendingListingDto): Observable<any> {
+        return this.http.post<any>(this.apiUrl, dto);
+    }
+
+    updatePendingListing(id: number, dto: CreatePendingListingDto): Observable<any> {
+        return this.http.put<any>(`${this.apiUrl}/${id}`, dto);
     }
 
     deletePendingListing(id: number): Observable<void> {

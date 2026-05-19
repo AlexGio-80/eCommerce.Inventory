@@ -25,6 +25,11 @@ public class PendingListing
 
     // Sync state tracking
     public bool IsSynced { get; set; } = false;
+    /// <summary>
+    /// When true, sync will UPDATE the existing CT product (CardTraderProductId) instead of creating a new one.
+    /// Set when re-editing a previously synced listing or loading a CT-native inventory item.
+    /// </summary>
+    public bool IsUpdate { get; set; } = false;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? SyncedAt { get; set; }
     public string? SyncError { get; set; }

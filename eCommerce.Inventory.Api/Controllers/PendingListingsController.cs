@@ -73,14 +73,127 @@ public class PendingListingsController : ControllerBase
     }
 
     /// <summary>
-    /// Add a listing to the pending queue. If duplicate exists, sum quantities.
+    /// Returns all existing listings for a given blueprint:
+    /// - InventoryItems (synced from CT, represent the actual current state)
+    /// - Plus any unsynced PendingListings not yet pushed to CT
+    /// Used to populate the "Le mie inserzioni" panel in the Create Listing form.
+    /// </summary>
+    [HttpGet("by-blueprint/{blueprintId:int}")]
+    public async Task<ActionResult<Models.ApiResponse<IEnumerable<BlueprintListingInfoDto>>>> GetListingsByBlueprint(
+        int blueprintId,
+        CancellationToken cancellationToken = default)
+    {
+        // InventoryItems = what's currently on CT (after last product sync)
+        var inventoryItems = await _dbContext.InventoryItems
+            .AsNoTracking()
+            .Where(ii => ii.BlueprintId == blueprintId)
+            .ToListAsync(cancellationToken);
+
+        // All PendingListings for this blueprint (synced or not)
+        var pendingListings = await _dbContext.PendingListings
+            .AsNoTracking()
+            .Where(pl => pl.BlueprintId == blueprintId)
+            .ToListAsync(cancellationToken);
+
+        var result = new List<BlueprintListingInfoDto>();
+
+        // Map InventoryItems → enrich with matching unsynced PendingListing if present
+        var unsyncedByProductId = pendingListings
+            .Where(pl => !pl.IsSynced && pl.CardTraderProductId.HasValue)
+            .ToDictionary(pl => pl.CardTraderProductId!.Value, pl => pl);
+
+        foreach (var ii in inventoryItems)
+        {
+            PendingListing? pendingEdit = ii.CardTraderProductId.HasValue
+                ? unsyncedByProductId.GetValueOrDefault(ii.CardTraderProductId.Value)
+                : null;
+
+            // If there is a pending edit queued, show its values (latest intent)
+            var source = pendingEdit != null
+                ? new
+                {
+                    Quantity = pendingEdit.Quantity,
+                    SellingPrice = pendingEdit.SellingPrice,
+                    PurchasePrice = pendingEdit.PurchasePrice,
+                    Condition = pendingEdit.Condition,
+                    Language = pendingEdit.Language,
+                    IsFoil = pendingEdit.IsFoil,
+                    IsSigned = pendingEdit.IsSigned,
+                    Location = pendingEdit.Location,
+                    Tag = pendingEdit.Tag
+                }
+                : new
+                {
+                    Quantity = ii.Quantity,
+                    SellingPrice = ii.ListingPrice,
+                    PurchasePrice = ii.PurchasePrice,
+                    Condition = ii.Condition,
+                    Language = ii.Language,
+                    IsFoil = ii.IsFoil,
+                    IsSigned = ii.IsSigned,
+                    Location = ii.Location,
+                    Tag = ii.Tag
+                };
+
+            result.Add(new BlueprintListingInfoDto
+            {
+                InventoryItemId = ii.Id,
+                PendingListingId = pendingEdit?.Id,
+                CardTraderProductId = ii.CardTraderProductId,
+                Quantity = source.Quantity,
+                SellingPrice = source.SellingPrice,
+                PurchasePrice = source.PurchasePrice,
+                Condition = source.Condition,
+                Language = source.Language,
+                IsFoil = source.IsFoil,
+                IsSigned = source.IsSigned,
+                Location = source.Location,
+                Tag = source.Tag,
+                // pending-edit = an update is queued but not yet sent; synced = on CT, no pending changes; ct-native = on CT, never managed by us
+                Status = pendingEdit != null ? "pending-edit"
+                    : pendingListings.Any(pl => pl.CardTraderProductId == ii.CardTraderProductId && pl.IsSynced) ? "synced"
+                    : "ct-native"
+            });
+        }
+
+        // Add unsynced PendingListings with no CardTraderProductId (pure new listings not yet on CT)
+        var pureNew = pendingListings
+            .Where(pl => !pl.IsSynced && !pl.CardTraderProductId.HasValue)
+            .ToList();
+
+        foreach (var pl in pureNew)
+        {
+            result.Add(new BlueprintListingInfoDto
+            {
+                InventoryItemId = null,
+                PendingListingId = pl.Id,
+                CardTraderProductId = null,
+                Quantity = pl.Quantity,
+                SellingPrice = pl.SellingPrice,
+                PurchasePrice = pl.PurchasePrice,
+                Condition = pl.Condition,
+                Language = pl.Language,
+                IsFoil = pl.IsFoil,
+                IsSigned = pl.IsSigned,
+                Location = pl.Location,
+                Tag = pl.Tag,
+                Status = "pending-new"
+            });
+        }
+
+        return Ok(Models.ApiResponse<IEnumerable<BlueprintListingInfoDto>>.SuccessResult(result));
+    }
+
+    /// <summary>
+    /// Add a listing to the pending queue.
+    /// - Normal mode: if duplicate exists (same blueprint/condition/language/price/foil/signed), sums quantities.
+    /// - Update mode (IsUpdate=true): creates a new record with CardTraderProductId pre-filled so sync calls UPDATE on CT.
     /// </summary>
     [HttpPost]
     public async Task<ActionResult<Models.ApiResponse<PendingListing>>> CreatePendingListing(
         [FromBody] CreatePendingListingDto dto,
         CancellationToken cancellationToken = default)
     {
-        // Verify blueprint exists
         var blueprint = await _dbContext.Blueprints
             .FindAsync(new object[] { dto.BlueprintId }, cancellationToken);
 
@@ -89,41 +202,42 @@ public class PendingListingsController : ControllerBase
             return BadRequest(Models.ApiResponse<PendingListing>.ErrorResult("Blueprint not found"));
         }
 
-        // Check for existing duplicate (only against unsynced items)
-        var existingItem = await _dbContext.PendingListings
-            .FirstOrDefaultAsync(p =>
-                !p.IsSynced &&
-                p.BlueprintId == dto.BlueprintId &&
-                p.Condition == dto.Condition &&
-                p.Language == dto.Language &&
-                p.SellingPrice == dto.Price &&
-                p.IsFoil == dto.IsFoil &&
-                p.IsSigned == dto.IsSigned,
-                cancellationToken);
-
-        if (existingItem != null)
+        // Update-mode: skip duplicate check, always create a fresh record linked to the CT product
+        if (!dto.IsUpdate)
         {
-            // Sum quantities instead of rejecting duplicate
-            existingItem.Quantity += dto.Quantity;
+            var existingItem = await _dbContext.PendingListings
+                .FirstOrDefaultAsync(p =>
+                    !p.IsSynced &&
+                    p.BlueprintId == dto.BlueprintId &&
+                    p.Condition == dto.Condition &&
+                    p.Language == dto.Language &&
+                    p.SellingPrice == dto.Price &&
+                    p.IsFoil == dto.IsFoil &&
+                    p.IsSigned == dto.IsSigned,
+                    cancellationToken);
 
-            // Update grading data if provided (use latest)
-            if (dto.GradingScore.HasValue)
+            if (existingItem != null)
             {
-                existingItem.GradingScore = dto.GradingScore;
-                existingItem.GradingConditionCode = dto.GradingConditionCode;
-                existingItem.GradingCentering = dto.GradingCentering;
-                existingItem.GradingCorners = dto.GradingCorners;
-                existingItem.GradingEdges = dto.GradingEdges;
-                existingItem.GradingSurface = dto.GradingSurface;
-                existingItem.GradingConfidence = dto.GradingConfidence;
-                existingItem.GradingImagesCount = dto.GradingImagesCount;
+                existingItem.Quantity += dto.Quantity;
+
+                if (dto.GradingScore.HasValue)
+                {
+                    existingItem.GradingScore = dto.GradingScore;
+                    existingItem.GradingConditionCode = dto.GradingConditionCode;
+                    existingItem.GradingCentering = dto.GradingCentering;
+                    existingItem.GradingCorners = dto.GradingCorners;
+                    existingItem.GradingEdges = dto.GradingEdges;
+                    existingItem.GradingSurface = dto.GradingSurface;
+                    existingItem.GradingConfidence = dto.GradingConfidence;
+                    existingItem.GradingImagesCount = dto.GradingImagesCount;
+                }
+
+                await _dbContext.SaveChangesAsync(cancellationToken);
+
+                return Ok(Models.ApiResponse<PendingListing>.SuccessResult(
+                    existingItem,
+                    $"Quantity added to existing item. New total: {existingItem.Quantity}"));
             }
-
-            await _dbContext.SaveChangesAsync(cancellationToken);
-
-            return Ok(Models.ApiResponse<PendingListing>.SuccessResult(
-                existingItem,
-                $"Quantity added to existing item. New total: {existingItem.Quantity}"));
         }
 
         var pendingListing = new PendingListing
@@ -140,7 +254,8 @@ public class PendingListingsController : ControllerBase
             Tag = dto.Tag,
             CreatedAt = DateTime.UtcNow,
             IsSynced = false,
-            // Grading data
+            IsUpdate = dto.IsUpdate,
+            CardTraderProductId = dto.CardTraderProductId,
             GradingScore = dto.GradingScore,
             GradingConditionCode = dto.GradingConditionCode,
             GradingCentering = dto.GradingCentering,
@@ -179,7 +294,9 @@ public class PendingListingsController : ControllerBase
     }
 
     /// <summary>
-    /// Update a pending listing
+    /// Update a pending listing.
+    /// If the listing is already synced (IsSynced=true), it is re-queued as an UPDATE operation:
+    /// IsSynced is reset to false and IsUpdate is set to true so the next sync calls CT's update API.
     /// </summary>
     [HttpPut("{id}")]
     public async Task<ActionResult<Models.ApiResponse<PendingListing>>> UpdatePendingListing(
@@ -194,11 +311,6 @@ public class PendingListingsController : ControllerBase
             return NotFound(Models.ApiResponse<PendingListing>.ErrorResult($"Pending listing with ID {id} not found"));
         }
 
-        if (item.IsSynced)
-        {
-            return BadRequest(Models.ApiResponse<PendingListing>.ErrorResult("Cannot update a synced listing"));
-        }
-
         item.BlueprintId = dto.BlueprintId;
         item.Quantity = dto.Quantity;
         item.SellingPrice = dto.Price;
@@ -209,7 +321,15 @@ public class PendingListingsController : ControllerBase
         item.IsSigned = dto.IsSigned;
         item.Location = dto.Location ?? string.Empty;
         item.Tag = dto.Tag;
-        item.SyncError = null; // Clear error on update
+        item.SyncError = null;
+
+        // If re-editing a synced listing: re-queue it as an UPDATE (not a new CREATE on CT)
+        if (item.IsSynced)
+        {
+            item.IsSynced = false;
+            item.IsUpdate = true;
+            item.SyncedAt = null;
+        }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -236,7 +356,8 @@ public class PendingListingsController : ControllerBase
     }
 
     /// <summary>
-    /// Sync all pending listings to Card Trader
+    /// Sync all pending listings to Card Trader.
+    /// Records with IsUpdate=true and CardTraderProductId set call CT's update API instead of create.
     /// </summary>
     [HttpPost("sync")]
     public async Task<ActionResult<Models.ApiResponse<object>>> SyncPendingListings(CancellationToken cancellationToken = default)
@@ -253,7 +374,6 @@ public class PendingListingsController : ControllerBase
         {
             try
             {
-                // Create InventoryItem object for the service
                 var inventoryItem = new InventoryItem
                 {
                     BlueprintId = pending.BlueprintId,
@@ -266,17 +386,25 @@ public class PendingListingsController : ControllerBase
                     IsSigned = pending.IsSigned,
                     Location = pending.Location,
                     Tag = pending.Tag,
-                    PurchasePrice = pending.PurchasePrice
+                    PurchasePrice = pending.PurchasePrice,
+                    CardTraderProductId = pending.CardTraderProductId
                 };
 
-                // Call Card Trader API
-                var cardTraderId = await _cardTraderService.CreateProductOnCardTraderAsync(inventoryItem, cancellationToken);
-
-                // Update PendingListing with sync info
-                pending.IsSynced = true;
-                pending.SyncedAt = DateTime.UtcNow;
-                pending.CardTraderProductId = cardTraderId;
-                pending.SyncError = null;
+                if (pending.IsUpdate && pending.CardTraderProductId.HasValue)
+                {
+                    await _cardTraderService.UpdateProductOnCardTraderAsync(inventoryItem, cancellationToken);
+                    pending.IsSynced = true;
+                    pending.SyncedAt = DateTime.UtcNow;
+                    pending.SyncError = null;
+                }
+                else
+                {
+                    var cardTraderId = await _cardTraderService.CreateProductOnCardTraderAsync(inventoryItem, cancellationToken);
+                    pending.IsSynced = true;
+                    pending.SyncedAt = DateTime.UtcNow;
+                    pending.CardTraderProductId = cardTraderId;
+                    pending.SyncError = null;
+                }
 
                 successCount++;
             }
@@ -301,4 +429,27 @@ public class PendingListingsController : ControllerBase
             result,
             $"Sync completed. Success: {successCount}, Errors: {errorCount}"));
     }
+}
+
+public class BlueprintListingInfoDto
+{
+    public int? InventoryItemId { get; set; }
+    public int? PendingListingId { get; set; }
+    public int? CardTraderProductId { get; set; }
+    public int Quantity { get; set; }
+    public decimal SellingPrice { get; set; }
+    public decimal PurchasePrice { get; set; }
+    public string Condition { get; set; } = string.Empty;
+    public string Language { get; set; } = string.Empty;
+    public bool IsFoil { get; set; }
+    public bool IsSigned { get; set; }
+    public string Location { get; set; } = string.Empty;
+    public string? Tag { get; set; }
+    /// <summary>
+    /// synced = on CT, no pending changes
+    /// pending-edit = on CT, an update is queued
+    /// ct-native = on CT, never managed via our software
+    /// pending-new = in queue, not yet on CT
+    /// </summary>
+    public string Status { get; set; } = string.Empty;
 }
