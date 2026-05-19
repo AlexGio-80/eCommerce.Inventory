@@ -8,174 +8,190 @@
     </button>
   </mat-toolbar>
 
-  <!-- Stats Cards -->
-  <div class="stats-grid" *ngIf="stats$ | async as stats">
-    <mat-card class="stat-card">
-      <mat-card-header>
-        <div mat-card-avatar class="stat-icon primary">
-          <mat-icon>inventory_2</mat-icon>
-        </div>
-        <mat-card-title>Prodotti</mat-card-title>
-      </mat-card-header>
-      <mat-card-content class="padded-content">
-        <div class="stat-value">{{ stats.totalProducts }}</div>
-        <p class="stat-label">Articoli in magazzino</p>
-      </mat-card-content>
-    </mat-card>
+  <mat-tab-group animationDuration="200ms" class="dashboard-tabs">
 
-    <mat-card class="stat-card">
-      <mat-card-header>
-        <div mat-card-avatar class="stat-icon accent">
-          <mat-icon>shopping_cart</mat-icon>
-        </div>
-        <mat-card-title>Ordini</mat-card-title>
-      </mat-card-header>
-      <mat-card-content class="padded-content">
-        <div class="stat-value">{{ stats.totalOrders }}</div>
-        <p class="stat-label">Ordini totali</p>
-      </mat-card-content>
-    </mat-card>
+    <!-- ===== TAB OVERVIEW ===== -->
+    <mat-tab label="Overview">
 
-    <mat-card class="stat-card">
-      <mat-card-header>
-        <div mat-card-avatar class="stat-icon warn">
-          <mat-icon>assignment_late</mat-icon>
-        </div>
-        <mat-card-title>Da Preparare</mat-card-title>
-      </mat-card-header>
-      <mat-card-content class="padded-content">
-        <div class="stat-value">{{ stats.unpreparedItemsCount }}</div>
-        <p class="stat-label">Oggetti da preparare</p>
-      </mat-card-content>
-    </mat-card>
+      <!-- Stats Cards -->
+      <div class="stats-grid" *ngIf="stats$ | async as stats">
+        <mat-card class="stat-card">
+          <mat-card-header>
+            <div mat-card-avatar class="stat-icon primary">
+              <mat-icon>inventory_2</mat-icon>
+            </div>
+            <mat-card-title>Prodotti</mat-card-title>
+          </mat-card-header>
+          <mat-card-content class="padded-content">
+            <div class="stat-value">{{ stats.totalProducts }}</div>
+            <p class="stat-label">Articoli in magazzino</p>
+          </mat-card-content>
+        </mat-card>
 
-    <mat-card class="stat-card">
-      <mat-card-header>
-        <div mat-card-avatar class="stat-icon success">
-          <mat-icon>sync</mat-icon>
-        </div>
-        <mat-card-title>Ultimo Sync</mat-card-title>
-      </mat-card-header>
-      <mat-card-content class="padded-content">
-        <div class="stat-value">{{ stats.lastSync | date: 'short' }}</div>
-        <p class="stat-label">Data ultimo aggiornamento</p>
-      </mat-card-content>
-    </mat-card>
-  </div>
+        <mat-card class="stat-card">
+          <mat-card-header>
+            <div mat-card-avatar class="stat-icon accent">
+              <mat-icon>shopping_cart</mat-icon>
+            </div>
+            <mat-card-title>Ordini</mat-card-title>
+          </mat-card-header>
+          <mat-card-content class="padded-content">
+            <div class="stat-value">{{ stats.totalOrders }}</div>
+            <p class="stat-label">Ordini totali</p>
+          </mat-card-content>
+        </mat-card>
 
-  <!-- Analytics Section -->
-  <div class="analytics-grid">
-    <!-- Sales by Expansion -->
-    <mat-card class="analytics-card">
-      <mat-card-header>
-        <mat-card-title>📈 Vendite per Espansione</mat-card-title>
-      </mat-card-header>
-      <mat-card-content>
-        <mat-form-field appearance="outline" class="filter-field">
-          <mat-label>Filtra espansione</mat-label>
-          <input matInput [(ngModel)]="salesFilter" (ngModelChange)="onSalesFilterChange($event)"
-            placeholder="Cerca...">
-          <mat-icon matSuffix>search</mat-icon>
-        </mat-form-field>
-        <mat-list *ngIf="salesByExpansion$ | async as sales">
-          <mat-list-item *ngFor="let item of sales" class="analytics-item">
-            <div matLine class="item-header">
-              <span class="item-name">{{ item.expansionName }}</span>
-              <span class="item-value">€ {{ item.totalRevenue | number: '1.2-2' }}</span>
+        <mat-card class="stat-card">
+          <mat-card-header>
+            <div mat-card-avatar class="stat-icon warn">
+              <mat-icon>assignment_late</mat-icon>
             </div>
-            <div matLine>
-              <mat-progress-bar mode="determinate" [value]="item.percentage"></mat-progress-bar>
-            </div>
-          </mat-list-item>
-        </mat-list>
-      </mat-card-content>
-    </mat-card>
+            <mat-card-title>Da Preparare</mat-card-title>
+          </mat-card-header>
+          <mat-card-content class="padded-content">
+            <div class="stat-value">{{ stats.unpreparedItemsCount }}</div>
+            <p class="stat-label">Oggetti da preparare</p>
+          </mat-card-content>
+        </mat-card>
 
-    <!-- Profitability -->
-    <mat-card class="analytics-card">
-      <mat-card-header>
-        <mat-card-title>💰 Redditività (ROI)</mat-card-title>
-      </mat-card-header>
-      <mat-card-content>
-        <mat-form-field appearance="outline" class="filter-field">
-          <mat-label>Filtra espansione</mat-label>
-          <input matInput [(ngModel)]="roiFilter" (ngModelChange)="onRoiFilterChange($event)" placeholder="Cerca...">
-          <mat-icon matSuffix>search</mat-icon>
-        </mat-form-field>
-        <mat-list *ngIf="expansionProfitability$ | async as profitability">
-          <mat-list-item *ngFor="let item of profitability" class="analytics-item roi-item">
-            <div matLine class="item-header">
-              <span class="item-name">{{ item.expansionName }}</span>
-              <span class="item-value" [class.negative-roi]="item.percentualeDifferenza < 0"
-                [class.neutral-roi]="item.percentualeDifferenza === 0"
-                [class.positive-roi]="item.percentualeDifferenza > 0">
-                {{ item.percentualeDifferenza | number: '1.1-1' }}%
-              </span>
+        <mat-card class="stat-card">
+          <mat-card-header>
+            <div mat-card-avatar class="stat-icon success">
+              <mat-icon>sync</mat-icon>
             </div>
-            <div matLine class="secondary-text">
-              Differenza: € {{ item.differenza | number: '1.2-2' }}
-            </div>
-            <div matLine class="secondary-text">
-              Venduto: € {{ item.totaleVenduto | number: '1.2-2' }} • Acquistato: € {{ item.totaleAcquistato | number:
-              '1.2-2' }}
-            </div>
-          </mat-list-item>
-        </mat-list>
-      </mat-card-content>
-    </mat-card>
+            <mat-card-title>Ultimo Sync</mat-card-title>
+          </mat-card-header>
+          <mat-card-content class="padded-content">
+            <div class="stat-value">{{ stats.lastSync | date: 'short' }}</div>
+            <p class="stat-label">Data ultimo aggiornamento</p>
+          </mat-card-content>
+        </mat-card>
+      </div>
 
-    <!-- Top Expansions by Value -->
-    <mat-card class="analytics-card">
-      <mat-card-header>
-        <mat-card-title>💎 Espansioni più Convenienti (Valore Medio)</mat-card-title>
-      </mat-card-header>
-      <mat-card-content>
-        <p class="secondary-text" style="padding: 0 16px; margin-bottom: 8px;">
-          Le espansioni con il miglior valore medio per carta (prezzo minimo).
-        </p>
-        <mat-list *ngIf="topExpansionsByValue$ | async as topValues">
-          <mat-list-item *ngFor="let item of topValues" class="analytics-item">
-            <div matLine class="item-header">
-              <span class="item-name">{{ item.expansionName }}</span>
-              <span class="item-value">€ {{ item.averageCardValue | number: '1.2-2' }}</span>
-            </div>
-            <div matLine class="secondary-text">
-              Valore Totale (Min): € {{ item.totalMinPrice | number: '1.2-2' }} • {{ item.gameName }}
-            </div>
-          </mat-list-item>
-        </mat-list>
-      </mat-card-content>
-    </mat-card>
-  </div>
+      <!-- Analytics Section -->
+      <div class="analytics-grid">
+        <!-- Sales by Expansion -->
+        <mat-card class="analytics-card">
+          <mat-card-header>
+            <mat-card-title>📈 Vendite per Espansione</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <mat-form-field appearance="outline" class="filter-field">
+              <mat-label>Filtra espansione</mat-label>
+              <input matInput [(ngModel)]="salesFilter" (ngModelChange)="onSalesFilterChange($event)"
+                placeholder="Cerca...">
+              <mat-icon matSuffix>search</mat-icon>
+            </mat-form-field>
+            <mat-list *ngIf="salesByExpansion$ | async as sales">
+              <mat-list-item *ngFor="let item of sales" class="analytics-item">
+                <div matLine class="item-header">
+                  <span class="item-name">{{ item.expansionName }}</span>
+                  <span class="item-value">€ {{ item.totalRevenue | number: '1.2-2' }}</span>
+                </div>
+                <div matLine>
+                  <mat-progress-bar mode="determinate" [value]="item.percentage"></mat-progress-bar>
+                </div>
+              </mat-list-item>
+            </mat-list>
+          </mat-card-content>
+        </mat-card>
 
-  <!-- Quick Actions -->
-  <div class="actions-section">
-    <mat-card>
-      <mat-card-header>
-        <mat-card-title>⚡ Azioni Rapide</mat-card-title>
-      </mat-card-header>
-      <mat-card-content class="actions-grid">
-        <button mat-raised-button color="primary" class="action-btn"
-          (click)="openTab('/layout/products/create', 'Nuovo Articolo', 'add_circle')">
-          <mat-icon>add_circle</mat-icon>
-          Nuovo Articolo
-        </button>
-        <button mat-raised-button color="accent" class="action-btn"
-          (click)="openTab('/layout/sync', 'Sincronizza', 'sync')">
-          <mat-icon>sync</mat-icon>
-          Sincronizza
-        </button>
-        <button mat-raised-button color="warn" class="action-btn"
-          (click)="openTab('/layout/inventory', 'Inventario', 'list')">
-          <mat-icon>list</mat-icon>
-          Visualizza Inventario
-        </button>
-        <button mat-raised-button class="action-btn"
-          (click)="openTab('/layout/orders/unprepared', 'Da Preparare', 'assignment_late')">
-          <mat-icon>assignment_late</mat-icon>
-          Da Preparare
-        </button>
-      </mat-card-content>
-    </mat-card>
-  </div>
+        <!-- Profitability -->
+        <mat-card class="analytics-card">
+          <mat-card-header>
+            <mat-card-title>💰 Redditività (ROI)</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <mat-form-field appearance="outline" class="filter-field">
+              <mat-label>Filtra espansione</mat-label>
+              <input matInput [(ngModel)]="roiFilter" (ngModelChange)="onRoiFilterChange($event)" placeholder="Cerca...">
+              <mat-icon matSuffix>search</mat-icon>
+            </mat-form-field>
+            <mat-list *ngIf="expansionProfitability$ | async as profitability">
+              <mat-list-item *ngFor="let item of profitability" class="analytics-item roi-item">
+                <div matLine class="item-header">
+                  <span class="item-name">{{ item.expansionName }}</span>
+                  <span class="item-value" [class.negative-roi]="item.percentualeDifferenza < 0"
+                    [class.neutral-roi]="item.percentualeDifferenza === 0"
+                    [class.positive-roi]="item.percentualeDifferenza > 0">
+                    {{ item.percentualeDifferenza | number: '1.1-1' }}%
+                  </span>
+                </div>
+                <div matLine class="secondary-text">
+                  Differenza: € {{ item.differenza | number: '1.2-2' }}
+                </div>
+                <div matLine class="secondary-text">
+                  Venduto: € {{ item.totaleVenduto | number: '1.2-2' }} • Acquistato: € {{ item.totaleAcquistato | number:
+                  '1.2-2' }}
+                </div>
+              </mat-list-item>
+            </mat-list>
+          </mat-card-content>
+        </mat-card>
+
+        <!-- Top Expansions by Value -->
+        <mat-card class="analytics-card">
+          <mat-card-header>
+            <mat-card-title>💎 Espansioni più Convenienti (Valore Medio)</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <p class="secondary-text" style="padding: 0 16px; margin-bottom: 8px;">
+              Le espansioni con il miglior valore medio per carta (prezzo minimo).
+            </p>
+            <mat-list *ngIf="topExpansionsByValue$ | async as topValues">
+              <mat-list-item *ngFor="let item of topValues" class="analytics-item">
+                <div matLine class="item-header">
+                  <span class="item-name">{{ item.expansionName }}</span>
+                  <span class="item-value">€ {{ item.averageCardValue | number: '1.2-2' }}</span>
+                </div>
+                <div matLine class="secondary-text">
+                  Valore Totale (Min): € {{ item.totalMinPrice | number: '1.2-2' }} • {{ item.gameName }}
+                </div>
+              </mat-list-item>
+            </mat-list>
+          </mat-card-content>
+        </mat-card>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="actions-section">
+        <mat-card>
+          <mat-card-header>
+            <mat-card-title>⚡ Azioni Rapide</mat-card-title>
+          </mat-card-header>
+          <mat-card-content class="actions-grid">
+            <button mat-raised-button color="primary" class="action-btn"
+              (click)="openTab('/layout/products/create', 'Nuovo Articolo', 'add_circle')">
+              <mat-icon>add_circle</mat-icon>
+              Nuovo Articolo
+            </button>
+            <button mat-raised-button color="accent" class="action-btn"
+              (click)="openTab('/layout/sync', 'Sincronizza', 'sync')">
+              <mat-icon>sync</mat-icon>
+              Sincronizza
+            </button>
+            <button mat-raised-button color="warn" class="action-btn"
+              (click)="openTab('/layout/inventory', 'Inventario', 'list')">
+              <mat-icon>list</mat-icon>
+              Visualizza Inventario
+            </button>
+            <button mat-raised-button class="action-btn"
+              (click)="openTab('/layout/orders/unprepared', 'Da Preparare', 'assignment_late')">
+              <mat-icon>assignment_late</mat-icon>
+              Da Preparare
+            </button>
+          </mat-card-content>
+        </mat-card>
+      </div>
+
+    </mat-tab>
+
+    <!-- ===== TAB REDDITIVITÀ PER TAG ===== -->
+    <mat-tab label="Redditività per Tag">
+      <div class="tab-content">
+        <app-tag-profitability></app-tag-profitability>
+      </div>
+    </mat-tab>
+
+  </mat-tab-group>
 </div>

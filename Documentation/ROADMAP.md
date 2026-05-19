@@ -12,8 +12,7 @@ _Nessun task attivo al momento._
 
 ## Da Fare
 
-### Feature
-- [ ] UI button per re-sync singolo ordine dalla griglia Ordini (endpoint `POST /api/cardtrader/orders/{id}/sync` già implementato, manca solo il collegamento UI)
+_Nessun task attivo al momento._
 
 ---
 
@@ -34,6 +33,7 @@ _Nessun task attivo al momento._
 
 | Data | Voce |
 |------|------|
+| 2026-05-19 | Feature — UI button re-sync singolo ordine nella griglia Ordini (già presente nel codice, ROADMAP aggiornata) |
 | 2026-05-19 | Feature — Pannello "Le mie inserzioni" in Nuovo Prodotto, update CT API implementato, flag IsUpdate su PendingListing |
 | 2026-05-19 | Fix Qtà/Valore Rimanente nel report Redditività per Tag — query riscritte via PendingListings, endpoint backfill-tags per InventoryItems |
 | 2026-03-27 | Feature 003 (cont.) — fix report Tag (query timeout), backfill Tag storici, grid state Redditività per Tag |
