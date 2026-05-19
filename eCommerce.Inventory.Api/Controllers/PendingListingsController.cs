@@ -396,6 +396,23 @@ public class PendingListingsController : ControllerBase
                     pending.IsSynced = true;
                     pending.SyncedAt = DateTime.UtcNow;
                     pending.SyncError = null;
+
+                    // Aggiorna subito l'InventoryItem locale in modo che il pannello
+                    // "Le mie inserzioni" rifletta i nuovi valori senza attendere la sync notturna
+                    var localItem = await _dbContext.InventoryItems
+                        .FirstOrDefaultAsync(ii => ii.CardTraderProductId == pending.CardTraderProductId, cancellationToken);
+                    if (localItem != null)
+                    {
+                        localItem.Quantity = pending.Quantity;
+                        localItem.ListingPrice = pending.SellingPrice;
+                        localItem.PurchasePrice = pending.PurchasePrice;
+                        localItem.Condition = pending.Condition;
+                        localItem.Language = pending.Language;
+                        localItem.IsFoil = pending.IsFoil;
+                        localItem.IsSigned = pending.IsSigned;
+                        localItem.Location = pending.Location;
+                        localItem.Tag = pending.Tag;
+                    }
                 }
                 else
                 {
