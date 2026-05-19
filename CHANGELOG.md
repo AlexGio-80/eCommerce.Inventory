@@ -8,11 +8,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Scheduled Full Sync Worker**: Enhanced nightly sync to include all entities (Games, Expansions, Blueprints, Inventory, Orders) with comprehensive logging
-- **Roadmap Note**: Added periodic review reminder for card grading recognition technology
+- **Calcolatore Box su pagina Espansioni**: pannello interattivo per calcolare la convenienza di acquistare un box sigillato
+  - Campi `PacksPerBox`, `CardsPerPack`, `BoxPrice` salvati a DB (migration `20260519120000` + `20260519130000`)
+  - Endpoint `PATCH /api/expansions/{id}/box-config` aggiornato per salvare anche `BoxPrice`
+  - `BoxRoiPercentage` calcolato server-side: `(avgCardValue × cardsPerBox - boxPrice) / boxPrice × 100`
+  - Colonna **ROI Box%** in griglia Espansioni: verde >20%, arancio 0-20%, rosso <0%; filtrabile e ordinabile
+  - Valori pre-caricati dalla selezione riga; "Salva config" persiste tutti e tre i valori
+- **Dashboard tab "Redditività per Tag"**: il componente `tag-profitability` è ora un tab nella dashboard principale invece di una pagina separata
 
 ### Changed
-- **Sync Worker Logging**: Improved log format with clear separators and detailed entity-level statistics
+- **Report Inventario** (`/report/inventory`): rielaborato per usabilità
+  - Soglia "slow movers" configurabile con input giorni + pulsante "Cerca"
+  - Griglia AG Grid con sort/filter su tutte le colonne, stato persistente, default sort desc per `daysInInventory`
+  - 4 KPI: Valore Totale, Totale Articoli, Prodotti Unici, Valore Medio Articolo
+  - Hint descrittivo con conteggio articoli trovati
+  - Fix: query EF Core per slow movers riscritta in 2 step (fetch DB + proiezione in memoria) per evitare `InvalidOperationException` su `TimeSpan.TotalDays`
+- **Report Vendite** (`/report/sales`): rielaborato per usabilità
+  - Filtro date (Dal/Al) con default ultimi 30 giorni; raggruppamento automatico giorno/settimana/mese
+  - Griglia top prodotti con AG Grid: 20 items, colonne sortabili/filtrabili, stato persistente
+  - Crescita % con segno +/- e colori verde/rosso
+- **Dashboard — widget "Ultimo Sync"**: ora legge `lastSyncTime` da `localStorage` (valorizzato dalla sync page ad ogni sync completata); mostra `—` se mai sincronizzato
+
+### Removed
+- **Componente `profitability-analysis`** e relativa route: rimosso per dati inaffidabili (`AVG(PurchasePrice)` come proxy costo non rappresentativo)
+- **Widget "Espansioni più Convenienti"** dalla dashboard: mostrava dati stantii non aggiornati regolarmente
+- **Voce di menù "Redditività per Tag"** dal sidenav: accessibile come tab nella dashboard
+
+### Fixed
+- **Struttura template HTML** di `expansions-page.component.ts`: rimosso `</div>` extra che chiudeva prematuramente `expansion-dashboard`, il calcolatore box ora è correttamente dentro la grid CSS
+- **TypeScript build error** su `cellStyle` AG Grid: sostituito `return {}` con `return null` per compatibilità con `CellStyle | null | undefined`
+- **ModuleRegistry.registerModules** rimosso da `expansions-page.component.ts` (già registrato globalmente in `app.config.ts`)
+
+---
+
+## [1.1.0] - 2026-05-19
+
+### Added
+- **Pannello "Le mie inserzioni"** in Nuovo Prodotto: mostra inserzioni esistenti su CT per la carta selezionata, permette di pre-compilare il form e inviarle come UPDATE (non nuova inserzione)
+- **Flag `IsUpdate`** su `PendingListing`: distingue operazioni CREATE vs UPDATE su Card Trader API (migration `20260519073801_AddIsUpdateToPendingListings`)
+- **Aggiornamento `InventoryItem` locale** durante sync UPDATE: il sync su CT ora aggiorna anche il record locale per evitare disallineamenti visibili nel pannello inserzioni
+- **Endpoint `POST /api/cardtrader/orders/backfill-tags`**: assegna retroattivamente i Tag agli OrderItems storici basandosi sul `CardTraderId`
+
+### Fixed
+- **Report Redditività per Tag**: query `TotaleAcquistato` riscritta con JOIN diretto su `PendingListings` (eliminato `OPENJSON` che causava timeout 30s)
+- **ValoreRimanente nel report Tag**: usa `InventoryItems.ListingPrice` invece di `PurchasePrice` (spesso zero)
+
+---
 
 ## [1.0.0] - 2025-11-28
 

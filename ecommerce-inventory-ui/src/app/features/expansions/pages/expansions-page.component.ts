@@ -1,7 +1,7 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AgGridAngular } from 'ag-grid-angular';
-import { ColDef, ModuleRegistry, AllCommunityModule, GridApi, GridReadyEvent } from 'ag-grid-community';
+import { ColDef, GridApi, GridReadyEvent } from 'ag-grid-community';
 import { ExpansionsService, Expansion, SyncBlueprintsResponse } from '../services/expansions.service';
 import { GridStateService } from '../../../core/services/grid-state.service';
 import { MatCardModule } from '@angular/material/card';
@@ -14,9 +14,8 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatTooltipModule } from '@angular/material/tooltip';
-
-// Register AG Grid modules
-ModuleRegistry.registerModules([AllCommunityModule]);
+import { MatDividerModule } from '@angular/material/divider';
+import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-expansions-page',
@@ -33,7 +32,9 @@ ModuleRegistry.registerModules([AllCommunityModule]);
     MatMenuModule,
     MatIconModule,
     MatCheckboxModule,
-    MatTooltipModule
+    MatTooltipModule,
+    MatDividerModule,
+    FormsModule
   ],
   template: `
     <div class="expansions-container">
@@ -127,6 +128,63 @@ ModuleRegistry.registerModules([AllCommunityModule]);
                   <span class="rarity-value">€{{ selectedExpansion()?.avgValueMythic?.toFixed(2) || '0.00' }}</span>
                 </div>
               </div>
+            </div>
+            <!-- Box Calculator Section -->
+            <div class="dashboard-section box-calculator">
+              <h3>Calcolatore Box</h3>
+              <div class="box-config-row">
+                <mat-form-field appearance="outline" class="box-input">
+                  <mat-label>Bustine / Box</mat-label>
+                  <input matInput type="number" min="1"
+                    [(ngModel)]="boxPacksPerBox"
+                    (ngModelChange)="onBoxConfigChange()">
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="box-input">
+                  <mat-label>Carte / Bustina</mat-label>
+                  <input matInput type="number" min="1"
+                    [(ngModel)]="boxCardsPerPack"
+                    (ngModelChange)="onBoxConfigChange()">
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="box-input">
+                  <mat-label>Prezzo Box (€)</mat-label>
+                  <input matInput type="number" min="0" step="0.01"
+                    [(ngModel)]="boxPrice"
+                    (ngModelChange)="onBoxConfigChange()">
+                </mat-form-field>
+                <button mat-stroked-button color="primary" class="save-config-btn"
+                  (click)="saveBoxConfig()"
+                  [disabled]="isSavingBoxConfig"
+                  matTooltip="Salva Bustine/Box, Carte/Bustina e Prezzo Box per questa espansione">
+                  <mat-icon>save</mat-icon>
+                  Salva config
+                </button>
+              </div>
+              <mat-divider style="margin: 12px 0"></mat-divider>
+              <div class="box-results" *ngIf="boxResult">
+                <div class="box-result-item">
+                  <span class="stat-label">Carte per Box</span>
+                  <span class="stat-value">{{ boxResult.cardsPerBox }}</span>
+                </div>
+                <div class="box-result-item">
+                  <span class="stat-label">Valore Stimato Box</span>
+                  <span class="stat-value secondary">€{{ boxResult.estimatedBoxValue.toFixed(2) }}</span>
+                </div>
+                <div class="box-result-item" *ngIf="boxPrice">
+                  <span class="stat-label">ROI Potenziale</span>
+                  <span class="stat-value"
+                    [class.positive]="boxResult.roiPercent > 20"
+                    [class.neutral]="boxResult.roiPercent >= 0 && boxResult.roiPercent <= 20"
+                    [class.negative]="boxResult.roiPercent < 0">
+                    {{ boxResult.roiPercent > 0 ? '+' : '' }}{{ boxResult.roiPercent.toFixed(1) }}%
+                    <mat-icon inline="true">{{ boxResult.roiPercent > 20 ? 'thumb_up' : boxResult.roiPercent >= 0 ? 'remove' : 'thumb_down' }}</mat-icon>
+                  </span>
+                </div>
+                <div class="box-result-item" *ngIf="boxPrice">
+                  <span class="stat-label">Breakeven (val. medio min.)</span>
+                  <span class="stat-value text-small">€{{ boxResult.breakevenAvg.toFixed(3) }} / carta</span>
+                </div>
+              </div>
+              <p class="box-hint" *ngIf="!boxResult">Inserisci Bustine/Box e Carte/Bustina per calcolare.</p>
             </div>
           </div>
         </mat-card-content>
@@ -446,6 +504,47 @@ ModuleRegistry.registerModules([AllCommunityModule]);
     ::ng-deep .mat-mdc-menu-content {
       padding: 0 !important;
     }
+
+    .box-calculator {
+      grid-column: 1 / -1;
+    }
+
+    .box-config-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .box-input {
+      width: 150px;
+    }
+
+    .save-config-btn {
+      height: 56px;
+    }
+
+    .box-results {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .box-result-item {
+      display: flex;
+      flex-direction: column;
+      min-width: 140px;
+    }
+
+    .stat-value.neutral {
+      color: #f57c00;
+    }
+
+    .box-hint {
+      font-size: 13px;
+      color: #999;
+      margin: 4px 0 0 0;
+    }
   `]
 })
 export class ExpansionsPageComponent implements OnInit {
@@ -454,6 +553,13 @@ export class ExpansionsPageComponent implements OnInit {
   isSyncing = signal(false);
   isAnalyzing = signal(false);
   isAnalyzingAll = signal(false);
+
+  // Box calculator
+  boxPacksPerBox: number | null = null;
+  boxCardsPerPack: number | null = null;
+  boxPrice: number | null = null;
+  isSavingBoxConfig = false;
+  boxResult: { cardsPerBox: number; estimatedBoxValue: number; roiPercent: number; breakevenAvg: number } | null = null;
 
   private gridApi!: GridApi;
   private readonly GRID_ID = 'expansions-grid';
@@ -523,6 +629,24 @@ export class ExpansionsPageComponent implements OnInit {
       width: 120,
       filter: 'agNumberColumnFilter',
       valueFormatter: (params: any) => params.value ? `€${params.value.toFixed(2)}` : '-'
+    },
+    {
+      field: 'boxRoiPercentage',
+      headerName: 'ROI Box %',
+      width: 120,
+      filter: 'agNumberColumnFilter',
+      sort: 'desc' as const,
+      cellStyle: (params: any) => {
+        if (params.value == null) return null;
+        if (params.value > 20) return { color: '#2e7d32', fontWeight: '600' };
+        if (params.value >= 0) return { color: '#f57c00', fontWeight: '600' };
+        return { color: '#c62828', fontWeight: '600' };
+      },
+      valueFormatter: (params: any) => {
+        if (params.value == null) return '—';
+        const sign = params.value > 0 ? '+' : '';
+        return `${sign}${params.value.toFixed(1)}%`;
+      }
     },
     {
       field: 'lastValueAnalysisUpdate',
@@ -607,10 +731,59 @@ export class ExpansionsPageComponent implements OnInit {
   onSelectionChanged(event: any) {
     const selectedRows = event.api.getSelectedRows();
     if (selectedRows.length > 0) {
-      this.selectedExpansion.set(selectedRows[0]);
+      const exp: Expansion = selectedRows[0];
+      this.selectedExpansion.set(exp);
+      // Precarica config box salvata
+      this.boxPacksPerBox = exp.packsPerBox ?? null;
+      this.boxCardsPerPack = exp.cardsPerPack ?? null;
+      this.boxPrice = exp.boxPrice ?? null;
+      this.onBoxConfigChange();
     } else {
       this.selectedExpansion.set(null);
+      this.boxResult = null;
     }
+  }
+
+  onBoxConfigChange(): void {
+    const avg = this.selectedExpansion()?.averageCardValue;
+    if (!avg || !this.boxPacksPerBox || !this.boxCardsPerPack) {
+      this.boxResult = null;
+      return;
+    }
+    const cardsPerBox = this.boxCardsPerPack * this.boxPacksPerBox;
+    const estimatedBoxValue = avg * cardsPerBox;
+    const roiPercent = this.boxPrice && this.boxPrice > 0
+      ? ((estimatedBoxValue - this.boxPrice) / this.boxPrice) * 100
+      : 0;
+    const breakevenAvg = this.boxPrice && cardsPerBox > 0
+      ? this.boxPrice / cardsPerBox
+      : 0;
+    this.boxResult = { cardsPerBox, estimatedBoxValue, roiPercent, breakevenAvg };
+  }
+
+  saveBoxConfig(): void {
+    const exp = this.selectedExpansion();
+    if (!exp) return;
+    this.isSavingBoxConfig = true;
+    this.expansionsService.saveBoxConfig(exp.id, this.boxPacksPerBox, this.boxCardsPerPack, this.boxPrice).subscribe({
+      next: () => {
+        this.isSavingBoxConfig = false;
+        this.snackBar.open('Configurazione box salvata', 'Chiudi', { duration: 3000 });
+        // Aggiorna il dato localmente incluso boxRoiPercentage calcolato
+        const cardsPerBox = (this.boxPacksPerBox && this.boxCardsPerPack) ? this.boxPacksPerBox * this.boxCardsPerPack : null;
+        const avg = exp.averageCardValue;
+        const bp = this.boxPrice;
+        const boxRoi = (cardsPerBox && avg && bp && bp > 0)
+          ? ((avg * cardsPerBox - bp) / bp) * 100
+          : undefined;
+        const updated = { ...exp, packsPerBox: this.boxPacksPerBox ?? undefined, cardsPerPack: this.boxCardsPerPack ?? undefined, boxPrice: this.boxPrice ?? undefined, boxRoiPercentage: boxRoi };
+        this.selectedExpansion.set(updated);
+      },
+      error: () => {
+        this.isSavingBoxConfig = false;
+        this.snackBar.open('Errore salvataggio configurazione', 'Chiudi', { duration: 3000 });
+      }
+    });
   }
 
   syncBlueprints() {

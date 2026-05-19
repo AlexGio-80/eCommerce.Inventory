@@ -1,8 +1,9 @@
 import { Component, OnInit } from '@angular/core';
 import { ReportingService } from '../../../../core/services/reporting.service';
-import { InventoryValue, InventoryDistribution, SlowMover, TopExpansionValue } from '../../../../core/models/reporting.models';
+import { InventoryValue, SlowMover } from '../../../../core/models/reporting.models';
 import { firstValueFrom } from 'rxjs';
-import { ColDef, ValueFormatterParams } from 'ag-grid-community';
+import { ColDef, GridApi, GridOptions, GridReadyEvent, ValueFormatterParams } from 'ag-grid-community';
+import { GridStateService } from '../../../../core/services/grid-state.service';
 
 @Component({
     selector: 'app-inventory-analytics',
@@ -12,70 +13,97 @@ import { ColDef, ValueFormatterParams } from 'ag-grid-community';
 })
 export class InventoryAnalyticsComponent implements OnInit {
     inventoryValue?: InventoryValue;
-    inventoryDistribution: InventoryDistribution[] = [];
     slowMovers: SlowMover[] = [];
-    topExpansionsByValue: TopExpansionValue[] = [];
+    isLoadingSlowMovers = false;
+    slowMoverDays = 90;
 
-    // Chart.js data
-    distributionLabels: string[] = [];
-    distributionValues: number[] = [];
-    chartOptions: any = { responsive: true };
+    private gridApi!: GridApi;
+    private readonly GRID_ID = 'inventory-slow-movers-grid';
 
-    // AG-Grid Column Definitions
+    private readonly currencyFormatter = (p: ValueFormatterParams) =>
+        p.value != null ? `€${(p.value as number).toFixed(2)}` : '';
+
     slowMoversColumnDefs: ColDef[] = [
-        { field: 'cardName', headerName: 'Carta' },
-        { field: 'expansionName', headerName: 'Espansione' },
-        { field: 'daysInInventory', headerName: 'Giorni in Inventario' },
-        { field: 'quantity', headerName: 'Quantità' },
+        { field: 'cardName', headerName: 'Carta', sortable: true, filter: true, flex: 2 },
+        { field: 'expansionName', headerName: 'Espansione', sortable: true, filter: true, flex: 1 },
+        {
+            field: 'daysInInventory',
+            headerName: 'Giorni in Inv.',
+            sortable: true,
+            filter: 'agNumberColumnFilter',
+            width: 140,
+            sort: 'desc'
+        },
+        {
+            field: 'quantity',
+            headerName: 'Qtà',
+            sortable: true,
+            filter: 'agNumberColumnFilter',
+            width: 90
+        },
         {
             field: 'listingPrice',
             headerName: 'Prezzo',
-            valueFormatter: (params: ValueFormatterParams) => '€' + params.value
+            sortable: true,
+            filter: 'agNumberColumnFilter',
+            width: 110,
+            valueFormatter: this.currencyFormatter
         }
     ];
 
-    topExpansionsColumnDefs: ColDef[] = [
-        { field: 'expansionName', headerName: 'Espansione', flex: 2 },
-        { field: 'gameName', headerName: 'Gioco', flex: 1 },
-        {
-            field: 'averageCardValue',
-            headerName: 'Val. Medio Carta',
-            flex: 1,
-            valueFormatter: (params: ValueFormatterParams) => '€' + params.value.toFixed(2)
-        },
-        {
-            field: 'totalMinPrice',
-            headerName: 'Valore Totale (Min)',
-            flex: 1,
-            valueFormatter: (params: ValueFormatterParams) => '€' + params.value.toFixed(2)
+    gridOptions: GridOptions = {
+        sideBar: {
+            toolPanels: [
+                {
+                    id: 'columns',
+                    labelDefault: 'Colonne',
+                    labelKey: 'columns',
+                    iconKey: 'columns',
+                    toolPanel: 'agColumnsToolPanel',
+                    toolPanelParams: {
+                        suppressRowGroups: true,
+                        suppressValues: true,
+                        suppressPivots: true,
+                        suppressPivotMode: true
+                    }
+                }
+            ]
         }
-    ];
+    };
 
-    constructor(private reportingService: ReportingService) { }
+    constructor(
+        private reportingService: ReportingService,
+        private gridStateService: GridStateService
+    ) { }
 
     async ngOnInit(): Promise<void> {
+        this.inventoryValue = await firstValueFrom(this.reportingService.getInventoryValue());
+        await this.loadSlowMovers();
+    }
+
+    async loadSlowMovers(): Promise<void> {
+        this.isLoadingSlowMovers = true;
         try {
-            console.log('Fetching inventory analytics data...');
-            const [value, distribution, slow, topValues] = await Promise.all([
-                firstValueFrom(this.reportingService.getInventoryValue()),
-                firstValueFrom(this.reportingService.getInventoryDistribution()),
-                firstValueFrom(this.reportingService.getSlowMovers()),
-                firstValueFrom(this.reportingService.getTopExpansionsByValue())
-            ]);
-
-            console.log('Inventory analytics data fetched successfully', { value, distribution, slow, topValues });
-
-            this.inventoryValue = value;
-            this.inventoryDistribution = distribution;
-            this.slowMovers = slow;
-            this.topExpansionsByValue = topValues;
-
-            if (distribution) {
-                this.distributionLabels = distribution.map(d => d.gameName);
-                this.distributionValues = distribution.map(d => d.totalValue);
-            }
-        } catch (error) {
-            console.error('Error fetching inventory analytics data:', error);
+            this.slowMovers = await firstValueFrom(this.reportingService.getSlowMovers(this.slowMoverDays));
+        } finally {
+            this.isLoadingSlowMovers = false;
         }
+    }
+
+    onGridReady(params: GridReadyEvent): void {
+        this.gridApi = params.api;
+        const saved = this.gridStateService.loadGridState(this.GRID_ID);
+        if (saved?.columnState) {
+            this.gridApi.applyColumnState({ state: saved.columnState, applyOrder: true });
+        }
+    }
+
+    saveGridState(): void {
+        if (!this.gridApi) return;
+        const columnState = this.gridApi.getColumnState();
+        this.gridStateService.saveGridState(this.GRID_ID, {
+            columnState,
+            sortModel: columnState.filter(c => c.sort != null)
+        });
     }
 }

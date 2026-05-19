@@ -11,31 +11,51 @@
             <h3>Totale Articoli</h3>
             <p>{{ inventoryValue.totalItems }}</p>
         </div>
+        <div class="metric-item">
+            <h3>Prodotti Unici</h3>
+            <p>{{ inventoryValue.uniqueProducts }}</p>
+        </div>
+        <div class="metric-item">
+            <h3>Valore Medio Articolo</h3>
+            <p>{{ inventoryValue.averageItemValue | currency:'EUR':'symbol':'1.2-2' }}</p>
+        </div>
     </div>
 
-    <!-- Distribution Chart -->
-    <div class="chart-container" *ngIf="distributionValues.length > 0">
-        <h3>Distribuzione Valore per Gioco</h3>
-        <canvas baseChart
-            [data]="{ datasets: [{ data: distributionValues, label: 'Valore' }], labels: distributionLabels }"
-            [options]="chartOptions" [legend]="true" chartType="pie">
-        </canvas>
-    </div>
+    <!-- Slow Movers -->
+    <div class="slow-movers-section">
+        <div class="slow-movers-header">
+            <div>
+                <h3>Articoli a Bassa Rotazione</h3>
+                <p class="section-desc">Articoli ancora in vendita (Qtà &gt; 0) aggiunti all'inventario almeno X giorni fa. Diminuire la soglia per vedere più articoli.</p>
+            </div>
+            <div class="slow-movers-controls">
+                <mat-form-field appearance="outline" class="days-field">
+                    <mat-label>Età minima (giorni)</mat-label>
+                    <input matInput type="number" [(ngModel)]="slowMoverDays" min="1" max="3650"
+                        (keydown.enter)="loadSlowMovers()">
+                </mat-form-field>
+                <button mat-raised-button color="primary" (click)="loadSlowMovers()" [disabled]="isLoadingSlowMovers">
+                    <mat-icon>search</mat-icon>
+                    Cerca
+                </button>
+            </div>
+        </div>
 
-    <!-- Slow Movers Grid -->
-    <h3>Articoli a Bassa Rotazione (>90 giorni)</h3>
-    <ag-grid-angular class="ag-theme-alpine" style="width: 100%; height: 300px; margin-bottom: 24px;" [rowData]="slowMovers"
-        [columnDefs]="slowMoversColumnDefs">
-    </ag-grid-angular>
-
-    <!-- Top Expansions Grid -->
-    <div class="top-expansions-section" *ngIf="topExpansionsByValue.length > 0">
-        <h3>Espansioni più Convenienti (Valore Medio Carta)</h3>
-        <p style="font-size: 14px; color: #666; margin-bottom: 8px;">
-            Basato sul prezzo minimo di vendita di tutte le carte dell'espansione.
+        <p class="hint" *ngIf="!isLoadingSlowMovers">
+            <strong>{{ slowMovers.length }}</strong> articoli in vendita da più di {{ slowMoverDays }} giorni.
         </p>
-        <ag-grid-angular class="ag-theme-alpine" style="width: 100%; height: 400px;" [rowData]="topExpansionsByValue"
-            [columnDefs]="topExpansionsColumnDefs">
+        <p class="hint" *ngIf="isLoadingSlowMovers">Caricamento...</p>
+
+        <ag-grid-angular
+            class="ag-theme-alpine slow-movers-grid"
+            [rowData]="slowMovers"
+            [columnDefs]="slowMoversColumnDefs"
+            [gridOptions]="gridOptions"
+            (gridReady)="onGridReady($event)"
+            (columnMoved)="saveGridState()"
+            (columnVisible)="saveGridState()"
+            (columnResized)="saveGridState()"
+            (sortChanged)="saveGridState()">
         </ag-grid-angular>
     </div>
 </div>

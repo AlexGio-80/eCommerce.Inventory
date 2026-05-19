@@ -6,6 +6,7 @@
     display: flex;
     gap: 20px;
     margin-bottom: 30px;
+    flex-wrap: wrap;
 }
 
 .metric-item {
@@ -13,12 +14,16 @@
     padding: 20px;
     border-radius: 8px;
     flex: 1;
+    min-width: 160px;
     text-align: center;
 }
 
 .metric-item h3 {
     margin: 0 0 10px 0;
     color: #666;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .metric-item p {
@@ -28,7 +33,46 @@
     color: #333;
 }
 
-.chart-container {
-    margin-bottom: 30px;
-    height: 400px;
+.slow-movers-section {
+    margin-top: 10px;
+}
+
+.section-desc {
+    font-size: 13px;
+    color: #666;
+    margin: 2px 0 0 0;
+}
+
+.slow-movers-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.slow-movers-header h3 {
+    margin: 0;
+}
+
+.slow-movers-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.days-field {
+    width: 130px;
+}
+
+.hint {
+    font-size: 13px;
+    color: #666;
+    margin: 0 0 12px 0;
+}
+
+.slow-movers-grid {
+    width: 100%;
+    height: 450px;
 }

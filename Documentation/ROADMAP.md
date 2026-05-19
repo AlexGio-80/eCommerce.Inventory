@@ -20,6 +20,7 @@ _Nessun task attivo al momento._
 
 > Funzionalità non prioritarie, da rivalutare in futuro.
 
+- [ ] **Sealed Product Sync** — prezzi box automatici nel calcolatore espansioni: recuperare prezzo box sigillati da CT (primi 10 valori più bassi in inglese tra Blueprint categoria "sealed") per pre-popolare `BoxPrice` invece di inserimento manuale
 - [ ] Redis caching per dati statici Card Trader (Games TTL 24h, Expansions TTL 12h, Blueprints TTL 6h)
 - [ ] Espansione multi-marketplace (eBay, Wallapop) — pattern già definito in ARCHITECTURE.md
 - [ ] AI Grading reale (Ximilar API) — valutare costi/benefici abbonamento
@@ -33,6 +34,14 @@ _Nessun task attivo al momento._
 
 | Data | Voce |
 |------|------|
+| 2026-05-19 | UX Review — rimozione componente `profitability-analysis` (dati inaffidabili) |
+| 2026-05-19 | Feature — `tag-profitability` come tab dedicato nella Dashboard (invece di voce di menù separata) |
+| 2026-05-19 | Miglioramento — Report Inventario: AG Grid con filtri/sort, soglia slow-movers configurabile, 4 KPI, fix EF LINQ translation |
+| 2026-05-19 | Miglioramento — Report Vendite: filtro date, griglia top prodotti AG Grid con stato persistente, rimozione grafici inutilizzati |
+| 2026-05-19 | Fix — Widget "Ultimo Sync" dashboard: ora legge `lastSyncTime` da `localStorage` invece di mostrare sempre l'ora corrente |
+| 2026-05-19 | UX — Rimozione widget "Espansioni più Convenienti" dalla dashboard (valori non aggiornati, poco utile) |
+| 2026-05-19 | Feature — Calcolatore Box su pagina Espansioni: PacksPerBox + CardsPerPack + BoxPrice salvati a DB; ROI% e breakeven calcolati on-the-fly |
+| 2026-05-19 | Feature — Colonna "ROI Box%" in griglia Espansioni: colorata (verde/arancio/rosso), filtrabile e ordinabile |
 | 2026-05-19 | Feature — UI button re-sync singolo ordine nella griglia Ordini (già presente nel codice, ROADMAP aggiornata) |
 | 2026-05-19 | Feature — Pannello "Le mie inserzioni" in Nuovo Prodotto, update CT API implementato, flag IsUpdate su PendingListing |
 | 2026-05-19 | Fix Qtà/Valore Rimanente nel report Redditività per Tag — query riscritte via PendingListings, endpoint backfill-tags per InventoryItems |

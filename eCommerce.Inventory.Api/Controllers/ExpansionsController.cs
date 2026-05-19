@@ -88,7 +88,13 @@ public class ExpansionsController : ControllerBase
                                       ? ((roi.Differenza ?? 0m) / (roi.TotaleAcquistato ?? 0m)) * 100
                                       : 0m,
                                   ReleaseDate = e.ReleaseDate,
-                                  IconSvgUri = e.IconSvgUri
+                                  IconSvgUri = e.IconSvgUri,
+                                  PacksPerBox = e.PacksPerBox,
+                                  CardsPerPack = e.CardsPerPack,
+                                  BoxPrice = e.BoxPrice,
+                                  BoxRoiPercentage = (e.BoxPrice != null && e.BoxPrice > 0 && e.AverageCardValue != null && e.PacksPerBox != null && e.CardsPerPack != null)
+                                      ? ((e.AverageCardValue.Value * e.PacksPerBox.Value * e.CardsPerPack.Value - e.BoxPrice.Value) / e.BoxPrice.Value) * 100m
+                                      : (decimal?)null
                               };
 
         var expansions = await expansionsQuery.ToListAsync(cancellationToken);
@@ -125,7 +131,13 @@ public class ExpansionsController : ControllerBase
             AvgValueRare = expansion.AvgValueRare,
             AvgValueMythic = expansion.AvgValueMythic,
             ReleaseDate = expansion.ReleaseDate,
-            IconSvgUri = expansion.IconSvgUri
+            IconSvgUri = expansion.IconSvgUri,
+            PacksPerBox = expansion.PacksPerBox,
+            CardsPerPack = expansion.CardsPerPack,
+            BoxPrice = expansion.BoxPrice,
+            BoxRoiPercentage = (expansion.BoxPrice != null && expansion.BoxPrice > 0 && expansion.AverageCardValue != null && expansion.PacksPerBox != null && expansion.CardsPerPack != null)
+                ? ((expansion.AverageCardValue.Value * expansion.PacksPerBox.Value * expansion.CardsPerPack.Value - expansion.BoxPrice.Value) / expansion.BoxPrice.Value) * 100m
+                : (decimal?)null
         };
 
         try
@@ -210,6 +222,21 @@ public class ExpansionsController : ControllerBase
         }
     }
 
+    [HttpPatch("{id}/box-config")]
+    public async Task<ActionResult<Models.ApiResponse<object>>> SaveBoxConfig(int id, [FromBody] BoxConfigDto dto, CancellationToken cancellationToken = default)
+    {
+        var expansion = await _dbContext.Expansions.FindAsync([id], cancellationToken);
+        if (expansion == null)
+            return NotFound(Models.ApiResponse<object>.ErrorResult($"Expansion {id} not found"));
+
+        expansion.PacksPerBox = dto.PacksPerBox;
+        expansion.CardsPerPack = dto.CardsPerPack;
+        expansion.BoxPrice = dto.BoxPrice;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return Ok(Models.ApiResponse<object>.SuccessResult(null, "Configurazione box salvata"));
+    }
+
     [HttpPost("analyze-all-values")]
     public async Task<ActionResult<Models.ApiResponse<object>>> AnalyzeAllValues(CancellationToken cancellationToken = default)
     {
@@ -224,6 +251,13 @@ public class ExpansionsController : ControllerBase
             return StatusCode(500, Models.ApiResponse<object>.ErrorResult(ex.Message));
         }
     }
+}
+
+public class BoxConfigDto
+{
+    public int? PacksPerBox { get; set; }
+    public int? CardsPerPack { get; set; }
+    public decimal? BoxPrice { get; set; }
 }
 
 public class ExpansionDto
@@ -252,4 +286,8 @@ public class ExpansionDto
     public decimal? RoiPercentage { get; set; }
     public DateTime? ReleaseDate { get; set; }
     public string? IconSvgUri { get; set; }
+    public int? PacksPerBox { get; set; }
+    public int? CardsPerPack { get; set; }
+    public decimal? BoxPrice { get; set; }
+    public decimal? BoxRoiPercentage { get; set; }
 }

@@ -16,15 +16,15 @@ import { TagProfitabilityComponent } from '../../../reporting/pages/tag-profitab
 import { Observable, forkJoin, of, BehaviorSubject } from 'rxjs';
 import { map, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 
-import { CardTraderApiService, ReportingService } from '../../../../core/services';
-import { PagedResponse, SalesByExpansion, ExpansionProfitability, TopExpansionValue } from '../../../../core/models';
+import { CardTraderApiService } from '../../../../core/services';
+import { PagedResponse, SalesByExpansion, ExpansionProfitability } from '../../../../core/models';
 import { TabManagerService } from '../../../../core/services/tab-manager.service';
 
 interface DashboardStats {
   totalProducts: number;
   totalOrders: number;
   unpreparedItemsCount: number;
-  lastSync: Date;
+  lastSync: Date | null;
 }
 
 @Component({
@@ -53,7 +53,6 @@ export class DashboardComponent implements OnInit {
   stats$!: Observable<DashboardStats>;
   salesByExpansion$!: Observable<SalesByExpansion[]>;
   expansionProfitability$!: Observable<ExpansionProfitability[]>;
-  topExpansionsByValue$!: Observable<TopExpansionValue[]>;
   isLoading = true;
 
   // Filter subjects
@@ -66,7 +65,6 @@ export class DashboardComponent implements OnInit {
 
   constructor(
     private apiService: CardTraderApiService,
-    private reportingService: ReportingService,
     private tabManager: TabManagerService,
     private router: Router
   ) { }
@@ -86,7 +84,7 @@ export class DashboardComponent implements OnInit {
       unpreparedItems: this.apiService.getUnpreparedItems().pipe(
         map((items: any[]) => items.length)
       ),
-      lastSync: of(new Date()) // TODO: Get real last sync date
+      lastSync: of(this.getLastSyncTime())
     }).pipe(
       map((data) => ({
         totalProducts: data.totalItems,
@@ -108,9 +106,12 @@ export class DashboardComponent implements OnInit {
       switchMap(filter => this.apiService.getExpansionProfitability(undefined, undefined, 12, filter))
     );
 
-    this.topExpansionsByValue$ = this.reportingService.getTopExpansionsByValue(10);
-
     this.isLoading = false;
+  }
+
+  private getLastSyncTime(): Date | null {
+    const stored = localStorage.getItem('lastSyncTime');
+    return stored ? new Date(stored) : null;
   }
 
   openTab(route: string, title: string, icon: string): void {

@@ -22,4 +22,9 @@ public class Expansion
     public DateTime? LastValueAnalysisUpdate { get; set; }
     public DateTime? ReleaseDate { get; set; }
     public string? IconSvgUri { get; set; }
+
+    // Box calculator config
+    public int? PacksPerBox { get; set; }
+    public int? CardsPerPack { get; set; }
+    public decimal? BoxPrice { get; set; }
 }

@@ -170,6 +170,16 @@ namespace eCommerce.Inventory.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("PacksPerBox")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CardsPerPack")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("BoxPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<DateTime?>("ReleaseDate")
                         .HasColumnType("datetime2");
 

@@ -227,7 +227,12 @@ Expansions
 ├─ CardTraderId
 ├─ Name
 ├─ Code
-└─ GameId (FK → Games)
+├─ GameId (FK → Games)
+├─ AverageCardValue, TotalMinPrice, LastValueAnalysisUpdate
+├─ AvgValueCommon, AvgValueUncommon, AvgValueRare, AvgValueMythic
+├─ ReleaseDate, IconSvgUri
+├─ PacksPerBox, CardsPerPack  ← configurazione box calcolatore
+└─ BoxPrice                   ← prezzo box (decimal 18,2), usato per ROI%
 
 Blueprints
 ├─ Id (PK)
@@ -360,6 +365,7 @@ L'architettura è progettata per aggiungere facilmente nuovi marketplace:
 | 2025-11-28 | Rate limiter outbound custom (`CardTraderRateLimiter`) | Card Trader API: 20 req/min — rischio IP ban senza throttling |
 | 2025-12-22 | `RunAnalyticsDuringSync = false` di default | Expansion analytics durante sync notturna causava stalli (100+ chiamate API) |
 | 2026-02-06 | Fetch marketplace prices per `expansion_id` (non per `blueprint_id[]`) | Card Trader non supporta batch per blueprint — una call per espansione è più efficiente |
+| 2026-05-19 | Migrazioni applicate via SQL diretto quando `dotnet ef` è bloccato | API + VS lockano le DLL Infrastructure; workaround: SQL diretto + insert in `__EFMigrationsHistory` + aggiornamento snapshot manuale |
 | 2026-03-26 | `TotaleAcquistato` nel report Tag da `PendingListings.PurchasePrice` | `InventoryItems.PurchasePrice` spesso zero; `PendingListings` è la source of truth del costo d'acquisto |
 
 ---

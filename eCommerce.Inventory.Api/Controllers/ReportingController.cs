@@ -350,24 +350,37 @@ public class ReportingController : ControllerBase
             _logger.LogInformation("Fetching slow movers (items older than {Days} days)", days);
 
             var cutoffDate = DateTime.UtcNow.AddDays(-days);
+            var now = DateTime.UtcNow;
 
-            var slowMovers = await _context.InventoryItems
+            var rawItems = await _context.InventoryItems
                 .AsNoTracking()
                 .Include(i => i.Blueprint)
                     .ThenInclude(b => b.Expansion)
                 .Where(i => i.DateAdded <= cutoffDate && i.Quantity > 0)
+                .Select(i => new
+                {
+                    i.Id,
+                    CardName = i.Blueprint.Name,
+                    ExpansionName = i.Blueprint.Expansion.Name,
+                    i.Quantity,
+                    i.ListingPrice,
+                    i.DateAdded
+                })
+                .ToListAsync();
+
+            var slowMovers = rawItems
                 .Select(i => new SlowMoverDto
                 {
                     InventoryItemId = i.Id,
-                    CardName = i.Blueprint.Name,
-                    ExpansionName = i.Blueprint.Expansion.Name,
+                    CardName = i.CardName,
+                    ExpansionName = i.ExpansionName,
                     Quantity = i.Quantity,
                     ListingPrice = i.ListingPrice,
-                    DaysInInventory = (int)(DateTime.UtcNow - i.DateAdded).TotalDays,
+                    DaysInInventory = (int)(now - i.DateAdded).TotalDays,
                     DateAdded = i.DateAdded
                 })
                 .OrderByDescending(s => s.DaysInInventory)
-                .ToListAsync();
+                .ToList();
 
             return Ok(ApiResponse<List<SlowMoverDto>>.SuccessResult(slowMovers));
         }
