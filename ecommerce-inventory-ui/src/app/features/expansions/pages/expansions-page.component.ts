@@ -267,7 +267,7 @@ import { FormsModule } from '@angular/forms';
             (columnMoved)="onColumnMoved()"
             (columnVisible)="onColumnVisible()"
             (sortChanged)="onSortChanged()"
-            style="height: 600px; width: 100%;">
+            style="width: 100%; height: 100%;">
           </ag-grid-angular>
         </mat-card-content>
       </mat-card>
@@ -275,9 +275,11 @@ import { FormsModule } from '@angular/forms';
   `,
   styles: [`
     .expansions-container {
-      padding: 24px;
-      max-width: 1400px;
-      margin: 0 auto;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      box-sizing: border-box;
     }
 
     h1 {
@@ -440,14 +442,32 @@ import { FormsModule } from '@angular/forms';
     }
 
     .grid-card {
-      margin-top: 24px;
+      margin-top: 16px;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .grid-card ::ng-deep .mat-mdc-card-content {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      padding-bottom: 0 !important;
     }
     
     .grid-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 16px;
+      margin-bottom: 8px;
+      flex-shrink: 0;
+    }
+
+    ag-grid-angular {
+      flex: 1;
+      min-height: 0;
     }
     
     .grid-header h2 {

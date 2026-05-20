@@ -222,13 +222,14 @@ export class UnpreparedItemsComponent implements OnInit, OnDestroy {
     gridOptions = {
         pagination: true,
         paginationPageSize: 20,
-        domLayout: 'autoHeight' as const,
         enableCellTextSelection: true,
         suppressRowClickSelection: true,
         animateRows: true,
         suppressMenuHide: false,
         columnMenu: 'new' as const,
-        suppressDragLeaveHidesColumns: true
+        suppressDragLeaveHidesColumns: true,
+        overlayNoRowsTemplate: '<span style="padding: 16px; color: #666; font-size: 16px;">All items are prepared! Great job.</span>',
+        overlayLoadingTemplate: '<span style="padding: 16px; color: #666; font-size: 16px;">Loading items...</span>'
     };
 
     constructor(
@@ -262,6 +263,10 @@ export class UnpreparedItemsComponent implements OnInit, OnDestroy {
     onGridReady(params: GridReadyEvent): void {
         this.gridApi = params.api;
 
+        if (this.isLoading) {
+            this.gridApi.showLoadingOverlay();
+        }
+
         // Restore saved grid state
         const savedState = this.gridStateService.loadGridState(this.GRID_ID);
         if (savedState?.columnState) {
@@ -281,22 +286,29 @@ export class UnpreparedItemsComponent implements OnInit, OnDestroy {
 
     loadUnpreparedItems(): void {
         this.isLoading = true;
+        if (this.gridApi) {
+            this.gridApi.showLoadingOverlay();
+        }
         this.apiService.getUnpreparedItems().subscribe({
             next: (items) => {
                 this.unpreparedItems = items;
                 this.isLoading = false;
-
-                // Force grid to re-render after data is loaded
-                setTimeout(() => {
-                    if (this.gridApi) {
-                        this.gridApi.setGridOption('rowData', this.unpreparedItems);
+                if (this.gridApi) {
+                    this.gridApi.setGridOption('rowData', this.unpreparedItems);
+                    if (items.length === 0) {
+                        this.gridApi.showNoRowsOverlay();
+                    } else {
+                        this.gridApi.hideOverlay();
                     }
-                }, 0);
+                }
             },
             error: (err) => {
                 console.error('Error loading unprepared items', err);
                 this.showSnackBar('Error loading items');
                 this.isLoading = false;
+                if (this.gridApi) {
+                    this.gridApi.hideOverlay();
+                }
             }
         });
     }
@@ -379,8 +391,10 @@ export class UnpreparedItemsComponent implements OnInit, OnDestroy {
                 // Remove from list if marked prepared
                 if (newValue) {
                     this.unpreparedItems = this.unpreparedItems.filter(i => i.id !== item.id);
-                    // Refresh grid data
                     this.gridApi.setGridOption('rowData', this.unpreparedItems);
+                    if (this.unpreparedItems.length === 0) {
+                        this.gridApi.showNoRowsOverlay();
+                    }
                 }
             },
             error: (err) => {

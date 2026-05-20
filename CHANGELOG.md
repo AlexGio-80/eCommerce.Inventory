@@ -38,6 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Struttura template HTML** di `expansions-page.component.ts`: rimosso `</div>` extra che chiudeva prematuramente `expansion-dashboard`, il calcolatore box ora è correttamente dentro la grid CSS
 - **TypeScript build error** su `cellStyle` AG Grid: sostituito `return {}` con `return null` per compatibilità con `CellStyle | null | undefined`
 - **ModuleRegistry.registerModules** rimosso da `expansions-page.component.ts` (già registrato globalmente in `app.config.ts`)
+- **Griglia Items to Prepare — paginazione tagliata**: rimosso `domLayout: 'autoHeight'` da `gridOptions` (causava rendering a 952px ignorando il contenitore CSS di 458px); AG Grid ora in layout `normal`, stati loading/empty gestiti con `showLoadingOverlay()` / `showNoRowsOverlay()`; rimosso `*ngIf` dal container per garantire inizializzazione con dimensioni corrette
+- **Griglia Espansioni — altezza fissa 600px**: sostituita con layout flex (`flex: 1; min-height: 0`) sulla card e sul componente AG Grid; la griglia ora riempie tutto lo spazio disponibile come Items to Prepare
+- **Sidenav container overflow**: altezza corretta da `calc(100vh - 64px)` a `calc(100vh - 112px)` (64px toolbar + 48px tab-bar)
 
 ---
 

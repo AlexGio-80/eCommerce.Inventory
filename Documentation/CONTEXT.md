@@ -9,7 +9,7 @@
 ## Stato Attuale
 
 **Branch principale:** `master`
-**Ultimo aggiornamento:** 2026-05-19 (sessione 3)
+**Ultimo aggiornamento:** 2026-05-20 (sessione 3 — fix layout griglia)
 **Fase:** In produzione (uso quotidiano attivo)
 
 ### Cosa funziona adesso
@@ -36,6 +36,7 @@
 ### Cosa è in sospeso / da verificare
 - Possibile disallineamento residuo tra il valore `TotaleAcquistato` a livello Tag e la somma dei valori per Espansione nel report Redditività per Tag
 - Copertura limitata del backfill Tag su OrderItems storici (molti `CardTraderId` non trovano corrispondenza nei Blueprints locali)
+- Applicare le migration manuali su server di produzione (SQL diretto: vedi sezione Punti di Attenzione)
 
 ---
 
@@ -43,6 +44,9 @@
 
 | Data | Decisione | Perché |
 |------|-----------|--------|
+| 2026-05-20 | `domLayout: 'autoHeight'` rimosso da Items to Prepare | Causava rendering AG Grid a 952px (altezza naturale 25 righe) ignorando il contenitore CSS; la paginazione risultava tagliata da `overflow: hidden` |
+| 2026-05-20 | Griglia Espansioni con layout flex (`flex: 1; min-height: 0`) | Sostituisce altezza fissa `600px`; la griglia ora riempie lo spazio disponibile coerentemente con Items to Prepare |
+| 2026-05-20 | Sidenav container: `calc(100vh - 112px)` | Contabilizza sia toolbar (64px) che tab-bar (48px); prima tagliava il contenuto con il solo 64px |
 | 2026-05-19 | `BoxPrice` salvato a DB insieme a PacksPerBox/CardsPerPack | Permette tracking del prezzo inserito e calcolo ROI Box% come colonna filtrabile in griglia |
 | 2026-05-19 | `BoxRoiPercentage` calcolato server-side nel controller, non persistito | Dato derivato da campi già in DB; si ricalcola sempre aggiornato ad ogni fetch |
 | 2026-05-19 | Migrazioni applicate via SQL diretto + snapshot aggiornato manualmente | API + VS lockano le DLL Infrastructure; workaround stabile: SQL diretto + `__EFMigrationsHistory` + snapshot |
