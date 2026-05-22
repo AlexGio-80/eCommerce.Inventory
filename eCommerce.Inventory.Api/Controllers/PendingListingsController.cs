@@ -1,6 +1,7 @@
 using eCommerce.Inventory.Application.DTOs;
 using eCommerce.Inventory.Application.Interfaces;
 using eCommerce.Inventory.Domain.Entities;
+using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Mappers;
 using eCommerce.Inventory.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -108,6 +109,10 @@ public class PendingListingsController : ControllerBase
                 ? unsyncedByProductId.GetValueOrDefault(ii.CardTraderProductId.Value)
                 : null;
 
+            PendingListing? syncedPending = pendingEdit == null && ii.CardTraderProductId.HasValue
+                ? pendingListings.FirstOrDefault(pl => pl.IsSynced && pl.CardTraderProductId == ii.CardTraderProductId)
+                : null;
+
             // If there is a pending edit queued, show its values (latest intent)
             var source = pendingEdit != null
                 ? new
@@ -132,7 +137,8 @@ public class PendingListingsController : ControllerBase
                     IsFoil = ii.IsFoil,
                     IsSigned = ii.IsSigned,
                     Location = ii.Location,
-                    Tag = ii.Tag
+                    // InventoryItems synced from CT don't carry the user's tag; fall back to the synced PendingListing
+                    Tag = ii.Tag ?? syncedPending?.Tag
                 };
 
             result.Add(new BlueprintListingInfoDto
@@ -144,14 +150,14 @@ public class PendingListingsController : ControllerBase
                 SellingPrice = source.SellingPrice,
                 PurchasePrice = source.PurchasePrice,
                 Condition = source.Condition,
-                Language = source.Language,
+                // CT stores short language codes ("en", "it"); normalize to full names for the form dropdown
+                Language = CardTraderDtoMapper.NormalizeLanguageCode(source.Language),
                 IsFoil = source.IsFoil,
                 IsSigned = source.IsSigned,
                 Location = source.Location,
                 Tag = source.Tag,
-                // pending-edit = an update is queued but not yet sent; synced = on CT, no pending changes; ct-native = on CT, never managed by us
                 Status = pendingEdit != null ? "pending-edit"
-                    : pendingListings.Any(pl => pl.CardTraderProductId == ii.CardTraderProductId && pl.IsSynced) ? "synced"
+                    : syncedPending != null ? "synced"
                     : "ct-native"
             });
         }

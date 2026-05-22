@@ -380,14 +380,29 @@ public class CardTraderDtoMapper
     private string ExtractLanguage(Dictionary<string, object> properties)
     {
         if (properties == null) return "Unknown";
-        // Check for common language keys
         string[] keys = { "language", "mtg_language", "pokemon_language", "yugioh_language" };
         foreach (var key in keys)
         {
-            if (properties.TryGetValue(key, out var value)) return value?.ToString() ?? "Unknown";
+            if (properties.TryGetValue(key, out var value))
+                return NormalizeLanguageCode(value?.ToString());
         }
         return "Unknown";
     }
+
+    public static string NormalizeLanguageCode(string? code) => (code ?? string.Empty).ToLowerInvariant() switch
+    {
+        "en" or "english" => "English",
+        "it" or "italian" => "Italian",
+        "de" or "german" => "German",
+        "fr" or "french" => "French",
+        "es" or "spanish" => "Spanish",
+        "jp" or "ja" or "japanese" => "Japanese",
+        "cn" or "zh" or "chinese" => "Chinese",
+        "pt" or "portuguese" => "Portuguese",
+        "ko" or "korean" => "Korean",
+        "ru" or "russian" => "Russian",
+        _ => code ?? "Unknown"
+    };
 
     private bool ExtractBooleanProperty(Dictionary<string, object> properties, string partialKey)
     {
