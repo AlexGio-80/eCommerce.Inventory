@@ -44,6 +44,8 @@
 
 | Data | Decisione | Perché |
 |------|-----------|--------|
+| 2026-05-22 | `NormalizeLanguageCode` nel mapper + endpoint `by-blueprint` | CT restituisce codici brevi (`"en"`, `"it"`); il mapper li converte a nomi completi per le future sync; il DTO li normalizza anche per i record già in DB, così la combo lingua nel form si popola correttamente |
+| 2026-05-22 | Tag recuperato da `PendingListing` sincronizzata come fallback in `by-blueprint` | Gli `InventoryItem` da sync notturna CT non portano il tag utente (CT non lo espone); il fallback `ii.Tag ?? syncedPending?.Tag` lo recupera senza richiedere re-sync |
 | 2026-05-20 | `domLayout: 'autoHeight'` rimosso da Items to Prepare | Causava rendering AG Grid a 952px (altezza naturale 25 righe) ignorando il contenitore CSS; la paginazione risultava tagliata da `overflow: hidden` |
 | 2026-05-20 | Griglia Espansioni con layout flex (`flex: 1; min-height: 0`) | Sostituisce altezza fissa `600px`; la griglia ora riempie lo spazio disponibile coerentemente con Items to Prepare |
 | 2026-05-20 | Sidenav container: `calc(100vh - 112px)` | Contabilizza sia toolbar (64px) che tab-bar (48px); prima tagliava il contenuto con il solo 64px |

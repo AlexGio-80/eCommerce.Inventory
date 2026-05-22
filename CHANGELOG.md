@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Voce di menù "Redditività per Tag"** dal sidenav: accessibile come tab nella dashboard
 
 ### Fixed
+- **Form "Nuovo Prodotto" — lingua non selezionata**: CT restituisce codici brevi (`"en"`, `"it"`) nella `properties_hash`; il mapper ora li normalizza a nomi completi (`"English"`, `"Italian"`) tramite `NormalizeLanguageCode`; l'endpoint `by-blueprint` applica la stessa normalizzazione ai record esistenti in DB, così la combo si popola correttamente
+- **Form "Nuovo Prodotto" — tag non recuperato**: gli `InventoryItem` creati dalla sync notturna CT non portano il tag utente (CT non lo espone); l'endpoint `by-blueprint` ora recupera il tag dal `PendingListing` sincronizzato corrispondente come fallback su `InventoryItem.Tag == null`
 - **Struttura template HTML** di `expansions-page.component.ts`: rimosso `</div>` extra che chiudeva prematuramente `expansion-dashboard`, il calcolatore box ora è correttamente dentro la grid CSS
 - **TypeScript build error** su `cellStyle` AG Grid: sostituito `return {}` con `return null` per compatibilità con `CellStyle | null | undefined`
 - **ModuleRegistry.registerModules** rimosso da `expansions-page.component.ts` (già registrato globalmente in `app.config.ts`)
