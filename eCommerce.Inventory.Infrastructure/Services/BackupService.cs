@@ -258,14 +258,28 @@ public class BackupService : BackgroundService
             _logger.LogInformation("Applying retention policy. Keeping backups for {Days} days.", _settings.RetentionDays);
 
             var retentionDate = DateTime.Now.AddDays(-_settings.RetentionDays);
-            var files = Directory.GetFiles(backupFolder, "InventoryBackup_Complete_*.zip");
 
-            foreach (var file in files)
+            // Delete old ZIP backups
+            var zipFiles = Directory.GetFiles(backupFolder, "InventoryBackup_Complete_*.zip");
+            foreach (var file in zipFiles)
             {
                 var fileInfo = new FileInfo(file);
                 if (fileInfo.CreationTime < retentionDate)
                 {
-                    _logger.LogInformation("Deleting old backup: {File} ({Size} MB)",
+                    _logger.LogInformation("Deleting old backup ZIP: {File} ({Size} MB)",
+                        fileInfo.Name, fileInfo.Length / 1024 / 1024);
+                    fileInfo.Delete();
+                }
+            }
+
+            // Delete old database backups (.bak files)
+            var dbFiles = Directory.GetFiles(backupFolder, "Database_InventoryDB_*.bak");
+            foreach (var file in dbFiles)
+            {
+                var fileInfo = new FileInfo(file);
+                if (fileInfo.CreationTime < retentionDate)
+                {
+                    _logger.LogInformation("Deleting old database backup: {File} ({Size} MB)",
                         fileInfo.Name, fileInfo.Length / 1024 / 1024);
                     fileInfo.Delete();
                 }
