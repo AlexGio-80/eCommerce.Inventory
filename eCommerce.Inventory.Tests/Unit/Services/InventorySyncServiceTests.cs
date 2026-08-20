@@ -64,7 +64,7 @@ public class InventorySyncServiceTests
         item!.Quantity.Should().Be(2);
         item.ListingPrice.Should().Be(10.00m);
         item.Condition.Should().Be("NM");
-        item.Language.Should().Be("EN");
+        item.Language.Should().Be("English");
     }
 
     [Fact]
@@ -109,7 +109,7 @@ public class InventorySyncServiceTests
         item!.Quantity.Should().Be(5);
         item.ListingPrice.Should().Be(8.00m);
         item.Condition.Should().Be("NM");
-        item.Language.Should().Be("EN");
+        item.Language.Should().Be("English");
     }
 
     [Fact]

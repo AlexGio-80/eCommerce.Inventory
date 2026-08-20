@@ -94,8 +94,8 @@ if (-not (Test-Path "node_modules")) {
     npm install
 }
 
-# Build Angular app
-npm run build -- --configuration production
+# Build Angular app (defaultConfiguration is "production" in angular.json)
+npm run build
 if ($LASTEXITCODE -ne 0) { 
     Pop-Location
     Write-Error "Frontend build failed!"

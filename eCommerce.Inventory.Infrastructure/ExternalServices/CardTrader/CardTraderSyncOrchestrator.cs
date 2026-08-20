@@ -726,6 +726,16 @@ public class CardTraderSyncOrchestrator
 
                 if (existingBlueprint == null)
                 {
+                    // For new blueprints, try to fetch Italian name from Scryfall if we have ScryfallId
+                    if (!string.IsNullOrWhiteSpace(blueprint.ScryfallId))
+                    {
+                        var italianName = await FetchItalianNameFromScryfallAsync(blueprint.ScryfallId, cancellationToken);
+                        if (!string.IsNullOrWhiteSpace(italianName))
+                        {
+                            blueprint.ItalianName = italianName;
+                        }
+                    }
+
                     _dbContext.Blueprints.Add(blueprint);
                     added++;
                 }
@@ -746,6 +756,17 @@ public class CardTraderSyncOrchestrator
                     existingBlueprint.TcgPlayerId = blueprint.TcgPlayerId;
                     existingBlueprint.ScryfallId = blueprint.ScryfallId;
                     existingBlueprint.UpdatedAt = DateTime.UtcNow;
+
+                    // Lazy populate Italian name if missing and we have ScryfallId
+                    if (string.IsNullOrWhiteSpace(existingBlueprint.ItalianName) && !string.IsNullOrWhiteSpace(existingBlueprint.ScryfallId))
+                    {
+                        var italianName = await FetchItalianNameFromScryfallAsync(existingBlueprint.ScryfallId, cancellationToken);
+                        if (!string.IsNullOrWhiteSpace(italianName))
+                        {
+                            existingBlueprint.ItalianName = italianName;
+                        }
+                    }
+
                     _dbContext.Blueprints.Update(existingBlueprint);
                     updated++;
                 }
@@ -759,6 +780,36 @@ public class CardTraderSyncOrchestrator
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         return (added, updated, failed);
+    }
+
+    /// <summary>
+    /// Fetches the Italian name of a card from Scryfall using its Scryfall ID
+    /// Uses the 'localized' field which contains translations for cards that have them
+    /// </summary>
+    private async Task<string?> FetchItalianNameFromScryfallAsync(string scryfallId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var card = await _scryfallApiClient.GetCardByIdAsync(scryfallId, cancellationToken);
+
+            if (card?.Localized != null && card.Localized.TryGetValue("it", out var italianEntry))
+            {
+                return italianEntry.Name;
+            }
+
+            // Fallback: if card is already in Italian (lang=it), use its name
+            if (card != null && card.Lang.Equals("it", StringComparison.OrdinalIgnoreCase))
+            {
+                return card.Name;
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to fetch Italian name for ScryfallId {ScryfallId}", scryfallId);
+            return null;
+        }
     }
 
     /// <summary>

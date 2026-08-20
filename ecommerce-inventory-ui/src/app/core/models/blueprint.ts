@@ -2,6 +2,7 @@ export interface Blueprint {
   id: number;
   cardTraderId: number;
   name: string;
+  italianName?: string;
   expansionId: number;
   gameId: number;
   imageUrl?: string;

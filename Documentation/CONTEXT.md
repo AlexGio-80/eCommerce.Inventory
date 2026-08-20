@@ -9,7 +9,7 @@
 ## Stato Attuale
 
 **Branch principale:** `master`
-**Ultimo aggiornamento:** 2026-05-20 (sessione 3 — fix layout griglia)
+**Ultimo aggiornamento:** 2026-08-20 (sessione 4 — ricerca blueprint collector number + nome italiano)
 **Fase:** In produzione (uso quotidiano attivo)
 
 ### Cosa funziona adesso
@@ -32,6 +32,7 @@
 - Rate limiter outbound Card Trader (20 req/min)
 - Backup giornaliero automatico (DB + applicazione)
 - Icone espansioni e date rilascio da Scryfall
+- **Ricerca blueprint per Collector Number e Nome Italiano** nel selector "Nuovo Prodotto": il campo di ricerca ora matcha anche `collector_number` (da FixedProperties JSON) e il nome italiano (popolato lazy via Scryfall `localized.it` durante la sync blueprint); l'autocomplete mostra il nome italiano sotto quello inglese quando disponibile
 
 ### Cosa è in sospeso / da verificare
 - Possibile disallineamento residuo tra il valore `TotaleAcquistato` a livello Tag e la somma dei valori per Espansione nel report Redditività per Tag
@@ -59,6 +60,7 @@
 | 2026-05-19 | `PendingListing.IsUpdate` come flag per distinguere CREATE vs UPDATE su CT | Evita duplicazione di inserzioni quando si modifica una carta già listata su CT |
 | 2026-03-27 | `TotaleAcquistato` nel report Tag usa JOIN diretto con `PendingListings` | Eliminare la query con `OPENJSON` che causava timeout 30s |
 | 2026-03-27 | `ValoreRimanente` usa `InventoryItems.ListingPrice` (non `PurchasePrice`) | `PurchasePrice` sugli InventoryItems è spesso zero; il prezzo di mercato attuale è `ListingPrice` |
+| 2026-08-20 | `Blueprint.ItalianName` + search per collector_number | Aggiunto campo `ItalianName` (lazy-popolato via Scryfall `localized.it` durante sync blueprint); esteso `SearchByNameAsync` per matchare anche `collector_number` (JSON) e `ItalianName`; autocomplete mostra nome italiano quando disponibile |
 
 ---
 
@@ -67,6 +69,8 @@
 - **Migrazioni manuali**: `20260519120000_AddBoxConfigToExpansions` e `20260519130000_AddBoxPriceToExpansions` applicate via SQL diretto (non `dotnet ef database update`). Registrate in `__EFMigrationsHistory`, snapshot aggiornato. Non hanno `.Designer.cs`. Il prossimo `migrations add` funzionerà correttamente.
 - In produzione applicare le migration tramite SQL diretto (stessa procedura): `ALTER TABLE Expansions ADD PacksPerBox int NULL, CardsPerPack int NULL, BoxPrice decimal(18,2) NULL`
 - La migration EF ufficiale più recente è `20260519073801_AddIsUpdateToPendingListings`
+- **Nuova migration `20260820000000_AddItalianNameToBlueprints`**: aggiunge colonna `ItalianName nvarchar(max) NULL` a `Blueprints`. Applicata via SQL diretto (vedi `Migrazioni/20260820000000_AddItalianNameToBlueprints.sql`). Snapshot aggiornato. Non ha `.Designer.cs`.
+- **Popolamento lazy `ItalianName`**: la prima sync blueprint completa farà molte chiamate a Scryfall (rate-limit 100ms/call lato client); le sync successive toccano solo i blueprint senza nome italiano. Scryfall espone `localized.it` solo per carte che hanno una versione italiana stampata.
 - Il backfill Tag (`POST /api/cardtrader/orders/backfill-tags`) ha copertura parziale
 - Il file `debug_expansion_{id}.csv` viene generato da `ExpansionAnalyticsService` — non committare
 - L'AI Grading usa un mock service: Ximilar richiede abbonamento a pagamento
@@ -99,10 +103,14 @@ Poi [descrivi il task da fare].
 | `eCommerce.Inventory.Infrastructure/Persistence/ApplicationDbContext.cs` | DbContext + DbSet |
 | `eCommerce.Inventory.Infrastructure/DependencyInjection.cs` | Registrazione servizi Infrastructure |
 | `eCommerce.Inventory.Infrastructure/CardTrader/CardTraderSyncOrchestrator.cs` | Orchestrazione sync completa Card Trader |
+| `eCommerce.Inventory.Infrastructure/Persistence/Repositories/BlueprintRepository.cs` | `SearchByNameAsync` — ricerca blueprint (nome, espansione, collector_number, nome IT) |
+| `eCommerce.Inventory.Infrastructure/ExternalServices/Scryfall/ScryfallApiClient.cs` | Client Scryfall (set + card per `ItalianName`) |
+| `eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderBlueprintsController.cs` | Endpoint blueprint (search) |
 | `eCommerce.Inventory.Api/Controllers/ReportingController.cs` | Endpoint reporting (query SQL pesanti) |
 | `eCommerce.Inventory.Api/Controllers/ExpansionsController.cs` | Gestione espansioni + calcolatore box (BoxConfigDto, BoxRoiPercentage) |
 | `eCommerce.Inventory.Api/appsettings.json` | Configurazione (senza segreti) |
 | `publish.ps1` | Script deploy automatizzato (richiede permessi Admin) |
+| `ecommerce-inventory-ui/src/app/shared/components/blueprint-selector/blueprint-selector.component.ts` | Selector carta in "Nuovo Prodotto" (autocomplete con nome IT) |
 | `ecommerce-inventory-ui/src/app/features/expansions/pages/expansions-page.component.ts` | Pagina espansioni con calcolatore box |
 | `ecommerce-inventory-ui/src/app/features/inventory/pages/dashboard/` | Dashboard principale (2 tab) |
 | `ecommerce-inventory-ui/src/app/features/reporting/pages/` | Report Vendite, Inventario, Tag |

@@ -28,7 +28,7 @@ import { Blueprint } from '../../../core/models';
              [formControl]="searchControl"
              [matAutocomplete]="auto">
       <mat-spinner *ngIf="isLoading" matSuffix diameter="20"></mat-spinner>
-      <mat-hint>Type at least 1 character to search</mat-hint>
+      <mat-hint>Type at least 1 character to search (name, collector number, Italian name)</mat-hint>
       <mat-autocomplete #auto="matAutocomplete" [displayWith]="displayFn" (optionSelected)="onOptionSelected($event)">
         <mat-option *ngFor="let blueprint of filteredBlueprints" [value]="blueprint" class="blueprint-option-container">
           <div class="blueprint-option">
@@ -38,6 +38,7 @@ import { Blueprint } from '../../../core/models';
               <span class="details">
                 {{ blueprint.expansion?.name }} ({{ blueprint.game?.name }})
               </span>
+              <span class="italian-name" *ngIf="blueprint.italianName">{{ blueprint.italianName }}</span>
             </div>
           </div>
         </mat-option>
@@ -67,6 +68,11 @@ import { Blueprint } from '../../../core/models';
     }
     .name {
       font-weight: 500;
+    }
+    .italian-name {
+      font-size: 0.75em;
+      color: #3f51b5;
+      font-style: italic;
     }
     .details {
       font-size: 0.8em;

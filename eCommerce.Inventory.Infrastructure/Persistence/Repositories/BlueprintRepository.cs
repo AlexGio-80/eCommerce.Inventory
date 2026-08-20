@@ -19,6 +19,12 @@ public class BlueprintRepository : IBlueprintRepository
     }
 
     /// <summary>
+    /// Gets a SQL fragment to extract collector_number from FixedProperties JSON
+    /// Uses JSON_VALUE for SQL Server compatibility
+    /// </summary>
+    private static string CollectorNumberJsonPath => "$.collector_number";
+
+    /// <summary>
     /// Get blueprint by ID with related entities
     /// </summary>
     public async Task<Blueprint> GetByIdAsync(int id, CancellationToken cancellationToken = default)
@@ -125,7 +131,7 @@ public class BlueprintRepository : IBlueprintRepository
 
     /// <summary>
     /// Search blueprints by name (case-insensitive partial match)
-    /// Allows searching by card name and expansion name (e.g. "Sol Ring Commander")
+    /// Allows searching by card name (English and Italian), expansion name, and collector number
     /// </summary>
     public async Task<IEnumerable<Blueprint>> SearchByNameAsync(
         string name,
@@ -145,7 +151,15 @@ public class BlueprintRepository : IBlueprintRepository
 
         foreach (var term in searchTerms)
         {
-            query = query.Where(b => b.Name.ToLower().Contains(term) || b.Expansion.Name.ToLower().Contains(term));
+            var lowerTerm = term.ToLower();
+            query = query.Where(b =>
+                b.Name.ToLower().Contains(lowerTerm) ||
+                b.Expansion.Name.ToLower().Contains(lowerTerm) ||
+                (b.ItalianName != null && b.ItalianName.ToLower().Contains(lowerTerm)) ||
+                EF.Functions.Like(
+                    EF.Property<string>(b, "FixedProperties"),
+                    $"%\"collector_number\":\"{term}\"%")
+            );
         }
 
         return await query

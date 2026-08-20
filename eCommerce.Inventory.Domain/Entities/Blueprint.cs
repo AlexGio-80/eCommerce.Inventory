@@ -14,9 +14,14 @@ public class Blueprint
     public int CardTraderId { get; set; }
 
     /// <summary>
-    /// Card name
+    /// Card name (English, from Card Trader)
     /// </summary>
     public string Name { get; set; }
+
+    /// <summary>
+    /// Card name in Italian (from Scryfall, populated lazily during sync)
+    /// </summary>
+    public string? ItalianName { get; set; }
 
     /// <summary>
     /// Card version/variant (e.g., "Showcase", "Borderless", null for regular)

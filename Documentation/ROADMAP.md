@@ -10,6 +10,14 @@ _Nessun task attivo al momento._
 
 ---
 
+## Completato (Sessione 2026-08-20)
+
+| Data | Voce |
+|------|------|
+| 2026-08-20 | Feature — Ricerca blueprint per **Collector Number** e **Nome Italiano** nel selector "Nuovo Prodotto": campo `ItalianName` su Blueprint (lazy-popolato via Scryfall `localized.it` durante sync), `SearchByNameAsync` esteso per matchare `collector_number` (JSON) e `ItalianName`, autocomplete mostra nome italiano quando disponibile |
+
+---
+
 ## Da Fare
 
 _Nessun task attivo al momento._

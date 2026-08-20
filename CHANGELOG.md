@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Colonna **ROI Box%** in griglia Espansioni: verde >20%, arancio 0-20%, rosso <0%; filtrabile e ordinabile
   - Valori pre-caricati dalla selezione riga; "Salva config" persiste tutti e tre i valori
 - **Dashboard tab "Redditività per Tag"**: il componente `tag-profitability` è ora un tab nella dashboard principale invece di una pagina separata
+- **Ricerca blueprint per Collector Number e Nome Italiano** nel selector della maschera "Nuovo Prodotto"
+  - `Blueprint.ItalianName` salvato a DB (migration `20260820000000_AddItalianNameToBlueprints`); popolato lazy durante la sync blueprint via Scryfall `localized.it`
+  - `SearchByNameAsync` ora matcha anche su `collector_number` (in `FixedProperties` JSON) e su `ItalianName`
+  - Il selector mostra il nome italiano sotto a quello inglese quando disponibile
 
 ### Changed
 - **Report Inventario** (`/report/inventory`): rielaborato per usabilità

@@ -32,4 +32,38 @@ public class ScryfallApiClient : IScryfallApiClient
             return new List<ScryfallSetDto>();
         }
     }
+
+    public async Task<ScryfallCardDto?> GetCardByIdAsync(string scryfallId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(scryfallId))
+        {
+            return null;
+        }
+
+        try
+        {
+            _logger.LogDebug("Fetching card {ScryfallId} from Scryfall API", scryfallId);
+
+            // Scryfall rate limit: 10 requests/second, be polite
+            await Task.Delay(100, cancellationToken);
+
+            var response = await _httpClient.GetAsync($"cards/{scryfallId}", cancellationToken);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                _logger.LogWarning("Card {ScryfallId} not found on Scryfall (404)", scryfallId);
+                return null;
+            }
+
+            response.EnsureSuccessStatusCode();
+
+            var card = await response.Content.ReadFromJsonAsync<ScryfallCardDto>(cancellationToken: cancellationToken);
+            return card;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching card {ScryfallId} from Scryfall API", scryfallId);
+            return null;
+        }
+    }
 }

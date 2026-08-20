@@ -64,6 +64,9 @@ namespace eCommerce.Inventory.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<string>("ItalianName")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Rarity")
                         .HasColumnType("nvarchar(max)");
 
