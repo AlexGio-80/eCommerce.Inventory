@@ -9,7 +9,7 @@
 ## Stato Attuale
 
 **Branch principale:** `master`
-**Ultimo aggiornamento:** 2026-08-20 (sessione 4 — ricerca blueprint collector number + nome italiano)
+**Ultimo aggiornamento:** 2026-08-20 (sessione 5 — campo Description Card Trader in Nuovo Prodotto, replaces Posizione)
 **Fase:** In produzione (uso quotidiano attivo)
 
 ### Cosa funziona adesso
@@ -33,6 +33,8 @@
 - Backup giornaliero automatico (DB + applicazione)
 - Icone espansioni e date rilascio da Scryfall
 - **Ricerca blueprint per Collector Number e Nome Italiano** nel selector "Nuovo Prodotto": il campo di ricerca ora matcha anche `collector_number` (da FixedProperties JSON) e il nome italiano (popolato lazy via Scryfall `localized.it` durante la sync blueprint); l'autocomplete mostra il nome italiano sotto quello inglese quando disponibile
+- **PurchasePrice preservato dopo sync notturna**: il mapper `MapProductToInventoryItem` ora accetta un `purchasePrice` opzionale da `PendingListing` e lo propaga sull'`InventoryItem` creato dalla sync; sia `InventorySyncService.SyncProductsAsync` che `CardTraderSyncOrchestrator.UpsertInventoryAsync` fanno lookup del `PurchasePrice` (e `Tag`) da `PendingListing` per il `CardTraderProductId` corrispondente. Risolve il problema per cui il giorno dopo la sync il campo `PurchasePrice` risultava vuoto nel pannello "Le mie inserzioni".
+- **Campo Descrizione Card Trader in "Nuovo Prodotto"**: scrittura e lettura del campo `description` di Card Trader (es. "Timbro dei nazionali Italiani"), sostituisce il campo "Posizione" nel form. `GET /api/v2/products/{id}` per leggere la descrizione esistente; payload CREATE/UPDATE su CT ora include `description`; `Description` su `PendingListing` e `InventoryItem` (migration `20260820202633_AddDescriptionToEntities`, applicata). Form UI: "Posizione" → "Descrizione" con hint "Descrizione visibile su Card Trader".
 
 ### Cosa è in sospeso / da verificare
 - Possibile disallineamento residuo tra il valore `TotaleAcquistato` a livello Tag e la somma dei valori per Espansione nel report Redditività per Tag
@@ -70,6 +72,7 @@
 - In produzione applicare le migration tramite SQL diretto (stessa procedura): `ALTER TABLE Expansions ADD PacksPerBox int NULL, CardsPerPack int NULL, BoxPrice decimal(18,2) NULL`
 - La migration EF ufficiale più recente è `20260519073801_AddIsUpdateToPendingListings`
 - **Nuova migration `20260820000000_AddItalianNameToBlueprints`**: aggiunge colonna `ItalianName nvarchar(max) NULL` a `Blueprints`. Applicata via SQL diretto (vedi `Migrazioni/20260820000000_AddItalianNameToBlueprints.sql`). Snapshot aggiornato. Non ha `.Designer.cs`.
+- **Nuova migration `20260820202633_AddDescriptionToEntities`**: aggiunge `Description nvarchar(max) NULL` a `PendingListings` e `InventoryItems`; rimuove `Location` da `PendingListings` (sostituito da Description nel form "Nuovo Prodotto"). Applicata via `dotnet ef database update` in dev; in produzione applicare via SQL: `ALTER TABLE PendingListings DROP COLUMN Location; ALTER TABLE PendingListings ADD Description nvarchar(max) NULL; ALTER TABLE InventoryItems ADD Description nvarchar(max) NULL`. Snapshot aggiornato.
 - **Popolamento lazy `ItalianName`**: la prima sync blueprint completa farà molte chiamate a Scryfall (rate-limit 100ms/call lato client); le sync successive toccano solo i blueprint senza nome italiano. Scryfall espone `localized.it` solo per carte che hanno una versione italiana stampata.
 - Il backfill Tag (`POST /api/cardtrader/orders/backfill-tags`) ha copertura parziale
 - Il file `debug_expansion_{id}.csv` viene generato da `ExpansionAnalyticsService` — non committare

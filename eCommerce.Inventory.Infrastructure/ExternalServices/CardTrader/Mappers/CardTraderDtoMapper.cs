@@ -221,7 +221,7 @@ public class CardTraderDtoMapper
     /// Maps CardTraderProductDto to InventoryItem entity
     /// Useful for creating new items from Card Trader products
     /// </summary>
-    public InventoryItem MapProductToInventoryItem(CardTraderProductDto dto)
+    public InventoryItem MapProductToInventoryItem(CardTraderProductDto dto, decimal? purchasePrice = null)
     {
         if (dto == null)
         {
@@ -233,7 +233,7 @@ public class CardTraderDtoMapper
         {
             CardTraderProductId = dto.Id,
             BlueprintId = dto.BlueprintId,
-            PurchasePrice = 0m, // Not available in DTO (user maintains purchase price locally)
+            PurchasePrice = purchasePrice ?? 0m, // Use provided purchase price (from PendingListing) or default to 0
             DateAdded = DateTime.UtcNow,
             Quantity = dto.Quantity,
             ListingPrice = dto.PriceCents / 100m, // Convert cents to decimal currency
@@ -241,7 +241,8 @@ public class CardTraderDtoMapper
             Language = ExtractLanguage(dto.Properties),
             IsFoil = ExtractBooleanProperty(dto.Properties, "foil"),
             IsSigned = ExtractBooleanProperty(dto.Properties, "signed"),
-            Location = dto.UserDataField ?? "Unknown" // Default location if not provided
+            Location = dto.UserDataField ?? "Unknown", // Default location if not provided
+            Description = dto.Description // Descrizione prodotto su Card Trader (es. "Timbro dei nazionali Italiani")
         };
     }
 
@@ -277,6 +278,12 @@ public class CardTraderDtoMapper
             item.Location = dto.UserDataField;
         }
 
+        // Update description if provided
+        if (!string.IsNullOrWhiteSpace(dto.Description))
+        {
+            item.Description = dto.Description;
+        }
+
         _logger.LogInformation("Updated InventoryItem {ItemId} from Card Trader product {ProductId}",
             item.Id, dto.Id);
     }
@@ -294,7 +301,7 @@ public class CardTraderDtoMapper
 
         _logger.LogInformation("Mapping {ProductCount} products to inventory items", dtos.Count);
 
-        return dtos.Select(MapProductToInventoryItem).ToList();
+        return dtos.Select(d => MapProductToInventoryItem(d)).ToList();
     }
 
     /// <summary>

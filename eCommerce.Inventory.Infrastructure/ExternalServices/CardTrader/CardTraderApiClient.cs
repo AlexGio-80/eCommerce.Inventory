@@ -201,6 +201,7 @@ public class CardTraderApiClient : ICardTraderApiService
                 quantity = item.Quantity,
                 user_data_field = item.Location,
                 tag = item.Tag,
+                description = item.Description,
                 properties = new Dictionary<string, object>
                 {
                     { "condition", item.Condition },
@@ -271,6 +272,7 @@ public class CardTraderApiClient : ICardTraderApiService
                 quantity = item.Quantity,
                 user_data_field = item.Location,
                 tag = item.Tag,
+                description = item.Description,
                 properties = new Dictionary<string, object>
                 {
                     { "condition", item.Condition },
@@ -663,6 +665,31 @@ public class CardTraderApiClient : ICardTraderApiService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching marketplace products for expansion {ExpansionId}", expansionId);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Fetch full detail of a single product from Card Trader API (includes description)
+    /// Endpoint: /api/v2/products/{id}
+    /// </summary>
+    public async Task<dynamic?> GetProductDetailAsync(int productId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Fetching product detail for product {ProductId} from Card Trader API", productId);
+
+            await _rateLimiter.AcquireAsync(cancellationToken);
+            var response = await _httpClient.GetAsync($"products/{productId}", cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            var jsonContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            var dto = JsonSerializer.Deserialize<CardTraderProductDto>(jsonContent);
+            return dto;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching detail for product {ProductId}", productId);
             throw;
         }
     }

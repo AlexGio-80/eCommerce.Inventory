@@ -14,7 +14,7 @@ export interface PendingListing {
     language: string;
     isFoil: boolean;
     isSigned: boolean;
-    location: string;
+    description?: string;
     tag?: string;
     isSynced: boolean;
     isUpdate: boolean;
@@ -43,7 +43,7 @@ export interface CreatePendingListingDto {
     language: string;
     isFoil: boolean;
     isSigned: boolean;
-    location?: string;
+    description?: string;
     tag?: string;
     // Update-mode fields
     cardTraderProductId?: number;
@@ -70,7 +70,7 @@ export interface BlueprintListingInfo {
     language: string;
     isFoil: boolean;
     isSigned: boolean;
-    location: string;
+    description?: string;
     tag?: string;
     /** synced | pending-edit | ct-native | pending-new */
     status: string;

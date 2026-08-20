@@ -32,4 +32,7 @@ public interface ICardTraderApiService
     Task<int> CreateProductOnCardTraderAsync(InventoryItem item, CancellationToken cancellationToken = default);
     Task UpdateProductOnCardTraderAsync(InventoryItem item, CancellationToken cancellationToken = default);
     Task DeleteProductOnCardTraderAsync(int cardTraderProductId, CancellationToken cancellationToken = default);
+
+    // Product detail
+    Task<dynamic?> GetProductDetailAsync(int productId, CancellationToken cancellationToken = default);
 }

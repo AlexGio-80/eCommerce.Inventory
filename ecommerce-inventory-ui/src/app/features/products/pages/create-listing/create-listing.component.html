@@ -164,8 +164,9 @@
                             </mat-form-field>
 
                             <mat-form-field appearance="outline">
-                                <mat-label>Posizione</mat-label>
-                                <input matInput formControlName="location" placeholder="es. Scatola A, Raccoglitore 1">
+                                <mat-label>Descrizione</mat-label>
+                                <input matInput formControlName="description" placeholder="es. Timbro dei nazionali Italiani">
+                                <mat-hint>Descrizione visibile su Card Trader</mat-hint>
                             </mat-form-field>
                         </div>
 
@@ -263,6 +264,9 @@
                                         </div>
                                         <div class="listing-details" *ngIf="item.tag">
                                             Tag: {{ item.tag }}
+                                        </div>
+                                        <div class="listing-details" *ngIf="item.description">
+                                            {{ item.description }}
                                         </div>
                                     </div>
                                     <button mat-icon-button style="width: 28px; height: 28px; line-height: 28px; flex-shrink: 0;"

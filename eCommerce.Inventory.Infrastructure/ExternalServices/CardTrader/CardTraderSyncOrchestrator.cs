@@ -488,6 +488,14 @@ public class CardTraderSyncOrchestrator
             .Where(i => i.CardTraderProductId.HasValue)
             .ToDictionary(i => i.CardTraderProductId!.Value);
 
+        // Lookup Tag e PurchasePrice da PendingListings per propagarli su InventoryItem (non arrivano dall'API di CT)
+        var pendingDataByCardTraderProductId = await _dbContext.PendingListings
+            .AsNoTracking()
+            .Where(pl => pl.CardTraderProductId.HasValue
+                         && products.Select(p => (int?)p.Id).Contains(pl.CardTraderProductId))
+            .Select(pl => new { pl.CardTraderProductId, pl.Tag, pl.PurchasePrice })
+            .ToDictionaryAsync(pl => pl.CardTraderProductId!.Value, pl => pl, cancellationToken);
+
         var processedProductIds = new HashSet<int>();
 
         // 2. Upsert (Insert/Update)
@@ -528,8 +536,10 @@ public class CardTraderSyncOrchestrator
                         continue;
                     }
 
-                    var newItem = _dtoMapper.MapProductToInventoryItem(product);
+                    pendingDataByCardTraderProductId.TryGetValue(product.Id, out var pendingData);
+                    var newItem = _dtoMapper.MapProductToInventoryItem(product, pendingData?.PurchasePrice);
                     newItem.BlueprintId = blueprint.Id; // Link to local Blueprint
+                    if (pendingData?.Tag != null) newItem.Tag = pendingData.Tag;
 
                     _dbContext.InventoryItems.Add(newItem);
                     added++;

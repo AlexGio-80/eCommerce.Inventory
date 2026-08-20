@@ -29,6 +29,8 @@ public class CreatePendingListingDto
 
     public string? Tag { get; set; }
 
+    public string? Description { get; set; }
+
     public decimal PurchasePrice { get; set; }
 
     // Update-mode: set when re-editing a synced listing or a CT-native inventory item

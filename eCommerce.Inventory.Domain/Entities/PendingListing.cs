@@ -20,7 +20,7 @@ public class PendingListing
     public string Language { get; set; } = string.Empty;
     public bool IsFoil { get; set; }
     public bool IsSigned { get; set; }
-    public string Location { get; set; } = string.Empty;
+    public string? Description { get; set; }
     public string? Tag { get; set; }
 
     // Sync state tracking

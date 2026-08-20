@@ -25,6 +25,7 @@ public class InventoryItem
     // Dati personalizzati per la BI
     public string Location { get; set; } // Es. "Scatola A", "Raccoglitore 1"
     public string? Tag { get; set; } // Tag personalizzato per organizzazione/ricerca (inviato anche a Card Trader)
+    public string? Description { get; set; } // Descrizione prodotto su Card Trader (es. "Timbro dei nazionali Italiani")
 
     // NOTE: Removed 'virtual' to prevent lazy loading of Orders when loading Inventory
     // If you need to query OrderItems from an InventoryItem, use explicit Include

@@ -229,7 +229,7 @@ export class CreateListingComponent {
       language: [defaults.language, Validators.required],
       isFoil: [defaults.isFoil],
       isSigned: [defaults.isSigned],
-      location: [''],
+      description: [''],
       tag: [defaults.tag || ''],
       purchasePrice: [0, [Validators.required, Validators.min(0)]]
     });
@@ -340,7 +340,7 @@ export class CreateListingComponent {
       quantity: item.quantity,
       sellingPrice: item.sellingPrice,
       purchasePrice: item.purchasePrice,
-      location: item.location,
+      description: item.description,
       tag: item.tag,
       isFoil: item.isFoil,
       isSigned: item.isSigned
@@ -481,7 +481,7 @@ export class CreateListingComponent {
         language: defaults.language,
         isFoil: defaults.isFoil,
         isSigned: defaults.isSigned,
-        location: '',
+        description: '',
         tag: defaults.tag || ''
       });
     } else {
@@ -493,7 +493,7 @@ export class CreateListingComponent {
         language: 'English',
         isFoil: false,
         isSigned: false,
-        location: '',
+        description: '',
         tag: ''
       });
     }
@@ -510,7 +510,7 @@ export class CreateListingComponent {
       quantity: item.quantity,
       sellingPrice: item.sellingPrice,
       purchasePrice: item.purchasePrice || 0,
-      location: item.location,
+      description: item.description,
       tag: item.tag,
       isFoil: item.isFoil,
       isSigned: item.isSigned
@@ -625,7 +625,7 @@ export class CreateListingComponent {
       language: formValue.language,
       isFoil: formValue.isFoil,
       isSigned: formValue.isSigned,
-      location: formValue.location,
+      description: formValue.description,
       tag: formValue.tag,
       purchasePrice: formValue.purchasePrice,
       gradingScore: this.gradingResult()?.overallGrade,

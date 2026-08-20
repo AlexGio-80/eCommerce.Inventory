@@ -33,6 +33,9 @@ public class CardTraderProductDto
 
     [JsonPropertyName("user_data_field")]
     public string UserDataField { get; set; }
+
+    [JsonPropertyName("description")]
+    public string Description { get; set; }
 }
 
 public class CardTraderExpansionReferenceDto

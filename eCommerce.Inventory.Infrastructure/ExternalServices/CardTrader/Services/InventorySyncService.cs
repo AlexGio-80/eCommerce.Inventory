@@ -337,30 +337,29 @@ public class InventorySyncService
                 .Where(i => i.CardTraderProductId.HasValue)
                 .ToListAsync(cancellationToken);
 
-            // Lookup Tag da PendingListings per propagarlo su InventoryItem (il Tag non arriva dall'API di CT)
+            // Lookup Tag e PurchasePrice da PendingListings per propagarli su InventoryItem (non arrivano dall'API di CT)
             var incomingProductIds = productDtos.Select(p => (int?)p.Id).ToList();
-            var tagByCardTraderProductId = await dbContext.Set<PendingListing>()
+            var pendingDataByCardTraderProductId = await dbContext.Set<PendingListing>()
                 .AsNoTracking()
                 .Where(pl => pl.CardTraderProductId.HasValue
-                             && incomingProductIds.Contains(pl.CardTraderProductId)
-                             && pl.Tag != null)
-                .Select(pl => new { pl.CardTraderProductId, pl.Tag })
-                .ToDictionaryAsync(pl => pl.CardTraderProductId!.Value, pl => pl.Tag!, cancellationToken);
+                             && incomingProductIds.Contains(pl.CardTraderProductId))
+                .Select(pl => new { pl.CardTraderProductId, pl.Tag, pl.PurchasePrice })
+                .ToDictionaryAsync(pl => pl.CardTraderProductId!.Value, pl => pl, cancellationToken);
 
             int insertCount = 0, updateCount = 0, skippedCount = 0;
 
             foreach (var dto in productDtos)
             {
                 var existingItem = existingItems.FirstOrDefault(i => i.CardTraderProductId == dto.Id);
-                tagByCardTraderProductId.TryGetValue(dto.Id, out var tag);
+                pendingDataByCardTraderProductId.TryGetValue(dto.Id, out var pendingData);
 
                 if (existingItem == null)
                 {
                     // INSERT: New product
                     try
                     {
-                        var newItem = _mapper.MapProductToInventoryItem(dto);
-                        if (tag != null) newItem.Tag = tag;
+                        var newItem = _mapper.MapProductToInventoryItem(dto, pendingData?.PurchasePrice);
+                        if (pendingData?.Tag != null) newItem.Tag = pendingData.Tag;
                         dbContext!.Set<InventoryItem>().Add(newItem);
                         insertCount++;
                     }
@@ -376,7 +375,7 @@ public class InventorySyncService
                     try
                     {
                         _mapper.UpdateInventoryItemFromProduct(existingItem, dto);
-                        if (tag != null) existingItem.Tag = tag;
+                        if (pendingData?.Tag != null) existingItem.Tag = pendingData.Tag;
                         dbContext!.Set<InventoryItem>().Update(existingItem);
                         updateCount++;
                     }

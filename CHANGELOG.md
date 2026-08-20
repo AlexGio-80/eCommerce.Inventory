@@ -19,6 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `Blueprint.ItalianName` salvato a DB (migration `20260820000000_AddItalianNameToBlueprints`); popolato lazy durante la sync blueprint via Scryfall `localized.it`
   - `SearchByNameAsync` ora matcha anche su `collector_number` (in `FixedProperties` JSON) e su `ItalianName`
   - Il selector mostra il nome italiano sotto a quello inglese quando disponibile
+- **Campo Descrizione Card Trader** nella maschera "Nuovo Prodotto": scrittura e lettura del campo `description` di Card Trader (es. "Timbro dei nazionali Italiani"), sostituisce il campo "Posizione" nel form
+  - `GET /api/v2/products/{id}` per leggere la descrizione esistente (`GetProductDetailAsync`)
+  - Payload CREATE/UPDATE su CT ora include `description` (`CardTraderApiClient`)
+  - `Description` su `PendingListing` e `InventoryItem` (migration `20260820202633_AddDescriptionToEntities`)
+  - Form UI: "Posizione" → "Descrizione" con hint "Descrizione visibile su Card Trader"
+
+### Fixed
+- **PurchasePrice perso dopo sync notturna**: il mapper `MapProductToInventoryItem` ora accetta un `purchasePrice` opzionale da `PendingListing` e lo propaga sull'`InventoryItem` creato dalla sync; sia `InventorySyncService.SyncProductsAsync` che `CardTraderSyncOrchestrator.UpsertInventoryAsync` fanno lookup del `PurchasePrice` (e `Tag`) da `PendingListing` per il `CardTraderProductId` corrispondente. Risolve il problema per cui il giorno dopo la sync il campo `PurchasePrice` risultava vuoto nel pannello "Le mie inserzioni".
 
 ### Changed
 - **Report Inventario** (`/report/inventory`): rielaborato per usabilità

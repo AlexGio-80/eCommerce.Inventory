@@ -124,7 +124,7 @@ public class PendingListingsController : ControllerBase
                     Language = pendingEdit.Language,
                     IsFoil = pendingEdit.IsFoil,
                     IsSigned = pendingEdit.IsSigned,
-                    Location = pendingEdit.Location,
+                    Description = pendingEdit.Description,
                     Tag = pendingEdit.Tag
                 }
                 : new
@@ -136,7 +136,7 @@ public class PendingListingsController : ControllerBase
                     Language = ii.Language,
                     IsFoil = ii.IsFoil,
                     IsSigned = ii.IsSigned,
-                    Location = ii.Location,
+                    Description = ii.Description,
                     // InventoryItems synced from CT don't carry the user's tag; fall back to the synced PendingListing
                     Tag = ii.Tag ?? syncedPending?.Tag
                 };
@@ -154,7 +154,7 @@ public class PendingListingsController : ControllerBase
                 Language = CardTraderDtoMapper.NormalizeLanguageCode(source.Language),
                 IsFoil = source.IsFoil,
                 IsSigned = source.IsSigned,
-                Location = source.Location,
+                Description = source.Description,
                 Tag = source.Tag,
                 Status = pendingEdit != null ? "pending-edit"
                     : syncedPending != null ? "synced"
@@ -181,7 +181,7 @@ public class PendingListingsController : ControllerBase
                 Language = pl.Language,
                 IsFoil = pl.IsFoil,
                 IsSigned = pl.IsSigned,
-                Location = pl.Location,
+                Description = pl.Description,
                 Tag = pl.Tag,
                 Status = "pending-new"
             });
@@ -256,7 +256,7 @@ public class PendingListingsController : ControllerBase
             Language = dto.Language,
             IsFoil = dto.IsFoil,
             IsSigned = dto.IsSigned,
-            Location = dto.Location ?? string.Empty,
+            Description = dto.Description,
             Tag = dto.Tag,
             CreatedAt = DateTime.UtcNow,
             IsSynced = false,
@@ -325,7 +325,7 @@ public class PendingListingsController : ControllerBase
         item.Language = dto.Language;
         item.IsFoil = dto.IsFoil;
         item.IsSigned = dto.IsSigned;
-        item.Location = dto.Location ?? string.Empty;
+        item.Description = dto.Description;
         item.Tag = dto.Tag;
         item.SyncError = null;
 
@@ -390,7 +390,7 @@ public class PendingListingsController : ControllerBase
                     Language = pending.Language,
                     IsFoil = pending.IsFoil,
                     IsSigned = pending.IsSigned,
-                    Location = pending.Location,
+                    Description = pending.Description,
                     Tag = pending.Tag,
                     PurchasePrice = pending.PurchasePrice,
                     CardTraderProductId = pending.CardTraderProductId
@@ -416,7 +416,7 @@ public class PendingListingsController : ControllerBase
                         localItem.Language = pending.Language;
                         localItem.IsFoil = pending.IsFoil;
                         localItem.IsSigned = pending.IsSigned;
-                        localItem.Location = pending.Location;
+                        localItem.Description = pending.Description;
                         localItem.Tag = pending.Tag;
                     }
                 }
@@ -466,7 +466,7 @@ public class BlueprintListingInfoDto
     public string Language { get; set; } = string.Empty;
     public bool IsFoil { get; set; }
     public bool IsSigned { get; set; }
-    public string Location { get; set; } = string.Empty;
+    public string? Description { get; set; }
     public string? Tag { get; set; }
     /// <summary>
     /// synced = on CT, no pending changes
