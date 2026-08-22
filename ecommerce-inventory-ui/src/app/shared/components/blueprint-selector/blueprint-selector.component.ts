@@ -52,36 +52,43 @@ import { Blueprint } from '../../../core/models';
     .blueprint-option {
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 4px 0;
+      gap: 16px;
+      padding: 8px 0;
     }
     .option-image {
-      width: 30px;
-      height: 42px;
+      width: 50px;
+      height: 70px;
       object-fit: cover;
-      border-radius: 2px;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.15);
     }
     .option-details {
       display: flex;
       flex-direction: column;
-      line-height: 1.2;
+      line-height: 1.3;
     }
     .name {
       font-weight: 500;
+      font-size: 1rem;
     }
     .italian-name {
-      font-size: 0.75em;
+      font-size: 0.85em;
       color: #3f51b5;
       font-style: italic;
+      margin-top: 2px;
     }
     .details {
-      font-size: 0.8em;
+      font-size: 0.85em;
       color: #666;
     }
-    /* Override material option height to fit image */
+    /* Override material option height to fit larger image */
     ::ng-deep .blueprint-option-container {
       height: auto !important;
-      min-height: 56px;
+      min-height: 96px;
+    }
+    /* Make autocomplete panel wider to accommodate larger images */
+    ::ng-deep .mat-mdc-autocomplete-panel {
+      min-width: 400px;
     }
   `]
 })
