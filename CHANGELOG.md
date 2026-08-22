@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Popolamento nomi italiani da MTGJSON**: servizio one-shot per popolare `Blueprint.ItalianName` su tutto il database
+  - Nuovo background service `PopulateItalianNamesService` (abilitato via `SyncSettings:PopulateItalianNamesOnStartup=true`)
+  - Integrazione **MTGJSON AllPrintings.json** come fonte primaria (copertura ~95%+ vs ~0.1% Scryfall)
+  - Match preciso su `identifiers.scryfallId` ↔ `Blueprint.ScryfallId` (ID specifico per stampa)
+  - Fallback automatico su Scryfall API per carte non coperte da MTGJSON
+  - Batch processing (500 record/batch) con logging dettagliato progresso
+  - Esecuzione one-shot: scarica, popola, esce (`Environment.Exit(0)`)
 - **Calcolatore Box su pagina Espansioni**: pannello interattivo per calcolare la convenienza di acquistare un box sigillato
   - Campi `PacksPerBox`, `CardsPerPack`, `BoxPrice` salvati a DB (migration `20260519120000` + `20260519130000`)
   - Endpoint `PATCH /api/expansions/{id}/box-config` aggiornato per salvare anche `BoxPrice`

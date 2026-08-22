@@ -128,6 +128,10 @@ builder.Services.AddHttpClient<ICardTraderApiService, CardTraderApiClient>(clien
 // builder.Services.AddHostedService<CardTraderSyncWorker>();
 builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJobs.ScheduledProductSyncWorker>();
 
+// Register one-shot ItalianName population service
+// Enable via SyncSettings:PopulateItalianNamesOnStartup = true in appsettings.json
+builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJobs.PopulateItalianNamesService>();
+
 // Configure and register Backup Service
 builder.Services.Configure<BackupSettings>(builder.Configuration.GetSection("Backup"));
 builder.Services.AddHostedService<BackupService>();
