@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **UI: Aumentate dimensioni immagini nel blueprint-selector dropdown** (maschera "Nuovo Prodotto")
+  - Immagine card: 30×42px → 50×70px
+  - Gap: 12px → 16px, Padding: 4px → 8px
+  - min-height option: 56px → 96px
+  - Font size/nome aumentati, aggiunto box-shadow
+  - Panel autocomplete min-width: 400px
 - **Popolamento nomi italiani da MTGJSON**: servizio one-shot per popolare `Blueprint.ItalianName` su tutto il database
   - Nuovo background service `PopulateItalianNamesService` (abilitato via `SyncSettings:PopulateItalianNamesOnStartup=true`)
   - Integrazione **MTGJSON AllPrintings.json** come fonte primaria (copertura ~95%+ vs ~0.1% Scryfall)

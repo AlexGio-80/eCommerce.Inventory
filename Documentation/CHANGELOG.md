@@ -9,6 +9,57 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-08-22] UI — Aumentate dimensioni immagini nel blueprint selector dropdown
+
+**Problema**
+Nella maschera "Nuovo Prodotto", il dropdown di ricerca blueprint mostrava immagini troppo piccole (30×42px) rendendo difficile il riconoscimento visivo delle carte.
+
+**Soluzione Implementata**
+- `blueprint-selector.component.ts`:
+  - Immagine card: 30×42px → 50×70px (+67% larghezza, +67% altezza)
+  - Gap tra immagine e dettagli: 12px → 16px
+  - Padding verticale option: 4px → 8px
+  - min-height option container: 56px → 96px
+  - Font nome: default → 1rem, weight 500
+  - Font nome italiano: 0.75em → 0.85em
+  - Aggiunto box-shadow su immagini per migliore visibilità
+  - Panel autocomplete min-width: 400px per accomodare layout più ampio
+
+**Note Tecniche**
+- Usa `::ng-deep` per sovrascrivere stili Material Autocomplete
+- Modifica non breaking: mantiene stessa struttura dati, solo presentazione
+
+---
+
+## [2026-08-22] Feature — Popolamento nomi italiani blueprint da MTGJSON
+
+### Problema
+Scryfall ha nomi italiani solo per ~128 carte (quelle con localizzazione ufficiale pubblicata). Il 99.9% dei blueprint rimaneva senza `ItalianName`, rendendo inutile la ricerca per nome italiano nel selettore "Nuovo Prodotto".
+
+### Soluzione Implementata
+
+**Backend — nuovi servizi:**
+- `MtgJsonClient` / `MtgJsonClientFactory`: download e parsing `AllPrintings.json` da MTGJSON
+- Match su `identifiers.scryfallId` (ID specifico per stampa) ↔ `Blueprint.ScryfallId` — match esatto 1:1
+- Copertura ~95%+ carte con traduzione italiana ufficiale vs ~0.1% Scryfall
+- `PopulateItalianNamesService`: background service one-shot (abilitato via `SyncSettings:PopulateItalianNamesOnStartup=true`)
+  - Scarica AllPrintings.json (~200MB) una tantum
+  - Estrae ~30k+ nomi italiani in memoria (Dictionary lookup O(1))
+  - Popola `Blueprint.ItalianName` in batch da 500 con `SaveChangesAsync` per batch
+  - Fallback automatico su Scryfall API per carte non coperte da MTGJSON
+  - Logging dettagliato: `FromMtgJson`, `FromScryfall`, `NotFound`
+  - Esecuzione one-shot: termina con `Environment.Exit(0)` dopo completamento
+
+**Frontend — già pronto:**
+- `BlueprintSelectorComponent` usa già `blueprint.italianName` per display e ricerca
+- `SearchByNameAsync` in `BlueprintsController` filtra già su `ItalianName`
+
+### Note Tecniche
+- `AtomicCards.json` usa `scryfallOracleId` (unico per carta logica) → NON matcha `Blueprint.ScryfallId`
+- `AllPrintings.json` usa `identifiers.scryfallId` (unico per stampa) → MATCHA `Blueprint.ScryfallId` direttamente
+- Il servizio è disabilitato di default; si abilita solo per run one-shot, poi si disabilita
+- Migrazione DB già esistente: `20260820000000_AddItalianNameToBlueprints`
+
 ---
 
 ## [2026-05-19] Feature — Pannello "Le mie inserzioni" in Nuovo Prodotto + Update CT API
