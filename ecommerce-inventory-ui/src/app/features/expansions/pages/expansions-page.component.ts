@@ -218,6 +218,12 @@ import { FormsModule } from '@angular/forms';
                 <mat-spinner *ngIf="isAnalyzingAll()" diameter="18"></mat-spinner>
                 Analizza Tutte
               </button>
+              <button mat-button color="warn" (click)="syncSealedPrices()" [disabled]="isSyncingSealedPrices()"
+                matTooltip="Aggiorna prezzi box sigillati da Card Trader (richiede alcuni minuti)">
+                <mat-spinner *ngIf="isSyncingSealedPrices()" diameter="18"></mat-spinner>
+                <mat-icon *ngIf="!isSyncingSealedPrices()">inventory_2</mat-icon>
+                Sync Box Prices
+              </button>
             </div>
             
             <!-- Grid Options Menu -->
@@ -573,6 +579,7 @@ export class ExpansionsPageComponent implements OnInit {
   isSyncing = signal(false);
   isAnalyzing = signal(false);
   isAnalyzingAll = signal(false);
+  isSyncingSealedPrices = signal(false);
 
   // Box calculator
   boxPacksPerBox: number | null = null;
@@ -893,6 +900,24 @@ export class ExpansionsPageComponent implements OnInit {
         this.isAnalyzingAll.set(false);
         console.error('Error in bulk analytics:', error);
         this.snackBar.open('Errore nell\'analisi collettiva', 'Chiudi', { duration: 5000 });
+      }
+    });
+  }
+
+  syncSealedPrices() {
+    this.isSyncingSealedPrices.set(true);
+    this.snackBar.open('Avvio sync prezzi box sigillati... (potrebbe richiedere alcuni minuti)', 'Chiudi', { duration: 10000 });
+    this.expansionsService.syncSealedPrices().subscribe({
+      next: (response: any) => {
+        this.isSyncingSealedPrices.set(false);
+        const data = response.data;
+        this.snackBar.open(`Sync box completato: ${data.updated} aggiornate, ${data.skippedNoData} saltate, ${data.failed} fallite`, 'Chiudi', { duration: 10000 });
+        this.loadExpansions();
+      },
+      error: (error) => {
+        this.isSyncingSealedPrices.set(false);
+        console.error('Error syncing sealed prices:', error);
+        this.snackBar.open(`Errore sync box: ${error.error?.error || error.message}`, 'Chiudi', { duration: 10000 });
       }
     });
   }
