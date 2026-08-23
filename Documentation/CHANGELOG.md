@@ -9,6 +9,50 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-08-22] Feature — Sealed Product Sync (Prezzi Box Automatici)
+
+#### Problema
+Il calcolatore box nella pagina Espansioni richiedeva l'inserimento manuale di `BoxPrice` per ogni espansione. Non c'era modo automatico per recuperare i prezzi dei prodotti sigillati (booster box, case, starter deck) dal marketplace Card Trader.
+
+#### Soluzione Implementata
+
+**Backend — nuovi servizi:**
+- `SealedCategoryIds` (Domain/Entities): classe statica con HashSet<int> per categoria sigillata per gioco:
+  - Magic: The Gathering (GameId=1): {4, 5, 7, 10, 13} — Booster Boxes, Boosters, Starter Decks, Box Sets & Displays, Boxed Set
+  - Force of Will (GameId=2): {30, 31, 33, 34}
+  - Pokémon (GameId=3): {4576, 4580}
+  - Lorcana (GameId=4): {12821, 12825}
+  - Metodo `IsSealedCategory(gameId, categoryId)` per check O(1)
+- `Blueprint.IsSealedProduct` (Domain/Entities): proprietà calcolata `GameId != 0 && SealedCategoryIds.IsSealedCategory(GameId, CategoryId)`
+- `SealedProductPriceService` (Infrastructure/BackgroundJobs): BackgroundService one-shot (pattern identico a `PopulateItalianNamesService`)
+  - Abilitato via `SyncSettings:PopulateSealedPricesOnStartup=true` in appsettings.json
+  - Recupera tutte le espansioni abilitate (`Game.IsEnabled`)
+  - Per ogni espansione: chiama `GetMarketplaceProductsByExpansionAsync(expansion.CardTraderId)`
+  - Filtra marketplace products: blueprint con `IsSealedProduct == true` + `Properties.Language == "English"`
+  - Per ogni blueprint sealed, prende il prezzo minimo
+  - Raccoglie tutti i minimi, ordina ascendente, prende i primi 10
+  - Calcola media dei 10 prezzi → `Expansion.BoxPrice` in euro (conversione da centesimi)
+  - Log dettagliato per espansione: `Processing`, `Found N sealed products`, `Updated BoxPrice to €X.XX`
+  - Delay 500ms tra espansioni per rate limiting
+  - Esecuzione one-shot: termina con `Environment.Exit(0)`
+- Endpoint manuale: `POST /api/expansions/sync-sealed-prices` in `ExpansionsController` per trigger on-demand da UI
+
+**Frontend:**
+- `expansions.service.ts`: aggiunto metodo `syncSealedPrices(): Observable<any>` per chiamare l'endpoint manuale
+
+**Configurazione:**
+- `appsettings.json` → `SyncSettings.PopulateSealedPricesOnStartup: false` (default disabilitato)
+
+#### Note Tecniche
+- Riutilizza `ICardTraderApiService.GetMarketplaceProductsByExpansionAsync` esistente
+- Rate limiting: CardTraderRateLimiter (20 req/min singleton) + delay 500ms tra espansioni
+- Se meno di 10 prodotti sigillati trovati, usa quelli disponibili (logga warning)
+- Prodotti senza prezzo English vengono ignorati
+- Configurazione disabilitata di default; si abilita solo per run one-shot, poi si disabilita
+- **Non incluso nella sync notturna automatica**: il processo richiede diversi minuti; si lancia manualmente on-demand (consigliato settimanale) via endpoint `POST /api/expansions/sync-sealed-prices` o abilitando temporaneamente `PopulateSealedPricesOnStartup=true` al riavvio
+
+---
+
 ### [2026-08-22] UI — Aumentate dimensioni immagini nel blueprint selector dropdown
 
 **Problema**

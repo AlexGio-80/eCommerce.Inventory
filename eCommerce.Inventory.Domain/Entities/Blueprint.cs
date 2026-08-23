@@ -1,4 +1,4 @@
-namespace eCommerce.Inventory.Domain.Entities;
+using eCommerce.Inventory.Domain.Entities;
 
 /// <summary>
 /// Blueprint represents a card template with all its metadata from Card Trader
@@ -38,6 +38,12 @@ public class Blueprint
     /// Category identifier (defines what properties are editable for this card)
     /// </summary>
     public int CategoryId { get; set; }
+
+    /// <summary>
+    /// Whether this blueprint represents a sealed product (booster box, case, starter deck, etc.)
+    /// Determined by checking if CategoryId matches known sealed categories for the Game
+    /// </summary>
+    public bool IsSealedProduct => GameId != 0 && SealedCategoryIds.IsSealedCategory(GameId, CategoryId);
 
     /// <summary>
     /// Rarity of the card (e.g., "Mythic", "Rare", "Uncommon", "Common")

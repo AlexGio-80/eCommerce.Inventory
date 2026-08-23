@@ -87,4 +87,8 @@ export class ExpansionsService {
     saveBoxConfig(id: number, packsPerBox: number | null, cardsPerPack: number | null, boxPrice: number | null): Observable<any> {
         return this.http.patch<ApiResponse<any>>(`${this.apiUrl}/${id}/box-config`, { packsPerBox, cardsPerPack, boxPrice });
     }
+
+    syncSealedPrices(): Observable<any> {
+        return this.http.post<ApiResponse<any>>(`${this.apiUrl}/sync-sealed-prices`, {});
+    }
 }

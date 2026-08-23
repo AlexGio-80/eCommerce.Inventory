@@ -132,6 +132,10 @@ builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJ
 // Enable via SyncSettings:PopulateItalianNamesOnStartup = true in appsettings.json
 builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJobs.PopulateItalianNamesService>();
 
+// Register one-shot Sealed Product Price population service
+// Enable via SyncSettings:PopulateSealedPricesOnStartup = true in appsettings.json
+builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJobs.SealedProductPriceService>();
+
 // Configure and register Backup Service
 builder.Services.Configure<BackupSettings>(builder.Configuration.GetSection("Backup"));
 builder.Services.AddHostedService<BackupService>();

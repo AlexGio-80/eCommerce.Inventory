@@ -1,4 +1,5 @@
 using eCommerce.Inventory.Application.Interfaces;
+using eCommerce.Inventory.Domain.Entities;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader;
 using eCommerce.Inventory.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
@@ -248,6 +249,140 @@ public class ExpansionsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during bulk value analysis");
+            return StatusCode(500, Models.ApiResponse<object>.ErrorResult(ex.Message));
+        }
+    }
+
+    [HttpPost("sync-sealed-prices")]
+    public async Task<ActionResult<Models.ApiResponse<object>>> SyncSealedPrices(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Manual sealed product price sync triggered");
+
+            var expansions = await _dbContext.Expansions
+                .AsNoTracking()
+                .Include(e => e.Game)
+                .Where(e => e.Game.IsEnabled)
+                .OrderBy(e => e.Game.Name)
+                .ThenBy(e => e.Name)
+                .ToListAsync(cancellationToken);
+
+            var totalCount = expansions.Count;
+            var updated = 0;
+            var skippedNoData = 0;
+            var failed = 0;
+
+            foreach (var expansion in expansions)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    _logger.LogWarning("Cancellation requested during sealed price sync");
+                    break;
+                }
+
+                try
+                {
+                    _logger.LogInformation("Processing expansion {ExpansionName} (CT ID: {CTId})", expansion.Name, expansion.CardTraderId);
+
+                    var marketplaceProducts = await _cardTraderApiService.GetMarketplaceProductsByExpansionAsync(expansion.CardTraderId, cancellationToken);
+
+                    if (marketplaceProducts == null || !marketplaceProducts.Any())
+                    {
+                        _logger.LogInformation("No marketplace products found for expansion {ExpansionName}", expansion.Name);
+                        skippedNoData++;
+                        continue;
+                    }
+
+                    var blueprints = await _dbContext.Blueprints
+                        .AsNoTracking()
+                        .Where(b => b.ExpansionId == expansion.Id)
+                        .Select(b => new { b.CardTraderId, b.CategoryId, b.GameId })
+                        .ToDictionaryAsync(b => b.CardTraderId, b => b, cancellationToken);
+
+                    // Group marketplace products by BlueprintId
+                    var productsByBlueprint = marketplaceProducts
+                        .Where(p => p.BlueprintId > 0)
+                        .GroupBy(p => p.BlueprintId)
+                        .ToDictionary(g => g.Key, g => g.ToList());
+
+                    var sealedProductPrices = new List<int>();
+
+                    foreach (var kvp in productsByBlueprint)
+                    {
+                        int blueprintId = kvp.Key;
+
+                        if (!blueprints.TryGetValue(blueprintId, out var blueprintInfo))
+                            continue;
+
+                        if (!SealedCategoryIds.IsSealedCategory(blueprintInfo.GameId, blueprintInfo.CategoryId))
+                            continue;
+
+                        var products = kvp.Value;
+
+                        var englishProducts = products
+                            .Where(p => p.Properties != null && p.Properties.Language != null &&
+                                        p.Properties.Language.Equals("English", StringComparison.OrdinalIgnoreCase))
+                            .Where(p => p.PriceCents > 0)
+                            .ToList();
+
+                        if (englishProducts.Any())
+                        {
+                            var minPrice = englishProducts.Min(p => p.PriceCents);
+                            sealedProductPrices.Add(minPrice);
+                        }
+                    }
+
+                    if (sealedProductPrices.Any())
+                    {
+                        sealedProductPrices.Sort();
+                        var top10 = sealedProductPrices.Take(10).ToList();
+                        var avgCents = (int)Math.Round(top10.Average());
+                        var avgEuros = Math.Round(avgCents / 100m, 2);
+
+                        var entity = await _dbContext.Expansions.FirstOrDefaultAsync(e => e.Id == expansion.Id, cancellationToken);
+                        if (entity != null)
+                        {
+                            entity.BoxPrice = avgEuros;
+                            await _dbContext.SaveChangesAsync(cancellationToken);
+
+                            _logger.LogInformation("Updated BoxPrice for {ExpansionName}: €{BoxPrice:F2} (from {Count} sealed products, used top {TopCount})",
+                                expansion.Name, avgEuros, sealedProductPrices.Count, top10.Count);
+                            updated++;
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Expansion {ExpansionId} not found in DB for update", expansion.Id);
+                            failed++;
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogInformation("No sealed products with English prices found for {ExpansionName}", expansion.Name);
+                        skippedNoData++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    _logger.LogError(ex, "Error processing expansion {ExpansionName} (ID: {ExpansionId})", expansion.Name, expansion.Id);
+                }
+            }
+
+            var result = new
+            {
+                totalExpansions = totalCount,
+                updated,
+                skippedNoData,
+                failed,
+                message = $"Sealed price sync completed. Updated: {updated}, Skipped (no data): {skippedNoData}, Failed: {failed}"
+            };
+
+            return Ok(Models.ApiResponse<object>.SuccessResult(result, result.message));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during sealed product price sync");
             return StatusCode(500, Models.ApiResponse<object>.ErrorResult(ex.Message));
         }
     }

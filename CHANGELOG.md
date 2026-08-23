@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Sealed Product Sync — Prezzi box automatici nel calcolatore espansioni**: background service one-shot che recupera i prezzi dei prodotti sigillati (booster box, case, starter deck) da Card Trader marketplace e popola automaticamente `Expansion.BoxPrice`
+  - Nuovo background service `SealedProductPriceService` (abilitato via `SyncSettings:PopulateSealedPricesOnStartup=true`)
+  - Identificazione prodotti sigillati tramite `Blueprint.CategoryId` mappati a categorie "sealed" note per gioco (MTG: 4,5,7,10,13; Force of Will: 30,31,33,34; Pokémon: 4576,4580; Lorcana: 12821,12825)
+  - Nuova classe dominio `SealedCategoryIds` con metodo `IsSealedCategory(gameId, categoryId)`
+  - Proprietà calcolata `Blueprint.IsSealedProduct` per check rapido
+  - Logica pricing: per ogni espansione, chiama `GetMarketplaceProductsByExpansionAsync`, filtra per categoria sealed + lingua English, prende i 10 prezzi minimi, calcola media → `BoxPrice` in euro
+  - Rate limiting integrato (20 req/min) con delay 500ms tra espansioni
+  - Esecuzione one-shot: processa, popola, esce (`Environment.Exit(0)`) — **non incluso nella sync notturna**, da lanciare manualmente on-demand (settimanale consigliato) via endpoint o config startup
+  - Endpoint manuale `POST /api/expansions/sync-sealed-prices` per trigger on-demand da UI
+  - Frontend: `expansions.service.ts` aggiunge `syncSealedPrices()` method
 - **UI: Aumentate dimensioni immagini nel blueprint-selector dropdown** (maschera "Nuovo Prodotto")
   - Immagine card: 30×42px → 50×70px
   - Gap: 12px → 16px, Padding: 4px → 8px
