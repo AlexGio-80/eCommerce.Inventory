@@ -812,16 +812,20 @@ public class ReportingController : ControllerBase
 
 
             // TotaleAcquistato per espansione: SUM(Quantity * PurchasePrice) da PendingListings JOIN Blueprints JOIN Expansions
-            // Equivalente SQL: SELECT e.Name, SUM(pl.Quantity * pl.PurchasePrice) FROM PendingListings pl
-            //                  INNER JOIN Blueprints b ON b.Id = pl.BlueprintId
-            //                  INNER JOIN Expansions e ON e.Id = b.ExpansionId
-            //                  WHERE pl.Tag = @tag GROUP BY e.Name
-            var acquistatoPerExpansion = await _context.PendingListings
-                .AsNoTracking()
-                .Where(pl => pl.Tag == tag)
-                .GroupBy(pl => pl.Blueprint.Expansion.Name)
-                .Select(g => new { ExpansionName = g.Key, TotaleAcquistato = g.Sum(pl => pl.Quantity * pl.PurchasePrice) })
-                .ToDictionaryAsync(x => x.ExpansionName, x => x.TotaleAcquistato);
+            // Usa join espliciti (non navigation properties) per includere tutti i record con Tag valido,
+            // anche se Blueprint/Expansion hanno dati incompleti. Coerente con la query 'rimanentePerExpansion'.
+            var acquistatoPerExpansion = await (
+                from pl in _context.PendingListings.AsNoTracking()
+                join bp in _context.Blueprints.AsNoTracking() on pl.BlueprintId equals bp.Id
+                join ex in _context.Expansions.AsNoTracking() on bp.ExpansionId equals ex.Id
+                where pl.Tag == tag
+                group new { ex.Name, pl.Quantity, pl.PurchasePrice } by ex.Name into g
+                select new
+                {
+                    ExpansionName = g.Key,
+                    TotaleAcquistato = g.Sum(x => x.Quantity * x.PurchasePrice)
+                }
+            ).ToDictionaryAsync(x => x.ExpansionName, x => x.TotaleAcquistato);
 
             // Rimanente per espansione: PendingListings → InventoryItems via CardTraderProductId,
             // poi join Blueprints → Expansions per il nome dell'espansione.

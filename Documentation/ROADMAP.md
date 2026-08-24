@@ -28,11 +28,9 @@ _Nessun task attivo al momento._
 
 > Funzionalità non prioritarie, da rivalutare in futuro.
 
-- [ ] **Sealed Product Sync** — prezzi box automatici nel calcolatore espansioni: recuperare prezzo box sigillati da CT (primi 10 valori più bassi in inglese tra Blueprint categoria "sealed") per pre-popolare `BoxPrice` invece di inserimento manuale
-- [ ] Redis caching per dati statici Card Trader (Games TTL 24h, Expansions TTL 12h, Blueprints TTL 6h)
-- [ ] Espansione multi-marketplace (eBay, Wallapop) — pattern già definito in ARCHITECTURE.md
+- [x] **Redis caching per dati statici Card Trader** (Games TTL 24h, Expansions TTL 12h, Blueprints TTL 6h) — **COMPLETATO 2026-08-24**
+- [x] **Health check endpoint `/health`** con controlli DB, Card Trader API, Redis — **COMPLETATO 2026-08-24**
 - [ ] AI Grading reale (Ximilar API) — valutare costi/benefici abbonamento
-- [ ] Health check endpoint `/health` con controllo DB + Card Trader API
 - [ ] Monitoring (Application Insights o equivalente)
 - [ ] CI/CD pipeline (GitHub Actions)
 
@@ -42,6 +40,8 @@ _Nessun task attivo al momento._
 
 | Data | Voce |
 |------|------|
+| 2026-08-24 | Fix — **Disallineamento `TotaleAcquistato` report Redditività per Tag**: uniformata query `GetTagExpansionProfitability` a usare join espliciti (`from pl join bp join ex`) come `rimanentePerExpansion`, risolvendo differenza tra livello Tag (include record con Blueprint/Expansion NULL) e livello Espansione (escludeva quei record per INNER JOIN implicito) |
+| 2026-08-24 | Feature — **Health check endpoint `/health`** con controlli Database (SQL Server), Card Trader API (via cached Games endpoint), Redis (se abilitato con graceful degradation); per liveness/readiness probes in produzione |
 | 2026-05-20 | Fix — Items to Prepare: rimosso `domLayout: 'autoHeight'`, griglia ora rispetta altezza container, paginazione visibile a qualsiasi zoom |
 | 2026-05-20 | Fix — Griglia Espansioni: layout flex sostituisce altezza fissa 600px, riempie tutto lo spazio disponibile |
 | 2026-05-20 | Fix — Sidenav container: `calc(100vh - 112px)` per tenere conto di toolbar + tab-bar |

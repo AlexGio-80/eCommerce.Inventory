@@ -2,10 +2,12 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using eCommerce.Inventory.Application.Interfaces;
+using eCommerce.Inventory.Application.Settings;
 using eCommerce.Inventory.Domain.Entities;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.DTOs;
 using eCommerce.Inventory.Application.DTOs;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
 
@@ -17,17 +19,23 @@ public class CardTraderApiClient : ICardTraderApiService
     private readonly ILogger<CardTraderApiClient> _logger;
     private readonly IApplicationDbContext _dbContext;
     private readonly CardTraderRateLimiter _rateLimiter;
+    private readonly ICacheService _cache;
+    private readonly CacheSettings _cacheSettings;
 
     public CardTraderApiClient(
         HttpClient httpClient,
         ILogger<CardTraderApiClient> logger,
         IApplicationDbContext dbContext,
-        CardTraderRateLimiter rateLimiter)
+        CardTraderRateLimiter rateLimiter,
+        ICacheService cache,
+        IOptions<CacheSettings> cacheSettings)
     {
         _httpClient = httpClient;
         _logger = logger;
         _dbContext = dbContext;
         _rateLimiter = rateLimiter;
+        _cache = cache;
+        _cacheSettings = cacheSettings.Value;
     }
 
     /// <summary>
@@ -35,11 +43,19 @@ public class CardTraderApiClient : ICardTraderApiService
     /// </summary>
     public async Task<IEnumerable<dynamic>> SyncGamesAsync(CancellationToken cancellationToken = default)
     {
+        const string cacheKey = "cardtrader:games";
+
         try
         {
-            _logger.LogInformation("Fetching games from Card Trader API");
+            // Try cache first
+            var cached = await _cache.GetAsync<List<CardTraderGameDto>>(cacheKey, cancellationToken);
+            if (cached != null)
+            {
+                _logger.LogInformation("Cache HIT: Returning {GameCount} games from Redis cache", cached.Count);
+                return cached.Cast<dynamic>().ToList();
+            }
 
-            _logger.LogInformation("Fetching games from Card Trader API");
+            _logger.LogInformation("Cache MISS: Fetching games from Card Trader API");
 
             await _rateLimiter.AcquireAsync(cancellationToken);
             var response = await _httpClient.GetAsync("games", cancellationToken);
@@ -51,7 +67,11 @@ public class CardTraderApiClient : ICardTraderApiService
             var responseWrapper = JsonSerializer.Deserialize<CardTraderGamesResponseDto>(jsonContent);
             var dtos = responseWrapper?.Array ?? new List<CardTraderGameDto>();
 
-            _logger.LogInformation("Fetched {GameCount} games from Card Trader API", dtos.Count);
+            // Store in cache
+            var ttl = TimeSpan.FromHours(_cacheSettings.GamesTtlHours);
+            await _cache.SetAsync(cacheKey, dtos, ttl, cancellationToken);
+
+            _logger.LogInformation("Fetched and cached {GameCount} games from Card Trader API (TTL: {TtlHours}h)", dtos.Count, _cacheSettings.GamesTtlHours);
             return dtos.Cast<dynamic>().ToList();
         }
         catch (Exception ex)
@@ -66,11 +86,19 @@ public class CardTraderApiClient : ICardTraderApiService
     /// </summary>
     public async Task<IEnumerable<dynamic>> SyncExpansionsAsync(CancellationToken cancellationToken = default)
     {
+        const string cacheKey = "cardtrader:expansions";
+
         try
         {
-            _logger.LogInformation("Fetching expansions from Card Trader API");
+            // Try cache first
+            var cached = await _cache.GetAsync<List<CardTraderExpansionDto>>(cacheKey, cancellationToken);
+            if (cached != null)
+            {
+                _logger.LogInformation("Cache HIT: Returning {ExpansionCount} expansions from Redis cache", cached.Count);
+                return cached.Cast<dynamic>().ToList();
+            }
 
-            _logger.LogInformation("Fetching expansions from Card Trader API");
+            _logger.LogInformation("Cache MISS: Fetching expansions from Card Trader API");
 
             await _rateLimiter.AcquireAsync(cancellationToken);
             var response = await _httpClient.GetAsync("expansions", cancellationToken);
@@ -80,7 +108,11 @@ public class CardTraderApiClient : ICardTraderApiService
             var dtos = JsonSerializer.Deserialize<List<CardTraderExpansionDto>>(jsonContent)
                 ?? new List<CardTraderExpansionDto>();
 
-            _logger.LogInformation("Fetched {ExpansionCount} expansions from Card Trader API", dtos.Count);
+            // Store in cache
+            var ttl = TimeSpan.FromHours(_cacheSettings.ExpansionsTtlHours);
+            await _cache.SetAsync(cacheKey, dtos, ttl, cancellationToken);
+
+            _logger.LogInformation("Fetched and cached {ExpansionCount} expansions from Card Trader API (TTL: {TtlHours}h)", dtos.Count, _cacheSettings.ExpansionsTtlHours);
             return dtos.Cast<dynamic>().ToList();
         }
         catch (Exception ex)
@@ -96,11 +128,20 @@ public class CardTraderApiClient : ICardTraderApiService
     /// </summary>
     public async Task<IEnumerable<dynamic>> SyncBlueprintsForExpansionAsync(int expansionId, CancellationToken cancellationToken = default)
     {
+        var cacheKey = $"cardtrader:blueprints:expansion:{expansionId}";
+
         try
         {
-            _logger.LogInformation("Fetching blueprints for expansion {ExpansionId} from Card Trader API", expansionId);
+            // Try cache first
+            var cached = await _cache.GetAsync<List<CardTraderBlueprintDto>>(cacheKey, cancellationToken);
+            if (cached != null)
+            {
+                _logger.LogInformation("Cache HIT: Returning {BlueprintCount} blueprints for expansion {ExpansionId} from Redis cache", cached.Count, expansionId);
+                return cached.Cast<dynamic>().ToList();
+            }
 
-            // Correct endpoint for fetching blueprints is /blueprints/export?expansion_id={id}
+            _logger.LogInformation("Cache MISS: Fetching blueprints for expansion {ExpansionId} from Card Trader API", expansionId);
+
             // Correct endpoint for fetching blueprints is /blueprints/export?expansion_id={id}
             await _rateLimiter.AcquireAsync(cancellationToken);
             var response = await _httpClient.GetAsync($"blueprints/export?expansion_id={expansionId}", cancellationToken);
@@ -126,7 +167,11 @@ public class CardTraderApiClient : ICardTraderApiService
             var dtos = JsonSerializer.Deserialize<List<CardTraderBlueprintDto>>(jsonContent)
                 ?? new List<CardTraderBlueprintDto>();
 
-            _logger.LogInformation("Fetched {BlueprintCount} blueprints for expansion {ExpansionId} from Card Trader API", dtos.Count, expansionId);
+            // Store in cache
+            var ttl = TimeSpan.FromHours(_cacheSettings.BlueprintsTtlHours);
+            await _cache.SetAsync(cacheKey, dtos, ttl, cancellationToken);
+
+            _logger.LogInformation("Fetched and cached {BlueprintCount} blueprints for expansion {ExpansionId} from Card Trader API (TTL: {TtlHours}h)", dtos.Count, expansionId, _cacheSettings.BlueprintsTtlHours);
             return dtos.Cast<dynamic>().ToList();
         }
         catch (Exception ex)
@@ -143,11 +188,19 @@ public class CardTraderApiClient : ICardTraderApiService
     /// </summary>
     public async Task<IEnumerable<dynamic>> SyncCategoriesAsync(CancellationToken cancellationToken = default)
     {
+        const string cacheKey = "cardtrader:categories";
+
         try
         {
-            _logger.LogInformation("Fetching categories from Card Trader API");
+            // Try cache first (same TTL as games - 24h since categories rarely change)
+            var cached = await _cache.GetAsync<List<CardTraderCategoryDto>>(cacheKey, cancellationToken);
+            if (cached != null)
+            {
+                _logger.LogInformation("Cache HIT: Returning {CategoryCount} categories from Redis cache", cached.Count);
+                return cached.Cast<dynamic>().ToList();
+            }
 
-            _logger.LogInformation("Fetching categories from Card Trader API");
+            _logger.LogInformation("Cache MISS: Fetching categories from Card Trader API");
 
             await _rateLimiter.AcquireAsync(cancellationToken);
             var response = await _httpClient.GetAsync("categories", cancellationToken);
@@ -175,7 +228,11 @@ public class CardTraderApiClient : ICardTraderApiService
                     ?? new List<CardTraderCategoryDto>();
             }
 
-            _logger.LogInformation("Fetched {CategoryCount} categories from Card Trader API", dtos.Count);
+            // Store in cache (same TTL as games)
+            var ttl = TimeSpan.FromHours(_cacheSettings.GamesTtlHours);
+            await _cache.SetAsync(cacheKey, dtos, ttl, cancellationToken);
+
+            _logger.LogInformation("Fetched and cached {CategoryCount} categories from Card Trader API (TTL: {TtlHours}h)", dtos.Count, _cacheSettings.GamesTtlHours);
             return dtos.Cast<dynamic>().ToList();
         }
         catch (Exception ex)

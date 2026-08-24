@@ -1,6 +1,8 @@
 using Serilog;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using eCommerce.Inventory.Application.Interfaces;
+using eCommerce.Inventory.Application.Settings;
 using eCommerce.Inventory.Infrastructure.Persistence;
 using eCommerce.Inventory.Infrastructure.Persistence.Repositories;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader;
@@ -10,7 +12,7 @@ using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Policies;
 using eCommerce.Inventory.Infrastructure.Services;
 using eCommerce.Inventory.Infrastructure.ExternalServices.Scryfall;
 using eCommerce.Inventory.Infrastructure.ExternalServices.Scryfall.DTOs;
-using eCommerce.Inventory.Application.Settings;
+using eCommerce.Inventory.Api.HealthChecks;
 using MediatR;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -153,6 +155,17 @@ builder.Services.AddHttpClient<IScryfallApiClient, ScryfallApiClient>(client =>
 
 // Register SignalR
 builder.Services.AddSignalR();
+
+// Register Redis Cache
+builder.Services.Configure<RedisSettings>(builder.Configuration.GetSection("Redis"));
+builder.Services.Configure<CacheSettings>(builder.Configuration.GetSection("CacheSettings"));
+builder.Services.AddSingleton<ICacheService, RedisCacheService>();
+
+// Register Health Checks
+builder.Services.AddHealthChecks()
+    .AddCheck<DatabaseHealthCheck>("database")
+    .AddCheck<CardTraderApiHealthCheck>("cardtrader-api")
+    .AddCheck<RedisHealthCheck>("redis");
 
 // Add Rate Limiting
 builder.Services.AddRateLimiter(options =>
@@ -298,6 +311,9 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<eCommerce.Inventory.Api.Hubs.NotificationHub>("/notificationHub");
+
+// Health check endpoint
+app.MapHealthChecks("/health");
 
 
 try

@@ -9,7 +9,7 @@
 ## Stato Attuale
 
 **Branch principale:** `master`
-**Ultimo aggiornamento:** 2026-08-20 (sessione 5 — campo Description Card Trader in Nuovo Prodotto, replaces Posizione)
+**Ultimo aggiornamento:** 2026-08-24 (sessione 7 — Redis caching per dati statici Card Trader: Games 24h, Expansions 12h, Blueprints 6h)
 **Fase:** In produzione (uso quotidiano attivo)
 
 ### Cosa funziona adesso
@@ -27,8 +27,11 @@
 - **Report Inventario** con soglia giorni configurabile per slow-movers, AG Grid, 4 KPI (valore totale, articoli totali, prodotti unici, valore medio)
 - Report Redditività per Tag con drill-down per Espansione
 - **Calcolatore Box su pagina Espansioni**: PacksPerBox, CardsPerPack, BoxPrice salvati a DB; ROI% e breakeven calcolati on-the-fly; colonna **ROI Box%** in griglia con colore verde/arancio/rosso, filtrabile e ordinabile
+- **Sealed Product Sync**: auto-popola `BoxPrice` da Card Trader (primi 10 prezzi più bassi in inglese tra Blueprint categoria "sealed") — via button "Sync Box Prices" in pagina Espansioni o flag `PopulateSealedPricesOnStartup` all'avvio
 - Expansion Analytics (valore medio carte per espansione via Card Trader API)
 - AI Grading mock (Ximilar API non attivata)
+- **Redis caching per dati statici Card Trader**: Games (TTL 24h), Expansions (TTL 12h), Blueprints (TTL 6h), Categories (TTL 24h) — riduce chiamate API durante sync e velocizza frontend
+- **Health check endpoint `/health`**: controlla DB (SQL Server), Card Trader API (via cached Games), Redis (se abilitato) — per liveness/readiness probes in produzione
 - Rate limiter outbound Card Trader (20 req/min)
 - Backup giornaliero automatico (DB + applicazione)
 - Icone espansioni e date rilascio da Scryfall
@@ -37,7 +40,7 @@
 - **Campo Descrizione Card Trader in "Nuovo Prodotto"**: scrittura e lettura del campo `description` di Card Trader (es. "Timbro dei nazionali Italiani"), sostituisce il campo "Posizione" nel form. `GET /api/v2/products/{id}` per leggere la descrizione esistente; payload CREATE/UPDATE su CT ora include `description`; `Description` su `PendingListing` e `InventoryItem` (migration `20260820202633_AddDescriptionToEntities`, applicata). Form UI: "Posizione" → "Descrizione" con hint "Descrizione visibile su Card Trader".
 
 ### Cosa è in sospeso / da verificare
-- Possibile disallineamento residuo tra il valore `TotaleAcquistato` a livello Tag e la somma dei valori per Espansione nel report Redditività per Tag
+- **FIXED (2026-08-24)**: Disallineamento `TotaleAcquistato` tra Tag e Espansione nel report Redditività — causato da query Tag che usava raggruppamento diretto su `PendingListings.Tag` (includeva record con Blueprint/Expansion NULL) vs query Espansione che usava navigation properties con INNER JOIN implicito (escludeva quei record). Risolto uniformando `GetTagExpansionProfitability` a usare join espliciti (`from pl join bp join ex`) come già fatto per `rimanentePerExpansion`.
 - Copertura limitata del backfill Tag su OrderItems storici (molti `CardTraderId` non trovano corrispondenza nei Blueprints locali)
 - Applicare le migration manuali su server di produzione (SQL diretto: vedi sezione Punti di Attenzione)
 
@@ -63,6 +66,9 @@
 | 2026-03-27 | `TotaleAcquistato` nel report Tag usa JOIN diretto con `PendingListings` | Eliminare la query con `OPENJSON` che causava timeout 30s |
 | 2026-03-27 | `ValoreRimanente` usa `InventoryItems.ListingPrice` (non `PurchasePrice`) | `PurchasePrice` sugli InventoryItems è spesso zero; il prezzo di mercato attuale è `ListingPrice` |
 | 2026-08-20 | `Blueprint.ItalianName` + search per collector_number | Aggiunto campo `ItalianName` (lazy-popolato via Scryfall `localized.it` durante sync blueprint); esteso `SearchByNameAsync` per matchare anche `collector_number` (JSON) e `ItalianName`; autocomplete mostra nome italiano quando disponibile |
+| 2026-08-24 | Redis caching per dati statici Card Trader (Games/Expansions/Blueprints/Categories) | Riduce drasticamente le chiamate API durante sync notturna e operazioni frontend; TTL configurabili via appsettings (Games 24h, Expansions 12h, Blueprints 6h); fallback trasparente se Redis non disponibile |
+| 2026-08-24 | Health check endpoint `/health` con controlli DB, Card Trader API, Redis | Liveness/readiness probes per orchestrazione container/Kubernetes; DB via `SELECT 1`, CT via cached games (lightweight), Redis via test set/get/remove; Redis disabilitato in config = healthy (not required) |
+| 2026-08-24 | Fix disallineamento `TotaleAcquistato` Tag vs Espansione | Query `GetTagExpansionProfitability` ora usa join espliciti (`from pl join bp join ex`) coerenti con `rimanentePerExpansion`; prima usava navigation properties con INNER JOIN implicito che escludeva record con Blueprint/Expansion NULL, mentre query Tag li includeva |
 
 ---
 
@@ -78,12 +84,13 @@
 - Il file `debug_expansion_{id}.csv` viene generato da `ExpansionAnalyticsService` — non committare
 - L'AI Grading usa un mock service: Ximilar richiede abbonamento a pagamento
 - Il seed crea sempre un utente `admin` — la logica controlla che non duplichi
+- **Redis caching**: richiede istanza Redis disponibile (default `localhost:6379`); se non raggiungibile, il servizio disabilita il caching silenziosamente e continua senza cache (graceful degradation). Configurabile via `Redis:Enabled=false` o `Redis:ConnectionString`.
 
 ---
 
 ## Backlog Tecnico (Punto Aperto)
 
-- **Sealed Product Sync** — prezzi box automatici: recuperare prezzo box sigillati da CT (primi 10 valori più bassi in inglese tra Blueprint categoria "sealed") per pre-popolare `BoxPrice`. Al momento inserimento manuale.
+_Nessun punto aperto al momento._
 
 ---
 
@@ -111,6 +118,7 @@ Poi [descrivi il task da fare].
 | `eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderBlueprintsController.cs` | Endpoint blueprint (search) |
 | `eCommerce.Inventory.Api/Controllers/ReportingController.cs` | Endpoint reporting (query SQL pesanti) |
 | `eCommerce.Inventory.Api/Controllers/ExpansionsController.cs` | Gestione espansioni + calcolatore box (BoxConfigDto, BoxRoiPercentage) |
+| `eCommerce.Inventory.Api/HealthChecks/` | Health check endpoint `/health` (DatabaseHealthCheck, CardTraderApiHealthCheck, RedisHealthCheck) |
 | `eCommerce.Inventory.Api/appsettings.json` | Configurazione (senza segreti) |
 | `publish.ps1` | Script deploy automatizzato (richiede permessi Admin) |
 | `ecommerce-inventory-ui/src/app/shared/components/blueprint-selector/blueprint-selector.component.ts` | Selector carta in "Nuovo Prodotto" (autocomplete con nome IT) |
