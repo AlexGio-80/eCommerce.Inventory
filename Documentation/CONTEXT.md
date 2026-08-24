@@ -9,7 +9,7 @@
 ## Stato Attuale
 
 **Branch principale:** `master`
-**Ultimo aggiornamento:** 2026-08-24 (sessione 7 — Redis caching per dati statici Card Trader: Games 24h, Expansions 12h, Blueprints 6h)
+**Ultimo aggiornamento:** 2026-08-24 (sessione 8 — Health check endpoint /health + Fix disallineamento TotaleAcquistato Tag vs Espansione report Redditività)
 **Fase:** In produzione (uso quotidiano attivo)
 
 ### Cosa funziona adesso
