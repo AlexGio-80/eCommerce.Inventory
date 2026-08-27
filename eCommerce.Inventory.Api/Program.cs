@@ -1,7 +1,10 @@
+using System.Diagnostics;
 using Serilog;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Http;
 using eCommerce.Inventory.Application.Interfaces;
+using eCommerce.Inventory.Application.Metrics;
 using eCommerce.Inventory.Application.Settings;
 using eCommerce.Inventory.Infrastructure.Persistence;
 using eCommerce.Inventory.Infrastructure.Persistence.Repositories;
@@ -13,20 +16,23 @@ using eCommerce.Inventory.Infrastructure.Services;
 using eCommerce.Inventory.Infrastructure.ExternalServices.Scryfall;
 using eCommerce.Inventory.Infrastructure.ExternalServices.Scryfall.DTOs;
 using eCommerce.Inventory.Api.HealthChecks;
+using eCommerce.Inventory.Api.Middleware;
 using MediatR;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+using Prometheus;
+using HealthChecks.UI;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure Serilog
-var logPath = Path.Combine(AppContext.BaseDirectory, "logs", "ecommerce-inventory-.txt");
-Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Debug()
-    .WriteTo.Console()
-    .WriteTo.File(logPath, rollingInterval: RollingInterval.Day)
+// Configure Serilog from appsettings.json (supports environment-specific configs)
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .ReadFrom.Services(services)
     .Enrich.FromLogContext()
-    .CreateLogger();
-
-builder.Host.UseSerilog();
+    .Enrich.WithProperty("Application", "eCommerce.Inventory")
+    .Enrich.WithProperty("Environment", context.HostingEnvironment.EnvironmentName));
 
 // Configure as Windows Service
 builder.Host.UseWindowsService(options =>
@@ -72,6 +78,10 @@ builder.Services.AddSingleton<CardTraderRateLimiter>(); // Singleton to share ra
 builder.Services.AddScoped<INotificationService, eCommerce.Inventory.Api.Services.SignalRNotificationService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IExpansionAnalyticsService, ExpansionAnalyticsService>();
+
+// Autopricer: il motore è senza stato, il servizio orchestra API e persistenza
+builder.Services.AddSingleton<eCommerce.Inventory.Application.Pricing.PricingEngine>();
+builder.Services.AddScoped<AutoPricingService>();
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
@@ -166,6 +176,68 @@ builder.Services.AddHealthChecks()
     .AddCheck<DatabaseHealthCheck>("database")
     .AddCheck<CardTraderApiHealthCheck>("cardtrader-api")
     .AddCheck<RedisHealthCheck>("redis");
+
+// Add Health Checks UI (preparazione Fase 2)
+builder.Services.AddHealthChecksUI(options =>
+{
+    options.SetEvaluationTimeInSeconds(30);
+    options.MaximumHistoryEntriesPerEndpoint(50);
+})
+.AddInMemoryStorage();
+
+// Configure OpenTelemetry
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource
+        .AddService("eCommerce.Inventory")
+        .AddAttributes(new Dictionary<string, object>
+        {
+            ["service.version"] = typeof(Program).Assembly.GetName().Version?.ToString() ?? "1.0.0",
+            ["deployment.environment"] = builder.Environment.EnvironmentName
+        }))
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation(options =>
+        {
+            options.RecordException = true;
+            options.EnrichWithHttpRequest = (activity, request) =>
+            {
+                activity.SetTag("http.request.correlation_id", request.Headers["X-Correlation-ID"].FirstOrDefault());
+                activity.SetTag("http.request.user_agent", request.Headers["User-Agent"].FirstOrDefault());
+            };
+            options.EnrichWithHttpResponse = (activity, response) =>
+            {
+                activity.SetTag("http.response.status_code", response.StatusCode);
+            };
+        })
+        .AddHttpClientInstrumentation(options =>
+        {
+            options.RecordException = true;
+            options.EnrichWithHttpRequestMessage = (activity, request) =>
+            {
+                activity.SetTag("http.client.request.uri", request.RequestUri?.ToString());
+            };
+            options.EnrichWithHttpResponseMessage = (activity, response) =>
+            {
+                activity.SetTag("http.client.response.status_code", (int)response.StatusCode);
+            };
+        })
+        .AddEntityFrameworkCoreInstrumentation(options =>
+        {
+            options.SetDbStatementForText = true;
+            options.EnrichWithIDbCommand = (activity, command) =>
+            {
+                activity.SetTag("db.operation", command.CommandText?.Split(' ')[0] ?? "unknown");
+            };
+        })
+        .AddSource("eCommerce.Inventory")
+        .AddConsoleExporter())
+    .WithMetrics(metrics => metrics
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddPrometheusExporter()
+        .AddConsoleExporter());
+
+// Register custom metrics
+builder.Services.AddSingleton<BusinessMetrics>();
 
 // Add Rate Limiting
 builder.Services.AddRateLimiter(options =>
@@ -284,9 +356,11 @@ if (app.Environment.IsDevelopment())
 // Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
-
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(c => {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "eCommerce.Inventory API v1");
+        c.RoutePrefix = "swagger";
+    });
 }
 else
 {
@@ -297,33 +371,78 @@ else
 // Use CORS before authorization
 app.UseCors("AllowAll");
 
+// Use Correlation ID middleware (MUST be before SerilogRequestLogging for proper enrichment)
+app.UseCorrelationId();
+
 // Use Serilog middleware for request/response logging
-app.UseSerilogRequestLogging();
+app.UseSerilogRequestLogging(options =>
+{
+    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+    {
+        diagnosticContext.Set("CorrelationId", httpContext.Response.Headers["X-Correlation-ID"].FirstOrDefault());
+        diagnosticContext.Set("TraceId", Activity.Current?.TraceId.ToString());
+        diagnosticContext.Set("SpanId", Activity.Current?.SpanId.ToString());
+    };
+});
 
 // Use Global Exception Middleware (AFTER logging, BEFORE authorization)
 app.UseMiddleware<eCommerce.Inventory.Api.Middleware.GlobalExceptionMiddleware>();
 
-// Use Rate Limiter (AFTER CORS, BEFORE Authentication)
+// Routing MUST be before authentication, authorization, rate limiting, and endpoint mapping
+app.UseRouting();
+
+// Use Rate Limiter (AFTER Routing, BEFORE Authentication)
 app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Health check endpoints
+app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = System.Net.Mime.MediaTypeNames.Application.Json;
+        var result = new
+        {
+            status = report.Status.ToString(),
+            totalDuration = report.TotalDuration.TotalMilliseconds,
+            checks = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+                description = e.Value.Description,
+                duration = e.Value.Duration.TotalMilliseconds,
+                data = e.Value.Data
+            })
+        };
+        await context.Response.WriteAsJsonAsync(result);
+    },
+    Predicate = _ => true,
+    ResultStatusCodes =
+    {
+        [HealthStatus.Healthy] = StatusCodes.Status200OK,
+        [HealthStatus.Degraded] = StatusCodes.Status200OK,
+        [HealthStatus.Unhealthy] = StatusCodes.Status503ServiceUnavailable
+    }
+});
+app.MapHealthChecksUI(options => options.UIPath = "/health-ui");
+
+// Prometheus metrics endpoint - Use MapMetrics() for minimal API (NOT UseMetricServer)
+app.MapMetrics();
+
 app.MapControllers();
 app.MapHub<eCommerce.Inventory.Api.Hubs.NotificationHub>("/notificationHub");
-
-// Health check endpoint
-app.MapHealthChecks("/health");
-
 
 try
 {
     Log.Information("Starting eCommerce.Inventory.Api application");
-    app.Run();
+    await app.RunAsync();
 }
 catch (Exception ex)
 {
     Log.Fatal(ex, "Application terminated unexpectedly");
+    throw;
 }
 finally
 {

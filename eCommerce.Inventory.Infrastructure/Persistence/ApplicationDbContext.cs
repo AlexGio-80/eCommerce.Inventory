@@ -22,10 +22,16 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<OrderItem> OrderItems { get; set; }
     public DbSet<User> Users { get; set; }
     public DbSet<ExpansionROI> ExpansionsROI { get; set; }
+    public DbSet<PricingProfile> PricingProfiles { get; set; }
+    public DbSet<PricingRule> PricingRules { get; set; }
+    public DbSet<PriceChangeLog> PriceChangeLogs { get; set; }
+    public DbSet<PricingRunLog> PricingRunLogs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        ConfigureAutoPricing(modelBuilder);
 
         // Game -> Expansion (One-to-Many)
         modelBuilder.Entity<Game>()
@@ -174,5 +180,83 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
         modelBuilder.Entity<ExpansionROI>()
             .HasNoKey()
             .ToView("ExpansionsROI");
+    }
+
+    /// <summary>
+    /// Configurazione delle entità dell'autopricer.
+    /// </summary>
+    private static void ConfigureAutoPricing(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<PricingProfile>(entity =>
+        {
+            entity.Property(p => p.Name).HasMaxLength(200).IsRequired();
+            entity.Property(p => p.CountryCodesCsv).HasMaxLength(500);
+            entity.Property(p => p.MinPrice).HasPrecision(18, 2);
+            entity.Property(p => p.MaxChangePercentPerRun).HasPrecision(9, 2);
+            entity.Property(p => p.OutlierMadThreshold).HasPrecision(9, 4);
+
+            entity.HasMany(p => p.Rules)
+                .WithOne(r => r.PricingProfile)
+                .HasForeignKey(r => r.PricingProfileId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PricingRule>(entity =>
+        {
+            entity.Property(r => r.FromPrice).HasPrecision(18, 2);
+            entity.Property(r => r.ToPrice).HasPrecision(18, 2);
+            entity.Property(r => r.AdjustmentAmount).HasPrecision(18, 2);
+            entity.Property(r => r.AdjustmentPercent).HasPrecision(9, 2);
+
+            entity.HasIndex(r => new { r.PricingProfileId, r.FromPrice, r.ToPrice })
+                .HasDatabaseName("IX_PricingRule_Profile_Range");
+        });
+
+        modelBuilder.Entity<PricingRunLog>(entity =>
+        {
+            entity.Property(r => r.TotalPriceDelta).HasPrecision(18, 2);
+            entity.Property(r => r.ErrorMessage).HasMaxLength(2000);
+
+            // CoveragePercent è calcolata in memoria dai contatori: non va persistita,
+            // altrimenti si potrebbe disallineare dai valori da cui deriva.
+            entity.Ignore(r => r.CoveragePercent);
+
+            entity.HasOne(r => r.PricingProfile)
+                .WithMany()
+                .HasForeignKey(r => r.PricingProfileId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(r => r.StartedAt).HasDatabaseName("IX_PricingRunLog_StartedAt");
+        });
+
+        modelBuilder.Entity<PriceChangeLog>(entity =>
+        {
+            entity.Property(c => c.OldPrice).HasPrecision(18, 2);
+            entity.Property(c => c.ProposedPrice).HasPrecision(18, 2);
+            entity.Property(c => c.ReferencePrice).HasPrecision(18, 2);
+            entity.Property(c => c.Reason).HasMaxLength(1000);
+
+            entity.HasOne(c => c.InventoryItem)
+                .WithMany()
+                .HasForeignKey(c => c.InventoryItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(c => c.Blueprint)
+                .WithMany()
+                .HasForeignKey(c => c.BlueprintId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(c => c.PricingRunLog)
+                .WithMany(r => r.Changes)
+                .HasForeignKey(c => c.PricingRunLogId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Serve a rispondere in fretta a "quando è stata aggiornata l'ultima volta
+            // questa carta?", che è la domanda alla base del problema di copertura.
+            entity.HasIndex(c => new { c.BlueprintId, c.CreatedAt })
+                .HasDatabaseName("IX_PriceChangeLog_Blueprint_CreatedAt");
+
+            entity.HasIndex(c => c.CreatedAt).HasDatabaseName("IX_PriceChangeLog_CreatedAt");
+        });
     }
 }

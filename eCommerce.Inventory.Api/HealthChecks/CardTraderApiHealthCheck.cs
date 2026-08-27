@@ -33,10 +33,14 @@ public class CardTraderApiHealthCheck : IHealthCheck
     {
         var stopwatch = Stopwatch.StartNew();
 
+        // Add a timeout for the health check itself (fail fast if API is slow)
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(5));
+
         try
         {
             // Try to get games from cache first (lightweight)
-            var cachedGames = await _cache.GetAsync<List<eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.DTOs.CardTraderGameDto>>("cardtrader:games", cancellationToken);
+            var cachedGames = await _cache.GetAsync<List<eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.DTOs.CardTraderGameDto>>("cardtrader:games", timeoutCts.Token);
 
             if (cachedGames != null && cachedGames.Count > 0)
             {
@@ -54,7 +58,7 @@ public class CardTraderApiHealthCheck : IHealthCheck
             }
 
             // If cache miss, make actual API call (this is heavier but validates full connectivity)
-            var games = await _cardTraderApi.SyncGamesAsync(cancellationToken);
+            var games = await _cardTraderApi.SyncGamesAsync(timeoutCts.Token);
 
             stopwatch.Stop();
 
@@ -85,13 +89,30 @@ public class CardTraderApiHealthCheck : IHealthCheck
                     ["gamesCount"] = 0
                 });
         }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            stopwatch.Stop();
+
+            _logger.LogWarning("Card Trader API health check timed out after {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
+
+            // An external API being slow does not mean this application is down:
+            // report Degraded so /health stays 200 and liveness probes don't restart us.
+            return HealthCheckResult.Degraded(
+                "Card Trader API did not respond within the health check timeout",
+                null,
+                new Dictionary<string, object>
+                {
+                    ["responseTimeMs"] = stopwatch.ElapsedMilliseconds,
+                    ["error"] = "timeout"
+                });
+        }
         catch (Exception ex)
         {
             stopwatch.Stop();
 
             _logger.LogError(ex, "Card Trader API health check failed after {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
 
-            return HealthCheckResult.Unhealthy(
+            return HealthCheckResult.Degraded(
                 "Card Trader API connection failed",
                 ex,
                 new Dictionary<string, object>

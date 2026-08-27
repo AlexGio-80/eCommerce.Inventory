@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using eCommerce.Inventory.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using eCommerce.Inventory.Infrastructure.Persistence;
 namespace eCommerce.Inventory.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260827163554_AddAutoPricing")]
+    partial class AddAutoPricing
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -695,9 +698,6 @@ namespace eCommerce.Inventory.Infrastructure.Migrations
                     b.Property<decimal>("OutlierMadThreshold")
                         .HasPrecision(9, 4)
                         .HasColumnType("decimal(9,4)");
-
-                    b.Property<bool>("SkipWhenFewerOffersThanPosition")
-                        .HasColumnType("bit");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");

@@ -153,10 +153,11 @@ public class SealedProductPriceService : BackgroundService
                     // Get products for this blueprint
                     var products = kvp.Value;
 
-                    // Filter to English language only and get minimum price per blueprint
+                    // Filter to English language only and get minimum price per blueprint.
+                    // Card Trader returns the short code ("en") in properties_hash, so comparing
+                    // against "English" alone silently matched nothing and left BoxPrice unset.
                     var englishProducts = products
-                        .Where(p => p.Properties != null && p.Properties.Language != null &&
-                                    p.Properties.Language.Equals("English", StringComparison.OrdinalIgnoreCase))
+                        .Where(p => p.Properties?.Language is "en" or "En" or "EN" or "English" or "english")
                         .Where(p => p.PriceCents > 0)
                         .ToList();
 

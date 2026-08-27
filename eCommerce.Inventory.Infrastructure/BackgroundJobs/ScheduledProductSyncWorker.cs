@@ -1,4 +1,5 @@
 using eCommerce.Inventory.Application.DTOs;
+using eCommerce.Inventory.Application.Metrics;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,15 +16,18 @@ public class ScheduledProductSyncWorker : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<ScheduledProductSyncWorker> _logger;
     private readonly IConfiguration _configuration;
+    private readonly BusinessMetrics _metrics;
 
     public ScheduledProductSyncWorker(
         IServiceProvider serviceProvider,
         ILogger<ScheduledProductSyncWorker> logger,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        BusinessMetrics metrics)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
         _configuration = configuration;
+        _metrics = metrics;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -61,6 +65,11 @@ public class ScheduledProductSyncWorker : BackgroundService
 
     private async Task RunSyncAsync(CancellationToken stoppingToken)
     {
+        // Use base histogram with manual timing for labeled metrics
+        var syncStopwatch = System.Diagnostics.Stopwatch.StartNew();
+        _metrics.SyncInProgress.WithLabels("scheduled_full").Inc();
+        _metrics.SyncTotal.WithLabels("scheduled_full", "started").Inc();
+
         using var scope = _serviceProvider.CreateScope();
         var orchestrator = scope.ServiceProvider.GetRequiredService<CardTraderSyncOrchestrator>();
 
@@ -86,6 +95,7 @@ public class ScheduledProductSyncWorker : BackgroundService
         if (result.ErrorMessage != null)
         {
             _logger.LogError("Sync FAILED with error: {ErrorMessage}", result.ErrorMessage);
+            _metrics.SyncTotal.WithLabels("scheduled_full", "failure").Inc();
         }
         else
         {
@@ -100,9 +110,13 @@ public class ScheduledProductSyncWorker : BackgroundService
                 result.Inventory.Added, result.Inventory.Updated, result.Inventory.Failed, result.Inventory.Skipped);
             _logger.LogInformation("  - Orders: Added={Added}, Updated={Updated}, Failed={Failed}, Skipped={Skipped}",
                 result.Orders.Added, result.Orders.Updated, result.Orders.Failed, result.Orders.Skipped);
+            _metrics.SyncTotal.WithLabels("scheduled_full", "success").Inc();
         }
 
         _logger.LogInformation("========================================");
+        _metrics.SyncInProgress.WithLabels("scheduled_full").Dec();
+        syncStopwatch.Stop();
+        _metrics.SyncDuration.WithLabels("scheduled_full", result.ErrorMessage != null ? "failure" : "success").Observe(syncStopwatch.Elapsed.TotalSeconds);
     }
 
     private DateTime GetNextRunTime()

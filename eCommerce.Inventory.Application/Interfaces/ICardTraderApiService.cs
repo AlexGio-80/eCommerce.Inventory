@@ -31,6 +31,14 @@ public interface ICardTraderApiService
     // Mutation methods - operate on Card Trader marketplace
     Task<int> CreateProductOnCardTraderAsync(InventoryItem item, CancellationToken cancellationToken = default);
     Task UpdateProductOnCardTraderAsync(InventoryItem item, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Aggiorna il solo prezzo di un prodotto. Usato dall'autopricer: inviare unicamente
+    /// il campo che cambia evita di riscrivere condizione, lingua e descrizione a ogni
+    /// ritocco di prezzo, che sarebbe un rischio inutile su migliaia di aggiornamenti.
+    /// Restituisce true se Card Trader ha accettato la modifica.
+    /// </summary>
+    Task<bool> UpdateProductPriceAsync(int cardTraderProductId, decimal newPrice, CancellationToken cancellationToken = default);
     Task DeleteProductOnCardTraderAsync(int cardTraderProductId, CancellationToken cancellationToken = default);
 
     // Product detail

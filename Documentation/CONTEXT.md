@@ -9,7 +9,7 @@
 ## Stato Attuale
 
 **Branch principale:** `master`
-**Ultimo aggiornamento:** 2026-08-24 (sessione 8 — Health check endpoint /health + Fix disallineamento TotaleAcquistato Tag vs Espansione report Redditività)
+**Ultimo aggiornamento:** 2026-08-27 (sessione 9 — Monitoring/Observability Fase 1 + ripristino wiring di produzione e deploy)
 **Fase:** In produzione (uso quotidiano attivo)
 
 ### Cosa funziona adesso
@@ -31,7 +31,8 @@
 - Expansion Analytics (valore medio carte per espansione via Card Trader API)
 - AI Grading mock (Ximilar API non attivata)
 - **Redis caching per dati statici Card Trader**: Games (TTL 24h), Expansions (TTL 12h), Blueprints (TTL 6h), Categories (TTL 24h) — riduce chiamate API durante sync e velocizza frontend
-- **Health check endpoint `/health`**: controlla DB (SQL Server), Card Trader API (via cached Games), Redis (se abilitato) — per liveness/readiness probes in produzione
+- **Health check endpoint `/health`**: controlla DB (SQL Server), Card Trader API (via cached Games), Redis (se abilitato) — per liveness/readiness probes in produzione. Risponde in ~0,2s con HTTP 200. Il fallimento di Card Trader produce `Degraded`, non `Unhealthy`: un servizio esterno giù non deve far risultare down la nostra applicazione
+- **Monitoring/Observability Fase 1**: endpoint `/metrics` Prometheus (runtime + HTTP + 20 metriche business in `Application/Metrics/BusinessMetrics.cs`), distributed tracing OpenTelemetry (ASP.NET Core, HttpClient, EF Core) con Console exporter, middleware Correlation ID (`X-Correlation-ID` propagato + enrichment Serilog con `CorrelationId`/`TraceId`/`SpanId`), Serilog configurato da appsettings per environment, Health Checks UI su `/health-ui`
 - Rate limiter outbound Card Trader (20 req/min)
 - Backup giornaliero automatico (DB + applicazione)
 - Icone espansioni e date rilascio da Scryfall
@@ -41,6 +42,8 @@
 
 ### Cosa è in sospeso / da verificare
 - **FIXED (2026-08-24)**: Disallineamento `TotaleAcquistato` tra Tag e Espansione nel report Redditività — causato da query Tag che usava raggruppamento diretto su `PendingListings.Tag` (includeva record con Blueprint/Expansion NULL) vs query Espansione che usava navigation properties con INNER JOIN implicito (escludeva quei record). Risolto uniformando `GetTagExpansionProfitability` a usare join espliciti (`from pl join bp join ex`) come già fatto per `rimanentePerExpansion`.
+- **Redis non è installato sulla macchina**: `Redis:Enabled` è ora `false`. Tutto il codice di caching resta in piedi e funzionante — per riattivarlo serve installare Redis e rimettere il flag a `true`. Da valutare: il caching riduce le chiamate API durante la sync notturna, ma richiede di mantenere un servizio in più
+- **OpenTelemetry usa il Console exporter**: il tracing è attivo ma i trace finiscono a console, senza backend di raccolta (Jaeger/Tempo/Application Insights). Va bene per il debug, non per l'analisi storica. La Fase 2 (Health Checks UI popolata + backend di tracing) è predisposta ma non configurata
 - Copertura limitata del backfill Tag su OrderItems storici (molti `CardTraderId` non trovano corrispondenza nei Blueprints locali)
 - Applicare le migration manuali su server di produzione (SQL diretto: vedi sezione Punti di Attenzione)
 
@@ -50,6 +53,9 @@
 
 | Data | Decisione | Perché |
 |------|-----------|--------|
+| 2026-08-27 | `Redis:Enabled` → `false` | Nessun server Redis installato sulla macchina, ma il flag era `true`: ogni health check restava appeso 15s sul connect TCP. Config allineata alla realtà; il codice di caching resta intatto e riattivabile |
+| 2026-08-27 | Il fallimento di Card Trader nell'health check produce `Degraded`, non `Unhealthy` | Un'API di terze parti lenta o giù non significa che la nostra applicazione sia down; con `Unhealthy` l'endpoint restituiva 503 e una liveness probe ci avrebbe riavviati in loop per un problema non nostro |
+| 2026-08-27 | Per girare in locale si usa `ASPNETCORE_ENVIRONMENT=Development`, non si commenta il wiring | Commentare `UseWindowsService`/`UseUrls` per test ha lasciato la produzione senza servizio e senza backup per due giorni. L'environment Development ha già porta e config separate |
 | 2026-05-22 | `NormalizeLanguageCode` nel mapper + endpoint `by-blueprint` | CT restituisce codici brevi (`"en"`, `"it"`); il mapper li converte a nomi completi per le future sync; il DTO li normalizza anche per i record già in DB, così la combo lingua nel form si popola correttamente |
 | 2026-05-22 | Tag recuperato da `PendingListing` sincronizzata come fallback in `by-blueprint` | Gli `InventoryItem` da sync notturna CT non portano il tag utente (CT non lo espone); il fallback `ii.Tag ?? syncedPending?.Tag` lo recupera senza richiedere re-sync |
 | 2026-05-20 | `domLayout: 'autoHeight'` rimosso da Items to Prepare | Causava rendering AG Grid a 952px (altezza naturale 25 righe) ignorando il contenitore CSS; la paginazione risultava tagliata da `overflow: hidden` |
@@ -84,6 +90,8 @@
 - Il file `debug_expansion_{id}.csv` viene generato da `ExpansionAnalyticsService` — non committare
 - L'AI Grading usa un mock service: Ximilar richiede abbonamento a pagamento
 - Il seed crea sempre un utente `admin` — la logica controlla che non duplichi
+- **⚠️ I servizi one-shot chiudono il processo**: `PopulateItalianNamesService` e `SealedProductPriceService` terminano con `Environment.Exit(0)`. La guard clause sul flag precede l'`Exit`, quindi con flag `false` sono innocui — ma **non vanno mai abilitati in `appsettings.Production.json`**, pena lo spegnimento del servizio Windows a ogni avvio. Vanno lanciati on-demand dagli endpoint dedicati (es. `POST /api/expansions/sync-sealed-prices`)
+- **⚠️ Non commentare il wiring di produzione in `Program.cs` per test locali**: `UseWindowsService`, `UseUrls(apiBaseUrl)` e la registrazione di `BackupService`/`ScheduledProductSyncWorker` sono ciò che tiene in piedi il deploy. Per girare in locale si usa `ASPNETCORE_ENVIRONMENT=Development` (porta 5155 da `appsettings.Development.json`), che non richiede di toccare il codice
 - **Redis caching**: richiede istanza Redis disponibile (default `localhost:6379`); se non raggiungibile, il servizio disabilita il caching silenziosamente e continua senza cache (graceful degradation). Configurabile via `Redis:Enabled=false` o `Redis:ConnectionString`.
 
 ---

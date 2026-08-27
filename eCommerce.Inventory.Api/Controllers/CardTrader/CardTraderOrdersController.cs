@@ -1,4 +1,5 @@
 using eCommerce.Inventory.Application.Interfaces;
+using eCommerce.Inventory.Application.Metrics;
 using eCommerce.Inventory.Domain.Entities;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
 using eCommerce.Inventory.Application.DTOs;
@@ -16,19 +17,22 @@ public class CardTraderOrdersController : ControllerBase
     private readonly InventorySyncService _inventorySyncService;
     private readonly ILogger<CardTraderOrdersController> _logger;
     private readonly IApplicationDbContext _context;
+    private readonly BusinessMetrics _metrics;
 
     public CardTraderOrdersController(
         IOrderRepository orderRepository,
         ICardTraderApiService cardTraderApiService,
         InventorySyncService inventorySyncService,
         ILogger<CardTraderOrdersController> logger,
-        IApplicationDbContext context)
+        IApplicationDbContext context,
+        BusinessMetrics metrics)
     {
         _orderRepository = orderRepository;
         _cardTraderApiService = cardTraderApiService;
         _inventorySyncService = inventorySyncService;
         _logger = logger;
         _context = context;
+        _metrics = metrics;
     }
 
     [HttpGet]
@@ -59,6 +63,9 @@ public class CardTraderOrdersController : ControllerBase
     {
         _logger.LogInformation("Syncing single order {OrderId}", cardTraderOrderId);
 
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        _metrics.OrdersUpdated.WithLabels("api").Inc();
+
         var detail = await _cardTraderApiService.GetOrderDetailAsync(cardTraderOrderId, cancellationToken)
             as Infrastructure.ExternalServices.CardTrader.DTOs.CardTraderOrderDto;
 
@@ -67,6 +74,8 @@ public class CardTraderOrdersController : ControllerBase
 
         await _inventorySyncService.SyncOrdersAsync(new List<Infrastructure.ExternalServices.CardTrader.DTOs.CardTraderOrderDto> { detail }, cancellationToken);
 
+        stopwatch.Stop();
+        _metrics.OrderProcessingDuration.WithLabels("sync_single").Observe(stopwatch.Elapsed.TotalSeconds);
         return Ok(Models.ApiResponse<object>.SuccessResult(
             data: new { cardTraderOrderId, itemCount = detail.OrderItems?.Count ?? 0 },
             message: $"Order {cardTraderOrderId} synced"
@@ -84,6 +93,9 @@ public class CardTraderOrdersController : ControllerBase
     {
         _logger.LogInformation("Manual sync of orders triggered - from: {From}, to: {To}", from, to);
 
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        _metrics.OrdersUpdated.WithLabels("api").Inc();
+
         var orderDtos = await _cardTraderApiService.GetOrdersAsync(from, to);
 
         var concreteDtos = ((IEnumerable<dynamic>)orderDtos)
@@ -91,6 +103,8 @@ public class CardTraderOrdersController : ControllerBase
 
         await _inventorySyncService.SyncOrdersAsync(concreteDtos);
 
+        stopwatch.Stop();
+        _metrics.OrderProcessingDuration.WithLabels("sync_range").Observe(stopwatch.Elapsed.TotalSeconds);
         return Ok(Models.ApiResponse<object>.SuccessResult(
             data: new { syncedCount = concreteDtos.Count },
             message: $"Synced {concreteDtos.Count} orders"

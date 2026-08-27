@@ -12,6 +12,10 @@ public interface IApplicationDbContext
     DbSet<Order> Orders { get; }
     DbSet<OrderItem> OrderItems { get; }
     DbSet<User> Users { get; }
+    DbSet<PricingProfile> PricingProfiles { get; }
+    DbSet<PricingRule> PricingRules { get; }
+    DbSet<PriceChangeLog> PriceChangeLogs { get; }
+    DbSet<PricingRunLog> PricingRunLogs { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

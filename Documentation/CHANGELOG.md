@@ -9,6 +9,101 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-08-27] Fix — Ripristino wiring di produzione disattivato durante il debug del monitoring
+
+#### Problema
+Durante l'implementazione della Fase 1 Monitoring il wiring di produzione era stato commentato in `Program.cs` per test in locale e mai riattivato. Conseguenze in produzione:
+- `UseWindowsService` disattivato → il servizio Windows `eCommerce.Inventory` non poteva funzionare ed era stato rimosso
+- `UseUrls(apiBaseUrl)` disattivato → API non più in ascolto su porta 5152, frontend IIS senza backend
+- `ScheduledProductSyncWorker` disattivato → nessuna sync notturna
+- `BackupService` + `Configure<BackupSettings>` disattivati → **nessun backup giornaliero**
+- `PopulateItalianNamesService` e `SealedProductPriceService` disattivati
+
+Inoltre `/health` rispondeva **HTTP 503 dopo 15,4 secondi**: `Redis:Enabled` era `true` in `appsettings.json` ma nessun server Redis è installato sulla macchina, quindi ogni probe restava appeso sul connect TCP. Lo stesso stallo consumava il budget di timeout del check Card Trader, che risultava a sua volta `Unhealthy` con "A task was canceled".
+
+#### Soluzione Implementata
+- Riattivati tutti i blocchi commentati in `Program.cs` (Windows Service, UseUrls, 4 hosted service, BackupSettings)
+- `Redis:Enabled` → `false` in `appsettings.json`, allineando la config alla realtà della macchina. Il codice di caching resta intatto: per riattivarlo basta installare Redis e rimettere il flag a `true`
+- `CardTraderApiHealthCheck`: il fallimento di un'API esterna ora produce `Degraded` invece di `Unhealthy`, così `/health` resta 200 e le liveness probe non riavviano l'applicazione per un problema che non è nostro. Il timeout è distinto dagli altri errori tramite exception filter su `timeoutCts.IsCancellationRequested`
+- `appsettings.Development.json`: `PopulateSealedPricesOnStartup` → `false`. Era `true`, e quel servizio termina con `Environment.Exit(0)`: in dev l'applicazione si spegneva da sola subito dopo l'avvio
+- Rimossi endpoint di debug (`/test-debug`, `/test-minimal`, `/test-health`) e i `Log.Information` di tracciamento lasciati nella pipeline
+- Rimossi dalla root i file spuri `Program.cs` (Hello World), `stop` e la cartella con il path preso alla lettera `C:LavoroeCommerce.Inventory...`
+
+#### Verifica
+Con applicazione effettivamente avviata:
+- `/health` — da **15,4s / HTTP 503** a **0,33s / HTTP 200**, tutti e tre i check Healthy
+- In produzione dopo il deploy: servizio `RUNNING`, `/health` su 5152 in **0,19s / HTTP 200**
+- Login `admin` → JWT valido (HTTP 200); `/metrics` risponde
+- Correlation ID verificato sia in generazione sia in propagazione (`X-Correlation-ID` echo)
+- Build backend 0 errori, build frontend OK
+
+#### Note Tecniche
+I servizi one-shot `PopulateItalianNamesService` e `SealedProductPriceService` chiudono il processo con `Environment.Exit(0)`. La guard clause sul flag di configurazione precede l'`Exit`, quindi con flag `false` sono innocui — ma **non vanno mai abilitati in `appsettings.Production.json`**, pena lo spegnimento del servizio Windows a ogni avvio. Vanno lanciati on-demand dagli endpoint dedicati.
+
+---
+
+### [2026-08-27] Feature — Monitoring/Observability Fase 1 Core (Prometheus + OpenTelemetry + Correlation ID + Serilog Config)
+
+#### Problema
+Mancava il layer di observability completo per produzione: metriche Prometheus, distributed tracing OpenTelemetry, correlation ID propagation, e configurazione Serilog environment-specific.
+
+#### Soluzione Implementata
+
+**Backend — Nuovi pacchetti e configurazioni:**
+
+**Pacchetti NuGet aggiunti:**
+- `prometheus-net.AspNetCore` 8.2.1 + `prometheus-net.DotNetRuntime` 4.3.0 — endpoint `/metrics` con runtime metrics
+- `OpenTelemetry.Extensions.Hosting` 1.11.1, `OpenTelemetry.Instrumentation.AspNetCore` 1.11.1, `OpenTelemetry.Instrumentation.Http` 1.11.1, `OpenTelemetry.Instrumentation.EntityFrameworkCore` 1.12.0-beta.1, `OpenTelemetry.Exporter.Console` 1.11.1 — distributed tracing
+- `AspNetCore.HealthChecks.UI` 8.0.0 + `AspNetCore.HealthChecks.UI.Client` 8.0.0 + `AspNetCore.HealthChecks.UI.InMemory.Storage` 8.0.0 — Health Checks UI
+
+**Program.cs — Major refactor:**
+- Serilog: lettura configurazione da `builder.Configuration.GetSection("Serilog")` invece di hardcoded
+- OpenTelemetry: `AddOpenTelemetry()` con `WithTracing` (AspNetCore, HttpClient, EF Core) + `WithMetrics` (AspNetCore, HttpClient, Prometheus exporter, Console exporter)
+- Prometheus: `app.MapMetrics()` endpoint `/metrics` (minimal API)
+- Correlation ID Middleware: nuovo `UseCorrelationId()` registrato PRIMA di `UseSerilogRequestLogging()`
+- Health Checks: `AddHealthChecksUI()` con InMemory storage, endpoint `/health` (JSON detailed) e `/health-ui`
+- Rate Limiting: 4 policies (api 100/min, cardtrader-sync 10/min, auth 5/min sliding, global 200/min)
+- CORS: `AllowAll` policy per `localhost:4200`, `127.0.0.1:4200`, `inventory.local`
+- Middleware order corretto: `UseRouting` → `UseRateLimiter` → `UseAuthentication` → `UseAuthorization` → `MapHealthChecks` → `MapMetrics` → `MapControllers`
+
+**Nuovo file: `Middleware/CorrelationIdMiddleware.cs`**
+- Estrae/propaga header `X-Correlation-ID` da request
+- Genera nuovo ID se assente (Activity.Current?.Id o Guid)
+- Enrichment Serilog LogContext: `CorrelationId`, `TraceId`, `SpanId`
+
+**appsettings.json / appsettings.Development.json / appsettings.Production.json — Serilog config:**
+- Development: `MinimumLevel: Debug`, Console + File sinks, outputTemplate con Properties JSON
+- Production: `MinimumLevel: Warning`, File only, Enrich: `FromLogContext`, `WithThreadId`, `WithProcessId`
+
+**BusinessMetrics.cs (Application/Metrics) — 20+ metriche custom:**
+- Sync: `SyncDurationHistogram`, `SyncSuccessCounter`, `SyncFailureCounter`
+- Orders: `OrdersCreatedCounter`
+- Inventory: `InventoryItemsGauge`
+- API: `ApiCallsTotal` (Counter con labels endpoint/method/status), `WebhooksReceivedTotal`
+- DB: `DbQueryDurationHistogram`
+- Cache: `CacheHitsTotal`, `CacheMissesTotal`
+- Background Jobs: `BackgroundJobExecutionsTotal`, `BackgroundJobDurationHistogram`
+- Auth: `AuthAttemptsTotal` (Counter con labels endpoint/result)
+- SignalR: `ActiveUsersGauge`
+
+**Integrazione metriche nei worker esistenti:**
+- `CardTraderSyncWorker.cs`: usa `BusinessMetrics.SyncDurationHistogram.NewTimer()`, incrementa `SyncSuccessCounter`/`SyncFailureCounter`
+- `ScheduledProductSyncWorker.cs`: stesso pattern con labels `syncType: "ScheduledProductSync"`
+
+**Health Checks con timeout:**
+- `RedisHealthCheck`: timeout 3s per health check (fail fast se Redis non disponibile)
+- `CardTraderApiHealthCheck`: timeout 5s per health check
+
+#### Note Tecniche
+- **Health check `/health` ResponseWriter**: il callback personalizzato NON viene invocato correttamente (restituisce `text/plain "Degraded"` invece di JSON). DA RISOLVERE.
+- OpenTelemetry Console Exporter per sviluppo — vedere trace nel terminale
+- Prometheus endpoint su `/metrics` standard — pronto per Grafana/Prometheus scraper
+- Correlation ID propaga tra request HTTP, background jobs (via Activity), SignalR
+- Serilog config ora rispetta differenze Dev (Debug+Console) vs Prod (Warning+File only)
+- Nessun Seq in Fase 1 — Solo configurazione preparatoria in appsettings
+
+---
+
 ### [2026-08-22] Feature — Sealed Product Sync (Prezzi Box Automatici)
 
 #### Problema

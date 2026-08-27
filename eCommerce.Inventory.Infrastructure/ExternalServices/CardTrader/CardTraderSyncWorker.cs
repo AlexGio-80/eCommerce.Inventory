@@ -5,6 +5,7 @@ using eCommerce.Inventory.Application.Interfaces;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.DTOs;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Mappers;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
+using eCommerce.Inventory.Application.Metrics;
 
 namespace eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader;
 
@@ -15,14 +16,17 @@ public class CardTraderSyncWorker : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<CardTraderSyncWorker> _logger;
+    private readonly BusinessMetrics _metrics;
     private readonly TimeSpan _syncInterval = TimeSpan.FromMinutes(15); // Sync every 15 minutes
 
     public CardTraderSyncWorker(
         IServiceProvider serviceProvider,
-        ILogger<CardTraderSyncWorker> logger)
+        ILogger<CardTraderSyncWorker> logger,
+        BusinessMetrics metrics)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
+        _metrics = metrics;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -56,6 +60,10 @@ public class CardTraderSyncWorker : BackgroundService
     /// </summary>
     private async Task SyncCardTraderDataAsync(CancellationToken cancellationToken)
     {
+        var syncStopwatch = System.Diagnostics.Stopwatch.StartNew();
+        _metrics.SyncInProgress.WithLabels("cardtrader_full").Inc();
+        _metrics.SyncTotal.WithLabels("cardtrader_full", "started").Inc();
+
         using (var scope = _serviceProvider.CreateScope())
         {
             var cardTraderApiService = scope.ServiceProvider.GetRequiredService<ICardTraderApiService>();
@@ -122,11 +130,19 @@ public class CardTraderSyncWorker : BackgroundService
                 }
 
                 _logger.LogInformation("Card Trader data sync completed successfully");
+                _metrics.SyncTotal.WithLabels("cardtrader_full", "success").Inc();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during Card Trader data sync");
+                _metrics.SyncTotal.WithLabels("cardtrader_full", "failure").Inc();
                 throw;
+            }
+            finally
+            {
+                _metrics.SyncInProgress.WithLabels("cardtrader_full").Dec();
+                syncStopwatch.Stop();
+                _metrics.SyncDuration.WithLabels("cardtrader_full", "completed").Observe(syncStopwatch.Elapsed.TotalSeconds);
             }
         }
     }

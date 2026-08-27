@@ -1,4 +1,5 @@
 using eCommerce.Inventory.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace eCommerce.Inventory.Infrastructure.Persistence;
@@ -13,6 +14,8 @@ public static class SeedData
     {
         try
         {
+            await SeedDefaultPricingProfileAsync(context, logger);
+
             // Seed Games if not present
             if (!context.Games.Any())
             {
@@ -495,5 +498,72 @@ public static class SeedData
             logger.LogError(ex, "An error occurred while seeding the database");
             throw;
         }
+    }
+
+    /// <summary>
+    /// Crea il profilo di autopricing iniziale replicando le regole dell'autopricer nativo
+    /// di Card Trader già in uso, così il confronto fra i due avviene a parità di condizioni.
+    /// Nasce in dry-run: nessun prezzo viene toccato finché non si decide diversamente.
+    /// </summary>
+    private static async Task SeedDefaultPricingProfileAsync(ApplicationDbContext context, ILogger logger)
+    {
+        if (await context.PricingProfiles.AnyAsync()) return;
+
+        var profile = new PricingProfile
+        {
+            Name = "Profilo predefinito (regole Card Trader)",
+            IsActive = true,
+            DryRun = true,
+            MinPrice = 0.05m,
+            MaxChangePercentPerRun = 50m,
+
+            // L'autopricer nativo era impostato su venditori europei, americani e canadesi,
+            // inclusi i non professionali.
+            IncludeProSellers = true,
+            IncludeNormalSellers = true,
+            ExcludeVacationSellers = true,
+            MinSellerDailyCapacity = null,
+            CountryCodesCsv = null, // nessun vincolo di paese finché non se ne valuta l'effetto
+
+            EnableOutlierRejection = true,
+            OutlierMadThreshold = 3.0m,
+            MinOffersForOutlierRejection = 5,
+            MinComparableOffers = 2
+        };
+
+        // Le quattro fasce configurate nell'autopricer nativo: posizione fra i venditori
+        // e un centesimo sotto il riferimento.
+        var bands = new (decimal From, decimal To, int Position)[]
+        {
+            (0.02m, 1.00m, 2),
+            (1.01m, 25.00m, 3),
+            (25.01m, 100.00m, 4),
+            (100.01m, 2000.00m, 3)
+        };
+
+        var priority = 0;
+        foreach (var (from, to, position) in bands)
+        {
+            profile.Rules.Add(new PricingRule
+            {
+                FromPrice = from,
+                ToPrice = to,
+                ReferenceMode = PriceReferenceMode.NthLowestOffer,
+                Position = position,
+                AdjustmentAmount = -0.01m,
+                AdjustmentPercent = 0m,
+                CanIncrease = true,
+                CanDecrease = true,
+                Priority = priority++,
+                IsActive = true
+            });
+        }
+
+        context.PricingProfiles.Add(profile);
+        await context.SaveChangesAsync();
+
+        logger.LogInformation(
+            "Creato profilo di autopricing predefinito con {Count} regole, in modalità dry-run",
+            profile.Rules.Count);
     }
 }

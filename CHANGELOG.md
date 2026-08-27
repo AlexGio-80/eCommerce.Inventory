@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Monitoring/Observability — Fase 1 Core (Prometheus + OpenTelemetry + Correlation ID + Serilog Config)**: Layer completo di metriche, tracing distribuito e correlation ID per produzione
+  - **Prometheus metrics endpoint** (`/metrics`) con metriche runtime (`dotnet_*`), HTTP (`http_requests_*`), e **metriche business custom** (20+ metriche):
+    - `ecommerce_sync_duration_seconds` (istogramma durata sync), `ecommerce_sync_success_total`/`ecommerce_sync_failure_total` (contatori)
+    - `ecommerce_orders_created_total`, `ecommerce_inventory_items_total` (gauge), `ecommerce_active_users_total` (SignalR)
+    - `ecommerce_api_calls_total`, `ecommerce_webhook_received_total`, `ecommerce_db_query_duration_seconds`, `ecommerce_cache_hits_total`/`ecommerce_cache_misses_total`
+    - `ecommerce_background_job_duration_seconds`, `ecommerce_auth_attempts_total`
+  - **OpenTelemetry distributed tracing** per ASP.NET Core, HttpClient (Card Trader, Scryfall), EF Core con **Console Exporter** per sviluppo
+  - **Correlation ID middleware** propagazione header `X-Correlation-ID` con enrichment Serilog LogContext (`CorrelationId`, `TraceId`, `SpanId`)
+  - **Serilog configurazione da appsettings.json** (environment-specific): Development (Debug + Console + File), Production (Warning + File only, Enrich FromLogContext/ThreadId/ProcessId)
+  - **Health Checks** con UI preparation (`AspNetCore.HealthChecks.UI` + InMemory storage) su `/health` (JSON detailed) e `/health-ui`
+  - **Rate Limiting** policies: API (100/min), CardTrader Sync (10/min), Auth (5/min sliding), Global fallback (200/min)
+  - **CORS** configurato per frontend (`localhost:4200`, `inventory.local`)
 - **Sealed Product Sync — Prezzi box automatici nel calcolatore espansioni**: background service one-shot che recupera i prezzi dei prodotti sigillati (booster box, case, starter deck) da Card Trader marketplace e popola automaticamente `Expansion.BoxPrice`
   - Nuovo background service `SealedProductPriceService` (abilitato via `SyncSettings:PopulateSealedPricesOnStartup=true`)
   - Identificazione prodotti sigillati tramite `Blueprint.CategoryId` mappati a categorie "sealed" note per gioco (MTG: 4,5,7,10,13; Force of Will: 30,31,33,34; Pokémon: 4576,4580; Lorcana: 12821,12825)
@@ -49,6 +61,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Form UI: "Posizione" → "Descrizione" con hint "Descrizione visibile su Card Trader"
 
 ### Fixed
+- **Ripristino wiring di produzione disattivato durante il debug del monitoring**: in `Program.cs` erano rimasti commentati `UseWindowsService` (servizio Windows non avviabile), `UseUrls(apiBaseUrl)` (API non in ascolto su 5152), `ScheduledProductSyncWorker`, `BackupService` + `Configure<BackupSettings>` (nessun backup giornaliero), `PopulateItalianNamesService` e `SealedProductPriceService`. Tutti riattivati
+- **`/health` bloccato 15,4s con HTTP 503**: `Redis:Enabled` era `true` senza un server Redis installato, quindi ogni probe restava appeso sul connect TCP e consumava anche il timeout del check Card Trader. `Redis:Enabled` → `false` (codice di caching intatto, riattivabile installando Redis). Ora `/health` risponde in 0,33s con HTTP 200
+- **`CardTraderApiHealthCheck` restituiva `Unhealthy` per problemi esterni**: un'API di terze parti lenta o irraggiungibile marcava l'intera applicazione come down (503 → rischio riavvii in loop). Ora restituisce `Degraded`, con il timeout distinto dagli altri errori
+- **App in dev si spegneva da sola dopo l'avvio**: `PopulateSealedPricesOnStartup` era `true` in `appsettings.Development.json` e `SealedProductPriceService` termina con `Environment.Exit(0)`. Riportato a `false` (resta lanciabile on-demand)
+- **Rimossi residui di debug**: endpoint `/test-debug`, `/test-minimal`, `/test-health`, i `Log.Information` di tracciamento nella pipeline, e dalla root i file spuri `Program.cs` (Hello World), `stop` e la cartella con path preso alla lettera
 - **PurchasePrice perso dopo sync notturna**: il mapper `MapProductToInventoryItem` ora accetta un `purchasePrice` opzionale da `PendingListing` e lo propaga sull'`InventoryItem` creato dalla sync; sia `InventorySyncService.SyncProductsAsync` che `CardTraderSyncOrchestrator.UpsertInventoryAsync` fanno lookup del `PurchasePrice` (e `Tag`) da `PendingListing` per il `CardTraderProductId` corrispondente. Risolve il problema per cui il giorno dopo la sync il campo `PurchasePrice` risultava vuoto nel pannello "Le mie inserzioni".
 
 ### Changed

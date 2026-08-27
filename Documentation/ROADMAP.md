@@ -30,8 +30,10 @@ _Nessun task attivo al momento._
 
 - [x] **Redis caching per dati statici Card Trader** (Games TTL 24h, Expansions TTL 12h, Blueprints TTL 6h) — **COMPLETATO 2026-08-24**
 - [x] **Health check endpoint `/health`** con controlli DB, Card Trader API, Redis — **COMPLETATO 2026-08-24**
+- [x] **Monitoring/Observability Fase 1** (Prometheus `/metrics`, OpenTelemetry tracing, Correlation ID, Serilog da appsettings) — **COMPLETATO 2026-08-27**
 - [ ] AI Grading reale (Ximilar API) — valutare costi/benefici abbonamento
-- [ ] Monitoring (Application Insights o equivalente)
+- [ ] **Monitoring Fase 2** — backend di raccolta per trace e metriche (oggi OpenTelemetry usa il Console exporter, quindi niente storico). Da valutare: Prometheus + Grafana in locale, oppure Application Insights
+- [ ] **Installare Redis** per riattivare il caching dei dati statici Card Trader (codice già pronto, oggi `Enabled: false` perché il server non è installato)
 - [ ] CI/CD pipeline (GitHub Actions)
 
 ---
@@ -40,6 +42,9 @@ _Nessun task attivo al momento._
 
 | Data | Voce |
 |------|------|
+| 2026-08-27 | Fix — **Ripristino wiring di produzione**: riattivati `UseWindowsService`, `UseUrls`, `ScheduledProductSyncWorker`, `BackupService` e i servizi one-shot, tutti rimasti commentati dopo il debug del monitoring; servizio Windows ricreato e deploy verificato |
+| 2026-08-27 | Fix — **`/health` da 15,4s/503 a 0,19s/200**: `Redis:Enabled` allineato alla realtà (server non installato), check Card Trader degradato invece che unhealthy |
+| 2026-08-27 | Feature — **Monitoring/Observability Fase 1**: endpoint `/metrics` Prometheus con 20 metriche business, distributed tracing OpenTelemetry, middleware Correlation ID, Serilog configurato da appsettings per environment, Health Checks UI |
 | 2026-08-24 | Fix — **Disallineamento `TotaleAcquistato` report Redditività per Tag**: uniformata query `GetTagExpansionProfitability` a usare join espliciti (`from pl join bp join ex`) come `rimanentePerExpansion`, risolvendo differenza tra livello Tag (include record con Blueprint/Expansion NULL) e livello Espansione (escludeva quei record per INNER JOIN implicito) |
 | 2026-08-24 | Feature — **Health check endpoint `/health`** con controlli Database (SQL Server), Card Trader API (via cached Games endpoint), Redis (se abilitato con graceful degradation); per liveness/readiness probes in produzione |
 | 2026-05-20 | Fix — Items to Prepare: rimosso `domLayout: 'autoHeight'`, griglia ora rispetta altezza container, paginazione visibile a qualsiasi zoom |

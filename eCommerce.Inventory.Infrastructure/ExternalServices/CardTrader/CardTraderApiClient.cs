@@ -361,6 +361,41 @@ public class CardTraderApiClient : ICardTraderApiService
     }
 
     /// <summary>
+    /// Update only the price of a product (used by the autopricer).
+    /// Sends a partial payload with just the price: on thousands of repricing operations,
+    /// resending condition/language/description would be a needless risk of clobbering them.
+    /// Returns false instead of throwing, so that a single failed write is recorded in the
+    /// pricing log and the run continues with the remaining cards.
+    /// </summary>
+    public async Task<bool> UpdateProductPriceAsync(int cardTraderProductId, decimal newPrice, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var payload = new { price = newPrice };
+
+            await _rateLimiter.AcquireAsync(cancellationToken);
+            var response = await _httpClient.PutAsJsonAsync($"products/{cardTraderProductId}", payload, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogError(
+                    "Failed to update price for product {ProductId}. Status: {StatusCode}, Response: {Response}",
+                    cardTraderProductId, response.StatusCode, body);
+                return false;
+            }
+
+            _logger.LogDebug("Updated price for product {ProductId} to {Price:0.00} EUR", cardTraderProductId, newPrice);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating price for product {ProductId}", cardTraderProductId);
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Delete a product from Card Trader
     /// </summary>
     public async Task DeleteProductOnCardTraderAsync(int cardTraderProductId, CancellationToken cancellationToken = default)

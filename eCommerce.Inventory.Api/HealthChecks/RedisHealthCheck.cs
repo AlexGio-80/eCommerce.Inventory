@@ -41,15 +41,19 @@ public class RedisHealthCheck : IHealthCheck
 
         var stopwatch = Stopwatch.StartNew();
 
+        // Add a timeout for the health check itself (fail fast if Redis is slow)
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(3));
+
         try
         {
             // Test cache with a simple key
             var testKey = $"healthcheck:{Guid.NewGuid()}";
             var testValue = "test";
 
-            await _cache.SetAsync(testKey, testValue, TimeSpan.FromSeconds(10), cancellationToken);
-            var retrieved = await _cache.GetAsync<string>(testKey, cancellationToken);
-            await _cache.RemoveAsync(testKey, cancellationToken);
+            await _cache.SetAsync(testKey, testValue, TimeSpan.FromSeconds(10), timeoutCts.Token);
+            var retrieved = await _cache.GetAsync<string>(testKey, timeoutCts.Token);
+            await _cache.RemoveAsync(testKey, timeoutCts.Token);
 
             stopwatch.Stop();
 
