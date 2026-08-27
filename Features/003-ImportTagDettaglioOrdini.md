@@ -46,8 +46,10 @@ La colonna `Tag` non esisteva nella tabella `dbo.OrderItems`, quindi il valore n
 
 ### TODO (da completare nella prossima sessione)
 
-1. **UI: Bottone sync singolo ordine**
-   - Aggiungere nella griglia ordini (o nella maschera "Items to Prepare") un pulsante che chiama `POST /api/cardtrader/orders/{cardTraderOrderId}/sync` per ri-sincronizzare un singolo ordine senza dover rilanciare tutto il periodo.
+1. ~~**UI: Bottone sync singolo ordine**~~ ✅ (2026-03-27)
+   - Aggiunto metodo `syncSingleOrder(cardTraderOrderId)` in `cardtrader-api.service.ts`
+   - Aggiunta colonna "Azioni" in `orders-list.component.ts` con bottone icona sync per riga
+   - Metodo `syncSingleOrder(order)` nel component: chiama l'API, gestisce stato di caricamento per riga, mostra snackbar, ricarica la lista
 
 2. **Verifica coerenza valori report Redditività per Tag**
    - I valori mostrati nella vista per Tag non combaciano con quelli del dettaglio per Espansione — investigare e correggere la discrepanza nel calcolo di `TotaleAcquistato` / `TotaleVenduto` tra i due livelli del report.

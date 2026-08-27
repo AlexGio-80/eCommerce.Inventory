@@ -54,6 +54,7 @@ export class OrdersListComponent implements OnInit {
     filteredOrders: Order[] = [];
     isLoading = false;
     isSyncing = false;
+    syncingOrderIds = new Set<number>();
 
     // Date filters
     fromDate: string;
@@ -120,6 +121,38 @@ export class OrdersListComponent implements OnInit {
             filter: 'agDateColumnFilter',
             width: 150,
             valueFormatter: (params) => params.value ? new Date(params.value).toLocaleDateString() : ''
+        },
+        {
+            headerName: 'Azioni',
+            colId: 'actions',
+            sortable: false,
+            filter: false,
+            width: 100,
+            cellRenderer: (params: any) => {
+                const syncing = this.syncingOrderIds.has(params.data?.cardTraderOrderId);
+
+                const btn = document.createElement('button');
+                btn.disabled = syncing;
+                btn.title = syncing ? 'Sincronizzazione in corso...' : 'Ri-sincronizza ordine da CardTrader';
+                btn.style.cssText = `background:none;border:none;padding:4px;display:flex;align-items:center;cursor:${syncing ? 'default' : 'pointer'};`;
+
+                const icon = document.createElement('span');
+                icon.className = 'material-icons';
+                icon.textContent = 'sync';
+                icon.style.cssText = `font-size:18px;color:${syncing ? '#9e9e9e' : '#1976d2'};`;
+                if (syncing) {
+                    // Il nodo è creato a mano, quindi non riceve lo scoping di Angular e le
+                    // classi del css del componente non lo raggiungono: il nome delle
+                    // @keyframes invece non viene incapsulato, e via style inline arriva.
+                    icon.style.animation = 'orders-sync-spin 1s linear infinite';
+                }
+                btn.appendChild(icon);
+
+                btn.addEventListener('click', () => {
+                    this.syncSingleOrder(params.data);
+                });
+                return btn;
+            }
         },
         {
             headerName: 'Completed',
@@ -289,6 +322,27 @@ export class OrdersListComponent implements OnInit {
                 console.error('Error updating order completion', err);
                 this.showSnackBar('Error updating order status');
                 // Refresh to revert checkbox
+                this.gridApi.refreshCells({ force: true });
+            }
+        });
+    }
+
+    syncSingleOrder(order: Order): void {
+        const id = order.cardTraderOrderId;
+        if (this.syncingOrderIds.has(id)) return;
+        this.syncingOrderIds.add(id);
+        this.gridApi.refreshCells({ force: true });
+
+        this.apiService.syncSingleOrder(id).subscribe({
+            next: (response) => {
+                this.syncingOrderIds.delete(id);
+                this.showSnackBar(response.message || `Ordine ${order.code} sincronizzato`);
+                this.loadOrders();
+            },
+            error: (err) => {
+                this.syncingOrderIds.delete(id);
+                console.error('Error syncing order', err);
+                this.showSnackBar(`Errore sync ordine ${order.code}`);
                 this.gridApi.refreshCells({ force: true });
             }
         });
