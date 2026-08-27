@@ -14,10 +14,11 @@ describe('App', () => {
     expect(app).toBeTruthy();
   });
 
-  it('should render title', () => {
+  it('should render the router outlet', () => {
+    // Il guscio non ha contenuto proprio: tutte le pagine arrivano dal router.
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('Hello, ecommerce-inventory-ui');
+    expect(compiled.querySelector('router-outlet')).toBeTruthy();
   });
 });
