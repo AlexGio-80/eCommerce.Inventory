@@ -162,3 +162,19 @@ mat-card {
   height: 520px;
   margin-top: 16px;
 }
+
+/* --- Stati di caricamento ed errore --- */
+.state-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.state-card .hint {
+  margin: 4px 0 0;
+}
+
+.state-error {
+  border-left: 4px solid #c62828;
+}

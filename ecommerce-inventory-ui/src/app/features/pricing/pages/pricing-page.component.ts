@@ -37,6 +37,36 @@ import {
 
         <!-- ============ REGOLE ============ -->
         <mat-tab label="Regole">
+
+          <!-- Stati espliciti: un'area bianca senza spiegazione lascia l'utente
+               senza sapere se sta caricando, se è rotto o se manca il profilo. -->
+          <div class="tab-content" *ngIf="!profile() && loadingProfile()">
+            <mat-card>
+              <mat-card-content class="state-card">
+                <mat-spinner diameter="28"></mat-spinner>
+                <span>Caricamento del profilo di pricing…</span>
+              </mat-card-content>
+            </mat-card>
+          </div>
+
+          <div class="tab-content" *ngIf="!profile() && !loadingProfile()">
+            <mat-card class="state-error">
+              <mat-card-content class="state-card">
+                <mat-icon color="warn">error_outline</mat-icon>
+                <div>
+                  <strong>{{ loadError() || 'Nessun profilo di pricing disponibile' }}</strong>
+                  <p class="hint">
+                    Il profilo predefinito viene creato all'avvio dell'applicazione. Se l'errore
+                    persiste, controlla che il servizio sia raggiungibile e riprova.
+                  </p>
+                </div>
+                <button mat-stroked-button (click)="loadProfile()">
+                  <mat-icon>refresh</mat-icon> Riprova
+                </button>
+              </mat-card-content>
+            </mat-card>
+          </div>
+
           <div class="tab-content" *ngIf="profile() as p">
 
             <mat-card class="mode-card" [class.live]="!p.dryRun">
@@ -308,6 +338,8 @@ export class PricingPageComponent implements OnInit {
   coverage = signal<CoverageReport | null>(null);
   loading = signal(false);
   saving = signal(false);
+  loadingProfile = signal(true);
+  loadError = signal<string | null>(null);
 
   previewLimit = 15;
   private gridApi?: GridApi;
@@ -354,9 +386,27 @@ export class PricingPageComponent implements OnInit {
   }
 
   loadProfile(): void {
+    this.loadingProfile.set(true);
+    this.loadError.set(null);
+
     this.pricingService.getProfiles().subscribe({
-      next: profiles => this.profile.set(profiles[0] ?? null),
-      error: () => this.snackBar.open('Impossibile caricare il profilo di pricing', 'Chiudi', { duration: 4000 })
+      next: profiles => {
+        this.profile.set(profiles[0] ?? null);
+        this.loadingProfile.set(false);
+        if (profiles.length === 0) {
+          this.loadError.set('Nessun profilo di pricing presente a database');
+        }
+      },
+      error: err => {
+        this.loadingProfile.set(false);
+        // Il messaggio resta visibile nella pagina: uno snackbar che sparisce dopo
+        // pochi secondi lascia l'utente davanti a un'area vuota e inspiegata.
+        this.loadError.set(
+          err?.status === 0
+            ? "Impossibile contattare il servizio: verifica che l'API sia raggiungibile"
+            : `Errore ${err?.status ?? ''} nel caricamento del profilo di pricing`.trim());
+        this.snackBar.open('Impossibile caricare il profilo di pricing', 'Chiudi', { duration: 6000 });
+      }
     });
   }
 
