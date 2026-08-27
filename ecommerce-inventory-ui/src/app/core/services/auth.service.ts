@@ -63,8 +63,43 @@ export class AuthService {
         return localStorage.getItem(this.tokenKey);
     }
 
+    /**
+     * Un token presente ma scaduto non è una sessione valida: prima questo metodo
+     * controllava solo l'esistenza della stringa, così l'AuthGuard lasciava navigare
+     * mentre ogni chiamata API rispondeva 401 e le pagine restavano vuote senza
+     * spiegazione. La scadenza si legge dal claim `exp` del JWT.
+     */
     isAuthenticated(): boolean {
-        return !!this.getToken();
+        const token = this.getToken();
+        if (!token) return false;
+
+        const expiry = this.getTokenExpiry(token);
+
+        // Token illeggibile: si lascia decidere al server, che risponderà 401 se non va bene.
+        if (expiry === null) return true;
+
+        if (expiry <= Date.now()) {
+            this.logout();
+            return false;
+        }
+
+        return true;
+    }
+
+    /** Millisecondi della scadenza del token, o null se il token non è decodificabile. */
+    private getTokenExpiry(token: string): number | null {
+        try {
+            const payload = token.split('.')[1];
+            if (!payload) return null;
+
+            // base64url → base64
+            const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+            const decoded = JSON.parse(atob(normalized));
+
+            return typeof decoded.exp === 'number' ? decoded.exp * 1000 : null;
+        } catch {
+            return null;
+        }
     }
 
     getCurrentUser(): AuthResponse | null {
