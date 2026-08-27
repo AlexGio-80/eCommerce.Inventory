@@ -9,6 +9,34 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-08-27] Feature — Autopricer custom (motore a regole, esecuzione notturna, reprice alla vendita)
+
+#### Problema
+L'autopricer nativo di Card Trader ha tre limiti: non aggiorna tutte le carte, non permette di scegliere il campione di venditori su cui tarare il prezzo, e agisce solo una volta al giorno anche quando una vendita segnala che il mercato si sta muovendo.
+
+#### Soluzione Implementata
+
+**Motore (`Application/Pricing/PricingEngine.cs`)** — logica pura, senza dipendenze da rete o database, coperta da 21 test. Passi in ordine: esclusione delle proprie offerte, comparabilità (condizione/lingua/foil con normalizzazione `en`↔`English`), filtri venditore, scarto outlier, scelta regola per fascia, controllo profondità di mercato, prezzo minimo, direzione consentita, guardrail sulla variazione massima.
+
+**Filtro venditori** — l'API Card Trader **non espone il numero di recensioni**: verificato su offerte reali, l'oggetto `user` contiene solo `id`, `username`, `user_type` (`pro`/`normal`), `country_code`, `max_sellable_in24h_quantity`, `one_day_ready` e i flag hub. Al posto del filtro sul feedback si usa lo scarto statistico degli outlier con MAD (Median Absolute Deviation, preferita alla deviazione standard perché non viene distorta dagli outlier stessi), affiancato ai filtri realmente disponibili.
+
+**Copertura (`SelectBlueprintsForScheduledRunAsync`)** — con ~19.000 blueprint distinti e 20 richieste al minuto un giro completo richiederebbe 16 ore. Ogni notte si coprono per intero le carte sopra soglia e si aggiunge una fetta a rotazione del bulk, scegliendo quelle ferme da più tempo.
+
+**Riallineamento prezzi** — prima di ogni esecuzione i prezzi locali vengono riallineati a Card Trader tramite l'endpoint di export (una sola chiamata). Alla prima esecuzione **2856 prezzi locali risultavano disallineati**.
+
+**Reprice alla vendita** — il webhook `order.create` accoda i blueprint venduti su `IPriceRefreshQueue` e risponde subito; `OrderTriggeredPricingWorker` consuma la coda in background. Vengono accodate solo le carte ancora a magazzino.
+
+**Dry-run** — modalità permanente del profilo, non impalcatura temporanea: si spegne quando le regole sono tarate e si riaccende per verificare una modifica.
+
+**Interfaccia** (`/layout/pricing`) — quattro schede: Regole (con interruttore simulazione/attivo evidenziato), Anteprima, Copertura, Storico.
+
+#### Note Tecniche
+- Il flag `SkipWhenFewerOffersThanPosition` evita che una regola posizionale su mercato sottile allinei all'offerta più cara. Osservato su dati reali: con 2 venditori e "posizione 3" la carta finiva a 2000 € contro un mercato di 0,92–12,69 €, e l'altro venditore era a 2000,64 € — due autopricer che si rincorrono al rialzo.
+- Le migration aggiungono colonne bool con default `false`: un profilo già esistente non eredita il default C#. Dopo `AddSkipWhenFewerOffersThanPosition` è stato necessario un `UPDATE` esplicito.
+- `AutoPricing:Enabled` e `AutoPricing:RepriceOnOrder` sono `false` in dev e `true` in produzione.
+
+---
+
 ### [2026-08-27] Fix — Ripristino wiring di produzione disattivato durante il debug del monitoring
 
 #### Problema

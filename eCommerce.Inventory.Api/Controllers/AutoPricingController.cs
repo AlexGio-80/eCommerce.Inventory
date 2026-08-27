@@ -181,7 +181,7 @@ public class AutoPricingController : ControllerBase
         return Ok(ApiResponse<object>.SuccessResult(runs.Select(r => new
         {
             r.Id,
-            r.Trigger,
+            Trigger = r.Trigger.ToString(),
             r.DryRun,
             r.StartedAt,
             r.CompletedAt,
@@ -291,7 +291,7 @@ public class AutoPricingController : ControllerBase
 
         return new
         {
-            run.Trigger,
+            Trigger = run.Trigger.ToString(),
             run.DryRun,
             run.StartedAt,
             run.CompletedAt,

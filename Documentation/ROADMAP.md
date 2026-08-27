@@ -42,6 +42,7 @@ _Nessun task attivo al momento._
 
 | Data | Voce |
 |------|------|
+| 2026-08-27 | Feature — **Autopricer custom**: motore a regole con scarto outlier, guardrail e dry-run; esecuzione notturna a copertura rotante; reprice immediato dopo vendita via webhook; interfaccia con Regole, Anteprima, Copertura e Storico |
 | 2026-08-27 | Fix — **Ripristino wiring di produzione**: riattivati `UseWindowsService`, `UseUrls`, `ScheduledProductSyncWorker`, `BackupService` e i servizi one-shot, tutti rimasti commentati dopo il debug del monitoring; servizio Windows ricreato e deploy verificato |
 | 2026-08-27 | Fix — **`/health` da 15,4s/503 a 0,19s/200**: `Redis:Enabled` allineato alla realtà (server non installato), check Card Trader degradato invece che unhealthy |
 | 2026-08-27 | Feature — **Monitoring/Observability Fase 1**: endpoint `/metrics` Prometheus con 20 metriche business, distributed tracing OpenTelemetry, middleware Correlation ID, Serilog configurato da appsettings per environment, Health Checks UI |

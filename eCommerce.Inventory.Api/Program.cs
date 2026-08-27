@@ -83,6 +83,15 @@ builder.Services.AddScoped<IExpansionAnalyticsService, ExpansionAnalyticsService
 builder.Services.AddSingleton<eCommerce.Inventory.Application.Pricing.PricingEngine>();
 builder.Services.AddScoped<AutoPricingService>();
 
+// Coda condivisa fra webhook (produttore) e worker (consumatore): dev'essere singleton
+builder.Services.AddSingleton<IPriceRefreshQueue, PriceRefreshQueue>();
+
+// Esecuzione notturna dell'autopricer (attivabile via AutoPricing:Enabled)
+builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJobs.AutoPricingWorker>();
+
+// Reprice immediato dopo una vendita (attivabile via AutoPricing:RepriceOnOrder)
+builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJobs.OrderTriggeredPricingWorker>();
+
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings["SecretKey"];

@@ -25,6 +25,7 @@ public class ProcessCardTraderWebhookHandlerTests
     private readonly Mock<ILogger<CardTraderDtoMapper>> _mockMapperLogger;
     private readonly Mock<ILogger<InventorySyncService>> _mockSyncServiceLogger;
     private readonly Mock<INotificationService> _mockNotificationService;
+    private readonly Mock<IPriceRefreshQueue> _mockPriceRefreshQueue;
 
     public ProcessCardTraderWebhookHandlerTests()
     {
@@ -33,6 +34,7 @@ public class ProcessCardTraderWebhookHandlerTests
         _mockMapperLogger = new Mock<ILogger<CardTraderDtoMapper>>();
         _mockSyncServiceLogger = new Mock<ILogger<InventorySyncService>>();
         _mockNotificationService = new Mock<INotificationService>();
+        _mockPriceRefreshQueue = new Mock<IPriceRefreshQueue>();
     }
 
     [Fact]
@@ -45,6 +47,7 @@ public class ProcessCardTraderWebhookHandlerTests
             _mockDbContext.Object,
             syncService,
             _mockNotificationService.Object,
+            _mockPriceRefreshQueue.Object,
             _mockLogger.Object);
 
         var command = new ProcessCardTraderWebhookCommand(
@@ -71,6 +74,7 @@ public class ProcessCardTraderWebhookHandlerTests
             _mockDbContext.Object,
             syncService,
             _mockNotificationService.Object,
+            _mockPriceRefreshQueue.Object,
             _mockLogger.Object);
 
         var command = new ProcessCardTraderWebhookCommand(
@@ -97,6 +101,7 @@ public class ProcessCardTraderWebhookHandlerTests
             _mockDbContext.Object,
             syncService,
             _mockNotificationService.Object,
+            _mockPriceRefreshQueue.Object,
             _mockLogger.Object);
 
         var command = new ProcessCardTraderWebhookCommand(

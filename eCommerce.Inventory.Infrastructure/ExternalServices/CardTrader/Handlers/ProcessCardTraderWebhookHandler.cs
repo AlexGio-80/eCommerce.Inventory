@@ -18,17 +18,20 @@ public class ProcessCardTraderWebhookHandler : IRequestHandler<ProcessCardTrader
     private readonly IApplicationDbContext _context;
     private readonly InventorySyncService _syncService;
     private readonly INotificationService _notificationService;
+    private readonly IPriceRefreshQueue _priceRefreshQueue;
     private readonly ILogger<ProcessCardTraderWebhookHandler> _logger;
 
     public ProcessCardTraderWebhookHandler(
         IApplicationDbContext context,
         InventorySyncService syncService,
         INotificationService notificationService,
+        IPriceRefreshQueue priceRefreshQueue,
         ILogger<ProcessCardTraderWebhookHandler> logger)
     {
         _context = context;
         _syncService = syncService;
         _notificationService = notificationService;
+        _priceRefreshQueue = priceRefreshQueue;
         _logger = logger;
     }
 
@@ -97,12 +100,71 @@ public class ProcessCardTraderWebhookHandler : IRequestHandler<ProcessCardTrader
             // Notify frontend
             await _notificationService.NotifyAsync("OrderCreated", orderDto);
 
+            // Una vendita è essa stessa un segnale di mercato: la carta appena venduta
+            // viene rimessa in coda per una rivalutazione immediata del prezzo.
+            await EnqueueSoldCardsForRepricingAsync(orderDto, cancellationToken);
+
             _logger.LogInformation("Order {OrderId} created successfully from webhook", request.ObjectId);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error handling order creation for webhook {WebhookId}", request.WebhookId);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Accoda per rivalutazione i blueprint delle carte appena vendute.
+    ///
+    /// Vengono considerate solo le carte di cui resta ancora una copia a magazzino:
+    /// riprezzare qualcosa che non si ha più consumerebbe chiamate API senza alcun effetto.
+    /// L'operazione non deve mai far fallire l'elaborazione del webhook, perché la
+    /// registrazione dell'ordine è molto più importante dell'aggiornamento di prezzo.
+    /// </summary>
+    private async Task EnqueueSoldCardsForRepricingAsync(CardTraderOrderDto orderDto, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var soldCardTraderBlueprintIds = orderDto.OrderItems?
+                .Where(i => i.BlueprintId.HasValue)
+                .Select(i => i.BlueprintId!.Value)
+                .Distinct()
+                .ToList() ?? new List<int>();
+
+            if (soldCardTraderBlueprintIds.Count == 0) return;
+
+            // Il webhook porta gli id Card Trader, la coda lavora con gli id locali.
+            var localBlueprints = await _context.Blueprints
+                .AsNoTracking()
+                .Where(b => soldCardTraderBlueprintIds.Contains(b.CardTraderId))
+                .Select(b => new { b.Id, b.CardTraderId })
+                .ToListAsync(cancellationToken);
+
+            if (localBlueprints.Count == 0)
+            {
+                _logger.LogDebug("Nessun blueprint locale corrispondente alle carte vendute: rivalutazione non accodata");
+                return;
+            }
+
+            var localIds = localBlueprints.Select(b => b.Id).ToList();
+
+            var stillInStock = await _context.InventoryItems
+                .AsNoTracking()
+                .Where(i => localIds.Contains(i.BlueprintId) && i.Quantity > 0)
+                .Select(i => i.BlueprintId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            foreach (var blueprintId in stillInStock)
+            {
+                _priceRefreshQueue.Enqueue(blueprintId, $"vendita ordine {orderDto.Id}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Impossibile accodare la rivalutazione dei prezzi per l'ordine {OrderId}: l'ordine resta comunque registrato",
+                orderDto.Id);
         }
     }
 

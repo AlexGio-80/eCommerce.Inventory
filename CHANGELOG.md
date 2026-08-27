@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Autopricer custom**: motore di pricing a regole in alternativa all'autopricer nativo di Card Trader
+  - `PricingEngine` — logica pura senza dipendenze da rete o database, 21 test. Esclude le proprie offerte, filtra per comparabilità reale (condizione/lingua/foil con normalizzazione `en`↔`English`), scarta gli outlier con MAD, applica regola di fascia e guardrail
+  - **Scarto outlier al posto del filtro recensioni**: l'API Card Trader non espone il feedback dei venditori (verificato su offerte reali). Disponibili solo `user_type`, `country_code`, `max_sellable_in24h_quantity` e `on_vacation`
+  - **Copertura a rotazione**: carte di valore ogni notte + fetta di bulk scelta per anzianità di valutazione. Un giro completo dei ~19.000 blueprint richiederebbe 16 ore a 20 req/min
+  - **Riallineamento prezzi da Card Trader** prima di ogni esecuzione, con una sola chiamata all'endpoint di export
+  - **Salto su mercato sottile**: una regola posizionale non viene applicata se i venditori comparabili sono meno della posizione richiesta, per non allinearsi all'offerta più cara e non innescare rincorse al rialzo fra autopricer
+  - **Reprice alla vendita**: il webhook `order.create` accoda i blueprint venduti e risponde subito; un worker consuma la coda in background
+  - **Dry-run come modalità del profilo**, con guardrail su prezzo minimo e variazione massima per esecuzione
+  - **Storico e copertura** di ogni valutazione, applicata o meno, con il motivo
+  - Interfaccia `/layout/pricing` con schede Regole, Anteprima, Copertura, Storico
+  - 4 tabelle nuove (migration `AddAutoPricing` + `AddSkipWhenFewerOffersThanPosition`), endpoint `/api/pricing`
 - **Monitoring/Observability — Fase 1 Core (Prometheus + OpenTelemetry + Correlation ID + Serilog Config)**: Layer completo di metriche, tracing distribuito e correlation ID per produzione
   - **Prometheus metrics endpoint** (`/metrics`) con metriche runtime (`dotnet_*`), HTTP (`http_requests_*`), e **metriche business custom** (20+ metriche):
     - `ecommerce_sync_duration_seconds` (istogramma durata sync), `ecommerce_sync_success_total`/`ecommerce_sync_failure_total` (contatori)

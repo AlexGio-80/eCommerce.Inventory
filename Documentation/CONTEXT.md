@@ -9,7 +9,7 @@
 ## Stato Attuale
 
 **Branch principale:** `master`
-**Ultimo aggiornamento:** 2026-08-27 (sessione 9 — Monitoring/Observability Fase 1 + ripristino wiring di produzione e deploy)
+**Ultimo aggiornamento:** 2026-08-27 (sessione 9 — Monitoring Fase 1, ripristino produzione, Autopricer custom)
 **Fase:** In produzione (uso quotidiano attivo)
 
 ### Cosa funziona adesso
@@ -32,6 +32,7 @@
 - AI Grading mock (Ximilar API non attivata)
 - **Redis caching per dati statici Card Trader**: Games (TTL 24h), Expansions (TTL 12h), Blueprints (TTL 6h), Categories (TTL 24h) — riduce chiamate API durante sync e velocizza frontend
 - **Health check endpoint `/health`**: controlla DB (SQL Server), Card Trader API (via cached Games), Redis (se abilitato) — per liveness/readiness probes in produzione. Risponde in ~0,2s con HTTP 200. Il fallimento di Card Trader produce `Degraded`, non `Unhealthy`: un servizio esterno giù non deve far risultare down la nostra applicazione
+- **Autopricer custom** (`/layout/pricing`): motore di pricing a regole alternativo a quello nativo di Card Trader. Regole per fascia di prezzo con posizionamento fra i venditori, scarto statistico degli outlier (MAD) al posto del filtro sulle recensioni che l'API non espone, guardrail su prezzo minimo e variazione massima, dry-run come modalità del profilo. Esecuzione notturna con copertura a rotazione (carte di valore ogni notte + fetta di bulk) e reprice immediato dopo una vendita via webhook. Ogni valutazione è registrata con il motivo, applicata o meno
 - **Monitoring/Observability Fase 1**: endpoint `/metrics` Prometheus (runtime + HTTP + 20 metriche business in `Application/Metrics/BusinessMetrics.cs`), distributed tracing OpenTelemetry (ASP.NET Core, HttpClient, EF Core) con Console exporter, middleware Correlation ID (`X-Correlation-ID` propagato + enrichment Serilog con `CorrelationId`/`TraceId`/`SpanId`), Serilog configurato da appsettings per environment, Health Checks UI su `/health-ui`
 - Rate limiter outbound Card Trader (20 req/min)
 - Backup giornaliero automatico (DB + applicazione)
@@ -90,6 +91,8 @@
 - Il file `debug_expansion_{id}.csv` viene generato da `ExpansionAnalyticsService` — non committare
 - L'AI Grading usa un mock service: Ximilar richiede abbonamento a pagamento
 - Il seed crea sempre un utente `admin` — la logica controlla che non duplichi
+- **⚠️ L'autopricer nasce in dry-run**: il profilo predefinito ha `DryRun = true` e non modifica alcun prezzo. Si attiva dall'interruttore nella scheda Regole, o via `PUT /api/pricing/profiles/{id}`. In produzione `AutoPricing:Enabled` e `AutoPricing:RepriceOnOrder` sono `true`, quindi il worker gira: finché il profilo è in dry-run calcola e registra senza scrivere
+- **⚠️ Migration con colonne bool**: EF le aggiunge con default `false`, quindi un profilo già a database non eredita il default definito in C#. Dopo una migration di questo tipo serve un `UPDATE` esplicito sulle righe esistenti
 - **⚠️ I servizi one-shot chiudono il processo**: `PopulateItalianNamesService` e `SealedProductPriceService` terminano con `Environment.Exit(0)`. La guard clause sul flag precede l'`Exit`, quindi con flag `false` sono innocui — ma **non vanno mai abilitati in `appsettings.Production.json`**, pena lo spegnimento del servizio Windows a ogni avvio. Vanno lanciati on-demand dagli endpoint dedicati (es. `POST /api/expansions/sync-sealed-prices`)
 - **⚠️ Non commentare il wiring di produzione in `Program.cs` per test locali**: `UseWindowsService`, `UseUrls(apiBaseUrl)` e la registrazione di `BackupService`/`ScheduledProductSyncWorker` sono ciò che tiene in piedi il deploy. Per girare in locale si usa `ASPNETCORE_ENVIRONMENT=Development` (porta 5155 da `appsettings.Development.json`), che non richiede di toccare il codice
 - **Redis caching**: richiede istanza Redis disponibile (default `localhost:6379`); se non raggiungibile, il servizio disabilita il caching silenziosamente e continua senza cache (graceful degradation). Configurabile via `Redis:Enabled=false` o `Redis:ConnectionString`.
