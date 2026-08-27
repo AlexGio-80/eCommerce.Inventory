@@ -63,3 +63,12 @@
   display: flex;
   gap: 8px;
 }
+
+/* Rotazione dell'icona di sync per riga. Il bottone è costruito a mano dal
+   cellRenderer di ag-grid e non riceve lo scoping del componente, quindi i
+   selettori di questo file non lo toccherebbero: i nomi delle @keyframes però
+   restano globali, e il renderer li applica come style inline. */
+@keyframes orders-sync-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

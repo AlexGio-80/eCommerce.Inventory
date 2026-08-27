@@ -129,10 +129,25 @@ export class OrdersListComponent implements OnInit {
             filter: false,
             width: 100,
             cellRenderer: (params: any) => {
+                const syncing = this.syncingOrderIds.has(params.data?.cardTraderOrderId);
+
                 const btn = document.createElement('button');
-                btn.title = 'Ri-sincronizza ordine da CardTrader';
-                btn.style.cssText = 'background:none;border:none;cursor:pointer;padding:4px;display:flex;align-items:center;';
-                btn.innerHTML = '<span class="material-icons" style="font-size:18px;color:#1976d2">sync</span>';
+                btn.disabled = syncing;
+                btn.title = syncing ? 'Sincronizzazione in corso...' : 'Ri-sincronizza ordine da CardTrader';
+                btn.style.cssText = `background:none;border:none;padding:4px;display:flex;align-items:center;cursor:${syncing ? 'default' : 'pointer'};`;
+
+                const icon = document.createElement('span');
+                icon.className = 'material-icons';
+                icon.textContent = 'sync';
+                icon.style.cssText = `font-size:18px;color:${syncing ? '#9e9e9e' : '#1976d2'};`;
+                if (syncing) {
+                    // Il nodo è creato a mano, quindi non riceve lo scoping di Angular e le
+                    // classi del css del componente non lo raggiungono: il nome delle
+                    // @keyframes invece non viene incapsulato, e via style inline arriva.
+                    icon.style.animation = 'orders-sync-spin 1s linear infinite';
+                }
+                btn.appendChild(icon);
+
                 btn.addEventListener('click', () => {
                     this.syncSingleOrder(params.data);
                 });

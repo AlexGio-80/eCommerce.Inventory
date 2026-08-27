@@ -90,6 +90,7 @@ Aggiunta gestione completa stato griglia su entrambe le griglie del componente `
 ### Stato al 2026-03-27
 - Build: 0 errori ✅
 - Colonna "Azioni" con bottone sync visibile nella griglia ordini ✅
+- Sync singolo ordine: icona che ruota e bottone disabilitato durante la chiamata ✅
 - Report `by-tag` risponde senza timeout ✅
 - TotaleAcquistato allineato tra livello Tag e livello Espansione ✅
 - ValoreRimanente calcolato correttamente con ListingPrice ✅
