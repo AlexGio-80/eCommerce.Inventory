@@ -95,9 +95,31 @@ builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJ
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings["SecretKey"];
-if (string.IsNullOrEmpty(secretKey))
+
+// La chiave di firma va tenuta fuori dai file versionati: appsettings.json contiene
+// solo un segnaposto, il valore reale sta in appsettings.{Environment}.json che è
+// escluso da git. Meglio non partire affatto che partire firmando i token con una
+// chiave pubblicamente nota: chiunque potrebbe forgiare un token di amministratore.
+if (string.IsNullOrWhiteSpace(secretKey))
 {
-    throw new InvalidOperationException("JWT SecretKey is not configured");
+    throw new InvalidOperationException(
+        "JwtSettings:SecretKey non configurata. Impostarla in appsettings.{Environment}.json " +
+        "(file escluso dal versionamento) con un valore casuale di almeno 32 caratteri.");
+}
+
+if (secretKey.StartsWith("REPLACE_ME", StringComparison.OrdinalIgnoreCase))
+{
+    throw new InvalidOperationException(
+        "JwtSettings:SecretKey è ancora il segnaposto di esempio. Generare una chiave casuale " +
+        "e impostarla in appsettings.{Environment}.json prima di avviare l'applicazione.");
+}
+
+// HMAC-SHA256 richiede almeno 256 bit di chiave.
+if (System.Text.Encoding.UTF8.GetByteCount(secretKey) < 32)
+{
+    throw new InvalidOperationException(
+        $"JwtSettings:SecretKey è troppo corta ({System.Text.Encoding.UTF8.GetByteCount(secretKey)} byte): " +
+        "servono almeno 32 byte per la firma HMAC-SHA256.");
 }
 
 builder.Services.AddAuthentication(options =>
