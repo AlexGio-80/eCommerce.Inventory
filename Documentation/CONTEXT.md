@@ -42,6 +42,13 @@
 - **Campo Descrizione Card Trader in "Nuovo Prodotto"**: scrittura e lettura del campo `description` di Card Trader (es. "Timbro dei nazionali Italiani"), sostituisce il campo "Posizione" nel form. `GET /api/v2/products/{id}` per leggere la descrizione esistente; payload CREATE/UPDATE su CT ora include `description`; `Description` su `PendingListing` e `InventoryItem` (migration `20260820202633_AddDescriptionToEntities`, applicata). Form UI: "Posizione" → "Descrizione" con hint "Descrizione visibile su Card Trader".
 
 ### Cosa è in sospeso / da verificare
+
+- **⚠️ Punti di sicurezza aperti (2026-08-27)**, tutti preesistenti — dettaglio e decisioni da prendere in ROADMAP.md, sezione "Da Fare":
+  - `POST /api/auth/register` è raggiungibile **senza autenticazione** (`AuthController` non ha `[Authorize]`)
+  - Nessun `[Authorize(Roles = "Admin")]` nel progetto: qualunque utente autenticato accede a tutto
+  - La password di `admin` è `admin123`, valore scritto nella documentazione di un repository pubblico
+  - Utente `testuser` residuo dai test iniziali
+  - **Risolto il 2026-08-27**: la chiave di firma JWT non è più nei file versionati, ed esiste una validazione all'avvio che impedisce di partire con il segnaposto o con una chiave troppo corta
 - **FIXED (2026-08-24)**: Disallineamento `TotaleAcquistato` tra Tag e Espansione nel report Redditività — causato da query Tag che usava raggruppamento diretto su `PendingListings.Tag` (includeva record con Blueprint/Expansion NULL) vs query Espansione che usava navigation properties con INNER JOIN implicito (escludeva quei record). Risolto uniformando `GetTagExpansionProfitability` a usare join espliciti (`from pl join bp join ex`) come già fatto per `rimanentePerExpansion`.
 - **Redis non è installato sulla macchina**: `Redis:Enabled` è ora `false`. Tutto il codice di caching resta in piedi e funzionante — per riattivarlo serve installare Redis e rimettere il flag a `true`. Da valutare: il caching riduce le chiamate API durante la sync notturna, ma richiede di mantenere un servizio in più
 - **OpenTelemetry usa il Console exporter**: il tracing è attivo ma i trace finiscono a console, senza backend di raccolta (Jaeger/Tempo/Application Insights). Va bene per il debug, non per l'analisi storica. La Fase 2 (Health Checks UI popolata + backend di tracing) è predisposta ma non configurata

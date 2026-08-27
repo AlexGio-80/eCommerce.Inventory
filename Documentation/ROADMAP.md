@@ -20,7 +20,22 @@ _Nessun task attivo al momento._
 
 ## Da Fare
 
-_Nessun task attivo al momento._
+### Sicurezza (emerso il 2026-08-27, da affrontare insieme)
+
+Tutti punti **preesistenti**, non introdotti dal lavoro sull'autopricer.
+
+- [ ] **`POST /api/auth/register` è aperto a chiunque**: `AuthController` non ha l'attributo `[Authorize]`, quindi chiunque raggiunga l'API può crearsi un account senza credenziali. Da decidere: chiuderlo dietro autenticazione oppure disabilitarlo del tutto, dato che l'utente è uno solo
+- [ ] **Il ruolo non è verificato da nessuna parte**: non esiste un solo `[Authorize(Roles = "Admin")]` nel progetto. Gli account creati da `register` hanno ruolo `User` ma accedono a tutto — inventario, ordini, autopricer compreso. Combinato col punto precedente significa che chi raggiunge l'API ha pieno accesso al magazzino
+- [ ] **Cambiare la password di `admin`**: oggi è `admin123`, cioè il valore scritto nella documentazione di un repository GitHub **pubblico**
+- [ ] **Rimuovere l'utente `testuser`**, residuo dei test iniziali
+
+> Nota sull'esposizione: l'API ascolta su `localhost:5152`, ma l'endpoint webhook dev'essere raggiungibile da Card Trader, quindi un varco verso l'esterno probabilmente esiste. Da verificare com'è instradato.
+
+### Autopricer — taratura dopo le prime notti in simulazione
+
+- [ ] **Rivedere la posizione nella fascia 25–100 €**: la regola chiede la posizione 4, ma su quelle carte il mercato ha spesso 2–3 venditori comparabili, quindi molte valutazioni vengono saltate. Valutare se scendere a 2 o 3
+- [ ] **Caso limite offerte == posizione**: con esattamente 4 offerte e posizione 4 il motore prende comunque la più cara (fermato dal guardrail). Valutare se estendere il salto anche a questo caso
+- [ ] **Decidere quando uscire dal dry-run**: guardare la scheda Storico dopo qualche notte e confrontare le proposte con le proprie attese prima di attivare la scrittura reale
 
 ---
 
