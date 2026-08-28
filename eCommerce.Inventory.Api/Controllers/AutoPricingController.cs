@@ -198,18 +198,47 @@ public class AutoPricingController : ControllerBase
         })));
     }
 
+    /// <summary>
+    /// Dettaglio carta per carta di una esecuzione: è il registro su cui si fanno le verifiche a campione
+    /// prima di togliere il dry-run. Il filtro per esito serve perché su una esecuzione notturna le righe
+    /// sono migliaia e il tetto sul numero restituito mostrerebbe solo le variazioni più grandi.
+    /// </summary>
     [HttpGet("runs/{id:int}/changes")]
-    public async Task<IActionResult> GetRunChanges(int id, [FromQuery] int limit = 500, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetRunChanges(
+        int id,
+        [FromQuery] int limit = 500,
+        [FromQuery] string? outcome = null,
+        CancellationToken cancellationToken = default)
     {
-        var changes = await _context.PriceChangeLogs
+        var query = _context.PriceChangeLogs
             .AsNoTracking()
-            .Where(c => c.PricingRunLogId == id)
+            .Where(c => c.PricingRunLogId == id);
+
+        if (!string.IsNullOrWhiteSpace(outcome))
+        {
+            if (!Enum.TryParse<PricingOutcome>(outcome, ignoreCase: true, out var parsedOutcome))
+            {
+                return BadRequest(ApiResponse<object>.ErrorResult(
+                    $"Esito '{outcome}' non riconosciuto. Valori ammessi: {string.Join(", ", Enum.GetNames<PricingOutcome>())}."));
+            }
+
+            query = query.Where(c => c.Outcome == parsedOutcome);
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var changes = await query
             .Include(c => c.Blueprint)
             .OrderByDescending(c => Math.Abs(c.ProposedPrice - c.OldPrice))
             .Take(Math.Clamp(limit, 1, 2000))
             .ToListAsync(cancellationToken);
 
-        return Ok(ApiResponse<object>.SuccessResult(changes.Select(MapChange)));
+        return Ok(ApiResponse<object>.SuccessResult(new
+        {
+            TotalCount = totalCount,
+            ReturnedCount = changes.Count,
+            Items = changes.Select(MapChange)
+        }));
     }
 
     /// <summary>

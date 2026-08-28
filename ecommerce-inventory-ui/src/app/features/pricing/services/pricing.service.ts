@@ -52,7 +52,8 @@ export interface PriceChange {
     id?: number;
     blueprintId: number;
     cardName?: string | null;
-    inventoryItemId: number;
+    /** Null quando la carta è uscita dal magazzino, di norma perché venduta: la riga di registro resta. */
+    inventoryItemId: number | null;
     oldPrice: number;
     proposedPrice: number;
     delta: number;
@@ -62,6 +63,25 @@ export interface PriceChange {
     outcome: string;
     reason: string;
     createdAt: string;
+}
+
+/** Esiti possibili di una valutazione, allineati all'enum PricingOutcome del backend. */
+export const PRICING_OUTCOMES: { value: string; label: string }[] = [
+    { value: 'Applied', label: 'Applicate' },
+    { value: 'SimulatedDryRun', label: 'Simulate (dry-run)' },
+    { value: 'NoChangeNeeded', label: 'Invariate' },
+    { value: 'NoMatchingRule', label: 'Nessuna regola' },
+    { value: 'InsufficientOffers', label: 'Offerte insufficienti' },
+    { value: 'BlockedByGuardrail', label: 'Bloccate dal guardrail' },
+    { value: 'BlockedByDirection', label: 'Bloccate dalla direzione' },
+    { value: 'Failed', label: 'Fallite' }
+];
+
+/** Pagina di dettaglio restituita dall'endpoint delle variazioni di una esecuzione. */
+export interface PriceChangePage {
+    totalCount: number;
+    returnedCount: number;
+    items: PriceChange[];
 }
 
 export interface PricingRunReport {
@@ -147,9 +167,18 @@ export class PricingService {
             .pipe(map(r => r.data ?? []));
     }
 
-    getRunChanges(runId: number): Observable<PriceChange[]> {
-        return this.http.get<ApiResponse<PriceChange[]>>(`${this.baseUrl}/runs/${runId}/changes`)
-            .pipe(map(r => r.data ?? []));
+    /**
+     * Dettaglio carta per carta di una esecuzione. `outcome` filtra per esito lato server:
+     * su una notturna le righe sono migliaia e senza filtro il tetto restituirebbe
+     * solo le variazioni di importo maggiore.
+     */
+    getRunChanges(runId: number, outcome?: string, limit = 500): Observable<PriceChangePage> {
+        let url = `${this.baseUrl}/runs/${runId}/changes?limit=${limit}`;
+        if (outcome) {
+            url += `&outcome=${encodeURIComponent(outcome)}`;
+        }
+        return this.http.get<ApiResponse<PriceChangePage>>(url)
+            .pipe(map(r => r.data ?? { totalCount: 0, returnedCount: 0, items: [] }));
     }
 
     getCoverage(): Observable<CoverageReport> {
