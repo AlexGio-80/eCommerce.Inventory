@@ -53,7 +53,13 @@ public class PriceChangeLog
 {
     public int Id { get; set; }
 
-    public int InventoryItemId { get; set; }
+    /// <summary>
+    /// Copia di magazzino valutata. Diventa null quando la carta esce dall'inventario, tipicamente
+    /// perché è stata venduta: la riga di registro deve sopravvivere alla carta, altrimenti si perde
+    /// lo storico proprio delle carte vendute, che sono quelle su cui ha più senso verificare
+    /// se il prezzo proposto era corretto. La carta resta identificabile da <see cref="BlueprintId"/>.
+    /// </summary>
+    public int? InventoryItemId { get; set; }
     public InventoryItem? InventoryItem { get; set; }
 
     public int BlueprintId { get; set; }

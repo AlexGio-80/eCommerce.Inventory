@@ -236,10 +236,14 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(c => c.ReferencePrice).HasPrecision(18, 2);
             entity.Property(c => c.Reason).HasMaxLength(1000);
 
+            // In cascata la sincronizzazione notturna, cancellando le carte vendute e non più
+            // presenti su Card Trader, si porterebbe via anche il loro storico di valutazioni:
+            // sparirebbe la traccia proprio delle carte su cui conviene verificare se il prezzo
+            // proposto era corretto. Il registro deve sopravvivere alla carta.
             entity.HasOne(c => c.InventoryItem)
                 .WithMany()
                 .HasForeignKey(c => c.InventoryItemId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.SetNull);
 
             entity.HasOne(c => c.Blueprint)
                 .WithMany()
