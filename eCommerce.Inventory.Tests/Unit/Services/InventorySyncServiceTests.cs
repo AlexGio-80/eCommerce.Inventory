@@ -124,4 +124,62 @@ public class InventorySyncServiceTests
         // Assert
         await act.Should().NotThrowAsync();
     }
+
+    /// <summary>
+    /// Regressione: lo stesso prodotto di Card Trader può comparire su più PendingListings
+    /// (ripubblicazioni, riallineamenti manuali). Costruire il lookup con un ToDictionary diretto
+    /// solleva un'eccezione sulla chiave doppia e fa abortire l'intera sincronizzazione prima
+    /// dell'upsert: è il difetto che ha tenuto fermo l'inventario da dicembre 2025.
+    /// </summary>
+    [Fact]
+    public async Task SyncProductsAsync_ShouldNotThrow_WhenSameProductHasDuplicatePendingListings()
+    {
+        // Arrange: due PendingListings che puntano allo stesso prodotto di Card Trader
+        _context.PendingListings.Add(new PendingListing
+        {
+            BlueprintId = 5,
+            CardTraderProductId = 100,
+            Tag = "#vecchio",
+            PurchasePrice = 0.10m,
+            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+        });
+        _context.PendingListings.Add(new PendingListing
+        {
+            BlueprintId = 5,
+            CardTraderProductId = 100,
+            Tag = "#recente",
+            PurchasePrice = 0.50m,
+            CreatedAt = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc)
+        });
+        await _context.SaveChangesAsync();
+
+        var dtos = new List<CardTraderProductDto>
+        {
+            new()
+            {
+                Id = 100,
+                BlueprintId = 5,
+                PriceCents = 1000,
+                Quantity = 1,
+                Properties = new Dictionary<string, object>
+                {
+                    { "condition", "NM" },
+                    { "language", "EN" },
+                    { "foil", false },
+                    { "signed", false }
+                }
+            }
+        };
+
+        // Act
+        Func<Task> act = async () => await _service.SyncProductsAsync(dtos);
+
+        // Assert: la sincronizzazione arriva in fondo e applica la registrazione più recente
+        await act.Should().NotThrowAsync();
+
+        var item = await _context.InventoryItems.FirstOrDefaultAsync(i => i.CardTraderProductId == 100);
+        item.Should().NotBeNull();
+        item!.Tag.Should().Be("#recente");
+        item.PurchasePrice.Should().Be(0.50m);
+    }
 }
