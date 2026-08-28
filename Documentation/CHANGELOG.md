@@ -9,6 +9,79 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-08-28] Fix — La sincronizzazione dell'inventario era ferma da dicembre 2025 senza segnalarlo
+
+#### Problema
+
+Una carta venduta la settimana precedente (Galadriel's Dismissal) risultava ancora a magazzino nell'anteprima dell'autopricer, pur non essendo più su Card Trader. Il confronto fra il database e l'export di Card Trader ha misurato la deriva reale:
+
+| | |
+|---|---|
+| Articoli nel DB non più su Card Trader | 282 |
+| Carte Magic su Card Trader assenti dal DB | 192 |
+| Quantità disallineate | 203 |
+
+Nessun log lo segnalava, e le metriche riportavano l'esecuzione notturna come riuscita.
+
+**Causa** — in `CardTraderSyncOrchestrator.UpsertInventoryAsync` il lookup di `Tag` e `PurchasePrice` da `PendingListings` costruiva un dizionario con `ToDictionaryAsync`, che solleva un'eccezione sulla chiave duplicata. Lo stesso `CardTraderProductId` compare su più `PendingListings` (550 casi, il primo del 03/12/2025: ripubblicazioni e riallineamenti manuali). L'eccezione arrivava **prima** del ciclo di upsert, quindi ogni notte la sezione inventario abortiva senza inserire né cancellare nulla.
+
+**Perché non si notava** — due meccanismi indipendenti la nascondevano:
+
+1. `SyncInventoryAsync` impostava `response.Inventory.ErrorMessage` ma **non** `response.ErrorMessage`, e `ScheduledProductSyncWorker` valuta l'esito solo su quest'ultimo. Una sezione poteva fallire in blocco e l'esecuzione risultava comunque `success`, sia nel log riepilogativo sia nella metrica `ecommerce_sync_total`.
+2. In produzione Serilog era a `MinimumLevel: Warning`, e il sink su file non crea nemmeno il file finché non si verifica un evento di quel livello: la cartella `Publish/api/logs` risultava vuota e i riepiloghi di sync e autopricer (che sono `Information`) non lasciavano traccia.
+
+Un terzo elemento ha reso il sintomo ancora meno visibile: i prezzi nel DB coincidevano al 100% con Card Trader in ogni fascia, il che sembrava provare che la sync funzionasse. In realtà sono i prezzi di vendita dell'utente, non quotazioni di mercato: con l'autopricer in dry-run nessuno li cambia, quindi le due parti restavano identiche anche senza sync. E i nuovi articoli comparivano lo stesso perché il flusso `PendingListings` crea gli `InventoryItem` direttamente quando si pubblica dall'app — solo le carte messe in vendita dal sito di Card Trader mancavano.
+
+#### Soluzione Implementata
+
+**Il difetto** — il lookup raggruppa per `CardTraderProductId` e tiene la registrazione con `CreatedAt` più recente, cioè quella che riflette l'ultima messa in vendita. Stessa correzione applicata a `InventorySyncService.SyncProductsAsync`, che ha la medesima struttura (oggi non attiva: il suo worker `CardTraderSyncWorker` è commentato in `Program.cs`).
+
+**Il reporting** — `SyncAsync` raccoglie a fine esecuzione le sezioni con `ErrorMessage` valorizzato e le propaga su `response.ErrorMessage`, con un log a livello `Error` che le elenca. Da qui in avanti un fallimento parziale marca l'esecuzione come fallita anche nella metrica Prometheus.
+
+**I log** — in produzione `MinimumLevel` passa da `Warning` a `Information` con `Override` su `Microsoft`, `Microsoft.EntityFrameworkCore` e `System`, così i riepiloghi si vedono senza il rumore di EF. Aggiunto `retainedFileCountLimit: 14`. Rimosso inoltre il sink File da `appsettings.json`: gli array di configurazione in .NET si fondono **per indice** e non si concatenano, quindi un sink dichiarato nella base più uno dichiarato nel file per ambiente producevano due sink sullo stesso percorso, di cui il secondo non riusciva a prendere il lock — è l'origine dei file con suffisso `_001`.
+
+**Lo storico dei prezzi** — `FK_PriceChangeLogs_InventoryItems_InventoryItemId` era in `CASCADE`: alla prima sync corretta la cancellazione delle carte vendute si sarebbe portata via anche il loro storico di valutazioni, cioè proprio le carte su cui conviene verificare se il prezzo proposto era corretto. Misurato: 83 righe su 4.799 dell'esecuzione del 28/08. La foreign key passa a `SET NULL` con `PriceChangeLog.InventoryItemId` nullable (migration `20260828071742_PreservaStoricoPrezziCarteVendute`). La carta resta identificabile da `BlueprintId`, e `InventoryItemId IS NULL` diventa il modo per interrogare le valutazioni di carte non più a magazzino.
+
+#### Verifica
+
+Ripristinato il backup delle 03:00 come database separato `eCommerceInventory_Diag` ed eseguita lì la sincronizzazione, senza toccare la produzione:
+
+```
+added: 192   updated: 35.045   skipped: 29   failed: 0   errori: nessuno
+35.327 - 282 + 192 = 35.237 articoli
+```
+
+35.237 corrisponde esattamente alle carte Magic presenti su Card Trader (i 29 saltati sono Pokémon, gioco disabilitato). Galadriel's Dismissal non risulta più a magazzino.
+
+Applicata poi la migration alla stessa copia e cancellata una carta con storico: 4.719 righe di registro prima, 4.719 dopo, con le righe della carta cancellata conservate e ancora identificabili.
+
+#### Note Tecniche
+
+- Tre test di regressione: `SyncProductsAsync_ShouldNotThrow_WhenSameProductHasDuplicatePendingListings` e i due in `PriceChangeLogDeleteBehaviorTests` (uno sui metadati del modello, uno sul comportamento reale di cancellazione). Verificati rimettendo temporaneamente `CASCADE`: falliscono entrambi.
+- `POST /api/cardtrader/sync/products` e `POST /api/cardtrader/sync/orders` **non scrivono nulla a database**: recuperano i dati da Card Trader e restituiscono solo un conteggio. Per una sincronizzazione reale serve `POST /api/cardtrader/sync` con i flag della sezione desiderata.
+- `GET /api/pricing/runs/{id}/changes` accetta ora un parametro `outcome` per filtrare per esito lato server e restituisce `{ totalCount, returnedCount, items }`. Serviva perché su un'esecuzione notturna le righe sono migliaia e il tetto sul numero restituito mostrava solo le variazioni di importo maggiore, lasciando invisibili le 3.604 bloccate dal guardrail.
+
+---
+
+### [2026-08-28] Feature — Dettaglio carta per carta delle esecuzioni dell'autopricer
+
+#### Problema
+
+Le schede Copertura e Storico mostravano solo i riepiloghi delle esecuzioni. Non c'era modo di vedere i calcoli e i prezzi proposti, quindi non si potevano fare le verifiche a campione necessarie a decidere se uscire dal dry-run. I dati erano già tutti a database in `PriceChangeLogs`, l'endpoint `GET /api/pricing/runs/{id}/changes` esisteva e il metodo `getRunChanges()` era già nel servizio Angular: mancava solo il pezzo di interfaccia che li collegasse.
+
+#### Soluzione Implementata
+
+Nella scheda Storico la riga di un'esecuzione è ora cliccabile e apre il dettaglio: griglia con carta, prezzo attuale, proposto, variazione, offerte comparabili, anomale scartate, esito e motivazione testuale. Filtro per esito lato server, per isolare per esempio le sole bloccate dal guardrail.
+
+Aggiunta la colonna **Magazzino**: dopo il passaggio della foreign key a `SET NULL` una valutazione riferita a una carta ormai venduta sarebbe stata indistinguibile da una ancora a magazzino, e lo storico conservato sarebbe rimasto invisibile.
+
+#### Note Tecniche
+
+- `PRICING_OUTCOMES` in `pricing.service.ts` tiene le etichette allineate all'enum `PricingOutcome` del backend.
+- L'endpoint valida il parametro `outcome` contro l'enum e risponde `400` con l'elenco dei valori ammessi.
+
+---
+
 ### [2026-08-27] Feature — Autopricer custom (motore a regole, esecuzione notturna, reprice alla vendita)
 
 #### Problema

@@ -270,7 +270,39 @@ OrderItems
 ├─ InventoryItemId (FK → InventoryItems)
 ├─ QuantitySold
 └─ PricePerItem (decimal 18,2)
+
+PricingProfiles
+├─ Id (PK)
+├─ Name, IsActive, DryRun
+├─ MinPrice, MaxChangePercentPerRun
+├─ filtri venditore (IncludeProSellers, ExcludeVacationSellers, CountryCodesCsv, ...)
+└─ criteri di comparabilità (MatchCondition, MatchLanguage, MatchFoil, ...)
+
+PricingRules
+├─ Id (PK)
+├─ PricingProfileId (FK → PricingProfiles, CASCADE)
+├─ FromPrice / ToPrice (fascia di applicazione)
+├─ ReferenceMode / Position
+└─ AdjustmentAmount, AdjustmentPercent, CanIncrease, CanDecrease, Priority
+
+PricingRunLogs                    -- riepilogo di una esecuzione
+├─ Id (PK)
+├─ PricingProfileId (FK → PricingProfiles)
+├─ Trigger, DryRun, StartedAt, CompletedAt
+└─ contatori per esito + TotalPriceDelta
+
+PriceChangeLogs                   -- una riga per carta valutata
+├─ Id (PK)
+├─ InventoryItemId (FK → InventoryItems, SET NULL, nullable)
+├─ BlueprintId (FK → Blueprints, NO ACTION)
+├─ PricingRunLogId (FK → PricingRunLogs, SET NULL, nullable)
+├─ OldPrice, ProposedPrice, ReferencePrice (decimal 18,2)
+├─ Outcome, Trigger
+├─ ComparableOffersCount, OutliersRejectedCount
+└─ Reason (nvarchar 1000)
 ```
+
+> `PriceChangeLogs.InventoryItemId` è **nullable con `ON DELETE SET NULL`**: la riga di registro deve sopravvivere alla carta, altrimenti la cancellazione delle carte vendute durante la sincronizzazione notturna porterebbe via lo storico proprio dei casi su cui conviene verificare se il prezzo proposto era corretto. `InventoryItemId IS NULL` identifica le valutazioni di carte non più a magazzino; la carta resta riconoscibile da `BlueprintId`.
 
 ---
 
@@ -322,12 +354,16 @@ OrderItems
 
 Serilog configurato per:
 - Console output
-- File rolling (giornaliero)
+- File rolling (giornaliero, 14 file conservati in produzione)
 - Enrichment con LogContext
 - Structured logging per tutte le operazioni
 - Request/response logging middleware
 
 Log file: `logs/ecommerce-inventory-.txt`
+
+**Livelli**: `Debug` in sviluppo, `Information` in produzione con `Override` a `Warning` sui namespace `Microsoft`, `Microsoft.EntityFrameworkCore` e `System`. Il livello di produzione non va alzato a `Warning`: il sink su file non crea il file finché non si verifica un evento di quel livello, e i riepiloghi delle operazioni in background (sincronizzazione, autopricer) sono a livello `Information` — alzarlo equivale a rinunciare alla diagnostica di ciò che gira di notte.
+
+**Il sink File va dichiarato solo nei file per ambiente**, mai in `appsettings.json`: gli array di configurazione in .NET si fondono per indice e non si concatenano, quindi un sink nella base più uno nel file per ambiente producono due sink sullo stesso percorso, di cui il secondo non riesce ad acquisire il lock e ripiega su un file con suffisso `_001`.
 
 ---
 
@@ -367,6 +403,9 @@ L'architettura è progettata per aggiungere facilmente nuovi marketplace:
 | 2026-02-06 | Fetch marketplace prices per `expansion_id` (non per `blueprint_id[]`) | Card Trader non supporta batch per blueprint — una call per espansione è più efficiente |
 | 2026-05-19 | Migrazioni applicate via SQL diretto quando `dotnet ef` è bloccato | API + VS lockano le DLL Infrastructure; workaround: SQL diretto + insert in `__EFMigrationsHistory` + aggiornamento snapshot manuale |
 | 2026-03-26 | `TotaleAcquistato` nel report Tag da `PendingListings.PurchasePrice` | `InventoryItems.PurchasePrice` spesso zero; `PendingListings` è la source of truth del costo d'acquisto |
+| 2026-08-28 | I lookup costruiti da `PendingListings` raggruppano per `CardTraderProductId` invece di usare `ToDictionary` diretto | Lo stesso prodotto compare su più `PendingListings` (ripubblicazioni, riallineamenti): la chiave duplicata solleva un'eccezione che aborte l'intera sezione di sincronizzazione prima ancora dell'upsert. Vince la registrazione con `CreatedAt` più recente |
+| 2026-08-28 | Un fallimento di sezione marca l'intera sincronizzazione come fallita | Ogni sezione cattura le proprie eccezioni per non far cadere le altre; senza propagazione all'esito complessivo un fallimento totale risultava `success` in log e metriche |
+| 2026-08-28 | `PriceChangeLog` sopravvive all'`InventoryItem` (`SET NULL`, non `CASCADE`) | Il registro delle valutazioni serve a verificare a posteriori se il prezzo proposto era corretto: cancellarlo insieme alla carta venduta ne annullerebbe lo scopo proprio sui casi più istruttivi. La carta resta identificabile da `BlueprintId` |
 
 ---
 
