@@ -120,7 +120,7 @@ PUT    /api/cardtrader/inventory/{id}         Update item
 DELETE /api/cardtrader/inventory/{id}         Delete item
 
 GET    /api/cardtrader/products               Sync products from Card Trader
-POST   /api/cardtrader/webhooks/order         Receive order webhooks
+POST   /api/cardtraderwebhooks/events         Receive order webhooks
 POST   /api/cardtrader/sync/manual            Trigger manual sync
 ```
 

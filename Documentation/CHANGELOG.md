@@ -9,6 +9,23 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-08-29] Pulizia — Rimosso il webhook segnaposto di Card Trader
+
+#### Problema
+
+Esistevano due controller webhook per Card Trader. Quello operativo (`Controllers/CardTraderWebhooksController.cs`, rotta `/api/cardtraderwebhooks/events`) verifica la firma HMAC e processa l'evento via MediatR. Il secondo (`Controllers/CardTrader/CardTraderWebhooksController.cs`, rotta `/api/cardtrader/webhooks/notification`) era un segnaposto mai implementato: nessuna verifica di firma, corpo con un TODO e un log del payload. Non era referenziato da nulla — né dal frontend Angular, né dai test, né dagli script — ma era comunque instradato e raggiungibile senza autenticazione, dato che nell'API l'attributo `[Authorize]` è applicato per controller e su questo mancava. Rispondeva `200 OK` a qualsiasi payload, senza fare nulla.
+
+#### Soluzione Implementata
+
+Eliminato il file, insieme alla classe `CardTraderWebhookNotification` che vi era dichiarata. Aggiornati i due riferimenti rimasti nella documentazione (`ARCHITECTURE.md` e `README.md`), che puntavano a rotte inesistenti, in modo che descrivano l'endpoint reale.
+
+#### Note Tecniche
+
+- La soluzione compila senza errori e i 63 test passano.
+- L'endpoint superstite `/api/cardtraderwebhooks/events` non ha `[Authorize]`: è corretto, perché lo chiama Card Trader e la sua difesa è la firma HMAC nell'header `X-Signature`. Va però notato che oggi la verifica scatta **solo se l'header è presente**: se manca, il controller logga un warning e processa comunque. Se in futuro si introducesse un criterio di autorizzazione globale, questo endpoint andrebbe marcato `[AllowAnonymous]`.
+
+---
+
 ### [2026-08-29] Feature — Storico dei prezzi alimentato dalla sincronizzazione
 
 #### Problema

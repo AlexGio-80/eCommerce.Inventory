@@ -133,9 +133,10 @@ eCommerce.Inventory/
     - PUT /api/cardtrader/inventory/{id}
     - DELETE /api/cardtrader/inventory/{id}
 
-  - `CardTraderWebhooksController.cs`: Webhook receiver
-    - POST /api/cardtrader/webhooks/notification
-    - Notifiche real-time da Card Trader
+  - `Controllers/CardTraderWebhooksController.cs`: Webhook receiver
+    - POST /api/cardtraderwebhooks/events
+    - Notifiche real-time da Card Trader (order.create/update/destroy)
+    - Verifica della firma HMAC via `WebhookSignatureVerificationService`
 
   - `CardTraderSyncController.cs`: Sync operations
     - POST /api/cardtrader/sync/games
