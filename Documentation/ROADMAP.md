@@ -14,7 +14,8 @@ _Nessun task attivo al momento._
 
 | Data | Voce |
 |------|------|
-| 2026-08-29 | Sicurezza — **API chiusa per difetto**: criterio globale con ruolo `Admin` richiesto su ogni endpoint, registrazione rimossa, password del seed non più fissa nel codice, endpoint di cambio password |
+| 2026-08-29 | Sicurezza — **API chiusa per difetto**: criterio globale con ruolo `Admin` richiesto su ogni endpoint, registrazione rimossa, password del seed non più fissa nel codice, endpoint di cambio password. In produzione: password di `admin` cambiata, utente `testuser` eliminato |
+| 2026-08-29 | Pulizia — **Rimosso il controller webhook segnaposto** (`Controllers/CardTrader/`), mai implementato: si limitava a registrare il payload e a rispondere OK, duplicando la route del webhook vero |
 | 2026-08-29 | Fix — **Confronto fra prezzo venditore e prezzi acquirente**: il motore ricava il fattore di conversione dalla propria inserzione nel feed e ragiona sulla posizione in vetrina |
 | 2026-08-29 | Feature — **Collocazione percentuale** al posto della posizione fissa, e riferimento che non può mai cadere sull'offerta più cara |
 | 2026-08-29 | Feature — **Guardrail asimmetrico** (+300% in salita, −25% in discesa) e **filtro di rapporto sulla mediana** sempre attivo contro prezzi di comodo e prezzi da neofita |
@@ -46,18 +47,14 @@ _Nessun task attivo al momento._
 
 ## Da Fare
 
-### Sicurezza (emerso il 2026-08-27, codice chiuso il 2026-08-29)
+### Sicurezza — i quattro punti del 2026-08-27 sono chiusi
 
-Tutti punti **preesistenti**, non introdotti dal lavoro sull'autopricer.
+Tutti erano **preesistenti**, non introdotti dal lavoro sull'autopricer. Codice risolto e messo in produzione il 2026-08-29, password di `admin` cambiata e utente `testuser` eliminato lo stesso giorno. Dettaglio nel CHANGELOG.
 
-- [x] ~~**`POST /api/auth/register` è aperto a chiunque**~~ — risolto il 2026-08-29: l'endpoint è stato rimosso del tutto insieme a `RegisterAsync`. L'utente è uno solo; account nuovi si creano a mano sul database
-- [x] ~~**Il ruolo non è verificato da nessuna parte**~~ — risolto il 2026-08-29 con un criterio globale (`FallbackPolicy`) che richiede utente autenticato **e** ruolo `Admin` su ogni endpoint. Le eccezioni sono esplicite: login, webhook Card Trader (autenticato dalla firma HMAC), `/health`, `/health-ui`, `/metrics`, hub SignalR
-- [ ] **Cambiare la password di `admin`**: finché non viene fatto resta valida quella pubblicata nella documentazione di un repository GitHub **pubblico**. Il meccanismo ora c'è (`Scripts/Cambia-PasswordAdmin.ps1`, che chiama `POST /api/auth/change-password`: serve la password attuale, minimo 12 caratteri); resta da eseguirlo in produzione
-- [ ] **Rimuovere l'utente `testuser`**, residuo dei test iniziali — `DELETE FROM Users WHERE Username = 'testuser'` sul database di produzione
+Ne restano due, entrambi sul webhook — cioè sull'unico endpoint che per necessità è anonimo:
 
-> Nota sull'esposizione: l'API ascolta su `localhost:5152`, ma l'endpoint webhook dev'essere raggiungibile da Card Trader, quindi un varco verso l'esterno probabilmente esiste. Da verificare com'è instradato.
-
-> Nota sui token: il JWT non è revocabile e dura 7 giorni. Un token emesso prima del cambio password resta valido fino a scadenza.
+- [ ] **La firma del webhook si aggira omettendo l'header** (emerso il 2026-08-29 durante la pulizia del segnaposto): in `CardTraderWebhooksController.HandleWebhookEvent` la verifica scatta solo `if (!string.IsNullOrEmpty(signatureHeader))`; se `X-Signature` manca, il controller logga un warning e processa l'evento lo stesso. Da quando la vendita scala la giacenza, un `order.create` inventato modifica il magazzino e innesca una rivalutazione. Da rendere obbligatoria. Nota per chi lo sistema: `Request.EnableBuffering()` viene chiamato **dopo** che `[FromBody]` ha già letto il corpo, quindi va verificato che il corpo riletto per la firma non sia vuoto anche nel caso con header presente
+- [ ] **Verificare com'è instradato il webhook dall'esterno**: l'API ascolta su `localhost:5152`, ma l'endpoint webhook dev'essere raggiungibile da Card Trader, quindi un varco verso l'esterno probabilmente esiste. Ora dietro quel varco c'è un'API che richiede autenticazione ovunque tranne che sugli endpoint dichiarati, ma vale la pena sapere qual è il percorso e che cosa altro espone
 
 ### Autopricer — taratura dopo le prime notti in simulazione
 

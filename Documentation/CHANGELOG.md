@@ -59,7 +59,7 @@ Cinque test nuovi in `Unit/Services/AuthServiceTests.cs`, suite completa a 68 te
 
 - Il JWT non è revocabile e dura 7 giorni: i token emessi prima del cambio password restano validi fino a scadenza
 - `AuthService` firma con `Encoding.ASCII`, `Program.cs` valida con `Encoding.UTF8`. Sulle chiavi ASCII i byte coincidono, quindi oggi funziona; una chiave con caratteri non ASCII romperebbe la validazione
-- Restano due operazioni da fare sul database di produzione, che nessun deploy può fare al posto dell'utente: cambiare la password di `admin` e rimuovere `testuser`
+- Le due operazioni che nessun deploy poteva fare al posto dell'utente sono state eseguite il 2026-08-29, dopo la pubblicazione: password di `admin` cambiata con `Scripts/Cambia-PasswordAdmin.ps1`, utente `testuser` eliminato
 - `Controllers/CardTrader/CardTraderWebhooksController.cs` era un segnaposto mai implementato che loggava il payload e rispondeva OK. Non marcato `[AllowAnonymous]`, quindi chiuso dal criterio globale — ed è stato poi eliminato del tutto, vedi la voce qui sopra
 - `Scripts/BulkImportOrders.ps1` chiama l'API senza token: da ora riceverebbe `401`. Non è stato adeguato perché l'importazione storica è già stata fatta; la nota è nel README della cartella
 - Nuovo `Scripts/Cambia-PasswordAdmin.ps1`: chiede le password nascoste, così non finiscono nella cronologia di PowerShell

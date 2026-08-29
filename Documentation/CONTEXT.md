@@ -9,7 +9,7 @@
 ## Stato Attuale
 
 **Branch principale:** `master`
-**Ultimo aggiornamento:** 2026-08-29 (sessione 11 — taratura autopricer: percentile, guardrail asimmetrico, conversione prezzi; giacenza scalata alla vendita; log finalmente scritti)
+**Ultimo aggiornamento:** 2026-08-29 (sessione 12 — sicurezza: API chiusa per difetto, registrazione rimossa, password di `admin` cambiata e `testuser` eliminato. Sessione 11: taratura autopricer, giacenza scalata alla vendita, log finalmente scritti)
 **Fase:** In produzione (uso quotidiano attivo)
 
 ### Cosa funziona adesso
@@ -48,14 +48,14 @@
 
 ### Cosa è in sospeso / da verificare
 
-- **Punti di sicurezza — chiusi nel codice il 2026-08-29**, restano due operazioni sul database di produzione:
-  - **Risolto**: `POST /api/auth/register` non esiste più (era raggiungibile senza autenticazione). `RegisterAsync` rimosso anche da `IAuthService`
-  - **Risolto**: il ruolo `Admin` è ora richiesto su ogni endpoint dal criterio globale, non più affidato a un `[Authorize]` per controller (ne avevano due su dieci)
-  - **Risolto**: il seed non contiene più la password `admin123`; il primo utente si crea solo se è configurata `Seed:AdminPassword`, altrimenti il seed lo salta e logga un warning
-  - **Da fare in produzione**: cambiare la password di `admin` con `POST /api/auth/change-password` — finché non è fatto, la password è quella pubblicata sul repository
-  - **Da fare in produzione**: eliminare l'utente `testuser` residuo dai test iniziali
-  - Nota: i token già emessi restano validi fino a scadenza (7 giorni) anche dopo il cambio password — il JWT non è revocabile
+- **Punti di sicurezza — tutti chiusi il 2026-08-29**, codice in produzione e operazioni sul database eseguite:
+  - `POST /api/auth/register` non esiste più (era raggiungibile senza autenticazione). `RegisterAsync` rimosso anche da `IAuthService`
+  - Il ruolo `Admin` è richiesto su ogni endpoint dal criterio globale, non più affidato a un `[Authorize]` per controller (ne avevano due su dieci)
+  - Il seed non contiene più una password fissa: il primo utente si crea solo se è configurata `Seed:AdminPassword`, altrimenti il seed lo salta e logga un warning
+  - Password di `admin` cambiata in produzione con `Scripts/Cambia-PasswordAdmin.ps1`; utente `testuser` eliminato
+  - Nota: il JWT non è revocabile e dura 7 giorni, quindi i token emessi prima del cambio password restano validi fino a scadenza
   - **Risolto il 2026-08-27**: la chiave di firma JWT non è più nei file versionati, ed esiste una validazione all'avvio che impedisce di partire con il segnaposto o con una chiave troppo corta
+  - Resta da capire com'è instradato il webhook dall'esterno (vedi ROADMAP.md)
 - **FIXED (2026-08-24)**: Disallineamento `TotaleAcquistato` tra Tag e Espansione nel report Redditività — causato da query Tag che usava raggruppamento diretto su `PendingListings.Tag` (includeva record con Blueprint/Expansion NULL) vs query Espansione che usava navigation properties con INNER JOIN implicito (escludeva quei record). Risolto uniformando `GetTagExpansionProfitability` a usare join espliciti (`from pl join bp join ex`) come già fatto per `rimanentePerExpansion`.
 - **Redis non è installato sulla macchina**: `Redis:Enabled` è ora `false`. Tutto il codice di caching resta in piedi e funzionante — per riattivarlo serve installare Redis e rimettere il flag a `true`. Da valutare: il caching riduce le chiamate API durante la sync notturna, ma richiede di mantenere un servizio in più
 - **OpenTelemetry usa il Console exporter**: il tracing è attivo ma i trace finiscono a console, senza backend di raccolta (Jaeger/Tempo/Application Insights). Va bene per il debug, non per l'analisi storica. La Fase 2 (Health Checks UI popolata + backend di tracing) è predisposta ma non configurata
