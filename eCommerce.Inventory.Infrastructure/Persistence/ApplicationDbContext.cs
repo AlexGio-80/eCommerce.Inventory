@@ -26,6 +26,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<PricingRule> PricingRules { get; set; }
     public DbSet<PriceChangeLog> PriceChangeLogs { get; set; }
     public DbSet<PricingRunLog> PricingRunLogs { get; set; }
+    public DbSet<PriceHistoryEntry> PriceHistoryEntries { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -263,6 +264,34 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasDatabaseName("IX_PriceChangeLog_Blueprint_CreatedAt");
 
             entity.HasIndex(c => c.CreatedAt).HasDatabaseName("IX_PriceChangeLog_CreatedAt");
+        });
+
+        modelBuilder.Entity<PriceHistoryEntry>(entity =>
+        {
+            entity.Property(h => h.Price).HasPrecision(18, 2);
+            entity.Property(h => h.Condition).HasMaxLength(50);
+            entity.Property(h => h.Language).HasMaxLength(50);
+
+            entity.HasOne(h => h.Blueprint)
+                .WithMany()
+                .HasForeignKey(h => h.BlueprintId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            // Come per PriceChangeLog: la serie storica deve sopravvivere all'inserzione, o si
+            // perderebbe l'andamento proprio delle carte vendute.
+            entity.HasOne(h => h.InventoryItem)
+                .WithMany()
+                .HasForeignKey(h => h.InventoryItemId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // La domanda tipica e' "come si e' mosso il prezzo di questa inserzione nel tempo":
+            // l'indice la risolve senza scandire la tabella, che cresce a ogni sincronizzazione.
+            entity.HasIndex(h => new { h.CardTraderProductId, h.RecordedAt })
+                .HasDatabaseName("IX_PriceHistory_Product_RecordedAt");
+
+            // Per i grafici aggregati sulla carta, quando interessano tutte le sue versioni.
+            entity.HasIndex(h => new { h.BlueprintId, h.RecordedAt })
+                .HasDatabaseName("IX_PriceHistory_Blueprint_RecordedAt");
         });
     }
 }

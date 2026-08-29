@@ -302,6 +302,29 @@ PriceChangeLogs                   -- una riga per carta valutata
 └─ Reason (nvarchar 1000)
 ```
 
+PriceHistoryEntries               -- serie storica del prezzo esposto
+├─ Id (PK)
+├─ BlueprintId (FK → Blueprints, NO ACTION)
+├─ InventoryItemId (FK → InventoryItems, SET NULL, nullable)
+├─ CardTraderProductId            -- chiave stabile della serie
+├─ Price (decimal 18,2)           -- scala venditore, come l'export
+├─ Quantity
+├─ Condition / Language / IsFoil  -- denormalizzati: la riga resta leggibile senza l'inserzione
+└─ RecordedAt
+```
+
+> `PriceHistoryEntries` è **a delta**: una riga esiste solo quando prezzo o quantità cambiano
+> rispetto alla rilevazione precedente, più un primo punto per ogni inserzione. Scrivere ogni notte
+> tutte le 35.000 inserzioni produrrebbe milioni di righe l'anno per rappresentare in gran parte
+> prezzi fermi. È alimentata dalla sincronizzazione, che scarica già l'export completo: la
+> rilevazione non costa una sola chiamata alle API, che sono la risorsa scarsa.
+>
+> Va distinta da `PriceChangeLogs`: quella registra **cosa ha deciso l'autopricer** e con quale
+> motivazione, e porta anche il riferimento di mercato; questa registra **il prezzo effettivamente
+> esposto**, chiunque lo abbia cambiato — autopricer, mano dell'utente o autopricer nativo di
+> Card Trader.
+
+```
 > `PriceChangeLogs.InventoryItemId` è **nullable con `ON DELETE SET NULL`**: la riga di registro deve sopravvivere alla carta, altrimenti la cancellazione delle carte vendute durante la sincronizzazione notturna porterebbe via lo storico proprio dei casi su cui conviene verificare se il prezzo proposto era corretto. `InventoryItemId IS NULL` identifica le valutazioni di carte non più a magazzino; la carta resta riconoscibile da `BlueprintId`.
 
 ---
@@ -414,6 +437,8 @@ L'architettura è progettata per aggiungere facilmente nuovi marketplace:
 | 2026-08-29 | Il fattore di conversione si ricava dalla propria offerta nel feed | Il sovrapprezzo non è documentato né proporzionale (osservato fra 0,76% e 1,35%). Dedurlo dalla propria inserzione lo rende esatto e autoaggiornante |
 | 2026-08-29 | Collocazione percentuale al posto dell'ordinale, e mai sull'offerta più cara | La profondità di mercato varia da 3 a 29 offerte comparabili: un ordinale fisso degenera in "sii il più caro" sui mercati sottili |
 | 2026-08-29 | Guardrail asimmetrico fra rialzo e ribasso | I due errori non costano uguale: il rialzo è reversibile alla prossima esecuzione, il ribasso si traduce in una vendita immediata |
+| 2026-08-29 | Lo storico prezzi si alimenta dalla sincronizzazione, non dall'autopricer | La sync scarica già l'export completo, quindi la rilevazione è gratuita in termini di chiamate API e copre tutte le inserzioni, non solo quelle che l'autopricer tocca quella notte. Intercetta anche i cambi manuali |
+| 2026-08-29 | Serie a delta invece che snapshot completo | Un magazzino di 35.000 inserzioni scritto per intero ogni notte produrrebbe circa 12 milioni di righe l'anno per rappresentare in gran parte prezzi fermi: per ricostruire un andamento basta sapere quando è cambiato |
 
 ---
 

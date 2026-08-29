@@ -9,6 +9,43 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-08-29] Feature — Storico dei prezzi alimentato dalla sincronizzazione
+
+#### Problema
+
+Per ricostruire l'andamento del prezzo di una carta nel tempo esisteva solo `PriceChangeLogs`, che registra le valutazioni dell'autopricer. Sono dati utili — portano anche il riferimento di mercato — ma con tre limiti per un grafico: la copertura è a rotazione, quindi la serie è rada (su 4.877 carte toccate in due notti, 2.288 avevano un solo punto e 1.562 due); vede solo ciò che fa l'autopricer, quindi un cambio manuale o dell'autopricer nativo di Card Trader compare solo come salto di `OldPrice` alla valutazione successiva; e `OldPrice` è il prezzo venditore mentre `ReferencePrice` è un prezzo di vetrina, quindi le due colonne non sono confrontabili sullo stesso asse.
+
+#### Soluzione Implementata
+
+Nuova tabella `PriceHistoryEntries`, alimentata dalla sincronizzazione notturna. La scelta del punto di aggancio è il motivo per cui costa poco: la sync **scarica già l'export completo con tutti i prezzi**, quindi la rilevazione non aggiunge una sola chiamata alle API, che sono la risorsa scarsa. Ne risulta una serie regolare su tutte le inserzioni, indipendente dalla copertura dell'autopricer, che cattura anche i cambi fatti a mano.
+
+**Serie a delta.** Una riga esiste solo quando prezzo o quantità cambiano rispetto alla rilevazione precedente. Scrivere ogni notte tutte le 35.000 inserzioni produrrebbe circa 12 milioni di righe l'anno per rappresentare in gran parte prezzi fermi; per ricostruire un andamento basta sapere quando è cambiato. Fa eccezione il primo punto di ogni inserzione, che va scritto anche se nulla è cambiato: senza, una carta dal prezzo stabile non comparirebbe affatto e sarebbe indistinguibile da una di cui non si sa nulla.
+
+**La quantità viene registrata accanto al prezzo.** Messa in grafico mostra quando una carta è stata comprata, che è il contesto che spiega i movimenti di prezzo — proprio lo scenario delle copie multiple spazzate via da un rialzo improvviso.
+
+`InventoryItemId` è nullable con `SET NULL` e le caratteristiche della versione (condizione, lingua, foil) sono denormalizzate sulla riga: la serie deve sopravvivere alla vendita dell'inserzione, altrimenti si perderebbe l'andamento proprio delle carte vendute, e una serie per blueprint mescolerebbe la foil con la non foil.
+
+#### Verifica
+
+Su una copia ripristinata dal backup delle 03:02, con la sincronizzazione dell'inventario eseguita tre volte:
+
+| esecuzione | rilevazioni scritte | su osservate |
+|---|---|---|
+| prima (storico vuoto) | 35.219 | 35.219 |
+| seconda (nulla cambiato) | 0 | 35.219 |
+| terza (3 prezzi alterati) | 3 | 35.219 |
+
+Il primo giro stabilisce la linea di partenza, il secondo dimostra che i prezzi fermi non occupano spazio, il terzo che un cambiamento viene colto con precisione.
+
+#### Note Tecniche
+
+- La decisione su cosa registrare sta in `PriceHistoryRecorder`, funzione pura senza database né rete, coperta da sei test.
+- La scrittura è dentro un `try/catch` che al massimo logga: lo storico è un'osservazione a margine e non deve poter far fallire l'allineamento dell'inventario, che è il compito vero della sincronizzazione.
+- Lo stato precedente va catturato **prima** che il mapper aggiorni le entità in memoria: dopo, il valore vecchio non è più recuperabile.
+- Resta aperto il disallineamento di scala su `PriceChangeLogs`, dove `ReferencePrice` è in termini di vetrina e `OldPrice` in termini di venditore. Non riguarda questa tabella, che usa una scala sola.
+
+---
+
 ### [2026-08-29] Fix — Le migration si applicano all'avvio in ogni ambiente
 
 #### Problema

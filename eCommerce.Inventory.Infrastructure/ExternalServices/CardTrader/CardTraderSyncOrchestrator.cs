@@ -1,5 +1,6 @@
 using eCommerce.Inventory.Application.DTOs;
 using eCommerce.Inventory.Application.Interfaces;
+using eCommerce.Inventory.Application.Pricing;
 using eCommerce.Inventory.Domain.Entities;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.DTOs;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Mappers;
@@ -534,6 +535,15 @@ public class CardTraderSyncOrchestrator
             .GroupBy(pl => pl.CardTraderProductId!.Value)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(pl => pl.CreatedAt).First());
 
+        // Stato precedente di ogni inserzione, catturato prima che il mapper sovrascriva le
+        // entità in memoria: dopo l'aggiornamento il valore vecchio non è più recuperabile, e
+        // senza non si può sapere se il prezzo è cambiato.
+        var previousStateByProductId = existingItemsMap.ToDictionary(
+            kvp => kvp.Key,
+            kvp => new PriceHistoryRecorder.PreviousState(kvp.Value.ListingPrice, kvp.Value.Quantity));
+
+        var observations = new List<PriceHistoryRecorder.Observation>();
+
         var processedProductIds = new HashSet<int>();
 
         // 2. Upsert (Insert/Update)
@@ -556,6 +566,11 @@ public class CardTraderSyncOrchestrator
                     // Optimization: Only fetch blueprint if needed or batch fetch. 
                     // For now, let's assume BlueprintId link is correct if it exists.
                     // But if we are creating new, we definitely need to resolve it.
+
+                    observations.Add(new PriceHistoryRecorder.Observation(
+                        product.Id, existingItem.BlueprintId, existingItem.Id,
+                        existingItem.ListingPrice, existingItem.Quantity,
+                        existingItem.Condition, existingItem.Language, existingItem.IsFoil));
 
                     updated++;
                 }
@@ -580,6 +595,15 @@ public class CardTraderSyncOrchestrator
                     if (pendingData?.Tag != null) newItem.Tag = pendingData.Tag;
 
                     _dbContext.InventoryItems.Add(newItem);
+
+                    // Inserzione mai vista prima: e' il primo punto della sua serie storica.
+                    // L'InventoryItemId non esiste ancora — viene assegnato al salvataggio — ma
+                    // la serie si regge sul CardTraderProductId, che e' gia' noto.
+                    observations.Add(new PriceHistoryRecorder.Observation(
+                        product.Id, newItem.BlueprintId, null,
+                        newItem.ListingPrice, newItem.Quantity,
+                        newItem.Condition, newItem.Language, newItem.IsFoil));
+
                     added++;
                 }
             }
@@ -607,6 +631,42 @@ public class CardTraderSyncOrchestrator
                     _logger.LogError(ex, "Error deleting missing product {ProductId}", kvp.Key);
                 }
             }
+        }
+
+        // 4. Storico dei prezzi. Le inserzioni mai rilevate prima ottengono un primo punto anche
+        //    se nulla è cambiato, altrimenti una carta dal prezzo stabile non comparirebbe mai
+        //    nello storico e sarebbe indistinguibile da una di cui non si sa nulla.
+        try
+        {
+            var alreadyTracked = await _dbContext.PriceHistoryEntries
+                .AsNoTracking()
+                .Select(h => h.CardTraderProductId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var alreadyTrackedSet = alreadyTracked.ToHashSet();
+
+            // Un'inserzione senza storico va trattata come cambiata, così riceve il suo primo punto.
+            var previousForRecorder = previousStateByProductId
+                .Where(kvp => alreadyTrackedSet.Contains(kvp.Key))
+                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
+            var historyEntries = PriceHistoryRecorder.SelectEntriesToRecord(
+                observations, previousForRecorder, DateTime.UtcNow);
+
+            if (historyEntries.Count > 0)
+            {
+                _dbContext.PriceHistoryEntries.AddRange(historyEntries);
+                _logger.LogInformation(
+                    "Storico prezzi: {Count} rilevazioni registrate su {Observed} inserzioni osservate",
+                    historyEntries.Count, observations.Count);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Lo storico è un'osservazione a margine: se fallisce non deve trascinarsi dietro
+            // l'allineamento dell'inventario, che è il compito vero di questa sincronizzazione.
+            _logger.LogWarning(ex, "Impossibile registrare lo storico dei prezzi in questa esecuzione");
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);

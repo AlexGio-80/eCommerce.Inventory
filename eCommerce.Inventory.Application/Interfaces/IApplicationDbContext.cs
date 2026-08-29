@@ -16,6 +16,7 @@ public interface IApplicationDbContext
     DbSet<PricingRule> PricingRules { get; }
     DbSet<PriceChangeLog> PriceChangeLogs { get; }
     DbSet<PricingRunLog> PricingRunLogs { get; }
+    DbSet<PriceHistoryEntry> PriceHistoryEntries { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
