@@ -65,11 +65,24 @@ Le migration già applicate si leggono da `SELECT MigrationId FROM __EFMigration
 > Il backup del database prima di un deploy che contiene migration resta comunque consigliato:
 > l'applicazione automatica toglie il rischio di dimenticarsene, non quello di una migration sbagliata.
 
-#### Deploy del 2026-08-28 — nota specifica
+#### Effetti alla prima sincronizzazione dopo un deploy
 
-Questo rilascio contiene la migration `20260828071742_PreservaStoricoPrezziCarteVendute` (foreign key `PriceChangeLogs → InventoryItems` da `CASCADE` a `SET NULL`) e la correzione della sincronizzazione dell'inventario, ferma dal 03/12/2025.
+Alcuni rilasci si manifestano solo alla prima esecuzione notturna, non all'avvio del servizio: il
+giorno del deploy sembra non essere successo nulla e le sorprese arrivano la mattina dopo. Vale la
+pena sapere cosa aspettarsi prima di andare a dormire.
 
-**Alla prima sincronizzazione notturna dopo il deploy verranno cancellati 282 articoli e ne verranno inseriti 192**: è il recupero di otto mesi di deriva accumulata, non una perdita di dati. Fare un backup manuale prima del primo avvio e verificare il conteggio articoli il giorno seguente — deve coincidere con le carte dei giochi abilitati presenti su Card Trader.
+- **Un rilascio che tocca la sincronizzazione può muovere molti articoli in un colpo solo.** Il
+  2026-08-29, dopo la correzione del blocco che durava da dicembre, la prima notturna ha cancellato
+  282 articoli venduti e ne ha inseriti 192: era il recupero della deriva accumulata, non una
+  perdita di dati. Verificare il giorno dopo che il conteggio articoli coincida con le carte dei
+  giochi abilitati presenti su Card Trader.
+- **La prima rilevazione dello storico prezzi scrive una riga per ogni inserzione**, circa 35.000,
+  perché ogni serie ha bisogno di un punto di partenza. Dalla notte successiva vengono scritti solo
+  i prezzi che cambiano, quindi poche decine o centinaia. Un secondo giro con numeri ancora
+  nell'ordine delle decine di migliaia segnalerebbe che il confronto con la rilevazione precedente
+  non sta funzionando.
+
+Fare comunque un backup manuale prima di un deploy che contiene migration.
 
 ### Gestione manuale del servizio
 
@@ -204,4 +217,4 @@ Log IIS: `C:\inetpub\logs\LogFiles\`
 - [ ] `http://inventory.local` risponde correttamente
 - [ ] Log puliti (nessun errore all'avvio) — e la cartella `logs` **contiene un file**: se è vuota, la diagnostica non sta funzionando
 - [ ] Test funzionale rapido (login, sync, lista ordini)
-- [ ] Il giorno dopo il deploy: verificare nei log l'esito della sincronizzazione notturna e che il conteggio articoli coincida con Card Trader
+- [ ] Il giorno dopo il deploy: verificare nei log l'esito della sincronizzazione notturna, che il conteggio articoli coincida con Card Trader, e la riga `Storico prezzi: N rilevazioni registrate` (vedi "Effetti alla prima sincronizzazione")
