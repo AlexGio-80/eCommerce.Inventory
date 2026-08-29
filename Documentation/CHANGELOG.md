@@ -9,6 +9,24 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-08-29] Pulizia — Rimosso il webhook segnaposto di Card Trader
+
+#### Problema
+
+Esistevano due controller webhook per Card Trader. Quello operativo (`Controllers/CardTraderWebhooksController.cs`, rotta `/api/cardtraderwebhooks/events`) verifica la firma HMAC e processa l'evento via MediatR. Il secondo (`Controllers/CardTrader/CardTraderWebhooksController.cs`, rotta `/api/cardtrader/webhooks/notification`) era un segnaposto mai implementato: nessuna verifica di firma, corpo con un TODO e un log del payload. Rispondeva `200 OK` a qualsiasi cosa gli arrivasse, senza farci niente.
+
+Il criterio globale della voce qui sotto lo aveva già chiuso poche ore prima, essendo l'unico controller webhook non marcato `[AllowAnonymous]`. Restava però codice instradato che nessuno aveva mai finito, con la sua rotta pubblicata in due punti della documentazione.
+
+#### Soluzione Implementata
+
+Eliminato il file, insieme alla classe `CardTraderWebhookNotification` dichiarata al suo interno. Prima è stato verificato che non fosse referenziato da nulla: frontend Angular, `eCommerce.Inventory.Tests`, script PowerShell, `Documentation/`. Gli unici due riferimenti erano voci di documentazione stantie, ed entrambe erano già sbagliate — `ARCHITECTURE.md` citava la rotta del segnaposto, `README.md` una `/api/cardtrader/webhooks/order` mai esistita. Ora descrivono l'endpoint reale.
+
+#### Note Tecniche
+
+- Sull'endpoint superstite la verifica della firma scatta **solo se l'header `X-Signature` è presente**: se manca, il controller logga un warning e processa comunque l'evento. Essendo `[AllowAnonymous]` per necessità, la firma è l'unica cosa che lo difende, e oggi la si aggira omettendo l'header. Da chiudere.
+
+---
+
 ### [2026-08-29] Sicurezza — L'API è chiusa per difetto
 
 #### Problema
@@ -42,7 +60,7 @@ Cinque test nuovi in `Unit/Services/AuthServiceTests.cs`, suite completa a 68 te
 - Il JWT non è revocabile e dura 7 giorni: i token emessi prima del cambio password restano validi fino a scadenza
 - `AuthService` firma con `Encoding.ASCII`, `Program.cs` valida con `Encoding.UTF8`. Sulle chiavi ASCII i byte coincidono, quindi oggi funziona; una chiave con caratteri non ASCII romperebbe la validazione
 - Restano due operazioni da fare sul database di produzione, che nessun deploy può fare al posto dell'utente: cambiare la password di `admin` e rimuovere `testuser`
-- `Controllers/CardTrader/CardTraderWebhooksController.cs` è un segnaposto mai implementato che logga il payload e risponde OK. Non è marcato `[AllowAnonymous]`, quindi da ora è chiuso dal criterio globale
+- `Controllers/CardTrader/CardTraderWebhooksController.cs` era un segnaposto mai implementato che loggava il payload e rispondeva OK. Non marcato `[AllowAnonymous]`, quindi chiuso dal criterio globale — ed è stato poi eliminato del tutto, vedi la voce qui sopra
 - `Scripts/BulkImportOrders.ps1` chiama l'API senza token: da ora riceverebbe `401`. Non è stato adeguato perché l'importazione storica è già stata fatta; la nota è nel README della cartella
 - Nuovo `Scripts/Cambia-PasswordAdmin.ps1`: chiede le password nascoste, così non finiscono nella cronologia di PowerShell
 
