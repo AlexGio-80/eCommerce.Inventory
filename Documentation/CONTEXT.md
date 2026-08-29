@@ -176,4 +176,18 @@ Poi [descrivi il task da fare].
 | Diagnostica Serilog | `Publish/api/serilog-selflog.txt` — riporta il motivo per cui un sink non parte |
 | Servizio Windows | `eCommerce.Inventory`, avvio automatico, account `NT AUTHORITY\NetworkService` |
 
-> Per diagnosticare la sincronizzazione senza toccare la produzione: ripristinare l'ultimo `.bak` da `E:\Applicazioni\eCommerce.Inventory\Backups` come database separato, puntarci `appsettings.Development.json`, disattivare `Backup:Enabled` e lanciare `POST /api/cardtrader/sync` sull'istanza di sviluppo (porta 5155). È la procedura usata il 2026-08-28.
+> **Diagnosticare su una copia, senza toccare la produzione.** È la procedura usata il 2026-08-28
+> per capire perché la sincronizzazione dell'inventario era ferma:
+>
+> 1. Ripristinare l'ultimo `.bak` da `E:\Applicazioni\eCommerce.Inventory\Backups` come database
+>    separato, con `MOVE` dei file su nomi nuovi.
+> 2. Puntarci `appsettings.Development.json` e disattivare `Backup:Enabled`, per non sporcare i
+>    backup veri.
+> 3. Lanciare l'operazione sospetta sull'istanza di sviluppo (porta 5155). Il servizio Windows di
+>    produzione resta intatto.
+> 4. **Rimettere a posto**: ripristinare la connection string di sviluppo ed eliminare la copia.
+>    Sono circa 650 MB, e senza questo passo restano lì a tempo indeterminato.
+>
+> Attenzione a un effetto collaterale ora che le migration si applicano da sole: avviare
+> l'istanza di sviluppo contro la copia la aggiorna allo schema corrente. Va bene per riprodurre
+> un problema sul codice nuovo, non per esaminare lo stato in cui era il database.
