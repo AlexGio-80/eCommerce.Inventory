@@ -10,12 +10,15 @@ namespace eCommerce.Inventory.Infrastructure.Persistence;
 /// </summary>
 public static class SeedData
 {
+    /// <summary>
+    /// Dati dimostrativi: giochi, espansioni e blueprint fittizi per lavorare in locale.
+    /// Da non eseguire in produzione, dove l'inventario arriva da Card Trader — il profilo di
+    /// pricing, che invece serve ovunque, si crea con <see cref="SeedDefaultPricingProfileAsync"/>.
+    /// </summary>
     public static async Task InitializeAsync(ApplicationDbContext context, ILogger logger)
     {
         try
         {
-            await SeedDefaultPricingProfileAsync(context, logger);
-
             // Seed Games if not present
             if (!context.Games.Any())
             {
@@ -505,7 +508,11 @@ public static class SeedData
     /// di Card Trader già in uso, così il confronto fra i due avviene a parità di condizioni.
     /// Nasce in dry-run: nessun prezzo viene toccato finché non si decide diversamente.
     /// </summary>
-    private static async Task SeedDefaultPricingProfileAsync(ApplicationDbContext context, ILogger logger)
+    /// <summary>
+    /// Crea il profilo di pricing predefinito se non ne esiste alcuno. Va eseguito in ogni
+    /// ambiente: senza un profilo l'autopricer non ha regole con cui lavorare.
+    /// </summary>
+    public static async Task SeedDefaultPricingProfileAsync(ApplicationDbContext context, ILogger logger)
     {
         if (await context.PricingProfiles.AnyAsync()) return;
 

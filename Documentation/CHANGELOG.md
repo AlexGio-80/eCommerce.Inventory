@@ -9,6 +9,27 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-08-29] Fix — Le migration si applicano all'avvio in ogni ambiente
+
+#### Problema
+
+`MigrateAsync()` era dentro un `if (app.Environment.IsDevelopment())`: in produzione lo schema andava aggiornato a mano, e non era scritto da nessuna parte con sufficiente evidenza. Due deploy consecutivi sono partiti con i binari nuovi contro uno schema vecchio, e l'autopricer falliva a ogni lettura del profilo — senza lasciare traccia, perché nella stessa finestra i log non funzionavano.
+
+#### Soluzione Implementata
+
+Il blocco è uscito dalla guardia sull'ambiente. Prima di applicare, l'elenco delle migration pendenti viene registrato a log: resta così traccia di quando lo schema è cambiato e di cosa è cambiato, cosa che con l'applicazione manuale non esisteva. Se la migrazione fallisce l'applicazione non parte, ed è la scelta voluta: un servizio fermo si nota, uno che scrive su uno schema che non corrisponde al modello no.
+
+**Nessun interruttore per disattivarle.** Un flag lasciato a `false` riprodurrebbe esattamente lo stesso disallineamento, stavolta senza nemmeno un passaggio dimenticato da ricostruire.
+
+Separato di conseguenza il seed: il profilo di pricing predefinito viene creato in ogni ambiente, perché senza l'autopricer non ha regole; i dati dimostrativi (giochi, espansioni e blueprint fittizi) restano confinati allo sviluppo, dove prima erano di fatto protetti solo dal fatto che in produzione la tabella `Games` non è mai vuota.
+
+#### Note Tecniche
+
+- Verificato su una copia del database con una migration pendente: il log riporta `Migration da applicare (1): 20260829041648_PercentileEGuardrailAsimmetrico`, la applica, e al riavvio successivo dichiara `Nessuna migration da applicare`.
+- Il backup prima di un deploy con migration resta consigliato: l'automatismo elimina il rischio di dimenticarsene, non quello di una migration sbagliata.
+
+---
+
 ### [2026-08-29] Fix — L'autopricer confrontava prezzi su scale diverse e cadeva sui prezzi di comodo
 
 #### Problema

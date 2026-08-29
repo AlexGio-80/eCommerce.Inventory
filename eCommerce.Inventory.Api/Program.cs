@@ -385,28 +385,59 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Apply migrations and seed data in development
-if (app.Environment.IsDevelopment())
+// Le migration vengono applicate all'avvio in ogni ambiente.
+//
+// Prima giravano solo in Development e in produzione erano un passaggio manuale: dimenticarlo
+// faceva partire i binari nuovi contro uno schema vecchio, e l'applicazione falliva a ogni
+// lettura delle entità modificate senza che nulla lo dichiarasse. Il disallineamento fra codice
+// e schema non è una condizione da cui si possa lavorare, quindi va chiuso all'avvio.
+//
+// Deliberatamente senza interruttore di disattivazione: un flag lasciato a false riprodurrebbe
+// esattamente lo stesso disallineamento, stavolta senza nemmeno un passaggio dimenticato da
+// ricostruire. E se la migrazione fallisce l'applicazione non parte: un servizio fermo si nota,
+// un servizio che scrive su uno schema che non corrisponde al modello no.
+using (var scope = app.Services.CreateScope())
 {
-    using (var scope = app.Services.CreateScope())
+    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+    try
     {
-        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        // L'elenco viene registrato prima di applicarlo: è la traccia di quando lo schema è
+        // cambiato e di cosa è cambiato, che con l'applicazione manuale non esisteva.
+        var pendingMigrations = (await dbContext.Database.GetPendingMigrationsAsync()).ToList();
 
-        try
+        if (pendingMigrations.Count > 0)
         {
-            // Apply pending migrations
+            logger.LogInformation(
+                "Migration da applicare ({Count}): {Migrations}",
+                pendingMigrations.Count, string.Join(", ", pendingMigrations));
+
             await dbContext.Database.MigrateAsync();
-            logger.LogInformation("Database migrations applied successfully");
 
-            // Seed initial data
-            await eCommerce.Inventory.Infrastructure.Persistence.SeedData.InitializeAsync(dbContext, logger);
+            logger.LogInformation("Migration applicate correttamente");
         }
-        catch (Exception ex)
+        else
         {
-            logger.LogError(ex, "An error occurred while applying migrations or seeding data");
-            throw;
+            logger.LogInformation("Nessuna migration da applicare: lo schema è già allineato al modello");
         }
+
+        // Il profilo di pricing serve ovunque: senza, l'autopricer non ha regole.
+        await eCommerce.Inventory.Infrastructure.Persistence.SeedData
+            .SeedDefaultPricingProfileAsync(dbContext, logger);
+
+        // I dati dimostrativi restano confinati allo sviluppo: in produzione l'inventario
+        // arriva da Card Trader e non va inquinato con giochi e carte fittizi.
+        if (app.Environment.IsDevelopment())
+        {
+            await eCommerce.Inventory.Infrastructure.Persistence.SeedData
+                .InitializeAsync(dbContext, logger);
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Errore nell'applicazione delle migration o nel seed iniziale");
+        throw;
     }
 }
 

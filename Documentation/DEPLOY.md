@@ -46,19 +46,24 @@ dotnet ef database update --project src/eCommerce.Inventory.Infrastructure --sta
 
 > Fare sempre un backup del database prima di applicare migration in produzione.
 
-> ⚠️ **In produzione le migration NON vengono applicate automaticamente.** Il blocco che chiama
-> `MigrateAsync()` in `Program.cs` è dentro un `if (app.Environment.IsDevelopment())`, quindi il
-> servizio Windows parte senza toccare lo schema. È un passaggio manuale, da fare **prima** di
-> avviare la nuova versione: altrimenti i binari nuovi girano contro uno schema vecchio e ogni
-> lettura delle entità modificate fallisce a runtime, in silenzio se i log non funzionano.
->
-> Generare lo script della sola parte mancante e applicarlo:
->
-> ```bash
-> dotnet ef migrations script <ultima-applicata> <ultima-da-applicare> --project eCommerce.Inventory.Infrastructure --startup-project eCommerce.Inventory.Api --context ApplicationDbContext --output migrazioni.sql
-> ```
->
-> Le migration già applicate si leggono da `SELECT MigrationId FROM __EFMigrationsHistory ORDER BY MigrationId DESC`.
+Le migration pendenti vengono applicate **all'avvio del servizio, in ogni ambiente** (`Program.cs`).
+Il log riporta prima l'elenco di quelle da applicare e poi l'esito, quindi resta traccia di quando
+lo schema è cambiato e di cosa è cambiato. Se la migrazione fallisce l'applicazione non parte:
+è voluto, perché un servizio fermo si nota mentre uno che scrive su uno schema sbagliato no.
+
+Non esiste un interruttore per disattivarle: sarebbe un secondo modo di ritrovarsi con codice e
+schema disallineati, e fino al 29/08/2026 quel disallineamento è stato possibile proprio perché le
+migration giravano solo in Development. Il comando resta comunque utile per ispezionare in anticipo
+cosa verrà applicato:
+
+```bash
+dotnet ef migrations script <ultima-applicata> <ultima-da-applicare> --project eCommerce.Inventory.Infrastructure --startup-project eCommerce.Inventory.Api --context ApplicationDbContext --output migrazioni.sql
+```
+
+Le migration già applicate si leggono da `SELECT MigrationId FROM __EFMigrationsHistory ORDER BY MigrationId DESC`.
+
+> Il backup del database prima di un deploy che contiene migration resta comunque consigliato:
+> l'applicazione automatica toglie il rischio di dimenticarsene, non quello di una migration sbagliata.
 
 #### Deploy del 2026-08-28 — nota specifica
 
@@ -192,7 +197,7 @@ Log IIS: `C:\inetpub\logs\LogFiles\`
 ## Checklist Deploy
 
 - [ ] Backup database eseguito
-- [ ] **Migration pendenti applicate a mano** (in produzione non partono da sole — vedi sopra), confrontando `__EFMigrationsHistory` con la cartella `Migrations`
+- [ ] Migration pendenti verificate (si applicano da sole all'avvio; controllare nel log la riga `Migration applicate correttamente`)
 - [ ] `appsettings.Production.json` sul server presente e aggiornato
 - [ ] Script `publish.ps1` eseguito come Administrator
 - [ ] Windows Service in stato `Running`
