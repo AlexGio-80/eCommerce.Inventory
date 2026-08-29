@@ -338,13 +338,17 @@ public class InventorySyncService
                 .ToListAsync(cancellationToken);
 
             // Lookup Tag e PurchasePrice da PendingListings per propagarli su InventoryItem (non arrivano dall'API di CT)
+            // Lo stesso prodotto può comparire su più PendingListings: va raggruppato, altrimenti la chiave
+            // doppia solleva un'eccezione e fa saltare tutta la sincronizzazione. Vince la più recente.
             var incomingProductIds = productDtos.Select(p => (int?)p.Id).ToList();
-            var pendingDataByCardTraderProductId = await dbContext.Set<PendingListing>()
-                .AsNoTracking()
-                .Where(pl => pl.CardTraderProductId.HasValue
-                             && incomingProductIds.Contains(pl.CardTraderProductId))
-                .Select(pl => new { pl.CardTraderProductId, pl.Tag, pl.PurchasePrice })
-                .ToDictionaryAsync(pl => pl.CardTraderProductId!.Value, pl => pl, cancellationToken);
+            var pendingDataByCardTraderProductId = (await dbContext.Set<PendingListing>()
+                    .AsNoTracking()
+                    .Where(pl => pl.CardTraderProductId.HasValue
+                                 && incomingProductIds.Contains(pl.CardTraderProductId))
+                    .Select(pl => new { pl.CardTraderProductId, pl.Tag, pl.PurchasePrice, pl.CreatedAt })
+                    .ToListAsync(cancellationToken))
+                .GroupBy(pl => pl.CardTraderProductId!.Value)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(pl => pl.CreatedAt).First());
 
             int insertCount = 0, updateCount = 0, skippedCount = 0;
 

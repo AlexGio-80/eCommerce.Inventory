@@ -11,6 +11,14 @@ namespace eCommerce.Inventory.Application.Pricing;
 public class PricingEngine
 {
     /// <summary>
+    /// Limite di plausibilità del sovrapprezzo applicato da Card Trader all'acquirente.
+    /// Non è una regola commerciale: serve solo a riconoscere che le due letture di prezzo
+    /// (export e marketplace) non sono dello stesso istante, tipicamente perché il prezzo
+    /// è stato appena modificato a mano. In quel caso il rapporto non è utilizzabile.
+    /// </summary>
+    private const decimal MaxPlausibleMarketMarkup = 1.15m;
+
+    /// <summary>
     /// Valuta il prezzo di una carta.
     /// </summary>
     /// <param name="item">La mia carta a inventario.</param>
@@ -24,6 +32,21 @@ public class PricingEngine
         int myUserId)
     {
         var currentPrice = item.ListingPrice;
+
+        // 0. Le due grandezze in gioco non sono la stessa cosa e vanno riportate alla stessa scala.
+        //    `ListingPrice` è il prezzo che incasso io, quello dell'export di Card Trader.
+        //    Le offerte del marketplace sono invece prezzi lato acquirente, comprensivi del
+        //    sovrapprezzo che Card Trader aggiunge: la mia stessa inserzione compare nel feed
+        //    a un valore più alto di quello che ho impostato. Confrontarli direttamente mi fa
+        //    sembrare più economico di quanto sia, e la posizione calcolata risulta sbagliata.
+        //    Il rapporto si ricava dalla mia offerta nel feed, senza dover conoscere la
+        //    formula della commissione: è esatto per definizione e si aggiorna da solo.
+        var myOffer = item.CardTraderProductId.HasValue
+            ? offers.FirstOrDefault(o => o.Id == item.CardTraderProductId.Value)
+            : null;
+
+        var myMarketPrice = myOffer != null ? myOffer.PriceCents / 100m : (decimal?)null;
+        var marketMarkup = ResolveMarketMarkup(currentPrice, myMarketPrice);
 
         // 1. Le mie inserzioni non sono un riferimento di mercato.
         //    Senza questa esclusione il motore inseguirebbe il proprio prezzo verso il basso
@@ -44,13 +67,25 @@ public class PricingEngine
                 "Nessuna offerta comparabile dopo i filtri su comparabilità e venditori");
         }
 
-        // 4. Scarto delle offerte anomale.
+        // 4. Scarto delle offerte anomale, in due passaggi complementari.
+        //    Prima un filtro di rapporto sulla mediana, che è grossolano ma funziona a qualunque
+        //    numero di offerte: intercetta i prezzi di comodo messi altissimi per non sbagliare
+        //    e quelli irrealistici dei venditori alle prime armi. Poi lo scarto statistico con
+        //    la MAD, più fine ma affidabile solo con qualche punto a disposizione.
         var outliersRejected = 0;
+
+        if (profile.MaxMedianRatio >= 1m && candidates.Count >= 2)
+        {
+            var beforeCount = candidates.Count;
+            candidates = RejectByMedianRatio(candidates, profile.MaxMedianRatio);
+            outliersRejected += beforeCount - candidates.Count;
+        }
+
         if (profile.EnableOutlierRejection && candidates.Count >= profile.MinOffersForOutlierRejection)
         {
             var beforeCount = candidates.Count;
             candidates = RejectOutliers(candidates, profile.OutlierMadThreshold);
-            outliersRejected = beforeCount - candidates.Count;
+            outliersRejected += beforeCount - candidates.Count;
         }
 
         if (candidates.Count < profile.MinComparableOffers)
@@ -91,16 +126,19 @@ public class PricingEngine
                 outliersRejected);
         }
 
-        // 7. Prezzo di riferimento e scostamenti.
+        // 7. Prezzo di riferimento e scostamenti, in termini di vetrina.
+        //    Le regole descrivono una posizione fra i venditori, quindi vanno applicate ai
+        //    prezzi che l'acquirente vede; il risultato viene poi riportato al prezzo venditore,
+        //    che è l'unico valore che si può scrivere su Card Trader.
         var reference = ResolveReferencePrice(sortedPrices, rule);
 
-        var proposed = reference + rule.AdjustmentAmount;
+        var proposedMarket = reference + rule.AdjustmentAmount;
         if (rule.AdjustmentPercent != 0)
         {
-            proposed += proposed * (rule.AdjustmentPercent / 100m);
+            proposedMarket += proposedMarket * (rule.AdjustmentPercent / 100m);
         }
 
-        proposed = Math.Round(proposed, 2, MidpointRounding.AwayFromZero);
+        var proposed = Math.Round(proposedMarket / marketMarkup, 2, MidpointRounding.AwayFromZero);
 
         // 8. Il prezzo minimo non è mai valicabile.
         if (proposed < profile.MinPrice)
@@ -119,10 +157,14 @@ public class PricingEngine
             Rule = rule
         };
 
+        var context = DescribeContext(
+            currentPrice, myMarketPrice, marketMarkup, reference, proposedMarket,
+            sortedPrices, rule, candidates.Count, outliersRejected);
+
         if (proposed == currentPrice)
         {
             decision.Outcome = PricingOutcome.NoChangeNeeded;
-            decision.Reason = $"Prezzo già allineato a {proposed:0.00} € (riferimento {reference:0.00} € su {candidates.Count} offerte)";
+            decision.Reason = $"Prezzo già allineato: resta {currentPrice:0.00} €. {context}";
             return decision;
         }
 
@@ -141,27 +183,108 @@ public class PricingEngine
             return decision;
         }
 
-        // 10. Guardrail sulla variazione massima.
-        if (currentPrice > 0 && profile.MaxChangePercentPerRun > 0)
+        // 10. Guardrail, asimmetrico per direzione: le due non hanno lo stesso costo se sbagliate.
+        if (currentPrice > 0)
         {
-            var changePercent = Math.Abs((proposed - currentPrice) / currentPrice * 100m);
-            if (changePercent > profile.MaxChangePercentPerRun)
+            var isIncrease = proposed > currentPrice;
+            var limit = isIncrease ? profile.MaxIncreasePercentPerRun : profile.MaxDecreasePercentPerRun;
+
+            if (limit > 0)
             {
-                decision.Outcome = PricingOutcome.BlockedByGuardrail;
-                decision.Reason =
-                    $"Variazione del {changePercent:0.0}% oltre il massimo consentito del {profile.MaxChangePercentPerRun:0.0}% " +
-                    $"({currentPrice:0.00} € → {proposed:0.00} €). Verificare il dato di mercato prima di applicare.";
-                return decision;
+                var changePercent = Math.Abs((proposed - currentPrice) / currentPrice * 100m);
+                if (changePercent > limit)
+                {
+                    decision.Outcome = PricingOutcome.BlockedByGuardrail;
+                    decision.Reason =
+                        $"{(isIncrease ? "Aumento" : "Ribasso")} del {changePercent:0.0}% oltre il massimo consentito " +
+                        $"del {limit:0.0}% ({currentPrice:0.00} € → {proposed:0.00} €). {context}";
+                    return decision;
+                }
             }
         }
 
         decision.Outcome = profile.DryRun ? PricingOutcome.SimulatedDryRun : PricingOutcome.Applied;
-        decision.Reason =
-            $"{currentPrice:0.00} € → {proposed:0.00} € | riferimento {reference:0.00} € " +
-            $"({DescribeReference(rule)}) su {candidates.Count} offerte comparabili" +
-            (outliersRejected > 0 ? $", {outliersRejected} anomale scartate" : string.Empty);
+        decision.Reason = $"{currentPrice:0.00} € → {proposed:0.00} €. {context}";
 
         return decision;
+    }
+
+    /// <summary>
+    /// Rapporto fra il prezzo che l'acquirente vede sul marketplace e il prezzo che incasso io.
+    /// Si ricava dalla mia stessa inserzione presente nel feed, quindi non richiede di conoscere
+    /// la formula della commissione di Card Trader, che non è documentata e non è una percentuale
+    /// fissa (osservata fra lo 0,8% e l'1,4% a seconda della fascia).
+    /// Restituisce 1 quando il rapporto non è ricavabile: in quel caso il confronto avviene
+    /// comunque, ma sulla scala del prezzo venditore, e la motivazione lo dichiara.
+    /// </summary>
+    private static decimal ResolveMarketMarkup(decimal sellerPrice, decimal? marketPrice)
+    {
+        if (sellerPrice <= 0 || marketPrice is null || marketPrice <= 0) return 1m;
+
+        var ratio = marketPrice.Value / sellerPrice;
+
+        // Il prezzo esposto non può essere inferiore a quello che incasso io. Se lo è, oppure se
+        // il sovrapprezzo risulta implausibile, le due letture non sono dello stesso istante:
+        // succede quando il prezzo è stato appena cambiato a mano e il marketplace non si è
+        // ancora allineato. Meglio non convertire che convertire con un fattore inventato.
+        if (ratio < 1m || ratio > MaxPlausibleMarketMarkup) return 1m;
+
+        return ratio;
+    }
+
+    /// <summary>
+    /// Ricostruisce a parole il percorso che porta al prezzo proposto. Serve a rendere la
+    /// decisione verificabile senza rileggere il codice: quale posizione occupo oggi in vetrina,
+    /// quale offerta è stata presa a riferimento e come si torna dal prezzo esposto al mio.
+    /// </summary>
+    private static string DescribeContext(
+        decimal sellerPrice,
+        decimal? myMarketPrice,
+        decimal markup,
+        decimal reference,
+        decimal proposedMarket,
+        List<decimal> sortedComparablePrices,
+        PricingRule rule,
+        int comparableCount,
+        int outliersRejected)
+    {
+        var parts = new List<string>();
+
+        if (myMarketPrice.HasValue && markup > 1m)
+        {
+            // A parità di prezzo l'altra offerta compare prima della mia, quindi il confronto è
+            // "minore o uguale": è la lettura pessimistica, la stessa che si vede sul sito.
+            var position = sortedComparablePrices.Count(p => p <= myMarketPrice.Value) + 1;
+            parts.Add(
+                $"In vetrina la mia carta costa {myMarketPrice.Value:0.00} € (incasso {sellerPrice:0.00} €, " +
+                $"Card Trader aggiunge {myMarketPrice.Value - sellerPrice:0.00} €) e sono in posizione {position} " +
+                $"su {comparableCount + 1} offerte comparabili");
+        }
+        else
+        {
+            parts.Add(
+                $"Sovrapprezzo di Card Trader non ricavabile per questa carta: confronto fatto sul prezzo " +
+                $"venditore di {sellerPrice:0.00} € su {comparableCount} offerte comparabili");
+        }
+
+        parts.Add($"riferimento {reference:0.00} € ({DescribeReference(rule)} in vetrina)");
+
+        if (rule.AdjustmentAmount != 0 || rule.AdjustmentPercent != 0)
+        {
+            parts.Add($"con gli scostamenti della regola diventa {proposedMarket:0.00} € in vetrina");
+        }
+
+        if (markup > 1m)
+        {
+            parts.Add($"che al netto del sovrapprezzo vale {proposedMarket / markup:0.00} € per me");
+        }
+
+        if (outliersRejected > 0)
+        {
+            parts.Add($"{outliersRejected} offerte anomale scartate");
+        }
+
+        return string.Join(", ", parts) + ".";
     }
 
     /// <summary>
@@ -243,6 +366,38 @@ public class PricingEngine
     /// stessi outlier che deve individuare: basta un prezzo assurdo per gonfiare la
     /// deviazione standard al punto da rendere "normale" qualunque valore.
     /// </summary>
+    /// <summary>
+    /// Scarta le offerte troppo lontane dalla mediana in rapporto, in entrambe le direzioni.
+    /// Serve dove la statistica non arriva: con tre o quattro offerte la MAD non è affidabile,
+    /// ma un prezzo dieci volte la mediana resta riconoscibile per quello che è.
+    /// La mediana non viene ricalcolata dopo lo scarto: è già robusta per costruzione, e
+    /// ricalcolarla renderebbe il filtro dipendente dall'ordine di rimozione.
+    /// </summary>
+    private static List<CardTraderMarketplaceProductDto> RejectByMedianRatio(
+        List<CardTraderMarketplaceProductDto> offers,
+        decimal maxRatio)
+    {
+        var prices = offers.Select(o => o.PriceCents / 100m).OrderBy(p => p).ToList();
+        var median = Median(prices);
+        if (median <= 0) return offers;
+
+        var upperBound = median * maxRatio;
+        var lowerBound = median / maxRatio;
+
+        var kept = offers
+            .Where(o =>
+            {
+                var price = o.PriceCents / 100m;
+                return price <= upperBound && price >= lowerBound;
+            })
+            .ToList();
+
+        // Se il filtro non lascia nulla il dato non è interpretabile: meglio restituire le
+        // offerte originali e lasciare che siano i controlli a valle a fermare la decisione,
+        // piuttosto che proporre un prezzo basato su un insieme vuoto.
+        return kept.Count > 0 ? kept : offers;
+    }
+
     private static List<CardTraderMarketplaceProductDto> RejectOutliers(
         List<CardTraderMarketplaceProductDto> offers,
         decimal madThreshold)
@@ -300,16 +455,35 @@ public class PricingEngine
                 return Math.Round(sortedPrices.Take(n).Average(), 2, MidpointRounding.AwayFromZero);
             }
 
+            case PriceReferenceMode.PercentileOffer:
+            {
+                // Collocazione relativa sulla scaletta: l'indice si ricava dalla percentuale,
+                // quindi la stessa regola resta sensata sia su tre offerte che su trenta.
+                var pct = Math.Clamp(rule.Percentile, 0m, 100m);
+                var index = (int)Math.Round(
+                    (sortedPrices.Count - 1) * (pct / 100m), MidpointRounding.AwayFromZero);
+                return sortedPrices[CapIndexBelowMostExpensive(index, sortedPrices.Count)];
+            }
+
             case PriceReferenceMode.NthLowestOffer:
             default:
             {
-                // Se il mercato ha meno venditori della posizione richiesta si usa l'ultimo
-                // disponibile: meglio posizionarsi in fondo a una lista corta che rinunciare.
                 var index = Math.Clamp(rule.Position, 1, sortedPrices.Count) - 1;
-                return sortedPrices[index];
+                return sortedPrices[CapIndexBelowMostExpensive(index, sortedPrices.Count)];
             }
         }
     }
+
+    /// <summary>
+    /// Impedisce che il riferimento coincida con l'offerta più cara del mercato.
+    /// Una regola di collocazione serve a mettermi dentro la scaletta: quando cade sul massimo
+    /// non mi sta posizionando, mi sta dicendo di essere il più caro, e su un mercato sottile
+    /// ci finisce da sola. Osservato su quattro carte su undici, e in un caso il massimo era un
+    /// prezzo di comodo da 1019 € su un mercato di 73–96 €.
+    /// Con una sola offerta comparabile non c'è nulla da limitare.
+    /// </summary>
+    private static int CapIndexBelowMostExpensive(int index, int count)
+        => count <= 1 ? 0 : Math.Min(index, count - 2);
 
     private static string DescribeReference(PricingRule rule) => rule.ReferenceMode switch
     {
@@ -317,6 +491,7 @@ public class PricingEngine
         PriceReferenceMode.MedianOffer => "mediana",
         PriceReferenceMode.AverageOffer => "media",
         PriceReferenceMode.AverageOfLowestN => $"media delle {rule.Position} più basse",
+        PriceReferenceMode.PercentileOffer => $"collocazione al {rule.Percentile:0.#}% della scaletta",
         _ => $"{rule.Position}ª offerta più bassa"
     };
 

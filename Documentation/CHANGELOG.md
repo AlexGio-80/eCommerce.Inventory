@@ -9,6 +9,174 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-08-29] Fix — L'autopricer confrontava prezzi su scale diverse e cadeva sui prezzi di comodo
+
+#### Problema
+
+Verifiche a campione col simulatore hanno mostrato proposte incomprensibili: Overgrown Tomb a 19,99 € riceveva una proposta di rialzo pur essendo già in terza posizione fra offerte comparabili, e Sigarda's Aid, su un mercato di 73–96 €, veniva valutata **1019,61 €**.
+
+**Causa 1 — due grandezze diverse messe a confronto.** `InventoryItem.ListingPrice` è il prezzo che incassa il venditore, quello dell'export. Le offerte del marketplace sono invece prezzi lato acquirente, comprensivi del sovrapprezzo di Card Trader: la nostra stessa inserzione compare nel feed a un valore più alto di quello impostato. Misurato prendendo i due endpoint nello stesso istante:
+
+| carta | export (venditore) | marketplace (acquirente) |
+|---|---|---|
+| Overgrown Tomb foil | 19,99 € | 20,26 € |
+| The Ozolith | 63,07 € | 63,62 € |
+| Propaganda | 61,98 € | 62,62 € |
+
+Confrontando 19,99 € con i 20,2x € dei concorrenti il motore si credeva più economico di quanto fosse e proponeva un rialzo. Il sovrapprezzo non è una percentuale fissa (osservato fra 0,76% e 1,35%).
+
+**Causa 2 — l'ordinale fisso degenera sui mercati sottili.** Le offerte comparabili misurate sulle carte reali vanno da 3 a 29. Con "posizione 4" fissa, in **4 casi su 11** il riferimento cadeva esattamente sull'offerta più cara: la regola non posizionava più, diceva "sii il più caro".
+
+**Causa 3 — lo scarto degli outlier non girava dove serviva.** `MinOffersForOutlierRejection` era 5. Sigarda's Aid aveva 4 offerte comparabili, quindi il filtro non partiva affatto e il prezzo di comodo da 1019 € arrivava intatto al riferimento. Con 5 offerte lo avrebbe scartato senza esitazione: quel valore sta a 55 deviazioni dalla mediana contro una soglia di 3.
+
+#### Soluzione Implementata
+
+**Conversione fra le due scale.** Il motore individua la propria inserzione nel feed tramite il `CardTraderProductId` e ne ricava il rapporto fra prezzo esposto e prezzo incassato. Non serve conoscere la formula della commissione: il fattore è esatto per definizione e si aggiorna da solo. Le regole ragionano sulla posizione in vetrina, il risultato viene riportato al prezzo venditore prima di essere scritto. Se il rapporto risulta implausibile — prezzo esposto inferiore a quello incassato, tipico quando il prezzo è appena stato cambiato a mano — non si converte e la motivazione lo dichiara.
+
+**Collocazione percentuale al posto della posizione fissa.** Nuova modalità `PercentileOffer`: "collocati al N% della scaletta" invece di "la N-esima più bassa". Si adatta da sola alla profondità del mercato. Le regole esistenti sono state convertite: 15% sul bulk, 20% nella fascia 1–25 €, 40% sopra i 25 €.
+
+**Il riferimento non può mai essere l'offerta più cara**, in nessuna modalità.
+
+**Due difese contro i prezzi anomali, complementari.** Un filtro di rapporto sulla mediana (oltre 4× o sotto un quarto) che gira **a qualunque numero di offerte**, più lo scarto statistico con MAD la cui soglia scende da 5 a 3 offerte. Il primo è grossolano ma funziona dove la statistica non arriva; intercetta le due patologie descritte dall'utente: i prezzi messi altissimi per non sbagliare e quelli irrealistici dei venditori alle prime armi.
+
+**Guardrail asimmetrico.** `MaxChangePercentPerRun` si sdoppia in `MaxIncreasePercentPerRun` (300%) e `MaxDecreasePercentPerRun` (25%). Le due direzioni non hanno lo stesso costo se sbagliate: un rialzo eccessivo lascia la carta invenduta e si corregge all'esecuzione successiva, un ribasso eccessivo la fa comprare subito al prezzo sbagliato e non si recupera. La difesa dai prezzi anomali non è più affidata a questa soglia, quindi può essere generosa in salita — che è la ragione principale per cui l'autopricer esiste.
+
+**Motivazioni leggibili.** Ogni riga ora ricostruisce il percorso: posizione attuale in vetrina, sovrapprezzo, offerta presa a riferimento, scostamenti, riconversione.
+
+#### Verifica
+
+Effetto misurato sulle carte reali, con export e marketplace letti in diretta:
+
+```
+carta                  mio      PRIMA       ADESSO      esito
+Sigarda's Aid          75.72    1019.61  →    78.29     applicata (+3%)
+Sonic Screwdriver      60.56      75.18  →    57.69     applicata (-5%)
+Mystic Remora          62.14      79.36  →    78.69     applicata (+27%)
+The Ozolith            63.07      84.03  →    85.93     applicata (+37%)
+Mountain               68.46      87.18  →    27.15     BLOCCATA (-60%)
+```
+
+I rialzi corroborati da un gruppo di venditori concordi restano; il caso da 1019 € sparisce; su Mountain, mercato di 4 offerte sparse fra 27 e 87 €, il guardrail in discesa ferma la proposta.
+
+#### Note Tecniche
+
+- Analisi di sensibilità sul percentile eseguita su 11 carte reali: le carte davvero sottoprezzo danno lo stesso risultato dal 20% al 60%, segno che il segnale è robusto e non un artefatto della taratura. Le percentuali restano da affinare guardando l'anteprima.
+- Sui mercati profondi il percentile è **più aggressivo** dell'ordinale precedente (su Overgrown Tomb si passa dalla terza alla quinta posizione circa): è un cambio di postura voluto, non un effetto collaterale.
+- La migration `PercentileEGuardrailAsimmetrico` è stata scritta a mano: quella generata da EF rinominava `MaxChangePercentPerRun` in `MaxMedianRatio`, portandosi dietro il valore 50 (che come rapporto disattiva il filtro) e lasciando i due guardrail a zero, cioè senza limite.
+
+---
+
+### [2026-08-29] Feature — La vendita scala subito la giacenza e non spreca rivalutazioni
+
+#### Problema
+
+La quantità a magazzino veniva scritta solo dall'export durante la sincronizzazione notturna: nessuno la scalava alla vendita. Per tutta la giornata l'inventario mostrava quindi carte già vendute. Il controllo "riprezza solo se resta qualcosa", presente nel webhook, leggeva quel dato vecchio e risultava sempre vero: anche vendendo l'ultima copia si spendeva una chiamata al marketplace — risorsa limitata a 20 al minuto — per riprezzare una carta che non c'era più. A dry-run spento si sarebbe arrivati a scrivere un prezzo su un'inserzione inesistente.
+
+#### Soluzione Implementata
+
+All'arrivo del webhook `order.create` la giacenza locale viene scalata delle quantità vendute, confrontate per `product_id` e non per blueprint, così regge anche il caso di due inserzioni della stessa carta in condizioni diverse.
+
+Due protezioni:
+- **Idempotenza**: l'esistenza dell'ordine viene verificata *prima* della sincronizzazione, che fa insert-o-update e dopo renderebbe indistinguibile un ordine già visto. Card Trader può recapitare lo stesso webhook più volte, e un doppio scarico farebbe sparire dall'inventario una carta con una sola copia.
+- **Mai sotto zero**: se le copie vendute superano quelle registrate, il dato era già disallineato e portarlo in negativo aggiungerebbe un secondo errore.
+
+Il rischio complessivo resta basso perché la verità è l'export, che la sincronizzazione riscrive in valore assoluto: un errore qui si riassorbe la notte successiva e non si accumula. Per lo stesso motivo l'operazione non può far fallire la registrazione dell'ordine.
+
+Il controllo a valle è stato semplificato per leggere la giacenza già aggiornata: sottrarre di nuovo le quantità dell'ordine le avrebbe contate due volte, saltando rivalutazioni ancora dovute.
+
+---
+
+### [2026-08-29] Fix — I log di produzione finivano in C:\Windows\System32
+
+#### Problema
+
+Dopo la correzione del livello di log del 28/08 la cartella `Publish/api/logs` restava comunque vuota, anche con i permessi corretti.
+
+La causa è stata individuata grazie al `SelfLog` di Serilog aggiunto nella stessa sessione: **un servizio Windows eredita come cartella corrente `C:\Windows\System32`**, non quella dell'eseguibile. Il percorso relativo `logs/ecommerce-inventory-.txt` veniva quindi risolto lì dentro, dove l'account del servizio non ha permesso di scrittura. È anche la spiegazione del file `taffel-inventory-20251126.txt` trovato in `System32\logs`. L'assunzione che `UseWindowsService()` riallineasse la working directory era sbagliata.
+
+Un secondo difetto, sempre segnalato dal SelfLog: gli enricher `WithThreadId` e `WithProcessId` richiedono pacchetti non referenziati, e Serilog li ignorava.
+
+#### Soluzione Implementata
+
+`Program.cs` allinea la cartella corrente a `AppContext.BaseDirectory` quando il processo gira come servizio, prima di costruire l'host. Corregge tutti i percorsi relativi, non solo quello dei log: anche `Backup:BackupPath` ne beneficia. Rimossi dalla configurazione gli enricher non disponibili.
+
+Corretto inoltre `publish.ps1`, che concedeva i permessi con `icacls` usando il nome `NT AUTHORITY\NETWORK SERVICE`: su Windows italiano non si risolve, e l'errore era ingoiato tre volte (`2>$null`, `| Out-Null`, e un `catch` che non scatta mai perché `icacls` segnala con l'exit code). Ora usa il SID `*S-1-5-20` e verifica `$LASTEXITCODE`.
+
+---
+
+### [2026-08-28] Fix — La sincronizzazione dell'inventario era ferma da dicembre 2025 senza segnalarlo
+
+#### Problema
+
+Una carta venduta la settimana precedente (Galadriel's Dismissal) risultava ancora a magazzino nell'anteprima dell'autopricer, pur non essendo più su Card Trader. Il confronto fra il database e l'export di Card Trader ha misurato la deriva reale:
+
+| | |
+|---|---|
+| Articoli nel DB non più su Card Trader | 282 |
+| Carte Magic su Card Trader assenti dal DB | 192 |
+| Quantità disallineate | 203 |
+
+Nessun log lo segnalava, e le metriche riportavano l'esecuzione notturna come riuscita.
+
+**Causa** — in `CardTraderSyncOrchestrator.UpsertInventoryAsync` il lookup di `Tag` e `PurchasePrice` da `PendingListings` costruiva un dizionario con `ToDictionaryAsync`, che solleva un'eccezione sulla chiave duplicata. Lo stesso `CardTraderProductId` compare su più `PendingListings` (550 casi, il primo del 03/12/2025: ripubblicazioni e riallineamenti manuali). L'eccezione arrivava **prima** del ciclo di upsert, quindi ogni notte la sezione inventario abortiva senza inserire né cancellare nulla.
+
+**Perché non si notava** — due meccanismi indipendenti la nascondevano:
+
+1. `SyncInventoryAsync` impostava `response.Inventory.ErrorMessage` ma **non** `response.ErrorMessage`, e `ScheduledProductSyncWorker` valuta l'esito solo su quest'ultimo. Una sezione poteva fallire in blocco e l'esecuzione risultava comunque `success`, sia nel log riepilogativo sia nella metrica `ecommerce_sync_total`.
+2. In produzione Serilog era a `MinimumLevel: Warning`, e il sink su file non crea nemmeno il file finché non si verifica un evento di quel livello: la cartella `Publish/api/logs` risultava vuota e i riepiloghi di sync e autopricer (che sono `Information`) non lasciavano traccia.
+
+Un terzo elemento ha reso il sintomo ancora meno visibile: i prezzi nel DB coincidevano al 100% con Card Trader in ogni fascia, il che sembrava provare che la sync funzionasse. In realtà sono i prezzi di vendita dell'utente, non quotazioni di mercato: con l'autopricer in dry-run nessuno li cambia, quindi le due parti restavano identiche anche senza sync. E i nuovi articoli comparivano lo stesso perché il flusso `PendingListings` crea gli `InventoryItem` direttamente quando si pubblica dall'app — solo le carte messe in vendita dal sito di Card Trader mancavano.
+
+#### Soluzione Implementata
+
+**Il difetto** — il lookup raggruppa per `CardTraderProductId` e tiene la registrazione con `CreatedAt` più recente, cioè quella che riflette l'ultima messa in vendita. Stessa correzione applicata a `InventorySyncService.SyncProductsAsync`, che ha la medesima struttura (oggi non attiva: il suo worker `CardTraderSyncWorker` è commentato in `Program.cs`).
+
+**Il reporting** — `SyncAsync` raccoglie a fine esecuzione le sezioni con `ErrorMessage` valorizzato e le propaga su `response.ErrorMessage`, con un log a livello `Error` che le elenca. Da qui in avanti un fallimento parziale marca l'esecuzione come fallita anche nella metrica Prometheus.
+
+**I log** — in produzione `MinimumLevel` passa da `Warning` a `Information` con `Override` su `Microsoft`, `Microsoft.EntityFrameworkCore` e `System`, così i riepiloghi si vedono senza il rumore di EF. Aggiunto `retainedFileCountLimit: 14`. Rimosso inoltre il sink File da `appsettings.json`: gli array di configurazione in .NET si fondono **per indice** e non si concatenano, quindi un sink dichiarato nella base più uno dichiarato nel file per ambiente producevano due sink sullo stesso percorso, di cui il secondo non riusciva a prendere il lock — è l'origine dei file con suffisso `_001`.
+
+**Lo storico dei prezzi** — `FK_PriceChangeLogs_InventoryItems_InventoryItemId` era in `CASCADE`: alla prima sync corretta la cancellazione delle carte vendute si sarebbe portata via anche il loro storico di valutazioni, cioè proprio le carte su cui conviene verificare se il prezzo proposto era corretto. Misurato: 83 righe su 4.799 dell'esecuzione del 28/08. La foreign key passa a `SET NULL` con `PriceChangeLog.InventoryItemId` nullable (migration `20260828071742_PreservaStoricoPrezziCarteVendute`). La carta resta identificabile da `BlueprintId`, e `InventoryItemId IS NULL` diventa il modo per interrogare le valutazioni di carte non più a magazzino.
+
+#### Verifica
+
+Ripristinato il backup delle 03:00 come database separato `eCommerceInventory_Diag` ed eseguita lì la sincronizzazione, senza toccare la produzione:
+
+```
+added: 192   updated: 35.045   skipped: 29   failed: 0   errori: nessuno
+35.327 - 282 + 192 = 35.237 articoli
+```
+
+35.237 corrisponde esattamente alle carte Magic presenti su Card Trader (i 29 saltati sono Pokémon, gioco disabilitato). Galadriel's Dismissal non risulta più a magazzino.
+
+Applicata poi la migration alla stessa copia e cancellata una carta con storico: 4.719 righe di registro prima, 4.719 dopo, con le righe della carta cancellata conservate e ancora identificabili.
+
+#### Note Tecniche
+
+- Tre test di regressione: `SyncProductsAsync_ShouldNotThrow_WhenSameProductHasDuplicatePendingListings` e i due in `PriceChangeLogDeleteBehaviorTests` (uno sui metadati del modello, uno sul comportamento reale di cancellazione). Verificati rimettendo temporaneamente `CASCADE`: falliscono entrambi.
+- `POST /api/cardtrader/sync/products` e `POST /api/cardtrader/sync/orders` **non scrivono nulla a database**: recuperano i dati da Card Trader e restituiscono solo un conteggio. Per una sincronizzazione reale serve `POST /api/cardtrader/sync` con i flag della sezione desiderata.
+- `GET /api/pricing/runs/{id}/changes` accetta ora un parametro `outcome` per filtrare per esito lato server e restituisce `{ totalCount, returnedCount, items }`. Serviva perché su un'esecuzione notturna le righe sono migliaia e il tetto sul numero restituito mostrava solo le variazioni di importo maggiore, lasciando invisibili le 3.604 bloccate dal guardrail.
+
+---
+
+### [2026-08-28] Feature — Dettaglio carta per carta delle esecuzioni dell'autopricer
+
+#### Problema
+
+Le schede Copertura e Storico mostravano solo i riepiloghi delle esecuzioni. Non c'era modo di vedere i calcoli e i prezzi proposti, quindi non si potevano fare le verifiche a campione necessarie a decidere se uscire dal dry-run. I dati erano già tutti a database in `PriceChangeLogs`, l'endpoint `GET /api/pricing/runs/{id}/changes` esisteva e il metodo `getRunChanges()` era già nel servizio Angular: mancava solo il pezzo di interfaccia che li collegasse.
+
+#### Soluzione Implementata
+
+Nella scheda Storico la riga di un'esecuzione è ora cliccabile e apre il dettaglio: griglia con carta, prezzo attuale, proposto, variazione, offerte comparabili, anomale scartate, esito e motivazione testuale. Filtro per esito lato server, per isolare per esempio le sole bloccate dal guardrail.
+
+Aggiunta la colonna **Magazzino**: dopo il passaggio della foreign key a `SET NULL` una valutazione riferita a una carta ormai venduta sarebbe stata indistinguibile da una ancora a magazzino, e lo storico conservato sarebbe rimasto invisibile.
+
+#### Note Tecniche
+
+- `PRICING_OUTCOMES` in `pricing.service.ts` tiene le etichette allineate all'enum `PricingOutcome` del backend.
+- L'endpoint valida il parametro `outcome` contro l'enum e risponde `400` con l'elenco dei valori ammessi.
+
+---
+
 ### [2026-08-27] Feature — Autopricer custom (motore a regole, esecuzione notturna, reprice alla vendita)
 
 #### Problema

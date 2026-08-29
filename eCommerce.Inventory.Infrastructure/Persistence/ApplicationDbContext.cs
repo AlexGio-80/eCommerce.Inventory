@@ -192,7 +192,9 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(p => p.Name).HasMaxLength(200).IsRequired();
             entity.Property(p => p.CountryCodesCsv).HasMaxLength(500);
             entity.Property(p => p.MinPrice).HasPrecision(18, 2);
-            entity.Property(p => p.MaxChangePercentPerRun).HasPrecision(9, 2);
+            entity.Property(p => p.MaxIncreasePercentPerRun).HasPrecision(9, 2);
+            entity.Property(p => p.MaxDecreasePercentPerRun).HasPrecision(9, 2);
+            entity.Property(p => p.MaxMedianRatio).HasPrecision(9, 2);
             entity.Property(p => p.OutlierMadThreshold).HasPrecision(9, 4);
 
             entity.HasMany(p => p.Rules)
@@ -236,10 +238,14 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(c => c.ReferencePrice).HasPrecision(18, 2);
             entity.Property(c => c.Reason).HasMaxLength(1000);
 
+            // In cascata la sincronizzazione notturna, cancellando le carte vendute e non più
+            // presenti su Card Trader, si porterebbe via anche il loro storico di valutazioni:
+            // sparirebbe la traccia proprio delle carte su cui conviene verificare se il prezzo
+            // proposto era corretto. Il registro deve sopravvivere alla carta.
             entity.HasOne(c => c.InventoryItem)
                 .WithMany()
                 .HasForeignKey(c => c.InventoryItemId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.SetNull);
 
             entity.HasOne(c => c.Blueprint)
                 .WithMany()

@@ -20,12 +20,25 @@ public class PricingProfile
     /// <summary>Nessuna carta verrà mai prezzata sotto questo valore.</summary>
     public decimal MinPrice { get; set; } = 0.05m;
 
+    // --- Guardrail sulle variazioni ---
+    // Le due direzioni non comportano lo stesso rischio e non vanno limitate allo stesso modo.
+    // Un rialzo sbagliato costa una vendita rimandata: la carta resta a magazzino e l'esecuzione
+    // successiva corregge. Un ribasso sbagliato costa la carta, perché viene comprata subito al
+    // prezzo sbagliato e non si torna indietro. Di qui la soglia larga in salita e stretta in discesa.
+
     /// <summary>
-    /// Guardrail: variazione massima consentita in una singola esecuzione, in percentuale
-    /// sul prezzo corrente. Una proposta che la supera viene registrata ma non applicata,
-    /// così un dato anomalo del marketplace non può stravolgere il magazzino.
+    /// Aumento massimo consentito in una singola esecuzione, in percentuale sul prezzo corrente.
+    /// Generoso di proposito: serve a cogliere i rialzi reali di mercato, che sono la ragione
+    /// principale per cui l'autopricer esiste. La difesa dai prezzi anomali non è affidata a
+    /// questa soglia ma ai filtri sulle offerte.
     /// </summary>
-    public decimal MaxChangePercentPerRun { get; set; } = 50m;
+    public decimal MaxIncreasePercentPerRun { get; set; } = 300m;
+
+    /// <summary>
+    /// Ribasso massimo consentito in una singola esecuzione, in percentuale sul prezzo corrente.
+    /// Stretto perché un ribasso eccessivo si traduce in una vendita immediata e irrecuperabile.
+    /// </summary>
+    public decimal MaxDecreasePercentPerRun { get; set; } = 25m;
 
     // --- Filtri sui venditori di riferimento ---
     // NB: l'API Card Trader non espone il numero di recensioni di un venditore,
@@ -60,10 +73,24 @@ public class PricingProfile
     public decimal OutlierMadThreshold { get; set; } = 3.0m;
 
     /// <summary>
-    /// Sotto questo numero di offerte comparabili lo scarto outlier non viene applicato:
-    /// su pochi dati la statistica non è affidabile e rischierebbe di scartare il prezzo giusto.
+    /// Sotto questo numero di offerte comparabili lo scarto statistico non viene applicato.
+    /// Tenuto basso di proposito: è sui mercati sottili che un singolo prezzo di comodo fa più
+    /// danno, perché con quattro offerte una regola posizionale ci finisce sopra direttamente.
+    /// Il caso limite osservato aveva 4 offerte comparabili, di cui una a 1019 € su un mercato
+    /// di 73–96 €: con la soglia a 5 lo scarto non partiva proprio.
     /// </summary>
-    public int MinOffersForOutlierRejection { get; set; } = 5;
+    public int MinOffersForOutlierRejection { get; set; } = 3;
+
+    /// <summary>
+    /// Rapporto massimo ammesso fra un'offerta e la mediana delle comparabili, applicato in
+    /// entrambe le direzioni (oltre N volte la mediana, o sotto la mediana diviso N).
+    /// È un filtro grossolano che però funziona a qualunque numero di offerte, mentre la MAD
+    /// richiede qualche punto per essere affidabile. Intercetta le due patologie tipiche del
+    /// marketplace: i prezzi di comodo messi altissimi per non sbagliare, e i prezzi
+    /// irrealisticamente bassi dei venditori alle prime armi.
+    /// Zero o valori minori di 1 disattivano il filtro.
+    /// </summary>
+    public decimal MaxMedianRatio { get; set; } = 4m;
 
     /// <summary>
     /// Sotto questo numero di offerte comparabili il prezzo non viene aggiornato affatto:

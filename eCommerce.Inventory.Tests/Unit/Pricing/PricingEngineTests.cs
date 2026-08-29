@@ -17,7 +17,11 @@ public class PricingEngineTests
             Name = "Test",
             DryRun = false,
             MinPrice = 0.05m,
-            MaxChangePercentPerRun = 1000m, // disattivato salvo test dedicati
+            // Guardrail e filtro di rapporto disattivati salvo nei test dedicati, così ogni
+            // caso verifica una sola cosa.
+            MaxIncreasePercentPerRun = 100000m,
+            MaxDecreasePercentPerRun = 100000m,
+            MaxMedianRatio = 0m,
             MinComparableOffers = 1,
             MinOffersForOutlierRejection = 5,
             EnableOutlierRejection = false
@@ -200,7 +204,7 @@ public class PricingEngineTests
     {
         var engine = new PricingEngine();
         var profile = Profile(NthLowestRule(1.01m, 100m, 1));
-        profile.MaxChangePercentPerRun = 50m;
+        profile.MaxDecreasePercentPerRun = 50m;
 
         var offers = new List<CardTraderMarketplaceProductDto> { Offer(1.00m), Offer(1.10m) };
 
@@ -208,6 +212,116 @@ public class PricingEngineTests
 
         decision.Outcome.Should().Be(PricingOutcome.BlockedByGuardrail);
         decision.ShouldWrite.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Le due direzioni non comportano lo stesso rischio: un rialzo eccessivo lascia la carta
+    /// invenduta e si corregge alla prossima esecuzione, un ribasso eccessivo la fa comprare
+    /// subito al prezzo sbagliato. Il guardrail deve quindi essere asimmetrico.
+    /// </summary>
+    private static PricingRule PercentileRule(decimal from, decimal to, decimal percentile, decimal adjust = 0m)
+        => new()
+        {
+            Id = 1,
+            FromPrice = from,
+            ToPrice = to,
+            ReferenceMode = PriceReferenceMode.PercentileOffer,
+            Percentile = percentile,
+            AdjustmentAmount = adjust,
+            CanIncrease = true,
+            CanDecrease = true,
+            IsActive = true
+        };
+
+    /// <summary>
+    /// La stessa regola deve mantenere la collocazione relativa al variare della profondità
+    /// del mercato: sulle carte reali le offerte comparabili vanno da 3 a 29, e con un ordinale
+    /// fisso "la quarta più bassa" significa stare in fondo su un mercato profondo ed essere
+    /// il più caro su uno sottile.
+    /// </summary>
+    [Fact]
+    public void Il_percentile_si_adatta_alla_profondita_del_mercato()
+    {
+        var engine = new PricingEngine();
+        var profile = Profile(PercentileRule(1.01m, 1000m, 30m));
+
+        var mercatoSottile = new List<CardTraderMarketplaceProductDto>
+        {
+            Offer(10.00m), Offer(20.00m), Offer(30.00m), Offer(40.00m), Offer(50.00m)
+        };
+        engine.Evaluate(Item(25.00m), mercatoSottile, profile, MyUserId)
+            .ReferencePrice.Should().Be(20.00m, "su 5 offerte il 30% cade sulla seconda");
+
+        var mercatoProfondo = Enumerable.Range(1, 21).Select(i => Offer(i * 10m)).ToList();
+        engine.Evaluate(Item(25.00m), mercatoProfondo, profile, MyUserId)
+            .ReferencePrice.Should().Be(70.00m, "su 21 offerte il 30% cade sulla settima");
+    }
+
+    /// <summary>
+    /// Caso reale di Sigarda's Aid: 4 offerte comparabili su un mercato di 73–96 €, di cui una
+    /// a 1019 € messa lì per non sbagliare. Con la soglia dello scarto statistico a 5 il filtro
+    /// non partiva e la regola posizionale finiva dritta sul prezzo di comodo.
+    /// </summary>
+    [Fact]
+    public void Il_filtro_di_rapporto_scarta_il_prezzo_di_comodo_anche_su_mercato_sottile()
+    {
+        var engine = new PricingEngine();
+        var profile = Profile(NthLowestRule(25.01m, 2000m, 4, -0.01m));
+        profile.MaxMedianRatio = 4m;
+
+        var offers = new List<CardTraderMarketplaceProductDto>
+        {
+            Offer(73.74m), Offer(78.96m), Offer(96.56m), Offer(1019.62m)
+        };
+
+        var decision = engine.Evaluate(Item(75.72m), offers, profile, MyUserId);
+
+        decision.OutliersRejectedCount.Should().Be(1);
+        decision.ProposedPrice.Should().BeLessThan(100m, "il prezzo di comodo non deve tarare il posizionamento");
+    }
+
+    [Fact]
+    public void Il_filtro_di_rapporto_scarta_anche_il_prezzo_irrealisticamente_basso()
+    {
+        var engine = new PricingEngine();
+        var profile = Profile(NthLowestRule(1.01m, 1000m, 1));
+        profile.MaxMedianRatio = 4m;
+
+        var offers = new List<CardTraderMarketplaceProductDto>
+        {
+            Offer(0.50m), Offer(40.00m), Offer(42.00m), Offer(44.00m)
+        };
+
+        var decision = engine.Evaluate(Item(40.00m), offers, profile, MyUserId);
+
+        decision.OutliersRejectedCount.Should().Be(1);
+        decision.ReferencePrice.Should().Be(40.00m, "il venditore alle prime armi non deve trascinare giù il mercato");
+    }
+
+    [Fact]
+    public void Il_guardrail_e_asimmetrico_fra_salita_e_discesa()
+    {
+        var engine = new PricingEngine();
+
+        var profile = Profile(NthLowestRule(1.01m, 100m, 1));
+        profile.MaxIncreasePercentPerRun = 300m;
+        profile.MaxDecreasePercentPerRun = 25m;
+
+        // Il mercato sta molto più in alto: +150% deve passare.
+        var salita = engine.Evaluate(
+            Item(20.00m),
+            new List<CardTraderMarketplaceProductDto> { Offer(50.00m), Offer(55.00m) },
+            profile, MyUserId);
+
+        salita.Outcome.Should().Be(PricingOutcome.Applied, "i rialzi reali di mercato sono il motivo per cui l'autopricer esiste");
+
+        // Il mercato sta molto più in basso: -60% deve essere fermato.
+        var discesa = engine.Evaluate(
+            Item(50.00m),
+            new List<CardTraderMarketplaceProductDto> { Offer(20.00m), Offer(22.00m) },
+            profile, MyUserId);
+
+        discesa.Outcome.Should().Be(PricingOutcome.BlockedByGuardrail, "un ribasso eccessivo non si recupera");
     }
 
     [Fact]
@@ -331,9 +445,11 @@ public class PricingEngineTests
     }
 
     [Fact]
-    public void Se_disattivato_il_salto_usa_l_ultima_offerta_disponibile()
+    public void Se_disattivato_il_salto_non_diventa_comunque_il_piu_caro()
     {
-        // Comportamento dell'autopricer nativo, mantenuto come opzione esplicita.
+        // Con il salto disattivato la posizione viene troncata alla profondità del mercato,
+        // ma senza mai coincidere con l'offerta più cara: una regola di collocazione deve
+        // mettermi dentro la scaletta, e su un mercato sottile ci finirebbe sopra da sola.
         var engine = new PricingEngine();
         var profile = Profile(NthLowestRule(1.01m, 100m, 4));
         profile.SkipWhenFewerOffersThanPosition = false;
@@ -342,7 +458,7 @@ public class PricingEngineTests
 
         var decision = engine.Evaluate(Item(20.00m), offers, profile, MyUserId);
 
-        decision.ReferencePrice.Should().Be(12.00m);
+        decision.ReferencePrice.Should().Be(10.00m, "12,00 € è il massimo del mercato e non può essere il riferimento");
     }
 
     [Fact]
@@ -452,5 +568,97 @@ public class PricingEngineTests
 
         decision.Outcome.Should().Be(PricingOutcome.NoChangeNeeded);
         decision.ShouldWrite.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Caso reale osservato su Overgrown Tomb foil (blueprint 275538) il 2026-08-28.
+    /// L'export dava la mia carta a 19,99 € mentre nel feed del marketplace la stessa
+    /// inserzione compare a 20,26 €, perché i prezzi del marketplace sono lato acquirente.
+    /// Confrontando 19,99 € con i 20,2x € dei concorrenti il motore mi credeva più economico
+    /// di quanto fossi e proponeva un rialzo, benché fossi già in terza posizione.
+    /// </summary>
+    [Fact]
+    public void Converte_il_prezzo_di_vetrina_prima_di_confrontare_le_posizioni()
+    {
+        var engine = new PricingEngine();
+
+        var item = Item(19.99m, foil: true);
+        item.CardTraderProductId = 341396451;
+
+        var offers = new List<CardTraderMarketplaceProductDto>
+        {
+            Offer(19.26m, condition: "Slightly Played", foil: true), // non comparabile
+            Offer(20.22m, foil: true),
+            Offer(20.26m, foil: true),
+            Offer(20.27m, foil: true),
+            Offer(21.35m, foil: true)
+        };
+
+        // La mia inserzione come la vede il mercato: 19,99 € + 0,27 € di sovrapprezzo.
+        var mine = Offer(20.26m, userId: MyUserId, foil: true);
+        mine.Id = item.CardTraderProductId.Value;
+        offers.Add(mine);
+
+        var decision = engine.Evaluate(item, offers, Profile(NthLowestRule(1.01m, 25m, 3, -0.01m)), MyUserId);
+
+        decision.ReferencePrice.Should().Be(20.27m, "la terza offerta comparabile in vetrina");
+        decision.ProposedPrice.Should().Be(19.99m,
+            "20,26 € di vetrina, riportati al netto del sovrapprezzo, sono i 19,99 € che ho già");
+        decision.Outcome.Should().Be(PricingOutcome.NoChangeNeeded);
+        decision.Reason.Should().Contain("posizione 3");
+    }
+
+    [Fact]
+    public void Senza_la_mia_offerta_nel_feed_non_inventa_il_sovrapprezzo()
+    {
+        var engine = new PricingEngine();
+
+        var item = Item(19.99m, foil: true);
+        item.CardTraderProductId = 999999; // non presente fra le offerte
+
+        var offers = new List<CardTraderMarketplaceProductDto>
+        {
+            Offer(20.22m, foil: true),
+            Offer(20.26m, foil: true),
+            Offer(20.27m, foil: true)
+        };
+
+        var decision = engine.Evaluate(item, offers, Profile(NthLowestRule(1.01m, 25m, 3, -0.01m)), MyUserId);
+
+        decision.ProposedPrice.Should().Be(20.25m,
+            "senza fattore di conversione si resta sulla scala del venditore, e il riferimento " +
+            "non può essere l'offerta più cara");
+        decision.Reason.Should().Contain("non ricavabile");
+    }
+
+    /// <summary>
+    /// Se il prezzo è stato appena modificato a mano, il marketplace può ancora esporre il
+    /// valore vecchio e il rapporto risultare assurdo (osservato: prezzo di vetrina inferiore
+    /// a quello che incasso). In quel caso non si converte.
+    /// </summary>
+    [Fact]
+    public void Rapporto_implausibile_viene_ignorato()
+    {
+        var engine = new PricingEngine();
+
+        var item = Item(117.52m, foil: true);
+        item.CardTraderProductId = 424235992;
+
+        var stale = Offer(93.96m, userId: MyUserId, foil: true); // più basso del mio prezzo: impossibile
+        stale.Id = item.CardTraderProductId.Value;
+
+        var offers = new List<CardTraderMarketplaceProductDto>
+        {
+            stale,
+            Offer(100.64m, foil: true),
+            Offer(112.84m, foil: true),
+            Offer(149.16m, foil: true)
+        };
+
+        var decision = engine.Evaluate(item, offers, Profile(NthLowestRule(100.01m, 2000m, 3, -0.01m)), MyUserId);
+
+        decision.ProposedPrice.Should().Be(112.83m,
+            "senza conversione il riferimento resta grezzo, e non può essere l'offerta più cara");
+        decision.Reason.Should().Contain("non ricavabile");
     }
 }

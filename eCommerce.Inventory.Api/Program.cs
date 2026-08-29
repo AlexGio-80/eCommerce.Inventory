@@ -24,7 +24,33 @@ using OpenTelemetry.Trace;
 using Prometheus;
 using HealthChecks.UI;
 
+// Avviato come servizio Windows, il processo eredita come cartella corrente C:\Windows\System32,
+// non quella dell'eseguibile. Ogni percorso relativo di configurazione — il file di log, la
+// cartella dei backup — verrebbe quindi risolto lì dentro, dove l'account del servizio non ha
+// permesso di scrittura: il sink su file falliva in silenzio e l'applicazione girava senza
+// lasciare traccia. Va allineata prima di costruire l'host, perché il logger si configura subito.
+if (Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService())
+{
+    Directory.SetCurrentDirectory(AppContext.BaseDirectory);
+}
+
 var builder = WebApplication.CreateBuilder(args);
+
+// Serilog scarta in silenzio un sink che non riesce a inizializzarsi: se il servizio non ha
+// permesso di scrivere nella cartella dei log, l'applicazione gira senza lasciare traccia e il
+// problema è indistinguibile da "non è successo nulla". SelfLog scrive il motivo del fallimento
+// accanto all'eseguibile, così la diagnosi parte da un messaggio invece che da una cartella vuota.
+try
+{
+    var selfLogPath = Path.Combine(AppContext.BaseDirectory, "serilog-selflog.txt");
+    var selfLogWriter = TextWriter.Synchronized(new StreamWriter(selfLogPath, append: true));
+    Serilog.Debugging.SelfLog.Enable(selfLogWriter);
+}
+catch (Exception ex)
+{
+    // Se nemmeno questo è scrivibile resta la console: non deve impedire l'avvio.
+    Console.Error.WriteLine($"Impossibile abilitare Serilog SelfLog: {ex.Message}");
+}
 
 // Configure Serilog from appsettings.json (supports environment-specific configs)
 builder.Host.UseSerilog((context, services, configuration) => configuration

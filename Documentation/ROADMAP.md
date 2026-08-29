@@ -10,6 +10,30 @@ _Nessun task attivo al momento._
 
 ---
 
+## Completato (Sessione 2026-08-29)
+
+| Data | Voce |
+|------|------|
+| 2026-08-29 | Fix — **Confronto fra prezzo venditore e prezzi acquirente**: il motore ricava il fattore di conversione dalla propria inserzione nel feed e ragiona sulla posizione in vetrina |
+| 2026-08-29 | Feature — **Collocazione percentuale** al posto della posizione fissa, e riferimento che non può mai cadere sull'offerta più cara |
+| 2026-08-29 | Feature — **Guardrail asimmetrico** (+300% in salita, −25% in discesa) e **filtro di rapporto sulla mediana** sempre attivo contro prezzi di comodo e prezzi da neofita |
+| 2026-08-29 | Feature — **La vendita scala subito la giacenza locale**, con guardia sui webhook duplicati; niente più rivalutazioni sprecate su carte esaurite |
+| 2026-08-29 | Fix — **Log di produzione**: la cartella corrente di un servizio Windows è System32, il sink finiva lì. Corretti anche `publish.ps1` (SID invece del nome localizzato) e gli enricher inesistenti |
+
+---
+
+## Completato (Sessione 2026-08-28)
+
+| Data | Voce |
+|------|------|
+| 2026-08-28 | Fix — **Sincronizzazione inventario ripristinata**: ferma dal 03/12/2025 per un'eccezione su chiave duplicata nel lookup da `PendingListings`. Deriva recuperata: 282 articoli venduti da rimuovere, 192 carte da inserire, 203 quantità da riallineare |
+| 2026-08-28 | Fix — **I fallimenti parziali di sync non sono più riportati come successo**: l'esito complessivo e la metrica `ecommerce_sync_total` riflettono ora le sezioni fallite |
+| 2026-08-28 | Fix — **Log di produzione resi visibili**: `MinimumLevel` da `Warning` a `Information` con `Override` sui namespace di framework; rimosso il doppio sink File causato dal merge per indice degli array di configurazione |
+| 2026-08-28 | Fix — **Storico prezzi delle carte vendute preservato**: foreign key da `CASCADE` a `SET NULL` (migration `PreservaStoricoPrezziCarteVendute`) |
+| 2026-08-28 | Feature — **Dettaglio carta per carta delle esecuzioni dell'autopricer** nella scheda Storico, con filtro per esito |
+
+---
+
 ## Completato (Sessione 2026-08-20)
 
 | Data | Voce |
@@ -33,9 +57,11 @@ Tutti punti **preesistenti**, non introdotti dal lavoro sull'autopricer.
 
 ### Autopricer — taratura dopo le prime notti in simulazione
 
-- [ ] **Rivedere la posizione nella fascia 25–100 €**: la regola chiede la posizione 4, ma su quelle carte il mercato ha spesso 2–3 venditori comparabili, quindi molte valutazioni vengono saltate. Valutare se scendere a 2 o 3
-- [ ] **Caso limite offerte == posizione**: con esattamente 4 offerte e posizione 4 il motore prende comunque la più cara (fermato dal guardrail). Valutare se estendere il salto anche a questo caso
-- [ ] **Decidere quando uscire dal dry-run**: guardare la scheda Storico dopo qualche notte e confrontare le proposte con le proprie attese prima di attivare la scrittura reale
+- [x] ~~**Rivedere la posizione nella fascia 25–100 €**~~ — risolto il 2026-08-29 sostituendo l'ordinale con la collocazione percentuale
+- [x] ~~**Caso limite offerte == posizione**~~ — risolto il 2026-08-29: il riferimento non può più coincidere con l'offerta più cara, in nessuna modalità
+- [ ] **Decidere quando uscire dal dry-run**: la scheda Storico ha ora il dettaglio carta per carta con filtro per esito, quindi il confronto fra proposte e proprie attese si può fare direttamente dall'interfaccia
+- [ ] **Affinare i percentili guardando l'anteprima**: partenza a 15% sul bulk, 20% fra 1 e 25 €, 40% sopra i 25 €. L'analisi di sensibilità su 11 carte reali mostra che le carte davvero sottoprezzo danno lo stesso risultato dal 20% al 60% — il segnale è robusto — mentre il percentile decide sulle altre. Da notare che sui mercati profondi il percentile è più aggressivo del vecchio ordinale (su Overgrown Tomb si passa dalla terza alla quinta posizione)
+- [ ] **Valutare se i ribassi vadano concessi affatto**: con il percentile al 40% restano 5 carte su 11 con proposta in ribasso. Il guardrail le limita al 25%, ma si può anche disattivare `CanDecrease` per fascia se l'obiettivo è solo cogliere i rialzi
 
 ---
 

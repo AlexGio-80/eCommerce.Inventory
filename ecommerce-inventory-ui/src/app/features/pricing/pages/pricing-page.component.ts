@@ -18,7 +18,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { MatDividerModule } from '@angular/material/divider';
 import {
   PricingService, PricingProfile, PricingRule, PricingRunReport,
-  PricingRunSummary, CoverageReport
+  PricingRunSummary, CoverageReport, PriceChange, PRICING_OUTCOMES
 } from '../services/pricing.service';
 
 @Component({
@@ -98,9 +98,21 @@ import {
                   </mat-form-field>
 
                   <mat-form-field appearance="outline">
-                    <mat-label>Variazione massima per esecuzione (%)</mat-label>
-                    <input matInput type="number" step="1" [(ngModel)]="p.maxChangePercentPerRun">
-                    <mat-hint>Oltre questa soglia la variazione viene registrata ma non applicata</mat-hint>
+                    <mat-label>Aumento massimo per esecuzione (%)</mat-label>
+                    <input matInput type="number" step="1" [(ngModel)]="p.maxIncreasePercentPerRun">
+                    <mat-hint>Largo di proposito: un rialzo eccessivo lascia la carta invenduta e si corregge da solo</mat-hint>
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline">
+                    <mat-label>Ribasso massimo per esecuzione (%)</mat-label>
+                    <input matInput type="number" step="1" [(ngModel)]="p.maxDecreasePercentPerRun">
+                    <mat-hint>Stretto: una carta svenduta non si recupera</mat-hint>
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline">
+                    <mat-label>Rapporto massimo sulla mediana</mat-label>
+                    <input matInput type="number" step="0.5" [(ngModel)]="p.maxMedianRatio">
+                    <mat-hint>Scarta i prezzi di comodo e quelli irrealistici, anche con poche offerte</mat-hint>
                   </mat-form-field>
 
                   <mat-form-field appearance="outline">
@@ -160,7 +172,7 @@ import {
                 <table class="rules-table">
                   <thead>
                     <tr>
-                      <th>Da €</th><th>A €</th><th>Riferimento</th><th>Posizione</th>
+                      <th>Da €</th><th>A €</th><th>Riferimento</th><th>Posizione</th><th>Percentile</th>
                       <th>Scostamento €</th><th>Scostamento %</th>
                       <th>Può alzare</th><th>Può abbassare</th><th></th>
                     </tr>
@@ -176,9 +188,13 @@ import {
                           <option value="MedianOffer">Mediana</option>
                           <option value="AverageOffer">Media</option>
                           <option value="AverageOfLowestN">Media delle N più basse</option>
+                          <option value="PercentileOffer">Collocazione percentuale</option>
                         </select>
                       </td>
-                      <td><input type="number" [(ngModel)]="r.position" [ngModelOptions]="{standalone: true}"></td>
+                      <td><input type="number" [(ngModel)]="r.position" [ngModelOptions]="{standalone: true}"
+                                 [disabled]="r.referenceMode === 'PercentileOffer'"></td>
+                      <td><input type="number" step="1" [(ngModel)]="r.percentile" [ngModelOptions]="{standalone: true}"
+                                 [disabled]="r.referenceMode !== 'PercentileOffer'"></td>
                       <td><input type="number" step="0.01" [(ngModel)]="r.adjustmentAmount" [ngModelOptions]="{standalone: true}"></td>
                       <td><input type="number" step="0.1" [(ngModel)]="r.adjustmentPercent" [ngModelOptions]="{standalone: true}"></td>
                       <td class="center"><mat-checkbox [(ngModel)]="r.canIncrease" [ngModelOptions]="{standalone: true}"></mat-checkbox></td>
@@ -313,13 +329,67 @@ import {
                 <button mat-stroked-button (click)="loadRuns()">
                   <mat-icon>refresh</mat-icon> Aggiorna
                 </button>
+                <p class="hint">Clicca una esecuzione per vedere i calcoli carta per carta.</p>
                 <ag-grid-angular
                   class="ag-theme-quartz grid"
                   [rowData]="runs()"
                   [columnDefs]="runColumns"
                   [defaultColDef]="defaultColDef"
                   [pagination]="true"
-                  [paginationPageSize]="20">
+                  [paginationPageSize]="20"
+                  [rowSelection]="'single'"
+                  (rowClicked)="selectRun($event.data)">
+                </ag-grid-angular>
+              </mat-card-content>
+            </mat-card>
+
+            <!-- ---- dettaglio della esecuzione selezionata ---- -->
+            <mat-card class="detail-card" *ngIf="selectedRun() as run">
+              <mat-card-header>
+                <mat-card-title>
+                  Calcoli dell'esecuzione del {{ dateTime(run.startedAt) }}
+                </mat-card-title>
+                <mat-card-subtitle>
+                  {{ triggerLabel(run.trigger) }}<span *ngIf="run.dryRun"> · simulazione, nessun prezzo scritto su Card Trader</span>
+                </mat-card-subtitle>
+              </mat-card-header>
+              <mat-card-content>
+                <div class="field-row">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Esito</mat-label>
+                    <mat-select [(ngModel)]="changesOutcome" (selectionChange)="loadRunChanges()">
+                      <mat-option [value]="''">Tutti</mat-option>
+                      <mat-option *ngFor="let o of outcomes" [value]="o.value">{{ o.label }}</mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                  <button mat-stroked-button (click)="loadRunChanges()" [disabled]="loadingChanges()">
+                    <mat-icon>refresh</mat-icon> Aggiorna
+                  </button>
+                  <button mat-button (click)="closeRun()">
+                    <mat-icon>close</mat-icon> Chiudi
+                  </button>
+                  <mat-spinner diameter="28" *ngIf="loadingChanges()"></mat-spinner>
+                </div>
+
+                <p class="hint" *ngIf="!loadingChanges() && changesTotal() > changes().length">
+                  Mostrate le {{ changes().length }} variazioni di importo maggiore su {{ num(changesTotal()) }} totali.
+                  Restringi con il filtro per esito per vedere le altre.
+                </p>
+                <p class="hint" *ngIf="!loadingChanges() && changesTotal() > 0 && changesTotal() <= changes().length">
+                  {{ num(changesTotal()) }} carte valutate.
+                </p>
+                <p class="hint" *ngIf="!loadingChanges() && changesTotal() === 0">
+                  Nessuna carta con questo esito in questa esecuzione.
+                </p>
+
+                <ag-grid-angular
+                  *ngIf="changes().length > 0"
+                  class="ag-theme-quartz grid"
+                  [rowData]="changes()"
+                  [columnDefs]="changeColumns"
+                  [defaultColDef]="defaultColDef"
+                  [pagination]="true"
+                  [paginationPageSize]="25">
                 </ag-grid-angular>
               </mat-card-content>
             </mat-card>
@@ -341,6 +411,15 @@ export class PricingPageComponent implements OnInit {
   loadingProfile = signal(true);
   loadError = signal<string | null>(null);
 
+  // Dettaglio della esecuzione selezionata nello storico: è il registro su cui si fanno
+  // le verifiche a campione prima di togliere il dry-run.
+  selectedRun = signal<PricingRunSummary | null>(null);
+  changes = signal<PriceChange[]>([]);
+  changesTotal = signal(0);
+  loadingChanges = signal(false);
+  changesOutcome = '';
+  readonly outcomes = PRICING_OUTCOMES;
+
   previewLimit = 15;
   private gridApi?: GridApi;
 
@@ -360,6 +439,13 @@ export class PricingPageComponent implements OnInit {
     {
       field: 'outcome', headerName: 'Esito', width: 165,
       valueFormatter: p => this.outcomeLabel(p.value)
+    },
+    {
+      // La riga sopravvive alla carta: senza questa colonna una valutazione riferita a una carta
+      // ormai venduta sarebbe indistinguibile da una ancora a magazzino.
+      field: 'inventoryItemId', headerName: 'Magazzino', width: 130,
+      valueFormatter: p => p.value == null ? 'Non più a magazzino' : 'Presente',
+      cellStyle: p => p.value == null ? { color: '#8a6d3b' } : null
     },
     { field: 'reason', headerName: 'Motivo', flex: 3, minWidth: 300, tooltipField: 'reason' }
   ];
@@ -424,6 +510,48 @@ export class PricingPageComponent implements OnInit {
     });
   }
 
+  /** Apre il dettaglio di una esecuzione dallo storico. */
+  selectRun(run: PricingRunSummary | undefined): void {
+    if (!run) return;
+
+    // Ricliccare la riga già aperta non deve azzerare il filtro scelto.
+    if (this.selectedRun()?.id !== run.id) {
+      this.changesOutcome = '';
+      this.changes.set([]);
+      this.changesTotal.set(0);
+    }
+
+    this.selectedRun.set(run);
+    this.loadRunChanges();
+  }
+
+  closeRun(): void {
+    this.selectedRun.set(null);
+    this.changes.set([]);
+    this.changesTotal.set(0);
+    this.changesOutcome = '';
+  }
+
+  loadRunChanges(): void {
+    const run = this.selectedRun();
+    if (!run) return;
+
+    this.loadingChanges.set(true);
+    this.pricingService.getRunChanges(run.id, this.changesOutcome || undefined).subscribe({
+      next: page => {
+        this.changes.set(page.items);
+        this.changesTotal.set(page.totalCount);
+        this.loadingChanges.set(false);
+      },
+      error: () => {
+        this.loadingChanges.set(false);
+        this.changes.set([]);
+        this.changesTotal.set(0);
+        this.snackBar.open('Impossibile caricare i calcoli di questa esecuzione', 'Chiudi', { duration: 5000 });
+      }
+    });
+  }
+
   runPreview(): void {
     const p = this.profile();
     if (!p) return;
@@ -473,7 +601,7 @@ export class PricingPageComponent implements OnInit {
     if (!p) return;
 
     p.rules.push({
-      fromPrice: 0.02, toPrice: 1, referenceMode: 'NthLowestOffer', position: 2,
+      fromPrice: 0.02, toPrice: 1, referenceMode: 'PercentileOffer', position: 2, percentile: 15,
       adjustmentAmount: -0.01, adjustmentPercent: 0,
       canIncrease: true, canDecrease: true, priority: p.rules.length, isActive: true
     });
@@ -531,7 +659,7 @@ export class PricingPageComponent implements OnInit {
     return value == null ? '' : value.toLocaleString('it-IT');
   }
 
-  private dateTime(value: string): string {
+  dateTime(value: string): string {
     return value ? new Date(value).toLocaleString('it-IT') : '';
   }
 
@@ -549,7 +677,7 @@ export class PricingPageComponent implements OnInit {
     return labels[outcome] ?? outcome;
   }
 
-  private triggerLabel(trigger: string): string {
+  triggerLabel(trigger: string): string {
     const labels: Record<string, string> = {
       Scheduled: 'Notturna',
       OrderReceived: 'Vendita',

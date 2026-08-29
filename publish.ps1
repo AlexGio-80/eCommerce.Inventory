@@ -134,13 +134,21 @@ if (-not (Test-Path $logsDir)) {
     New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
 }
 
-# Grant full control to NetworkService using icacls
+# Grant full control to NetworkService using icacls.
+# Si usa il SID noto *S-1-5-20 e non il nome "NT AUTHORITY\NETWORK SERVICE": il nome e'
+# localizzato (su Windows italiano e' "NT AUTHORITY\SERVIZIO DI RETE") e icacls fallisce con
+# "Non e' stato effettuato alcun mapping tra nomi di account e ID di sicurezza". Con l'errore
+# soppresso il deploy sembrava riuscito mentre il servizio restava senza permessi di scrittura,
+# e la cartella logs restava vuota.
 Write-Host "[*] Setting permissions for NetworkService..." -ForegroundColor Yellow
-try {
-    icacls $apiPublishDir /grant "NT AUTHORITY\NETWORK SERVICE:(OI)(CI)F" /T /Q 2>$null | Out-Null
+icacls $apiPublishDir /grant "*S-1-5-20:(OI)(CI)F" /T /Q | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    # icacls segnala gli errori con l'exit code, non sollevando eccezioni: senza questo
+    # controllo il fallimento passerebbe inosservato.
+    Write-Warning "[!] icacls ha restituito exit code $LASTEXITCODE : il servizio potrebbe non riuscire a scrivere i log in $logsDir"
 }
-catch {
-    Write-Warning "[!] Could not set NetworkService permissions. Service may have issues writing logs."
+else {
+    Write-Host "[+] Permissions granted to NetworkService (S-1-5-20)" -ForegroundColor Green
 }
 
 # Install/Update Windows Service

@@ -66,7 +66,10 @@ public class AutoPricingController : ControllerBase
         profile.IsActive = request.IsActive ?? profile.IsActive;
         profile.DryRun = request.DryRun ?? profile.DryRun;
         profile.MinPrice = request.MinPrice ?? profile.MinPrice;
-        profile.MaxChangePercentPerRun = request.MaxChangePercentPerRun ?? profile.MaxChangePercentPerRun;
+        profile.MaxIncreasePercentPerRun = request.MaxIncreasePercentPerRun ?? profile.MaxIncreasePercentPerRun;
+        profile.MaxDecreasePercentPerRun = request.MaxDecreasePercentPerRun ?? profile.MaxDecreasePercentPerRun;
+        profile.MaxMedianRatio = request.MaxMedianRatio ?? profile.MaxMedianRatio;
+        profile.MinOffersForOutlierRejection = request.MinOffersForOutlierRejection ?? profile.MinOffersForOutlierRejection;
         profile.IncludeProSellers = request.IncludeProSellers ?? profile.IncludeProSellers;
         profile.IncludeNormalSellers = request.IncludeNormalSellers ?? profile.IncludeNormalSellers;
         profile.ExcludeVacationSellers = request.ExcludeVacationSellers ?? profile.ExcludeVacationSellers;
@@ -90,6 +93,7 @@ public class AutoPricingController : ControllerBase
                     ToPrice = r.ToPrice,
                     ReferenceMode = r.ReferenceMode,
                     Position = r.Position,
+                    Percentile = r.Percentile,
                     AdjustmentAmount = r.AdjustmentAmount,
                     AdjustmentPercent = r.AdjustmentPercent,
                     CanIncrease = r.CanIncrease,
@@ -198,18 +202,47 @@ public class AutoPricingController : ControllerBase
         })));
     }
 
+    /// <summary>
+    /// Dettaglio carta per carta di una esecuzione: è il registro su cui si fanno le verifiche a campione
+    /// prima di togliere il dry-run. Il filtro per esito serve perché su una esecuzione notturna le righe
+    /// sono migliaia e il tetto sul numero restituito mostrerebbe solo le variazioni più grandi.
+    /// </summary>
     [HttpGet("runs/{id:int}/changes")]
-    public async Task<IActionResult> GetRunChanges(int id, [FromQuery] int limit = 500, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetRunChanges(
+        int id,
+        [FromQuery] int limit = 500,
+        [FromQuery] string? outcome = null,
+        CancellationToken cancellationToken = default)
     {
-        var changes = await _context.PriceChangeLogs
+        var query = _context.PriceChangeLogs
             .AsNoTracking()
-            .Where(c => c.PricingRunLogId == id)
+            .Where(c => c.PricingRunLogId == id);
+
+        if (!string.IsNullOrWhiteSpace(outcome))
+        {
+            if (!Enum.TryParse<PricingOutcome>(outcome, ignoreCase: true, out var parsedOutcome))
+            {
+                return BadRequest(ApiResponse<object>.ErrorResult(
+                    $"Esito '{outcome}' non riconosciuto. Valori ammessi: {string.Join(", ", Enum.GetNames<PricingOutcome>())}."));
+            }
+
+            query = query.Where(c => c.Outcome == parsedOutcome);
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var changes = await query
             .Include(c => c.Blueprint)
             .OrderByDescending(c => Math.Abs(c.ProposedPrice - c.OldPrice))
             .Take(Math.Clamp(limit, 1, 2000))
             .ToListAsync(cancellationToken);
 
-        return Ok(ApiResponse<object>.SuccessResult(changes.Select(MapChange)));
+        return Ok(ApiResponse<object>.SuccessResult(new
+        {
+            TotalCount = totalCount,
+            ReturnedCount = changes.Count,
+            Items = changes.Select(MapChange)
+        }));
     }
 
     /// <summary>
@@ -337,7 +370,9 @@ public class AutoPricingController : ControllerBase
         p.IsActive,
         p.DryRun,
         p.MinPrice,
-        p.MaxChangePercentPerRun,
+        p.MaxIncreasePercentPerRun,
+        p.MaxDecreasePercentPerRun,
+        p.MaxMedianRatio,
         p.IncludeProSellers,
         p.IncludeNormalSellers,
         p.ExcludeVacationSellers,
@@ -357,6 +392,7 @@ public class AutoPricingController : ControllerBase
             r.ToPrice,
             ReferenceMode = r.ReferenceMode.ToString(),
             r.Position,
+            r.Percentile,
             r.AdjustmentAmount,
             r.AdjustmentPercent,
             r.CanIncrease,
@@ -390,7 +426,10 @@ public class UpdateProfileRequest
     public bool? IsActive { get; set; }
     public bool? DryRun { get; set; }
     public decimal? MinPrice { get; set; }
-    public decimal? MaxChangePercentPerRun { get; set; }
+    public decimal? MaxIncreasePercentPerRun { get; set; }
+    public decimal? MaxDecreasePercentPerRun { get; set; }
+    public decimal? MaxMedianRatio { get; set; }
+    public int? MinOffersForOutlierRejection { get; set; }
     public bool? IncludeProSellers { get; set; }
     public bool? IncludeNormalSellers { get; set; }
     public bool? ExcludeVacationSellers { get; set; }
@@ -408,6 +447,7 @@ public class RuleRequest
     public decimal ToPrice { get; set; }
     public PriceReferenceMode ReferenceMode { get; set; } = PriceReferenceMode.NthLowestOffer;
     public int Position { get; set; } = 1;
+    public decimal Percentile { get; set; } = 30m;
     public decimal AdjustmentAmount { get; set; }
     public decimal AdjustmentPercent { get; set; }
     public bool CanIncrease { get; set; } = true;

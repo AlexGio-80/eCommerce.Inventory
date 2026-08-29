@@ -178,3 +178,14 @@ mat-card {
 .state-error {
   border-left: 4px solid #c62828;
 }
+
+/* --- Dettaglio di una esecuzione dello storico --- */
+.detail-card {
+  margin-top: 16px;
+  border-left: 4px solid #1976d2;
+}
+
+/* Nello storico la riga è cliccabile: apre i calcoli carta per carta. */
+.detail-card .grid {
+  height: 480px;
+}

@@ -515,7 +515,12 @@ public static class SeedData
             IsActive = true,
             DryRun = true,
             MinPrice = 0.05m,
-            MaxChangePercentPerRun = 50m,
+
+            // Asimmetrico: un rialzo sbagliato lascia la carta invenduta e si corregge da solo
+            // all'esecuzione successiva, un ribasso sbagliato la fa comprare subito al prezzo
+            // sbagliato. La difesa dai prezzi anomali sta nei filtri sulle offerte, non qui.
+            MaxIncreasePercentPerRun = 300m,
+            MaxDecreasePercentPerRun = 25m,
 
             // L'autopricer nativo era impostato su venditori europei, americani e canadesi,
             // inclusi i non professionali.
@@ -527,29 +532,34 @@ public static class SeedData
 
             EnableOutlierRejection = true,
             OutlierMadThreshold = 3.0m,
-            MinOffersForOutlierRejection = 5,
+            MinOffersForOutlierRejection = 3,
+            MaxMedianRatio = 4m,
             MinComparableOffers = 2
         };
 
-        // Le quattro fasce configurate nell'autopricer nativo: posizione fra i venditori
-        // e un centesimo sotto il riferimento.
-        var bands = new (decimal From, decimal To, int Position)[]
+        // Le quattro fasce, espresse come collocazione percentuale sulla scaletta anziché come
+        // numero d'ordine. Le offerte comparabili misurate sulle carte reali vanno da 3 a 29:
+        // con un ordinale fisso la stessa regola significa "stai in fondo" su un mercato profondo
+        // e "sii il più caro" su uno sottile, e in quattro casi su undici cadeva esattamente
+        // sull'offerta massima. Le percentuali sono un punto di partenza da tarare guardando
+        // l'anteprima, non valori definitivi.
+        var bands = new (decimal From, decimal To, decimal Percentile)[]
         {
-            (0.02m, 1.00m, 2),
-            (1.01m, 25.00m, 3),
-            (25.01m, 100.00m, 4),
-            (100.01m, 2000.00m, 3)
+            (0.02m, 1.00m, 15m),
+            (1.01m, 25.00m, 20m),
+            (25.01m, 100.00m, 40m),
+            (100.01m, 2000.00m, 40m)
         };
 
         var priority = 0;
-        foreach (var (from, to, position) in bands)
+        foreach (var (from, to, percentile) in bands)
         {
             profile.Rules.Add(new PricingRule
             {
                 FromPrice = from,
                 ToPrice = to,
-                ReferenceMode = PriceReferenceMode.NthLowestOffer,
-                Position = position,
+                ReferenceMode = PriceReferenceMode.PercentileOffer,
+                Percentile = percentile,
                 AdjustmentAmount = -0.01m,
                 AdjustmentPercent = 0m,
                 CanIncrease = true,

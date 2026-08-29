@@ -119,8 +119,39 @@ public class CardTraderSyncOrchestrator
             }
 
             response.SyncEndTime = DateTime.UtcNow;
-            _logger.LogInformation("Sync completed successfully. Added: {Added}, Updated: {Updated}, Failed: {Failed}, Skipped: {Skipped}, Duration: {Duration}ms",
-                response.Added, response.Updated, response.Failed, response.Skipped, response.Duration.TotalMilliseconds);
+
+            // Ogni sezione cattura le proprie eccezioni per non far cadere le altre, ma finché l'esito
+            // complessivo ignora quegli errori una sezione può fallire in blocco e l'esecuzione risulta
+            // comunque riuscita: è così che la sincronizzazione dell'inventario è rimasta rotta per mesi
+            // senza che nulla lo segnalasse. L'esito generale deve riflettere i fallimenti parziali.
+            var failedSections = new (string Name, SyncEntityResultDto Result)[]
+                {
+                    ("Games", response.Games),
+                    ("Categories", response.Categories),
+                    ("Expansions", response.Expansions),
+                    ("Blueprints", response.Blueprints),
+                    ("Properties", response.Properties),
+                    ("Inventory", response.Inventory),
+                    ("Orders", response.Orders),
+                    ("Analytics", response.Analytics)
+                }
+                .Where(s => s.Result.ErrorMessage != null)
+                .ToList();
+
+            if (failedSections.Count > 0)
+            {
+                response.ErrorMessage = "Sezioni fallite: " + string.Join("; ",
+                    failedSections.Select(s => $"{s.Name}: {s.Result.ErrorMessage}"));
+
+                _logger.LogError(
+                    "Sync completata con {FailedSectionCount} sezioni fallite su 8. {Detail}",
+                    failedSections.Count, response.ErrorMessage);
+            }
+            else
+            {
+                _logger.LogInformation("Sync completed successfully. Added: {Added}, Updated: {Updated}, Failed: {Failed}, Skipped: {Skipped}, Duration: {Duration}ms",
+                    response.Added, response.Updated, response.Failed, response.Skipped, response.Duration.TotalMilliseconds);
+            }
         }
         catch (Exception ex)
         {
@@ -488,13 +519,20 @@ public class CardTraderSyncOrchestrator
             .Where(i => i.CardTraderProductId.HasValue)
             .ToDictionary(i => i.CardTraderProductId!.Value);
 
-        // Lookup Tag e PurchasePrice da PendingListings per propagarli su InventoryItem (non arrivano dall'API di CT)
-        var pendingDataByCardTraderProductId = await _dbContext.PendingListings
-            .AsNoTracking()
-            .Where(pl => pl.CardTraderProductId.HasValue
-                         && products.Select(p => (int?)p.Id).Contains(pl.CardTraderProductId))
-            .Select(pl => new { pl.CardTraderProductId, pl.Tag, pl.PurchasePrice })
-            .ToDictionaryAsync(pl => pl.CardTraderProductId!.Value, pl => pl, cancellationToken);
+        // Lookup Tag e PurchasePrice da PendingListings per propagarli su InventoryItem (non arrivano dall'API di CT).
+        // Lo stesso prodotto di Card Trader può comparire su più PendingListings (ripubblicazioni, riallineamenti
+        // manuali): raggrupparlo è obbligatorio, perché un ToDictionary diretto solleva un'eccezione sulla chiave
+        // doppia e fa abortire l'intera sincronizzazione dell'inventario prima ancora di iniziare l'upsert.
+        // A parità di prodotto vince la registrazione più recente, che è quella che riflette l'ultima messa in vendita.
+        var incomingProductIds = products.Select(p => (int?)p.Id).ToList();
+        var pendingDataByCardTraderProductId = (await _dbContext.PendingListings
+                .AsNoTracking()
+                .Where(pl => pl.CardTraderProductId.HasValue
+                             && incomingProductIds.Contains(pl.CardTraderProductId))
+                .Select(pl => new { pl.CardTraderProductId, pl.Tag, pl.PurchasePrice, pl.CreatedAt })
+                .ToListAsync(cancellationToken))
+            .GroupBy(pl => pl.CardTraderProductId!.Value)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(pl => pl.CreatedAt).First());
 
         var processedProductIds = new HashSet<int>();
 
