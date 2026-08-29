@@ -52,7 +52,7 @@ Tutti punti **preesistenti**, non introdotti dal lavoro sull'autopricer.
 
 - [x] ~~**`POST /api/auth/register` è aperto a chiunque**~~ — risolto il 2026-08-29: l'endpoint è stato rimosso del tutto insieme a `RegisterAsync`. L'utente è uno solo; account nuovi si creano a mano sul database
 - [x] ~~**Il ruolo non è verificato da nessuna parte**~~ — risolto il 2026-08-29 con un criterio globale (`FallbackPolicy`) che richiede utente autenticato **e** ruolo `Admin` su ogni endpoint. Le eccezioni sono esplicite: login, webhook Card Trader (autenticato dalla firma HMAC), `/health`, `/health-ui`, `/metrics`, hub SignalR
-- [ ] **Cambiare la password di `admin`**: è ancora `admin123`, valore scritto nella documentazione di un repository GitHub **pubblico**. Il meccanismo ora c'è (`POST /api/auth/change-password`, serve la password attuale, minimo 12 caratteri); resta da eseguirlo in produzione
+- [ ] **Cambiare la password di `admin`**: finché non viene fatto resta valida quella pubblicata nella documentazione di un repository GitHub **pubblico**. Il meccanismo ora c'è (`Scripts/Cambia-PasswordAdmin.ps1`, che chiama `POST /api/auth/change-password`: serve la password attuale, minimo 12 caratteri); resta da eseguirlo in produzione
 - [ ] **Rimuovere l'utente `testuser`**, residuo dei test iniziali — `DELETE FROM Users WHERE Username = 'testuser'` sul database di produzione
 
 > Nota sull'esposizione: l'API ascolta su `localhost:5152`, ma l'endpoint webhook dev'essere raggiungibile da Card Trader, quindi un varco verso l'esterno probabilmente esiste. Da verificare com'è instradato.
