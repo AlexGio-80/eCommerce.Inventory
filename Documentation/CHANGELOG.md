@@ -9,6 +9,101 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-08-29] Fix — L'autopricer confrontava prezzi su scale diverse e cadeva sui prezzi di comodo
+
+#### Problema
+
+Verifiche a campione col simulatore hanno mostrato proposte incomprensibili: Overgrown Tomb a 19,99 € riceveva una proposta di rialzo pur essendo già in terza posizione fra offerte comparabili, e Sigarda's Aid, su un mercato di 73–96 €, veniva valutata **1019,61 €**.
+
+**Causa 1 — due grandezze diverse messe a confronto.** `InventoryItem.ListingPrice` è il prezzo che incassa il venditore, quello dell'export. Le offerte del marketplace sono invece prezzi lato acquirente, comprensivi del sovrapprezzo di Card Trader: la nostra stessa inserzione compare nel feed a un valore più alto di quello impostato. Misurato prendendo i due endpoint nello stesso istante:
+
+| carta | export (venditore) | marketplace (acquirente) |
+|---|---|---|
+| Overgrown Tomb foil | 19,99 € | 20,26 € |
+| The Ozolith | 63,07 € | 63,62 € |
+| Propaganda | 61,98 € | 62,62 € |
+
+Confrontando 19,99 € con i 20,2x € dei concorrenti il motore si credeva più economico di quanto fosse e proponeva un rialzo. Il sovrapprezzo non è una percentuale fissa (osservato fra 0,76% e 1,35%).
+
+**Causa 2 — l'ordinale fisso degenera sui mercati sottili.** Le offerte comparabili misurate sulle carte reali vanno da 3 a 29. Con "posizione 4" fissa, in **4 casi su 11** il riferimento cadeva esattamente sull'offerta più cara: la regola non posizionava più, diceva "sii il più caro".
+
+**Causa 3 — lo scarto degli outlier non girava dove serviva.** `MinOffersForOutlierRejection` era 5. Sigarda's Aid aveva 4 offerte comparabili, quindi il filtro non partiva affatto e il prezzo di comodo da 1019 € arrivava intatto al riferimento. Con 5 offerte lo avrebbe scartato senza esitazione: quel valore sta a 55 deviazioni dalla mediana contro una soglia di 3.
+
+#### Soluzione Implementata
+
+**Conversione fra le due scale.** Il motore individua la propria inserzione nel feed tramite il `CardTraderProductId` e ne ricava il rapporto fra prezzo esposto e prezzo incassato. Non serve conoscere la formula della commissione: il fattore è esatto per definizione e si aggiorna da solo. Le regole ragionano sulla posizione in vetrina, il risultato viene riportato al prezzo venditore prima di essere scritto. Se il rapporto risulta implausibile — prezzo esposto inferiore a quello incassato, tipico quando il prezzo è appena stato cambiato a mano — non si converte e la motivazione lo dichiara.
+
+**Collocazione percentuale al posto della posizione fissa.** Nuova modalità `PercentileOffer`: "collocati al N% della scaletta" invece di "la N-esima più bassa". Si adatta da sola alla profondità del mercato. Le regole esistenti sono state convertite: 15% sul bulk, 20% nella fascia 1–25 €, 40% sopra i 25 €.
+
+**Il riferimento non può mai essere l'offerta più cara**, in nessuna modalità.
+
+**Due difese contro i prezzi anomali, complementari.** Un filtro di rapporto sulla mediana (oltre 4× o sotto un quarto) che gira **a qualunque numero di offerte**, più lo scarto statistico con MAD la cui soglia scende da 5 a 3 offerte. Il primo è grossolano ma funziona dove la statistica non arriva; intercetta le due patologie descritte dall'utente: i prezzi messi altissimi per non sbagliare e quelli irrealistici dei venditori alle prime armi.
+
+**Guardrail asimmetrico.** `MaxChangePercentPerRun` si sdoppia in `MaxIncreasePercentPerRun` (300%) e `MaxDecreasePercentPerRun` (25%). Le due direzioni non hanno lo stesso costo se sbagliate: un rialzo eccessivo lascia la carta invenduta e si corregge all'esecuzione successiva, un ribasso eccessivo la fa comprare subito al prezzo sbagliato e non si recupera. La difesa dai prezzi anomali non è più affidata a questa soglia, quindi può essere generosa in salita — che è la ragione principale per cui l'autopricer esiste.
+
+**Motivazioni leggibili.** Ogni riga ora ricostruisce il percorso: posizione attuale in vetrina, sovrapprezzo, offerta presa a riferimento, scostamenti, riconversione.
+
+#### Verifica
+
+Effetto misurato sulle carte reali, con export e marketplace letti in diretta:
+
+```
+carta                  mio      PRIMA       ADESSO      esito
+Sigarda's Aid          75.72    1019.61  →    78.29     applicata (+3%)
+Sonic Screwdriver      60.56      75.18  →    57.69     applicata (-5%)
+Mystic Remora          62.14      79.36  →    78.69     applicata (+27%)
+The Ozolith            63.07      84.03  →    85.93     applicata (+37%)
+Mountain               68.46      87.18  →    27.15     BLOCCATA (-60%)
+```
+
+I rialzi corroborati da un gruppo di venditori concordi restano; il caso da 1019 € sparisce; su Mountain, mercato di 4 offerte sparse fra 27 e 87 €, il guardrail in discesa ferma la proposta.
+
+#### Note Tecniche
+
+- Analisi di sensibilità sul percentile eseguita su 11 carte reali: le carte davvero sottoprezzo danno lo stesso risultato dal 20% al 60%, segno che il segnale è robusto e non un artefatto della taratura. Le percentuali restano da affinare guardando l'anteprima.
+- Sui mercati profondi il percentile è **più aggressivo** dell'ordinale precedente (su Overgrown Tomb si passa dalla terza alla quinta posizione circa): è un cambio di postura voluto, non un effetto collaterale.
+- La migration `PercentileEGuardrailAsimmetrico` è stata scritta a mano: quella generata da EF rinominava `MaxChangePercentPerRun` in `MaxMedianRatio`, portandosi dietro il valore 50 (che come rapporto disattiva il filtro) e lasciando i due guardrail a zero, cioè senza limite.
+
+---
+
+### [2026-08-29] Feature — La vendita scala subito la giacenza e non spreca rivalutazioni
+
+#### Problema
+
+La quantità a magazzino veniva scritta solo dall'export durante la sincronizzazione notturna: nessuno la scalava alla vendita. Per tutta la giornata l'inventario mostrava quindi carte già vendute. Il controllo "riprezza solo se resta qualcosa", presente nel webhook, leggeva quel dato vecchio e risultava sempre vero: anche vendendo l'ultima copia si spendeva una chiamata al marketplace — risorsa limitata a 20 al minuto — per riprezzare una carta che non c'era più. A dry-run spento si sarebbe arrivati a scrivere un prezzo su un'inserzione inesistente.
+
+#### Soluzione Implementata
+
+All'arrivo del webhook `order.create` la giacenza locale viene scalata delle quantità vendute, confrontate per `product_id` e non per blueprint, così regge anche il caso di due inserzioni della stessa carta in condizioni diverse.
+
+Due protezioni:
+- **Idempotenza**: l'esistenza dell'ordine viene verificata *prima* della sincronizzazione, che fa insert-o-update e dopo renderebbe indistinguibile un ordine già visto. Card Trader può recapitare lo stesso webhook più volte, e un doppio scarico farebbe sparire dall'inventario una carta con una sola copia.
+- **Mai sotto zero**: se le copie vendute superano quelle registrate, il dato era già disallineato e portarlo in negativo aggiungerebbe un secondo errore.
+
+Il rischio complessivo resta basso perché la verità è l'export, che la sincronizzazione riscrive in valore assoluto: un errore qui si riassorbe la notte successiva e non si accumula. Per lo stesso motivo l'operazione non può far fallire la registrazione dell'ordine.
+
+Il controllo a valle è stato semplificato per leggere la giacenza già aggiornata: sottrarre di nuovo le quantità dell'ordine le avrebbe contate due volte, saltando rivalutazioni ancora dovute.
+
+---
+
+### [2026-08-29] Fix — I log di produzione finivano in C:\Windows\System32
+
+#### Problema
+
+Dopo la correzione del livello di log del 28/08 la cartella `Publish/api/logs` restava comunque vuota, anche con i permessi corretti.
+
+La causa è stata individuata grazie al `SelfLog` di Serilog aggiunto nella stessa sessione: **un servizio Windows eredita come cartella corrente `C:\Windows\System32`**, non quella dell'eseguibile. Il percorso relativo `logs/ecommerce-inventory-.txt` veniva quindi risolto lì dentro, dove l'account del servizio non ha permesso di scrittura. È anche la spiegazione del file `taffel-inventory-20251126.txt` trovato in `System32\logs`. L'assunzione che `UseWindowsService()` riallineasse la working directory era sbagliata.
+
+Un secondo difetto, sempre segnalato dal SelfLog: gli enricher `WithThreadId` e `WithProcessId` richiedono pacchetti non referenziati, e Serilog li ignorava.
+
+#### Soluzione Implementata
+
+`Program.cs` allinea la cartella corrente a `AppContext.BaseDirectory` quando il processo gira come servizio, prima di costruire l'host. Corregge tutti i percorsi relativi, non solo quello dei log: anche `Backup:BackupPath` ne beneficia. Rimossi dalla configurazione gli enricher non disponibili.
+
+Corretto inoltre `publish.ps1`, che concedeva i permessi con `icacls` usando il nome `NT AUTHORITY\NETWORK SERVICE`: su Windows italiano non si risolve, e l'errore era ingoiato tre volte (`2>$null`, `| Out-Null`, e un `catch` che non scatta mai perché `icacls` segnala con l'exit code). Ora usa il SID `*S-1-5-20` e verifica `$LASTEXITCODE`.
+
+---
+
 ### [2026-08-28] Fix — La sincronizzazione dell'inventario era ferma da dicembre 2025 senza segnalarlo
 
 #### Problema

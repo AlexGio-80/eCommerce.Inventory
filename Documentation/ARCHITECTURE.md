@@ -361,6 +361,10 @@ Serilog configurato per:
 
 Log file: `logs/ecommerce-inventory-.txt`
 
+**Percorsi relativi e servizio Windows**: un servizio eredita come cartella corrente `C:\Windows\System32`, non quella dell'eseguibile. `Program.cs` la riallinea a `AppContext.BaseDirectory` quando rileva di girare come servizio, prima di costruire l'host: senza, il sink su file — e ogni altro percorso relativo, backup compresi — verrebbe risolto in System32, dove l'account del servizio non può scrivere, e il sink fallirebbe in silenzio.
+
+**Diagnostica**: Serilog scarta senza avvisare i sink che non riescono a inizializzarsi. `SelfLog` è abilitato su `serilog-selflog.txt` accanto all'eseguibile, ed è il primo posto dove guardare quando i log non compaiono.
+
 **Livelli**: `Debug` in sviluppo, `Information` in produzione con `Override` a `Warning` sui namespace `Microsoft`, `Microsoft.EntityFrameworkCore` e `System`. Il livello di produzione non va alzato a `Warning`: il sink su file non crea il file finché non si verifica un evento di quel livello, e i riepiloghi delle operazioni in background (sincronizzazione, autopricer) sono a livello `Information` — alzarlo equivale a rinunciare alla diagnostica di ciò che gira di notte.
 
 **Il sink File va dichiarato solo nei file per ambiente**, mai in `appsettings.json`: gli array di configurazione in .NET si fondono per indice e non si concatenano, quindi un sink nella base più uno nel file per ambiente producono due sink sullo stesso percorso, di cui il secondo non riesce ad acquisire il lock e ripiega su un file con suffisso `_001`.
@@ -406,6 +410,10 @@ L'architettura è progettata per aggiungere facilmente nuovi marketplace:
 | 2026-08-28 | I lookup costruiti da `PendingListings` raggruppano per `CardTraderProductId` invece di usare `ToDictionary` diretto | Lo stesso prodotto compare su più `PendingListings` (ripubblicazioni, riallineamenti): la chiave duplicata solleva un'eccezione che aborte l'intera sezione di sincronizzazione prima ancora dell'upsert. Vince la registrazione con `CreatedAt` più recente |
 | 2026-08-28 | Un fallimento di sezione marca l'intera sincronizzazione come fallita | Ogni sezione cattura le proprie eccezioni per non far cadere le altre; senza propagazione all'esito complessivo un fallimento totale risultava `success` in log e metriche |
 | 2026-08-28 | `PriceChangeLog` sopravvive all'`InventoryItem` (`SET NULL`, non `CASCADE`) | Il registro delle valutazioni serve a verificare a posteriori se il prezzo proposto era corretto: cancellarlo insieme alla carta venduta ne annullerebbe lo scopo proprio sui casi più istruttivi. La carta resta identificabile da `BlueprintId` |
+| 2026-08-29 | Le regole di pricing ragionano sui prezzi di vetrina, non su quelli incassati | `ListingPrice` viene dall'export ed è il netto venditore, mentre il marketplace espone prezzi comprensivi del sovrapprezzo di Card Trader: sono due scale diverse. La posizione fra i venditori è un fatto di vetrina, quindi si calcola lì e si riconverte solo alla fine, quando si deve scrivere |
+| 2026-08-29 | Il fattore di conversione si ricava dalla propria offerta nel feed | Il sovrapprezzo non è documentato né proporzionale (osservato fra 0,76% e 1,35%). Dedurlo dalla propria inserzione lo rende esatto e autoaggiornante |
+| 2026-08-29 | Collocazione percentuale al posto dell'ordinale, e mai sull'offerta più cara | La profondità di mercato varia da 3 a 29 offerte comparabili: un ordinale fisso degenera in "sii il più caro" sui mercati sottili |
+| 2026-08-29 | Guardrail asimmetrico fra rialzo e ribasso | I due errori non costano uguale: il rialzo è reversibile alla prossima esecuzione, il ribasso si traduce in una vendita immediata |
 
 ---
 

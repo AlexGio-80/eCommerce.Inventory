@@ -9,7 +9,7 @@
 ## Stato Attuale
 
 **Branch principale:** `master`
-**Ultimo aggiornamento:** 2026-08-28 (sessione 10 — sync inventario ripristinata, log di produzione resi visibili, dettaglio autopricer)
+**Ultimo aggiornamento:** 2026-08-29 (sessione 11 — taratura autopricer: percentile, guardrail asimmetrico, conversione prezzi; giacenza scalata alla vendita; log finalmente scritti)
 **Fase:** In produzione (uso quotidiano attivo)
 
 ### Cosa funziona adesso
@@ -39,6 +39,8 @@
 - Icone espansioni e date rilascio da Scryfall
 - **Ricerca blueprint per Collector Number e Nome Italiano** nel selector "Nuovo Prodotto": il campo di ricerca ora matcha anche `collector_number` (da FixedProperties JSON) e il nome italiano (popolato lazy via Scryfall `localized.it` durante la sync blueprint); l'autocomplete mostra il nome italiano sotto quello inglese quando disponibile
 - **PurchasePrice preservato dopo sync notturna**: il mapper `MapProductToInventoryItem` ora accetta un `purchasePrice` opzionale da `PendingListing` e lo propaga sull'`InventoryItem` creato dalla sync; sia `InventorySyncService.SyncProductsAsync` che `CardTraderSyncOrchestrator.UpsertInventoryAsync` fanno lookup del `PurchasePrice` (e `Tag`) da `PendingListing` per il `CardTraderProductId` corrispondente. Risolve il problema per cui il giorno dopo la sync il campo `PurchasePrice` risultava vuoto nel pannello "Le mie inserzioni".
+- **Autopricer ritarato (2026-08-29)**: il motore confrontava il prezzo venditore con i prezzi acquirente del marketplace, e si posizionava per numero d'ordine su mercati profondi da 3 a 29 offerte. Ora converte fra le due scale ricavando il fattore dalla propria inserzione nel feed, si colloca per percentile, non può mai finire sull'offerta più cara, e ha un guardrail asimmetrico (+300% / −25%)
+- **La vendita scala subito la giacenza (2026-08-29)**: il webhook `order.create` sottrae le quantità vendute, con guardia sui webhook duplicati. Prima l'inventario mostrava carte già vendute fino alla notte
 - **Sincronizzazione inventario riparata (2026-08-28)**: era ferma dal 03/12/2025 per un'eccezione su chiave duplicata nel lookup da `PendingListings`, e nessuno se ne era accorto perché i fallimenti di sezione venivano riportati come successo e in produzione non veniva scritto alcun log. Ora cancella le carte vendute e inserisce quelle messe in vendita dal sito di Card Trader
 - **Dettaglio carta per carta nella scheda Storico dell'autopricer**: cliccando un'esecuzione si apre la griglia dei calcoli (prezzo attuale, proposto, variazione, offerte comparabili, anomale scartate, esito, motivazione), con filtro per esito e colonna che segnala le carte non più a magazzino. È lo strumento per le verifiche a campione prima di uscire dal dry-run
 - **Campo Descrizione Card Trader in "Nuovo Prodotto"**: scrittura e lettura del campo `description` di Card Trader (es. "Timbro dei nazionali Italiani"), sostituisce il campo "Posizione" nel form. `GET /api/v2/products/{id}` per leggere la descrizione esistente; payload CREATE/UPDATE su CT ora include `description`; `Description` su `PendingListing` e `InventoryItem` (migration `20260820202633_AddDescriptionToEntities`, applicata). Form UI: "Posizione" → "Descrizione" con hint "Descrizione visibile su Card Trader".
@@ -63,6 +65,11 @@
 
 | Data | Decisione | Perché |
 |------|-----------|--------|
+| 2026-08-29 | Il fattore di conversione fra prezzo esposto e prezzo incassato si ricava dalla propria inserzione nel feed | Il sovrapprezzo di Card Trader non è documentato e non è una percentuale fissa (osservato fra 0,76% e 1,35%). Ricavarlo dalla propria offerta lo rende esatto per definizione e autoaggiornante, senza reverse engineering |
+| 2026-08-29 | Collocazione percentuale al posto della posizione fissa | Le offerte comparabili sulle carte reali vanno da 3 a 29: con un ordinale fisso la stessa regola cadeva sull'offerta più cara in 4 casi su 11 |
+| 2026-08-29 | Guardrail asimmetrico, largo in salita e stretto in discesa | Un rialzo sbagliato lascia la carta invenduta e si corregge all'esecuzione successiva; un ribasso sbagliato la fa comprare subito al prezzo sbagliato ed è irreversibile |
+| 2026-08-29 | Filtro di rapporto sulla mediana affiancato alla MAD | La MAD ha bisogno di qualche punto per essere affidabile; un rapporto no. Sui mercati sottili è lì che un singolo prezzo di comodo fa più danno |
+| 2026-08-29 | La giacenza si scala al webhook, non si aspetta la sincronizzazione | L'export resta la verità e riscrive valori assoluti, quindi un errore si riassorbe la notte dopo senza accumularsi; nel frattempo l'inventario è corretto e non si sprecano chiamate su carte esaurite |
 | 2026-08-28 | `FK_PriceChangeLogs_InventoryItems` da `CASCADE` a `SET NULL`, non cancellazione logica degli `InventoryItem` | La cancellazione logica avrebbe richiesto di rivedere ogni query sull'inventario (sync, autopricer, copertura) per un guadagno che qui non serve. Con `SET NULL` la riga di registro sopravvive alla carta venduta e resta identificabile da `BlueprintId` |
 | 2026-08-28 | I fallimenti di sezione marcano l'intera sincronizzazione come fallita | Ogni sezione cattura le proprie eccezioni per non far cadere le altre, ma finché l'esito complessivo li ignorava una sezione poteva fallire in blocco e risultare `success`: è così che l'inventario è rimasto fermo per otto mesi senza segnalazioni |
 | 2026-08-28 | In produzione Serilog a `Information` con `Override` sui namespace di framework, invece di `Warning` globale | A `Warning` il sink su file non creava nemmeno il file e i riepiloghi di sync e autopricer sparivano; abbassare il livello senza `Override` avrebbe riempito il disco col rumore di EF (163 MB in due ore osservati in sviluppo) |
@@ -99,6 +106,8 @@
 - La migration EF ufficiale più recente è `20260519073801_AddIsUpdateToPendingListings`
 - **Nuova migration `20260820000000_AddItalianNameToBlueprints`**: aggiunge colonna `ItalianName nvarchar(max) NULL` a `Blueprints`. Applicata via SQL diretto (vedi `Migrazioni/20260820000000_AddItalianNameToBlueprints.sql`). Snapshot aggiornato. Non ha `.Designer.cs`.
 - **Nuova migration `20260820202633_AddDescriptionToEntities`**: aggiunge `Description nvarchar(max) NULL` a `PendingListings` e `InventoryItems`; rimuove `Location` da `PendingListings` (sostituito da Description nel form "Nuovo Prodotto"). Applicata via `dotnet ef database update` in dev; in produzione applicare via SQL: `ALTER TABLE PendingListings DROP COLUMN Location; ALTER TABLE PendingListings ADD Description nvarchar(max) NULL; ALTER TABLE InventoryItems ADD Description nvarchar(max) NULL`. Snapshot aggiornato.
+- **⚠️ In produzione le migration NON partono da sole**: il blocco `MigrateAsync()` in `Program.cs` è dentro `if (app.Environment.IsDevelopment())`. Vanno applicate a mano prima di avviare la nuova versione, generando lo script con `dotnet ef migrations script <da> <a>`. Se si dimentica, i binari nuovi girano contro uno schema vecchio e falliscono a runtime
+- **Nuova migration `20260829041648_PercentileEGuardrailAsimmetrico`**: sostituisce `MaxChangePercentPerRun` con `MaxIncreasePercentPerRun`/`MaxDecreasePercentPerRun`, aggiunge `MaxMedianRatio` su `PricingProfiles` e `Percentile` su `PricingRules`, e converte le regole esistenti alla modalità percentuale. Scritta a mano: quella generata da EF rinominava la vecchia colonna portandosi dietro un valore sbagliato e lasciava i guardrail a zero
 - **Nuova migration `20260828071742_PreservaStoricoPrezziCarteVendute`**: rende nullable `PriceChangeLogs.InventoryItemId` e ricrea la foreign key verso `InventoryItems` con `ON DELETE SET NULL` al posto di `CASCADE`. Creata con `dotnet ef migrations add` e verificata su una copia ripristinata dal backup. Non comporta perdita di dati. Si applica da sola all'avvio del servizio (`Program.cs` esegue le migration pendenti), quindi lo schema si aggiorna prima che la sincronizzazione notturna possa cancellare qualcosa
 - **⚠️ La prima sincronizzazione dopo il deploy cancella 282 articoli** venduti fra dicembre 2025 e agosto 2026 e ne inserisce 192: è il recupero di otto mesi di deriva, non una perdita di dati. Fare un backup manuale prima del primo avvio
 - **⚠️ `POST /api/cardtrader/sync/products` e `/orders` non scrivono a database**: recuperano i dati da Card Trader e restituiscono solo un conteggio. Per una sincronizzazione reale serve `POST /api/cardtrader/sync` con i flag della sezione desiderata (`{"syncInventory": true, ...}`). Trappola già costata tempo in diagnosi
@@ -164,6 +173,7 @@ Poi [descrivi il task da fare].
 | Frontend (prod) | `http://inventory.local` (IIS) |
 | Frontend (dev) | `http://localhost:4200` |
 | Log backend | `Publish/api/logs/` (livello `Information` in produzione, `Debug` in dev) |
+| Diagnostica Serilog | `Publish/api/serilog-selflog.txt` — riporta il motivo per cui un sink non parte |
 | Servizio Windows | `eCommerce.Inventory`, avvio automatico, account `NT AUTHORITY\NetworkService` |
 
 > Per diagnosticare la sincronizzazione senza toccare la produzione: ripristinare l'ultimo `.bak` da `E:\Applicazioni\eCommerce.Inventory\Backups` come database separato, puntarci `appsettings.Development.json`, disattivare `Backup:Enabled` e lanciare `POST /api/cardtrader/sync` sull'istanza di sviluppo (porta 5155). È la procedura usata il 2026-08-28.

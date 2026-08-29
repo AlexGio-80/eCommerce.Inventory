@@ -10,6 +10,18 @@ _Nessun task attivo al momento._
 
 ---
 
+## Completato (Sessione 2026-08-29)
+
+| Data | Voce |
+|------|------|
+| 2026-08-29 | Fix — **Confronto fra prezzo venditore e prezzi acquirente**: il motore ricava il fattore di conversione dalla propria inserzione nel feed e ragiona sulla posizione in vetrina |
+| 2026-08-29 | Feature — **Collocazione percentuale** al posto della posizione fissa, e riferimento che non può mai cadere sull'offerta più cara |
+| 2026-08-29 | Feature — **Guardrail asimmetrico** (+300% in salita, −25% in discesa) e **filtro di rapporto sulla mediana** sempre attivo contro prezzi di comodo e prezzi da neofita |
+| 2026-08-29 | Feature — **La vendita scala subito la giacenza locale**, con guardia sui webhook duplicati; niente più rivalutazioni sprecate su carte esaurite |
+| 2026-08-29 | Fix — **Log di produzione**: la cartella corrente di un servizio Windows è System32, il sink finiva lì. Corretti anche `publish.ps1` (SID invece del nome localizzato) e gli enricher inesistenti |
+
+---
+
 ## Completato (Sessione 2026-08-28)
 
 | Data | Voce |
@@ -45,10 +57,11 @@ Tutti punti **preesistenti**, non introdotti dal lavoro sull'autopricer.
 
 ### Autopricer — taratura dopo le prime notti in simulazione
 
-- [ ] **Rivedere la posizione nella fascia 25–100 €**: la regola chiede la posizione 4, ma su quelle carte il mercato ha spesso 2–3 venditori comparabili, quindi molte valutazioni vengono saltate. Valutare se scendere a 2 o 3
-- [ ] **Caso limite offerte == posizione**: con esattamente 4 offerte e posizione 4 il motore prende comunque la più cara (fermato dal guardrail). Valutare se estendere il salto anche a questo caso
+- [x] ~~**Rivedere la posizione nella fascia 25–100 €**~~ — risolto il 2026-08-29 sostituendo l'ordinale con la collocazione percentuale
+- [x] ~~**Caso limite offerte == posizione**~~ — risolto il 2026-08-29: il riferimento non può più coincidere con l'offerta più cara, in nessuna modalità
 - [ ] **Decidere quando uscire dal dry-run**: la scheda Storico ha ora il dettaglio carta per carta con filtro per esito, quindi il confronto fra proposte e proprie attese si può fare direttamente dall'interfaccia
-- [ ] **Rivedere `MaxChangePercentPerRun`, oggi al 50%**: nell'esecuzione del 28/08 ha bloccato 3.604 valutazioni su 4.799, di cui **3.585 volevano salire, in media del +254%**. È l'effetto della prima esecuzione su bulk fermo al prezzo minimo di 5 centesimi. O si alza la soglia, o si lascia convergere in più notti: da decidere dopo aver guardato il dettaglio delle bloccate
+- [ ] **Affinare i percentili guardando l'anteprima**: partenza a 15% sul bulk, 20% fra 1 e 25 €, 40% sopra i 25 €. L'analisi di sensibilità su 11 carte reali mostra che le carte davvero sottoprezzo danno lo stesso risultato dal 20% al 60% — il segnale è robusto — mentre il percentile decide sulle altre. Da notare che sui mercati profondi il percentile è più aggressivo del vecchio ordinale (su Overgrown Tomb si passa dalla terza alla quinta posizione)
+- [ ] **Valutare se i ribassi vadano concessi affatto**: con il percentile al 40% restano 5 carte su 11 con proposta in ribasso. Il guardrail le limita al 25%, ma si può anche disattivare `CanDecrease` per fascia se l'obiettivo è solo cogliere i rialzi
 
 ---
 
