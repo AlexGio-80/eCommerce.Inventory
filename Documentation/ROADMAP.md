@@ -14,6 +14,7 @@ _Nessun task attivo al momento._
 
 | Data | Voce |
 |------|------|
+| 2026-08-29 | Sicurezza — **API chiusa per difetto**: criterio globale con ruolo `Admin` richiesto su ogni endpoint, registrazione rimossa, password del seed non più fissa nel codice, endpoint di cambio password |
 | 2026-08-29 | Fix — **Confronto fra prezzo venditore e prezzi acquirente**: il motore ricava il fattore di conversione dalla propria inserzione nel feed e ragiona sulla posizione in vetrina |
 | 2026-08-29 | Feature — **Collocazione percentuale** al posto della posizione fissa, e riferimento che non può mai cadere sull'offerta più cara |
 | 2026-08-29 | Feature — **Guardrail asimmetrico** (+300% in salita, −25% in discesa) e **filtro di rapporto sulla mediana** sempre attivo contro prezzi di comodo e prezzi da neofita |
@@ -45,16 +46,18 @@ _Nessun task attivo al momento._
 
 ## Da Fare
 
-### Sicurezza (emerso il 2026-08-27, da affrontare insieme)
+### Sicurezza (emerso il 2026-08-27, codice chiuso il 2026-08-29)
 
 Tutti punti **preesistenti**, non introdotti dal lavoro sull'autopricer.
 
-- [ ] **`POST /api/auth/register` è aperto a chiunque**: `AuthController` non ha l'attributo `[Authorize]`, quindi chiunque raggiunga l'API può crearsi un account senza credenziali. Da decidere: chiuderlo dietro autenticazione oppure disabilitarlo del tutto, dato che l'utente è uno solo
-- [ ] **Il ruolo non è verificato da nessuna parte**: non esiste un solo `[Authorize(Roles = "Admin")]` nel progetto. Gli account creati da `register` hanno ruolo `User` ma accedono a tutto — inventario, ordini, autopricer compreso. Combinato col punto precedente significa che chi raggiunge l'API ha pieno accesso al magazzino
-- [ ] **Cambiare la password di `admin`**: oggi è `admin123`, cioè il valore scritto nella documentazione di un repository GitHub **pubblico**
-- [ ] **Rimuovere l'utente `testuser`**, residuo dei test iniziali
+- [x] ~~**`POST /api/auth/register` è aperto a chiunque**~~ — risolto il 2026-08-29: l'endpoint è stato rimosso del tutto insieme a `RegisterAsync`. L'utente è uno solo; account nuovi si creano a mano sul database
+- [x] ~~**Il ruolo non è verificato da nessuna parte**~~ — risolto il 2026-08-29 con un criterio globale (`FallbackPolicy`) che richiede utente autenticato **e** ruolo `Admin` su ogni endpoint. Le eccezioni sono esplicite: login, webhook Card Trader (autenticato dalla firma HMAC), `/health`, `/health-ui`, `/metrics`, hub SignalR
+- [ ] **Cambiare la password di `admin`**: è ancora `admin123`, valore scritto nella documentazione di un repository GitHub **pubblico**. Il meccanismo ora c'è (`POST /api/auth/change-password`, serve la password attuale, minimo 12 caratteri); resta da eseguirlo in produzione
+- [ ] **Rimuovere l'utente `testuser`**, residuo dei test iniziali — `DELETE FROM Users WHERE Username = 'testuser'` sul database di produzione
 
 > Nota sull'esposizione: l'API ascolta su `localhost:5152`, ma l'endpoint webhook dev'essere raggiungibile da Card Trader, quindi un varco verso l'esterno probabilmente esiste. Da verificare com'è instradato.
+
+> Nota sui token: il JWT non è revocabile e dura 7 giorni. Un token emesso prima del cambio password resta valido fino a scadenza.
 
 ### Autopricer — taratura dopo le prime notti in simulazione
 

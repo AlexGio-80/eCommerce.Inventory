@@ -13,7 +13,7 @@
 **Fase:** In produzione (uso quotidiano attivo)
 
 ### Cosa funziona adesso
-- Autenticazione JWT completa (login `admin` / `admin123` di default)
+- Autenticazione JWT completa, utente unico `admin`. **Ogni endpoint richiede un utente autenticato con ruolo `Admin`** per criterio globale (`FallbackPolicy` in `Program.cs`); le eccezioni sono dichiarate una per una: login, webhook Card Trader (autenticato dalla firma HMAC), `/health`, `/health-ui`, `/metrics` e l'hub SignalR. La registrazione non esiste più: account nuovi si creano a mano sul database. La password si cambia da `POST /api/auth/change-password` (serve quella attuale, minimo 12 caratteri)
 - Sincronizzazione Card Trader: Games, Expansions, Blueprints, Products, Orders
 - Sincronizzazione notturna schedulata (`ScheduledProductSyncWorker`)
 - Frontend Angular completo su `http://inventory.local` (IIS)
@@ -48,11 +48,13 @@
 
 ### Cosa è in sospeso / da verificare
 
-- **⚠️ Punti di sicurezza aperti (2026-08-27)**, tutti preesistenti — dettaglio e decisioni da prendere in ROADMAP.md, sezione "Da Fare":
-  - `POST /api/auth/register` è raggiungibile **senza autenticazione** (`AuthController` non ha `[Authorize]`)
-  - Nessun `[Authorize(Roles = "Admin")]` nel progetto: qualunque utente autenticato accede a tutto
-  - La password di `admin` è `admin123`, valore scritto nella documentazione di un repository pubblico
-  - Utente `testuser` residuo dai test iniziali
+- **Punti di sicurezza — chiusi nel codice il 2026-08-29**, restano due operazioni sul database di produzione:
+  - **Risolto**: `POST /api/auth/register` non esiste più (era raggiungibile senza autenticazione). `RegisterAsync` rimosso anche da `IAuthService`
+  - **Risolto**: il ruolo `Admin` è ora richiesto su ogni endpoint dal criterio globale, non più affidato a un `[Authorize]` per controller (ne avevano due su dieci)
+  - **Risolto**: il seed non contiene più la password `admin123`; il primo utente si crea solo se è configurata `Seed:AdminPassword`, altrimenti il seed lo salta e logga un warning
+  - **Da fare in produzione**: cambiare la password di `admin` con `POST /api/auth/change-password` — finché non è fatto, la password è quella pubblicata sul repository
+  - **Da fare in produzione**: eliminare l'utente `testuser` residuo dai test iniziali
+  - Nota: i token già emessi restano validi fino a scadenza (7 giorni) anche dopo il cambio password — il JWT non è revocabile
   - **Risolto il 2026-08-27**: la chiave di firma JWT non è più nei file versionati, ed esiste una validazione all'avvio che impedisce di partire con il segnaposto o con una chiave troppo corta
 - **FIXED (2026-08-24)**: Disallineamento `TotaleAcquistato` tra Tag e Espansione nel report Redditività — causato da query Tag che usava raggruppamento diretto su `PendingListings.Tag` (includeva record con Blueprint/Expansion NULL) vs query Espansione che usava navigation properties con INNER JOIN implicito (escludeva quei record). Risolto uniformando `GetTagExpansionProfitability` a usare join espliciti (`from pl join bp join ex`) come già fatto per `rimanentePerExpansion`.
 - **Redis non è installato sulla macchina**: `Redis:Enabled` è ora `false`. Tutto il codice di caching resta in piedi e funzionante — per riattivarlo serve installare Redis e rimettere il flag a `true`. Da valutare: il caching riduce le chiamate API durante la sync notturna, ma richiede di mantenere un servizio in più
@@ -117,7 +119,8 @@
 - Il backfill Tag (`POST /api/cardtrader/orders/backfill-tags`) ha copertura parziale
 - Il file `debug_expansion_{id}.csv` viene generato da `ExpansionAnalyticsService` — non committare
 - L'AI Grading usa un mock service: Ximilar richiede abbonamento a pagamento
-- Il seed crea sempre un utente `admin` — la logica controlla che non duplichi
+- **Il seed crea l'utente `admin` solo se `Seed:AdminPassword` è configurata** (e solo in Development, dove girano i dati dimostrativi). Senza quella chiave logga un warning e non crea nessuno: prima usava una password fissa, pubblicata nella documentazione di un repository pubblico. Su un database vuoto, quindi, va impostata in `appsettings.Development.json` o nei user secrets prima del primo avvio
+- **Ogni endpoint nuovo nasce protetto**: il criterio globale in `Program.cs` richiede utente autenticato con ruolo `Admin`. Un endpoint che deve stare aperto (probe, webhook, callback) va marcato esplicitamente con `[AllowAnonymous]`, ed è il punto in cui fermarsi a chiedersi che cosa lo autentica al posto del token
 - **⚠️ L'autopricer nasce in dry-run**: il profilo predefinito ha `DryRun = true` e non modifica alcun prezzo. Si attiva dall'interruttore nella scheda Regole, o via `PUT /api/pricing/profiles/{id}`. In produzione `AutoPricing:Enabled` e `AutoPricing:RepriceOnOrder` sono `true`, quindi il worker gira: finché il profilo è in dry-run calcola e registra senza scrivere
 - **⚠️ Migration con colonne bool**: EF le aggiunge con default `false`, quindi un profilo già a database non eredita il default definito in C#. Dopo una migration di questo tipo serve un `UPDATE` esplicito sulle righe esistenti
 - **⚠️ I servizi one-shot chiudono il processo**: `PopulateItalianNamesService` e `SealedProductPriceService` terminano con `Environment.Exit(0)`. La guard clause sul flag precede l'`Exit`, quindi con flag `false` sono innocui — ma **non vanno mai abilitati in `appsettings.Production.json`**, pena lo spegnimento del servizio Windows a ogni avvio. Vanno lanciati on-demand dagli endpoint dedicati (es. `POST /api/expansions/sync-sealed-prices`)

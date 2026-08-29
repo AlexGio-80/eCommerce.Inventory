@@ -42,32 +42,34 @@ public class AuthService : IAuthService
         };
     }
 
-    public async Task<AuthResponseDto> RegisterAsync(RegisterDto registerDto)
+    /// <summary>
+    /// Lunghezza minima della nuova password. Dodici caratteri perché l'unica difesa contro
+    /// un tentativo automatico è la password stessa: non c'è blocco account dopo N errori.
+    /// </summary>
+    private const int MinimumPasswordLength = 12;
+
+    public async Task ChangePasswordAsync(string username, ChangePasswordDto changePasswordDto)
     {
-        if (await _context.Users.AnyAsync(u => u.Username == registerDto.Username))
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+
+        if (user == null || !BCrypt.Net.BCrypt.Verify(changePasswordDto.CurrentPassword, user.PasswordHash))
         {
-            throw new InvalidOperationException("Username already exists");
+            throw new UnauthorizedAccessException("Current password is not valid");
         }
 
-        var user = new User
+        if (changePasswordDto.NewPassword.Length < MinimumPasswordLength)
         {
-            Username = registerDto.Username,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(registerDto.Password),
-            Role = "User"
-        };
+            throw new InvalidOperationException(
+                $"La nuova password deve essere lunga almeno {MinimumPasswordLength} caratteri");
+        }
 
-        _context.Users.Add(user);
+        if (changePasswordDto.NewPassword == changePasswordDto.CurrentPassword)
+        {
+            throw new InvalidOperationException("La nuova password deve essere diversa da quella attuale");
+        }
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(changePasswordDto.NewPassword);
         await _context.SaveChangesAsync(default);
-
-        var token = GenerateJwtToken(user);
-
-        return new AuthResponseDto
-        {
-            Token = token,
-            Username = user.Username,
-            Role = user.Role,
-            ExpiresIn = 604800 // 7 days
-        };
     }
 
     private string GenerateJwtToken(User user)

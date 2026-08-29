@@ -167,6 +167,18 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
+// Chiuso per difetto: ogni endpoint richiede un utente autenticato con ruolo Admin, e le
+// eccezioni si dichiarano una per una con [AllowAnonymous]. Prima valeva il contrario —
+// solo due controller su dieci avevano [Authorize] — quindi bastava raggiungere l'API per
+// leggere e modificare tutto il magazzino.
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .RequireRole("Admin")
+        .Build();
+});
+
 // Register MediatR for CQRS command handling
 builder.Services.AddMediatR(config =>
     config.RegisterServicesFromAssembly(typeof(eCommerce.Inventory.Application.Commands.ProcessCardTraderWebhookCommand).Assembly));
@@ -431,7 +443,7 @@ using (var scope = app.Services.CreateScope())
         if (app.Environment.IsDevelopment())
         {
             await eCommerce.Inventory.Infrastructure.Persistence.SeedData
-                .InitializeAsync(dbContext, logger);
+                .InitializeAsync(dbContext, logger, app.Configuration["Seed:AdminPassword"]);
         }
     }
     catch (Exception ex)
@@ -486,6 +498,9 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // Health check endpoints
+// Anonimi per scelta: le probe del servizio Windows e gli scraper non hanno un token.
+// Espongono stato dei componenti e volumi di magazzino, quindi vanno protetti a livello
+// di rete se un giorno l'API venisse esposta oltre localhost.
 app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
 {
     ResponseWriter = async (context, report) =>
@@ -513,14 +528,16 @@ app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks
         [HealthStatus.Degraded] = StatusCodes.Status200OK,
         [HealthStatus.Unhealthy] = StatusCodes.Status503ServiceUnavailable
     }
-});
-app.MapHealthChecksUI(options => options.UIPath = "/health-ui");
+}).AllowAnonymous();
+app.MapHealthChecksUI(options => options.UIPath = "/health-ui").AllowAnonymous();
 
 // Prometheus metrics endpoint - Use MapMetrics() for minimal API (NOT UseMetricServer)
-app.MapMetrics();
+app.MapMetrics().AllowAnonymous();
 
 app.MapControllers();
-app.MapHub<eCommerce.Inventory.Api.Hubs.NotificationHub>("/notificationHub");
+// Il client SignalR non allega il token: la connessione resta anonima, ma l'hub si limita a
+// diffondere avanzamento delle sync e notifiche, senza esporre dati di magazzino.
+app.MapHub<eCommerce.Inventory.Api.Hubs.NotificationHub>("/notificationHub").AllowAnonymous();
 
 try
 {

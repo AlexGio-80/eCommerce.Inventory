@@ -2,6 +2,7 @@ using eCommerce.Inventory.Application.Commands;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.DTOs;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace eCommerce.Inventory.Api.Controllers;
@@ -12,6 +13,9 @@ namespace eCommerce.Inventory.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
+// Chiama Card Trader, che non ha un token dell'applicazione: l'autenticazione qui è la firma
+// HMAC del payload, verificata a ogni richiesta da WebhookSignatureVerificationService.
+[AllowAnonymous]
 public class CardTraderWebhooksController : ControllerBase
 {
     private readonly IMediator _mediator;

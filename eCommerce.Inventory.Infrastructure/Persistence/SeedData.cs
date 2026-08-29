@@ -15,7 +15,12 @@ public static class SeedData
     /// Da non eseguire in produzione, dove l'inventario arriva da Card Trader — il profilo di
     /// pricing, che invece serve ovunque, si crea con <see cref="SeedDefaultPricingProfileAsync"/>.
     /// </summary>
-    public static async Task InitializeAsync(ApplicationDbContext context, ILogger logger)
+    /// <param name="adminPassword">
+    /// Password del primo utente <c>admin</c>, letta da configurazione (<c>Seed:AdminPassword</c>).
+    /// Se manca, l'utente non viene creato: il valore fisso di prima era pubblicato nella
+    /// documentazione del repository, quindi non era un default ma una password nota a tutti.
+    /// </param>
+    public static async Task InitializeAsync(ApplicationDbContext context, ILogger logger, string? adminPassword = null)
     {
         try
         {
@@ -483,15 +488,24 @@ public static class SeedData
             // Seed Default User
             if (!context.Users.Any(u => u.Username == "admin"))
             {
-                var adminUser = new User
+                if (string.IsNullOrWhiteSpace(adminPassword))
                 {
-                    Username = "admin",
-                    PasswordHash = BCrypt.Net.BCrypt.HashPassword("admin123"),
-                    Role = "Admin"
-                };
-                context.Users.Add(adminUser);
-                await context.SaveChangesAsync();
-                logger.LogInformation("Seeded default admin user");
+                    logger.LogWarning(
+                        "Utente admin non creato: manca Seed:AdminPassword in configurazione. " +
+                        "Impostarla in appsettings.Development.json (o nei user secrets) e riavviare.");
+                }
+                else
+                {
+                    var adminUser = new User
+                    {
+                        Username = "admin",
+                        PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
+                        Role = "Admin"
+                    };
+                    context.Users.Add(adminUser);
+                    await context.SaveChangesAsync();
+                    logger.LogInformation("Seeded default admin user");
+                }
             }
 
             logger.LogInformation("Database seed completed successfully");

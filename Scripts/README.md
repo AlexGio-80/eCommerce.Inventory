@@ -1,4 +1,38 @@
+# Script di utilità
+
+- [`Cambia-PasswordAdmin.ps1`](#cambia-passwordadminps1) — cambia la password di un utente
+- [`BulkImportOrders.ps1`](#bulk-orders-import-script) — importa gli ordini storici da Card Trader
+
+---
+
+## Cambia-PasswordAdmin.ps1
+
+Cambia la password di un utente chiamando `POST /api/auth/change-password`. Le password si
+digitano nascoste (`Read-Host -AsSecureString`), quindi non restano nella cronologia di
+PowerShell né su disco. Serve la password attuale: lo script non la scavalca.
+
+```powershell
+cd Scripts
+.\Cambia-PasswordAdmin.ps1                                        # produzione, utente admin
+.\Cambia-PasswordAdmin.ps1 -ApiUrl http://localhost:5155          # sviluppo
+```
+
+Requisiti: API in esecuzione, minimo 12 caratteri per la password nuova.
+
+I token già emessi restano validi fino a scadenza (7 giorni): dopo il cambio serve rifare il
+login nel browser, ma una sessione aperta altrove non viene chiusa. Non esiste un recupero
+password: se la password attuale è perduta, l'unica strada è scrivere a mano un hash BCrypt
+in `Users.PasswordHash`.
+
+---
+
 # Bulk Orders Import Script
+
+> **Da aggiornare prima del prossimo uso (2026-08-29).** Dal 2026-08-29 ogni endpoint dell'API
+> richiede un token con ruolo `Admin`: questo script chiama `/api/cardtrader/orders/sync` senza
+> autenticazione e riceverebbe `401`. Serve un login iniziale e l'header
+> `Authorization: Bearer <token>` su ogni richiesta — vedi `Cambia-PasswordAdmin.ps1` per il
+> giro di login. Non è stato modificato perché è un'importazione storica già eseguita.
 
 ## Overview
 This PowerShell script imports historical orders from Card Trader API day-by-day from January 1, 2013 to today.

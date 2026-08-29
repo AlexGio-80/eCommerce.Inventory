@@ -9,6 +9,45 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-08-29] Sicurezza — L'API è chiusa per difetto
+
+#### Problema
+
+Chi raggiungeva l'API aveva pieno accesso al magazzino, senza credenziali. Tre cose separate concorrevano:
+
+`[Authorize]` era presente su due controller su dieci — grading e autopricer. Inventario, ordini, espansioni, inserzioni, reportistica e tutti gli endpoint di sincronizzazione Card Trader rispondevano a chiunque. Non c'era un criterio globale: la protezione dipendeva dal ricordarsi l'attributo controller per controller, ed era stata dimenticata quasi ovunque.
+
+`POST /api/auth/register` era aperto e non richiedeva nulla: bastava una richiesta per ottenere un account e un token validi. Il ruolo assegnato era `User`, ma il ruolo non veniva verificato da nessuna parte — nel progetto non esisteva un solo `[Authorize(Roles = "Admin")]` — quindi non limitava niente.
+
+La password di `admin` era `admin123`, scritta nel seed e ripetuta nella documentazione di un repository pubblico.
+
+L'API ascolta su `localhost:5152`, il che riduce la superficie ma non la annulla: l'endpoint webhook dev'essere raggiungibile da Card Trader, quindi un instradamento dall'esterno con ogni probabilità esiste.
+
+#### Soluzione Implementata
+
+**Il criterio si è invertito.** Un `FallbackPolicy` in `Program.cs` richiede utente autenticato con ruolo `Admin` su ogni endpoint; le eccezioni si dichiarano una per una con `[AllowAnonymous]`. È la differenza fra dimenticare un attributo e lasciare un endpoint aperto, e dimenticarlo e ritrovarsi un 401 in faccia al primo tentativo. Restano anonimi, ciascuno per un motivo dichiarato nel codice: il login; il webhook Card Trader, che è autenticato dalla firma HMAC del payload e non da un token nostro; `/health`, `/health-ui` e `/metrics`, che le probe interrogano senza credenziali; l'hub SignalR, il cui client non allega il token e che si limita a diffondere avanzamento delle sync.
+
+**La registrazione è stata rimossa**, non protetta: l'applicazione ha un solo utente, e un endpoint che crea account non è una funzionalità che serviva. Via anche `RegisterAsync` da `IAuthService` e `RegisterDto`. Il frontend non lo usava.
+
+**Il seed non contiene più una password.** Il primo utente `admin` si crea solo se è configurata `Seed:AdminPassword`; altrimenti il seed lo salta e logga un warning che spiega dove metterla. Una password fissa nel codice di un repository pubblico non è un default, è una credenziale nota a tutti.
+
+**Nuovo `POST /api/auth/change-password`**, autenticato, che chiede la password attuale — così un token rubato da solo non basta a chiudere fuori il proprietario dell'account — e impone almeno 12 caratteri, perché non esiste blocco account dopo N tentativi.
+
+#### Verifica
+
+Cinque test nuovi in `Unit/Services/AuthServiceTests.cs`, suite completa a 68 test verdi. Il primo test è quello che conta davvero: valida il token emesso dal login con gli stessi parametri di `Program.cs` e verifica `IsInRole("Admin")`, cioè il controllo esatto che fa ASP.NET. Se il ruolo non sopravvivesse al giro di andata e ritorno fra le due mappature di claim, il criterio globale chiuderebbe fuori l'unico utente dalla propria applicazione.
+
+#### Note Tecniche
+
+- Il JWT non è revocabile e dura 7 giorni: i token emessi prima del cambio password restano validi fino a scadenza
+- `AuthService` firma con `Encoding.ASCII`, `Program.cs` valida con `Encoding.UTF8`. Sulle chiavi ASCII i byte coincidono, quindi oggi funziona; una chiave con caratteri non ASCII romperebbe la validazione
+- Restano due operazioni da fare sul database di produzione, che nessun deploy può fare al posto dell'utente: cambiare la password di `admin` e rimuovere `testuser`
+- `Controllers/CardTrader/CardTraderWebhooksController.cs` è un segnaposto mai implementato che logga il payload e risponde OK. Non è marcato `[AllowAnonymous]`, quindi da ora è chiuso dal criterio globale
+- `Scripts/BulkImportOrders.ps1` chiama l'API senza token: da ora riceverebbe `401`. Non è stato adeguato perché l'importazione storica è già stata fatta; la nota è nel README della cartella
+- Nuovo `Scripts/Cambia-PasswordAdmin.ps1`: chiede le password nascoste, così non finiscono nella cronologia di PowerShell
+
+---
+
 ### [2026-08-29] Feature — Storico dei prezzi alimentato dalla sincronizzazione
 
 #### Problema
