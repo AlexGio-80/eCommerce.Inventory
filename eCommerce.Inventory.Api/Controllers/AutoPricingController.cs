@@ -66,7 +66,10 @@ public class AutoPricingController : ControllerBase
         profile.IsActive = request.IsActive ?? profile.IsActive;
         profile.DryRun = request.DryRun ?? profile.DryRun;
         profile.MinPrice = request.MinPrice ?? profile.MinPrice;
-        profile.MaxChangePercentPerRun = request.MaxChangePercentPerRun ?? profile.MaxChangePercentPerRun;
+        profile.MaxIncreasePercentPerRun = request.MaxIncreasePercentPerRun ?? profile.MaxIncreasePercentPerRun;
+        profile.MaxDecreasePercentPerRun = request.MaxDecreasePercentPerRun ?? profile.MaxDecreasePercentPerRun;
+        profile.MaxMedianRatio = request.MaxMedianRatio ?? profile.MaxMedianRatio;
+        profile.MinOffersForOutlierRejection = request.MinOffersForOutlierRejection ?? profile.MinOffersForOutlierRejection;
         profile.IncludeProSellers = request.IncludeProSellers ?? profile.IncludeProSellers;
         profile.IncludeNormalSellers = request.IncludeNormalSellers ?? profile.IncludeNormalSellers;
         profile.ExcludeVacationSellers = request.ExcludeVacationSellers ?? profile.ExcludeVacationSellers;
@@ -90,6 +93,7 @@ public class AutoPricingController : ControllerBase
                     ToPrice = r.ToPrice,
                     ReferenceMode = r.ReferenceMode,
                     Position = r.Position,
+                    Percentile = r.Percentile,
                     AdjustmentAmount = r.AdjustmentAmount,
                     AdjustmentPercent = r.AdjustmentPercent,
                     CanIncrease = r.CanIncrease,
@@ -366,7 +370,9 @@ public class AutoPricingController : ControllerBase
         p.IsActive,
         p.DryRun,
         p.MinPrice,
-        p.MaxChangePercentPerRun,
+        p.MaxIncreasePercentPerRun,
+        p.MaxDecreasePercentPerRun,
+        p.MaxMedianRatio,
         p.IncludeProSellers,
         p.IncludeNormalSellers,
         p.ExcludeVacationSellers,
@@ -386,6 +392,7 @@ public class AutoPricingController : ControllerBase
             r.ToPrice,
             ReferenceMode = r.ReferenceMode.ToString(),
             r.Position,
+            r.Percentile,
             r.AdjustmentAmount,
             r.AdjustmentPercent,
             r.CanIncrease,
@@ -419,7 +426,10 @@ public class UpdateProfileRequest
     public bool? IsActive { get; set; }
     public bool? DryRun { get; set; }
     public decimal? MinPrice { get; set; }
-    public decimal? MaxChangePercentPerRun { get; set; }
+    public decimal? MaxIncreasePercentPerRun { get; set; }
+    public decimal? MaxDecreasePercentPerRun { get; set; }
+    public decimal? MaxMedianRatio { get; set; }
+    public int? MinOffersForOutlierRejection { get; set; }
     public bool? IncludeProSellers { get; set; }
     public bool? IncludeNormalSellers { get; set; }
     public bool? ExcludeVacationSellers { get; set; }
@@ -437,6 +447,7 @@ public class RuleRequest
     public decimal ToPrice { get; set; }
     public PriceReferenceMode ReferenceMode { get; set; } = PriceReferenceMode.NthLowestOffer;
     public int Position { get; set; } = 1;
+    public decimal Percentile { get; set; } = 30m;
     public decimal AdjustmentAmount { get; set; }
     public decimal AdjustmentPercent { get; set; }
     public bool CanIncrease { get; set; } = true;

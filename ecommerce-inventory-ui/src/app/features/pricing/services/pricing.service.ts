@@ -10,7 +10,8 @@ export type PriceReferenceMode =
     | 'LowestOffer'
     | 'MedianOffer'
     | 'AverageOffer'
-    | 'AverageOfLowestN';
+    | 'AverageOfLowestN'
+    | 'PercentileOffer';
 
 export interface PricingRule {
     id?: number;
@@ -18,6 +19,8 @@ export interface PricingRule {
     toPrice: number;
     referenceMode: PriceReferenceMode;
     position: number;
+    /** Collocazione sulla scaletta in percentuale (0 = la più economica). Usata da PercentileOffer. */
+    percentile: number;
     adjustmentAmount: number;
     adjustmentPercent: number;
     canIncrease: boolean;
@@ -32,7 +35,9 @@ export interface PricingProfile {
     isActive: boolean;
     dryRun: boolean;
     minPrice: number;
-    maxChangePercentPerRun: number;
+    maxIncreasePercentPerRun: number;
+    maxDecreasePercentPerRun: number;
+    maxMedianRatio: number;
     includeProSellers: boolean;
     includeNormalSellers: boolean;
     excludeVacationSellers: boolean;

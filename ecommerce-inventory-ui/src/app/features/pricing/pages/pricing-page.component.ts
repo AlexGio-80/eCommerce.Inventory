@@ -98,9 +98,21 @@ import {
                   </mat-form-field>
 
                   <mat-form-field appearance="outline">
-                    <mat-label>Variazione massima per esecuzione (%)</mat-label>
-                    <input matInput type="number" step="1" [(ngModel)]="p.maxChangePercentPerRun">
-                    <mat-hint>Oltre questa soglia la variazione viene registrata ma non applicata</mat-hint>
+                    <mat-label>Aumento massimo per esecuzione (%)</mat-label>
+                    <input matInput type="number" step="1" [(ngModel)]="p.maxIncreasePercentPerRun">
+                    <mat-hint>Largo di proposito: un rialzo eccessivo lascia la carta invenduta e si corregge da solo</mat-hint>
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline">
+                    <mat-label>Ribasso massimo per esecuzione (%)</mat-label>
+                    <input matInput type="number" step="1" [(ngModel)]="p.maxDecreasePercentPerRun">
+                    <mat-hint>Stretto: una carta svenduta non si recupera</mat-hint>
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline">
+                    <mat-label>Rapporto massimo sulla mediana</mat-label>
+                    <input matInput type="number" step="0.5" [(ngModel)]="p.maxMedianRatio">
+                    <mat-hint>Scarta i prezzi di comodo e quelli irrealistici, anche con poche offerte</mat-hint>
                   </mat-form-field>
 
                   <mat-form-field appearance="outline">
@@ -160,7 +172,7 @@ import {
                 <table class="rules-table">
                   <thead>
                     <tr>
-                      <th>Da €</th><th>A €</th><th>Riferimento</th><th>Posizione</th>
+                      <th>Da €</th><th>A €</th><th>Riferimento</th><th>Posizione</th><th>Percentile</th>
                       <th>Scostamento €</th><th>Scostamento %</th>
                       <th>Può alzare</th><th>Può abbassare</th><th></th>
                     </tr>
@@ -176,9 +188,13 @@ import {
                           <option value="MedianOffer">Mediana</option>
                           <option value="AverageOffer">Media</option>
                           <option value="AverageOfLowestN">Media delle N più basse</option>
+                          <option value="PercentileOffer">Collocazione percentuale</option>
                         </select>
                       </td>
-                      <td><input type="number" [(ngModel)]="r.position" [ngModelOptions]="{standalone: true}"></td>
+                      <td><input type="number" [(ngModel)]="r.position" [ngModelOptions]="{standalone: true}"
+                                 [disabled]="r.referenceMode === 'PercentileOffer'"></td>
+                      <td><input type="number" step="1" [(ngModel)]="r.percentile" [ngModelOptions]="{standalone: true}"
+                                 [disabled]="r.referenceMode !== 'PercentileOffer'"></td>
                       <td><input type="number" step="0.01" [(ngModel)]="r.adjustmentAmount" [ngModelOptions]="{standalone: true}"></td>
                       <td><input type="number" step="0.1" [(ngModel)]="r.adjustmentPercent" [ngModelOptions]="{standalone: true}"></td>
                       <td class="center"><mat-checkbox [(ngModel)]="r.canIncrease" [ngModelOptions]="{standalone: true}"></mat-checkbox></td>
@@ -585,7 +601,7 @@ export class PricingPageComponent implements OnInit {
     if (!p) return;
 
     p.rules.push({
-      fromPrice: 0.02, toPrice: 1, referenceMode: 'NthLowestOffer', position: 2,
+      fromPrice: 0.02, toPrice: 1, referenceMode: 'PercentileOffer', position: 2, percentile: 15,
       adjustmentAmount: -0.01, adjustmentPercent: 0,
       canIncrease: true, canDecrease: true, priority: p.rules.length, isActive: true
     });

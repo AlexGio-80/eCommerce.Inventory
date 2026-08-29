@@ -18,7 +18,16 @@ public enum PriceReferenceMode
     AverageOffer = 3,
 
     /// <summary>Media delle N offerte più basse.</summary>
-    AverageOfLowestN = 4
+    AverageOfLowestN = 4,
+
+    /// <summary>
+    /// Posizione espressa in percentuale sulla scaletta delle offerte comparabili anziché
+    /// come numero d'ordine. Si adatta da sola alla profondità del mercato: sulle carte
+    /// osservate le offerte comparabili vanno da 3 a 29, e con un ordinale fisso la stessa
+    /// regola significa "stai in fondo" su un mercato profondo e "sii il più caro" su uno
+    /// sottile. Con il percentile la collocazione relativa resta quella voluta.
+    /// </summary>
+    PercentileOffer = 5
 }
 
 /// <summary>
@@ -45,6 +54,14 @@ public class PricingRule
     /// NthLowestOffer e AverageOfLowestN, ignorato dalle altre modalità.
     /// </summary>
     public int Position { get; set; } = 1;
+
+    /// <summary>
+    /// Collocazione desiderata sulla scaletta delle offerte comparabili, in percentuale
+    /// (0 = la più economica, 100 = la più cara). Usato solo da PercentileOffer.
+    /// Con 30 e otto offerte ci si colloca attorno alla terza; con le stesse 30 e venti
+    /// offerte attorno alla sesta: la posizione relativa resta la stessa mentre il mercato cambia.
+    /// </summary>
+    public decimal Percentile { get; set; } = 30m;
 
     /// <summary>Scostamento fisso in euro applicato al prezzo di riferimento (es. -0,01 per stare un cent sotto).</summary>
     public decimal AdjustmentAmount { get; set; }
