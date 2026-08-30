@@ -73,10 +73,7 @@ builder.WebHost.UseUrls(apiBaseUrl);
 
 // Add services to the container
 builder.Services.AddControllers()
-    .AddJsonOptions(options =>
-    {
-        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
-    });
+    .AddJsonOptions(options => eCommerce.Inventory.Api.ApiJsonOptions.Configure(options.JsonSerializerOptions));
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

@@ -9,6 +9,40 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-08-30] Correzione — Il salvataggio del profilo di pricing falliva con le regole
+
+#### Problema
+
+Modificare una regola nella scheda Regole e premere "Salva profilo" restituiva sempre
+"Errore nel salvataggio del profilo". L'interruttore simulazione/attivo funzionava, il
+che rendeva il difetto poco evidente: quel comando manda un corpo con il solo campo
+`dryRun`, senza regole.
+
+L'API non aveva alcun convertitore per gli enum. In uscita non si notava, perché le
+mappature dei controller scrivono gli enum con `ToString()` esplicito — `"PercentileOffer"`
+in una griglia si legge, un `5` no. In entrata invece System.Text.Json accettava solo il
+numero: rimandare indietro l'oggetto appena ricevuto, che è esattamente ciò che fa il
+salvataggio del profilo, faceva fallire il binding di `referenceMode` con un 400 prima
+ancora di entrare nel controller.
+
+#### Soluzione Implementata
+
+Registrato `JsonStringEnumConverter`. La configurazione JSON dell'API è stata estratta in
+`ApiJsonOptions`, richiamata da `Program.cs`, così i test verificano il contratto vero e non
+una copia destinata a divergere. Il test di regressione parte dal JSON esatto che manda la
+maschera.
+
+#### Note Tecniche
+
+- Difetto presente da quando esiste l'editor delle regole, non introdotto dalle modifiche
+  della stessa giornata.
+- Il convertitore continua ad accettare anche i numeri, quindi nessun chiamante esistente si
+  rompe. Nessuna risposta cambia forma: le tre enum del dominio (`PricingTrigger`,
+  `PricingOutcome`, `PriceReferenceMode`) vivono solo nell'area pricing e `AutoPricingController`
+  le serializzava già come stringa.
+
+---
+
 ### [2026-08-30] Prezzi — Riprezzo immediato delle carte appena caricate e collegamento a Card Trader
 
 #### Problema
