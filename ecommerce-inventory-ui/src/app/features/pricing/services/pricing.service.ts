@@ -57,6 +57,8 @@ export interface PriceChange {
     id?: number;
     blueprintId: number;
     cardName?: string | null;
+    /** Id del blueprint su Card Trader: serve ad aprire la pagina della carta sul sito. */
+    cardTraderId?: number | null;
     /** Null quando la carta è uscita dal magazzino, di norma perché venduta: la riga di registro resta. */
     inventoryItemId: number | null;
     oldPrice: number;

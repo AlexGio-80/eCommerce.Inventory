@@ -13,7 +13,13 @@ public enum PricingTrigger
     Manual = 2,
 
     /// <summary>Anteprima: calcolo a scopo di verifica, mai applicato.</summary>
-    Preview = 3
+    Preview = 3,
+
+    /// <summary>
+    /// Inserzione appena pubblicata su Card Trader dalla maschera di inserimento:
+    /// il prezzo di partenza è quello scelto a mano, qui viene allineato al mercato.
+    /// </summary>
+    ListingCreated = 4
 }
 
 /// <summary>Esito della valutazione di una singola carta.</summary>

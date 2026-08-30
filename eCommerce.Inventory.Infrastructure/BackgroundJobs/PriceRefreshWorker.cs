@@ -1,9 +1,7 @@
 using eCommerce.Inventory.Application.Interfaces;
-using eCommerce.Inventory.Domain.Entities;
 using eCommerce.Inventory.Infrastructure.Persistence;
 using eCommerce.Inventory.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -11,43 +9,38 @@ using Microsoft.Extensions.Logging;
 namespace eCommerce.Inventory.Infrastructure.BackgroundJobs;
 
 /// <summary>
-/// Consuma la coda dei blueprint da riprezzare dopo una vendita.
+/// Consuma la coda dei blueprint da riprezzare fuori dall'esecuzione notturna.
 ///
-/// L'idea è che la vendita stessa è un segnale di mercato: se una carta viene venduta il
-/// suo prezzo potrebbe essere in salita, e rivalutarla subito evita di lasciare a lungo
-/// una copia residua a un prezzo ormai basso. Il riallineamento globale dei prezzi qui è
-/// disattivato: costerebbe una chiamata di export per ogni singola vendita, mentre la
-/// valutazione riguarda una sola carta.
+/// Ci finiscono due casi. La vendita, perché è essa stessa un segnale di mercato: se una
+/// carta viene venduta il suo prezzo potrebbe essere in salita, e rivalutarla subito evita
+/// di lasciare a lungo una copia residua a un prezzo ormai basso. E la pubblicazione di una
+/// nuova inserzione dalla maschera, dove il prezzo di partenza è messo a mano e va allineato
+/// al mercato senza aspettare la notte.
+///
+/// Il worker non decide se quei casi siano attivi: la scelta sta a chi accoda, così l'unico
+/// compito qui è svuotare la coda. Il riallineamento globale dei prezzi è disattivato:
+/// costerebbe una chiamata di export per ogni singolo evento, mentre la valutazione
+/// riguarda una sola carta.
 /// </summary>
-public class OrderTriggeredPricingWorker : BackgroundService
+public class PriceRefreshWorker : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly IPriceRefreshQueue _queue;
-    private readonly ILogger<OrderTriggeredPricingWorker> _logger;
-    private readonly IConfiguration _configuration;
+    private readonly ILogger<PriceRefreshWorker> _logger;
 
-    public OrderTriggeredPricingWorker(
+    public PriceRefreshWorker(
         IServiceProvider serviceProvider,
         IPriceRefreshQueue queue,
-        ILogger<OrderTriggeredPricingWorker> logger,
-        IConfiguration configuration)
+        ILogger<PriceRefreshWorker> logger)
     {
         _serviceProvider = serviceProvider;
         _queue = queue;
         _logger = logger;
-        _configuration = configuration;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_configuration.GetValue("AutoPricing:RepriceOnOrder", false))
-        {
-            _logger.LogInformation(
-                "Reprice alla vendita disabilitato da configurazione (AutoPricing:RepriceOnOrder).");
-            return;
-        }
-
-        _logger.LogInformation("OrderTriggeredPricingWorker avviato.");
+        _logger.LogInformation("PriceRefreshWorker avviato.");
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -63,12 +56,12 @@ public class OrderTriggeredPricingWorker : BackgroundService
             catch (Exception ex)
             {
                 // Una singola carta fallita non deve fermare il consumo della coda.
-                _logger.LogError(ex, "Errore nella rivalutazione innescata da vendita");
+                _logger.LogError(ex, "Errore nella rivalutazione fuori dall'esecuzione notturna");
                 await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
             }
         }
 
-        _logger.LogInformation("OrderTriggeredPricingWorker fermato.");
+        _logger.LogInformation("PriceRefreshWorker fermato.");
     }
 
     private async Task ProcessAsync(PriceRefreshRequest request, CancellationToken stoppingToken)
@@ -95,7 +88,7 @@ public class OrderTriggeredPricingWorker : BackgroundService
         var run = await pricingService.RunAsync(
             new[] { request.BlueprintId },
             profile,
-            PricingTrigger.OrderReceived,
+            request.Trigger,
             forceDryRun: false,
             refreshPricesFirst: false,
             stoppingToken);

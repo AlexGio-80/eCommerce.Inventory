@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Riprezzo immediato delle carte appena caricate**: la sincronizzazione delle inserzioni accoda i blueprint pubblicati e l'autopricer li valuta in background, invece di lasciarli al prezzo di inserimento fino alla notturna. Governato da `AutoPricing:RepriceOnListingSync`. Nello storico compaiono con origine "Nuova inserzione". Il guardrail resta in vigore: uno scarto ampio dal mercato viene assorbito in più esecuzioni
+- **Collegamento a Card Trader dalle griglie dei calcoli dell'autopricer**: apre la carta sul sito, che è la via per correggere a mano le carte lasciate ferme dal guardrail. La regola vale d'ora in poi per ogni vista di carta singola (`SPECIFICATIONS.md` §15)
+
 ### Changed
+- **`OrderTriggeredPricingWorker` diventa `PriceRefreshWorker`**: consuma la coda di rivalutazione a prescindere dall'origine (vendita o nuova inserzione). L'interruttore `AutoPricing:RepriceOnOrder` si è spostato nel gestore del webhook, al momento dell'accodamento
 - **Le migration si applicano all'avvio in ogni ambiente**: `MigrateAsync()` era confinato a Development e in produzione lo schema andava aggiornato a mano, con il risultato che due deploy sono partiti contro uno schema vecchio. L'elenco delle migration pendenti viene ora registrato a log prima di applicarle, e un fallimento impedisce l'avvio. Il seed dei dati dimostrativi resta invece limitato allo sviluppo, mentre il profilo di pricing predefinito viene creato ovunque
 - **L'autopricer si posiziona per percentile e non più per numero d'ordine**: nuova modalità `PercentileOffer` ("collocati al N% della scaletta comparabile"). Le offerte comparabili misurate sulle carte reali vanno da 3 a 29, e con un ordinale fisso la stessa regola significava "stai in fondo" su un mercato profondo e "sii il più caro" su uno sottile. Regole convertite a 15% sul bulk, 20% fra 1 e 25 €, 40% sopra i 25 €
 - **Guardrail sdoppiato per direzione**: `MaxChangePercentPerRun` diventa `MaxIncreasePercentPerRun` (300%) e `MaxDecreasePercentPerRun` (25%). Un rialzo eccessivo lascia la carta invenduta e si corregge da solo, un ribasso eccessivo la fa svendere e non si recupera. Migration `PercentileEGuardrailAsimmetrico`

@@ -6,6 +6,7 @@ using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Mappers;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
 using MediatR;
 using MediatRUnit = MediatR.Unit;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace eCommerce.Inventory.Tests.Unit.Handlers;
@@ -26,6 +27,7 @@ public class ProcessCardTraderWebhookHandlerTests
     private readonly Mock<ILogger<InventorySyncService>> _mockSyncServiceLogger;
     private readonly Mock<INotificationService> _mockNotificationService;
     private readonly Mock<IPriceRefreshQueue> _mockPriceRefreshQueue;
+    private readonly IConfiguration _mockConfiguration;
 
     public ProcessCardTraderWebhookHandlerTests()
     {
@@ -35,6 +37,7 @@ public class ProcessCardTraderWebhookHandlerTests
         _mockSyncServiceLogger = new Mock<ILogger<InventorySyncService>>();
         _mockNotificationService = new Mock<INotificationService>();
         _mockPriceRefreshQueue = new Mock<IPriceRefreshQueue>();
+        _mockConfiguration = new ConfigurationBuilder().Build();
     }
 
     [Fact]
@@ -48,6 +51,7 @@ public class ProcessCardTraderWebhookHandlerTests
             syncService,
             _mockNotificationService.Object,
             _mockPriceRefreshQueue.Object,
+            _mockConfiguration,
             _mockLogger.Object);
 
         var command = new ProcessCardTraderWebhookCommand(
@@ -75,6 +79,7 @@ public class ProcessCardTraderWebhookHandlerTests
             syncService,
             _mockNotificationService.Object,
             _mockPriceRefreshQueue.Object,
+            _mockConfiguration,
             _mockLogger.Object);
 
         var command = new ProcessCardTraderWebhookCommand(
@@ -102,6 +107,7 @@ public class ProcessCardTraderWebhookHandlerTests
             syncService,
             _mockNotificationService.Object,
             _mockPriceRefreshQueue.Object,
+            _mockConfiguration,
             _mockLogger.Object);
 
         var command = new ProcessCardTraderWebhookCommand(

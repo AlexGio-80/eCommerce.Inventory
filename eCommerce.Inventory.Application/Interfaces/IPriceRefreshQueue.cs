@@ -1,17 +1,22 @@
+using eCommerce.Inventory.Domain.Entities;
+
 namespace eCommerce.Inventory.Application.Interfaces;
 
 /// <summary>
 /// Coda dei blueprint da riprezzare fuori dal ciclo di richiesta.
 ///
-/// Serve al reprice immediato dopo una vendita: il webhook di Card Trader deve
-/// rispondere in fretta, mentre una valutazione di prezzo comporta chiamate API
-/// soggette a rate limit. Il webhook accoda e restituisce subito il controllo;
-/// il consumo avviene in background.
+/// Serve a chi deve rispondere in fretta ma vuole comunque una rivalutazione:
+/// il webhook di Card Trader dopo una vendita, e la pubblicazione di nuove
+/// inserzioni dalla maschera di inserimento. In entrambi i casi la valutazione
+/// comporta chiamate API soggette a rate limit: il chiamante accoda e restituisce
+/// subito il controllo, il consumo avviene in background.
 /// </summary>
 public interface IPriceRefreshQueue
 {
     /// <summary>Accoda un blueprint da rivalutare. I duplicati già in attesa vengono ignorati.</summary>
-    void Enqueue(int blueprintId, string reason);
+    /// <param name="reason">Motivo leggibile, finisce nel log.</param>
+    /// <param name="trigger">Origine registrata nello storico delle esecuzioni.</param>
+    void Enqueue(int blueprintId, string reason, PricingTrigger trigger);
 
     /// <summary>Attende il prossimo blueprint da valutare.</summary>
     Task<PriceRefreshRequest> DequeueAsync(CancellationToken cancellationToken);
@@ -20,4 +25,4 @@ public interface IPriceRefreshQueue
     int PendingCount { get; }
 }
 
-public record PriceRefreshRequest(int BlueprintId, string Reason);
+public record PriceRefreshRequest(int BlueprintId, string Reason, PricingTrigger Trigger);

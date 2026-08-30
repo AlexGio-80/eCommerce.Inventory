@@ -2,7 +2,7 @@ import { Component, OnInit, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AgGridAngular } from 'ag-grid-angular';
-import { ColDef, GridApi, GridReadyEvent } from 'ag-grid-community';
+import { ColDef, GridApi, GridReadyEvent, ICellRendererParams } from 'ag-grid-community';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -426,6 +426,24 @@ export class PricingPageComponent implements OnInit {
   defaultColDef: ColDef = { sortable: true, filter: true, resizable: true };
 
   changeColumns: ColDef[] = [
+    {
+      // Ogni vista di una carta singola deve permettere di aprirla su Card Trader: qui è
+      // quello che serve per correggere a mano le carte che il guardrail ha lasciato ferme.
+      headerName: 'CT', width: 70, sortable: false, filter: false, resizable: false,
+      cellRenderer: (p: ICellRendererParams<PriceChange>) => {
+        const cardTraderId = p.data?.cardTraderId;
+        if (!cardTraderId) return '';
+
+        const link = document.createElement('a');
+        link.href = `https://www.cardtrader.com/cards/${cardTraderId}`;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.title = 'Apri la carta su Card Trader';
+        link.className = 'ct-link material-icons';
+        link.textContent = 'open_in_new';
+        return link;
+      }
+    },
     { field: 'cardName', headerName: 'Carta', flex: 2, minWidth: 180 },
     { field: 'oldPrice', headerName: 'Attuale', width: 110, valueFormatter: p => this.euro(p.value) },
     { field: 'proposedPrice', headerName: 'Proposto', width: 115, valueFormatter: p => this.euro(p.value) },
@@ -682,7 +700,8 @@ export class PricingPageComponent implements OnInit {
       Scheduled: 'Notturna',
       OrderReceived: 'Vendita',
       Manual: 'Manuale',
-      Preview: 'Anteprima'
+      Preview: 'Anteprima',
+      ListingCreated: 'Nuova inserzione'
     };
     return labels[trigger] ?? trigger;
   }

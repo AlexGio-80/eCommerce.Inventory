@@ -189,3 +189,18 @@ mat-card {
 .detail-card .grid {
   height: 480px;
 }
+
+/* Collegamento alla carta su Card Trader dentro la griglia.
+   La cella è costruita dal renderer di AG Grid, fuori dall'incapsulamento del
+   componente: senza ::ng-deep lo stile non la raggiungerebbe. */
+::ng-deep .ct-link {
+  color: #1976d2;
+  font-size: 18px;
+  line-height: 1;
+  text-decoration: none;
+  vertical-align: middle;
+}
+
+::ng-deep .ct-link:hover {
+  color: #0d47a1;
+}

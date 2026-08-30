@@ -313,14 +313,15 @@ public class AutoPricingController : ControllerBase
                 .Include(c => c.Blueprint)
                 .ToListAsync(cancellationToken);
 
-        // Per l'anteprima i blueprint non sono caricati: si risolvono i nomi in un colpo solo.
+        // Per l'anteprima i blueprint non sono caricati: si risolvono in un colpo solo nome e
+        // id Card Trader, quest'ultimo necessario per aprire la carta sul sito.
         var missingNames = changes.Where(c => c.Blueprint == null).Select(c => c.BlueprintId).Distinct().ToList();
         var names = missingNames.Count == 0
-            ? new Dictionary<int, string>()
+            ? new Dictionary<int, BlueprintRef>()
             : await _context.Blueprints
                 .AsNoTracking()
                 .Where(b => missingNames.Contains(b.Id))
-                .ToDictionaryAsync(b => b.Id, b => b.Name, cancellationToken);
+                .ToDictionaryAsync(b => b.Id, b => new BlueprintRef(b.Name, b.CardTraderId), cancellationToken);
 
         return new
         {
@@ -344,24 +345,35 @@ public class AutoPricingController : ControllerBase
         };
     }
 
-    private static object MapChange(PriceChangeLog c) => MapChange(c, new Dictionary<int, string>());
+    private static object MapChange(PriceChangeLog c) => MapChange(c, new Dictionary<int, BlueprintRef>());
 
-    private static object MapChange(PriceChangeLog c, IReadOnlyDictionary<int, string> fallbackNames) => new
+    private static object MapChange(PriceChangeLog c, IReadOnlyDictionary<int, BlueprintRef> fallback)
     {
-        c.Id,
-        c.BlueprintId,
-        CardName = c.Blueprint?.Name ?? (fallbackNames.TryGetValue(c.BlueprintId, out var n) ? n : null),
-        c.InventoryItemId,
-        c.OldPrice,
-        c.ProposedPrice,
-        Delta = c.ProposedPrice - c.OldPrice,
-        c.ReferencePrice,
-        c.ComparableOffersCount,
-        c.OutliersRejectedCount,
-        Outcome = c.Outcome.ToString(),
-        c.Reason,
-        c.CreatedAt
-    };
+        var resolved = fallback.TryGetValue(c.BlueprintId, out var r) ? r : null;
+
+        return new
+        {
+            c.Id,
+            c.BlueprintId,
+            CardName = c.Blueprint?.Name ?? resolved?.Name,
+            // Serve ad aprire la carta su Card Trader dalla griglia: è l'unico modo di
+            // sistemare a mano le carte che il guardrail ha lasciato al prezzo vecchio.
+            CardTraderId = c.Blueprint?.CardTraderId ?? resolved?.CardTraderId,
+            c.InventoryItemId,
+            c.OldPrice,
+            c.ProposedPrice,
+            Delta = c.ProposedPrice - c.OldPrice,
+            c.ReferencePrice,
+            c.ComparableOffersCount,
+            c.OutliersRejectedCount,
+            Outcome = c.Outcome.ToString(),
+            c.Reason,
+            c.CreatedAt
+        };
+    }
+
+    /// <summary>Nome e id Card Trader di un blueprint non caricato con la riga di registro.</summary>
+    private sealed record BlueprintRef(string Name, int CardTraderId);
 
     private static object MapProfile(PricingProfile p) => new
     {

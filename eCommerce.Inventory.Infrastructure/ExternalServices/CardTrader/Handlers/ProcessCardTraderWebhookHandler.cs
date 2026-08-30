@@ -1,9 +1,11 @@
 using eCommerce.Inventory.Application.Commands;
 using eCommerce.Inventory.Application.Interfaces;
+using eCommerce.Inventory.Domain.Entities;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.DTOs;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Handlers;
@@ -19,6 +21,7 @@ public class ProcessCardTraderWebhookHandler : IRequestHandler<ProcessCardTrader
     private readonly InventorySyncService _syncService;
     private readonly INotificationService _notificationService;
     private readonly IPriceRefreshQueue _priceRefreshQueue;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<ProcessCardTraderWebhookHandler> _logger;
 
     public ProcessCardTraderWebhookHandler(
@@ -26,12 +29,14 @@ public class ProcessCardTraderWebhookHandler : IRequestHandler<ProcessCardTrader
         InventorySyncService syncService,
         INotificationService notificationService,
         IPriceRefreshQueue priceRefreshQueue,
+        IConfiguration configuration,
         ILogger<ProcessCardTraderWebhookHandler> logger)
     {
         _context = context;
         _syncService = syncService;
         _notificationService = notificationService;
         _priceRefreshQueue = priceRefreshQueue;
+        _configuration = configuration;
         _logger = logger;
     }
 
@@ -204,6 +209,15 @@ public class ProcessCardTraderWebhookHandler : IRequestHandler<ProcessCardTrader
     /// </summary>
     private async Task EnqueueSoldCardsForRepricingAsync(CardTraderOrderDto orderDto, CancellationToken cancellationToken)
     {
+        // L'interruttore sta qui e non nel worker, che consuma la stessa coda anche per le
+        // nuove inserzioni: spegnere il reprice alla vendita non deve spegnere anche quello.
+        if (!_configuration.GetValue("AutoPricing:RepriceOnOrder", false))
+        {
+            _logger.LogDebug(
+                "Reprice alla vendita disabilitato da configurazione (AutoPricing:RepriceOnOrder): nulla da accodare");
+            return;
+        }
+
         try
         {
             var soldCardTraderBlueprintIds = orderDto.OrderItems?
@@ -241,7 +255,7 @@ public class ProcessCardTraderWebhookHandler : IRequestHandler<ProcessCardTrader
 
             foreach (var blueprintId in stillInStock)
             {
-                _priceRefreshQueue.Enqueue(blueprintId, $"vendita ordine {orderDto.Id}");
+                _priceRefreshQueue.Enqueue(blueprintId, $"vendita ordine {orderDto.Id}", PricingTrigger.OrderReceived);
             }
 
             var skipped = localIds.Count - stillInStock.Count;

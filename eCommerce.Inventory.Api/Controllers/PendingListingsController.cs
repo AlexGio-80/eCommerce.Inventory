@@ -14,15 +14,21 @@ public class PendingListingsController : ControllerBase
 {
     private readonly ApplicationDbContext _dbContext;
     private readonly ICardTraderApiService _cardTraderService;
+    private readonly IPriceRefreshQueue _priceRefreshQueue;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<PendingListingsController> _logger;
 
     public PendingListingsController(
         ApplicationDbContext dbContext,
         ICardTraderApiService cardTraderService,
+        IPriceRefreshQueue priceRefreshQueue,
+        IConfiguration configuration,
         ILogger<PendingListingsController> logger)
     {
         _dbContext = dbContext;
         _cardTraderService = cardTraderService;
+        _priceRefreshQueue = priceRefreshQueue;
+        _configuration = configuration;
         _logger = logger;
     }
 
@@ -375,6 +381,7 @@ public class PendingListingsController : ControllerBase
 
         int successCount = 0;
         int errorCount = 0;
+        var repriceBlueprintIds = new HashSet<int>();
 
         foreach (var pending in pendingItems)
         {
@@ -427,8 +434,41 @@ public class PendingListingsController : ControllerBase
                     pending.SyncedAt = DateTime.UtcNow;
                     pending.CardTraderProductId = cardTraderId;
                     pending.SyncError = null;
+
+                    // La copia locale va creata subito, non attendendo la sincronizzazione notturna:
+                    // l'autopricer valuta gli InventoryItem a magazzino, e finché la riga non esiste
+                    // la carta appena caricata non è riprezzabile.
+                    var existingItem = await _dbContext.InventoryItems
+                        .FirstOrDefaultAsync(ii => ii.CardTraderProductId == cardTraderId, cancellationToken);
+
+                    if (existingItem != null)
+                    {
+                        // Card Trader può accorpare l'inserzione a un prodotto già esistente: due righe
+                        // locali con lo stesso prodotto ne lascerebbero una fuori da ogni aggiornamento,
+                        // perché la sincronizzazione ne riconcilia una sola per CardTraderProductId.
+                        existingItem.Quantity = pending.Quantity;
+                        existingItem.ListingPrice = pending.SellingPrice;
+                        existingItem.PurchasePrice = pending.PurchasePrice;
+                        existingItem.Condition = pending.Condition;
+                        existingItem.Language = pending.Language;
+                        existingItem.IsFoil = pending.IsFoil;
+                        existingItem.IsSigned = pending.IsSigned;
+                        existingItem.Description = pending.Description;
+                        existingItem.Tag = pending.Tag;
+                        pending.InventoryItem = existingItem;
+                    }
+                    else
+                    {
+                        inventoryItem.CardTraderProductId = cardTraderId;
+                        // Stesso ripiego che usa la sincronizzazione quando Card Trader non
+                        // restituisce la collocazione: la colonna non ammette null.
+                        inventoryItem.Location = "Unknown";
+                        _dbContext.InventoryItems.Add(inventoryItem);
+                        pending.InventoryItem = inventoryItem;
+                    }
                 }
 
+                repriceBlueprintIds.Add(pending.BlueprintId);
                 successCount++;
             }
             catch (Exception ex)
@@ -441,6 +481,8 @@ public class PendingListingsController : ControllerBase
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
+        EnqueuePublishedListingsForRepricing(repriceBlueprintIds);
+
         var result = new
         {
             Total = pendingItems.Count,
@@ -451,6 +493,46 @@ public class PendingListingsController : ControllerBase
         return Ok(Models.ApiResponse<object>.SuccessResult(
             result,
             $"Sync completed. Success: {successCount}, Errors: {errorCount}"));
+    }
+
+    /// <summary>
+    /// Accoda per rivalutazione le carte appena pubblicate su Card Trader.
+    ///
+    /// Il prezzo con cui una carta entra dalla maschera è messo a mano, spesso alto di
+    /// proposito in attesa di un riferimento: allinearlo al mercato solo con l'esecuzione
+    /// notturna la lascerebbe fuori mercato per tutta la giornata. La valutazione costa una
+    /// chiamata al marketplace per carta, soggetta al limite di 20 al minuto, quindi non può
+    /// avvenire dentro questa richiesta: si accoda e ci pensa <c>PriceRefreshWorker</c>.
+    ///
+    /// Un errore qui non deve far fallire la sincronizzazione: le inserzioni sono già su
+    /// Card Trader, e la notturna riprende comunque le carte rimaste indietro.
+    /// </summary>
+    private void EnqueuePublishedListingsForRepricing(IReadOnlyCollection<int> blueprintIds)
+    {
+        if (blueprintIds.Count == 0) return;
+
+        if (!_configuration.GetValue("AutoPricing:RepriceOnListingSync", false))
+        {
+            _logger.LogDebug(
+                "Reprice delle nuove inserzioni disabilitato da configurazione (AutoPricing:RepriceOnListingSync)");
+            return;
+        }
+
+        try
+        {
+            foreach (var blueprintId in blueprintIds)
+            {
+                _priceRefreshQueue.Enqueue(blueprintId, "inserzione pubblicata dalla maschera", PricingTrigger.ListingCreated);
+            }
+
+            _logger.LogInformation(
+                "Accodati {Count} blueprint per rivalutazione dopo la pubblicazione delle inserzioni",
+                blueprintIds.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Impossibile accodare le nuove inserzioni per la rivalutazione di prezzo");
+        }
     }
 }
 

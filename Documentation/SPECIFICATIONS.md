@@ -779,6 +779,28 @@ import { MatTableModule } from '@angular/material/table';
 // Usare AG-Grid built-in features
 ```
 
+### Collegamento a Card Trader (OBBLIGATORIO)
+
+Ovunque venga mostrata una carta singola — griglia, maschera di inserimento, scheda di
+dettaglio, dialog di modifica — DEVE esserci un comando che apre la pagina della carta su
+Card Trader in una nuova scheda.
+
+Il motivo è operativo: quando il software non può o non deve toccare un prezzo (per esempio
+una variazione bloccata dal guardrail dell'autopricer), l'unica via è correggere a mano
+sull'inserzione vera, e senza questo collegamento occorre ritrovare la carta a mano sul sito.
+
+Regole:
+- L'URL è `https://www.cardtrader.com/cards/{cardTraderId}`, dove `cardTraderId` è l'id
+  **Card Trader** del blueprint, non l'id locale.
+- Apertura in nuova scheda (`target="_blank"` con `rel="noopener"`).
+- Se il dato mostrato non porta con sé l'id Card Trader, va aggiunto alla risposta dell'API
+  che alimenta la vista: non è accettabile ometterlo dal DTO e rinunciare al collegamento.
+- Quando l'id non è valorizzato, il comando non viene mostrato (o avvisa l'utente), mai un
+  link rotto.
+
+Viste che lo implementano: griglia Inventario, griglia Articoli da preparare, griglie
+dei calcoli dell'autopricer (anteprima e dettaglio di una esecuzione nello storico).
+
 ### Migrazione Griglie Esistenti
 Griglie già implementate con Material Table:
 - **Orders List**: ✅ Migrata ad AG-Grid

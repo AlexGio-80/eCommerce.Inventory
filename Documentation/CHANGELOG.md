@@ -9,6 +9,65 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-08-30] Prezzi — Riprezzo immediato delle carte appena caricate e collegamento a Card Trader
+
+#### Problema
+
+Una carta caricata dalla maschera di inserimento entrava in vendita con il prezzo messo a
+mano — spesso alto di proposito, in attesa di un riferimento di mercato — e restava così
+fino all'esecuzione notturna dell'autopricer. Per tutta la giornata l'inserzione era fuori
+mercato.
+
+Sotto ci stava un difetto più concreto: la sincronizzazione delle inserzioni creava il
+prodotto su Card Trader ma **non salvava l'`InventoryItem` locale** (lo costruiva solo per
+comporre la chiamata all'API). L'oggetto restava in memoria e la riga di magazzino compariva
+solo alla sincronizzazione notturna dei prodotti. Siccome l'autopricer valuta gli
+`InventoryItem` a magazzino, una carta appena caricata era invisibile al motore dei prezzi
+anche volendola riprezzare a mano.
+
+Inoltre, nella griglia dei calcoli dell'autopricer non c'era modo di aprire la carta su Card
+Trader: proprio le carte che il guardrail lascia al prezzo vecchio, che sono quelle da
+sistemare a mano, andavano ritrovate sul sito una per una.
+
+#### Soluzione Implementata
+
+**Riprezzo dopo la pubblicazione** — `POST /api/pending-listings/sync` ora persiste
+l'`InventoryItem` per le inserzioni nuove e accoda i blueprint pubblicati su
+`IPriceRefreshQueue`; il worker li valuta in background. Governato da
+`AutoPricing:RepriceOnListingSync` (`true` in produzione, `false` altrove).
+
+**La coda diventa generica** — `OrderTriggeredPricingWorker` è stato rinominato
+`PriceRefreshWorker` e non è più legato alle vendite: consuma la coda e basta. Il gate
+`AutoPricing:RepriceOnOrder` si è spostato dal worker al punto di accodamento in
+`ProcessCardTraderWebhookHandler`, altrimenti spegnere il riprezzo alla vendita avrebbe
+spento anche quello delle nuove inserzioni. Nuovo `PricingTrigger.ListingCreated`, che nello
+storico si legge come "Nuova inserzione" e resta distinguibile da una rivalutazione da
+vendita. `IPriceRefreshQueue.Enqueue` porta ora anche il trigger da registrare.
+
+**Collegamento a Card Trader** — le griglie dei calcoli (anteprima e dettaglio di una
+esecuzione) hanno una colonna che apre la carta sul sito. L'endpoint delle variazioni
+espone `cardTraderId` accanto al nome. La regola generale — ogni vista di una carta singola
+deve poterla aprire su Card Trader — è ora scritta in `SPECIFICATIONS.md` §15.
+
+#### Note Tecniche
+
+- **Il guardrail vince sul riprezzo immediato.** Una carta caricata a 50 € con mercato a 5 €
+  non scende in un colpo solo: `MaxDecreasePercentPerRun` è stretto di proposito (una carta
+  svenduta non si recupera) e l'esito sarà `BlockedByGuardrail`. La carta si riallinea in più
+  esecuzioni, oppure si corregge a mano su Card Trader — ed è esattamente il motivo per cui
+  serviva il collegamento diretto dalla griglia.
+- Nel ramo "nuova inserzione" la persistenza dell'`InventoryItem` controlla prima se esiste
+  già una riga con lo stesso `CardTraderProductId`: Card Trader può accorpare l'inserzione a
+  un prodotto esistente, e due righe locali con lo stesso prodotto ne lascerebbero una fuori
+  da ogni sincronizzazione futura, che ne riconcilia una sola per id.
+- `Location` non ammette null a database e la maschera non lo raccoglie: si usa `"Unknown"`,
+  lo stesso ripiego del mapper quando Card Trader non restituisce `user_data_field`. Il valore
+  viene assegnato **dopo** la chiamata di creazione, per non alterare ciò che si invia a CT.
+- Il worker gira sempre; sono i due interruttori a decidere se qualcosa entra in coda. In
+  Development entrambi sono `false`, quindi nulla viene accodato e la coda resta vuota.
+
+---
+
 ### [2026-08-29] Pulizia — Rimosso il webhook segnaposto di Card Trader
 
 #### Problema
