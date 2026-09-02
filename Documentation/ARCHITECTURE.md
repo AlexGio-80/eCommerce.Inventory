@@ -31,13 +31,25 @@ eCommerce.Inventory/
 **Responsabilità**: Definire il modello di dominio e le entità di business.
 
 **Componenti**:
-- **Entities/**
+- **Entities/** — catalogo e magazzino
   - `Game.cs`: Rappresenta un gioco TCG (Magic, YGO, etc.)
-  - `Expansion.cs`: Espansione di un gioco
-  - `Blueprint.cs`: Matrice di una carta (definizione)
+  - `Expansion.cs`: Espansione di un gioco, con configurazione e prezzo del box
+  - `Blueprint.cs`: Matrice di una carta (definizione), con nome italiano e id Scryfall
+  - `Category.cs`, `Property.cs`, `PropertyValue.cs`: tassonomia Card Trader
+  - `SealedCategoryIds.cs`: quali categorie sono prodotto sigillato, per gioco
   - `InventoryItem.cs`: Oggetto nell'inventario
+  - `PendingListing.cs`: Inserzione compilata dalla maschera, in attesa di pubblicazione su Card Trader. È la fonte del costo d'acquisto e del tag, che Card Trader non espone
+  - `ExpansionROI.cs`: vista di sola lettura sulla redditività per espansione
+- **Entities/** — ordini e utenti
   - `Order.cs`: Ordine ricevuto da un marketplace
   - `OrderItem.cs`: Riga di un ordine
+  - `User.cs`: Utente applicativo (autenticazione JWT)
+- **Entities/** — autopricer
+  - `PricingProfile.cs`: Modalità, guardrail, filtri sui venditori e criteri di comparabilità
+  - `PricingRule.cs`: Regola per fascia di prezzo (riferimento, collocazione, scostamento)
+  - `PricingRunLog.cs`: Riepilogo di una esecuzione, con i contatori per esito
+  - `PriceChangeLog.cs`: Una riga per carta valutata, con esito e motivazione
+  - `PriceHistoryEntry.cs`: Serie storica del prezzo effettivamente esposto
 
 **Caratteristiche**:
 - ✅ No dependencies su altri strati
@@ -55,13 +67,23 @@ eCommerce.Inventory/
 - **Interfaces/**
   - `IApplicationDbContext.cs`: Abstrazione del DbContext
   - `IReadonlyRepository<T>.cs`: Interface generica per letture
-  - `IInventoryItemRepository.cs`: CRUD specifico per InventoryItem
+  - `IInventoryItemRepository.cs`, `IBlueprintRepository.cs`, `IOrderRepository.cs`: repository specifici
   - `ICardTraderApiService.cs`: Comunicazione con API Card Trader
+  - `IAuthService.cs`: Autenticazione e cambio password
+  - `ICacheService.cs`: Cache dei dati statici Card Trader (implementazione Redis, oggi disattivata)
+  - `INotificationService.cs`: Notifiche verso il frontend (SignalR)
+  - `IExpansionAnalyticsService.cs`, `IGradingService.cs`
+  - `IPriceRefreshQueue.cs`: Coda dei blueprint da riprezzare fuori dall'esecuzione notturna — vendite e nuove inserzioni. Chi accoda risponde subito, il consumo avviene in background
+  - `IPricingRunCoordinator.cs`: Tiene **una sola** esecuzione dell'autopricer per volta e la porta avanti fuori dal ciclo di richiesta HTTP
+- **Pricing/** — logica di prezzo pura, senza dipendenze da rete o database
+  - `PricingEngine.cs`: Decide il prezzo di una carta date le offerte comparabili
+  - `PricingDecision.cs`: Esito della valutazione, con la motivazione
+  - `PriceHistoryRecorder.cs`: Decide quali rilevazioni vale la pena registrare (serie a delta)
+- **Metrics/BusinessMetrics.cs**: Metriche Prometheus di dominio
 
 **Caratteristiche**:
 - ✅ Dipende solo da Domain
-- ✅ Non contiene implementazioni
-- ✅ Placeholder per CQRS (Commands/Queries)
+- ✅ Le interfacce non contengono implementazioni; `Pricing/` sì, ma è logica pura e testabile senza infrastruttura
 
 ---
 
@@ -91,22 +113,55 @@ eCommerce.Inventory/
     - Operazioni CRUD su prodotti
     - Fetch orders
 
-  - `CardTraderSyncWorker.cs`: BackgroundService
-    - Polling periodico (ogni 15 minuti)
-    - Sincronizzazione dati da Card Trader
-    - Gestione errori con retry
-
+  - `CardTraderSyncOrchestrator.cs`: Orchestrazione della sincronizzazione completa
+    - Ogni sezione (games, expansions, blueprints, inventario, ordini) cattura le proprie
+      eccezioni per non far cadere le altre, ma un fallimento di sezione marca comunque
+      l'intera esecuzione come fallita
   - **DTOs/**: Modelli per deserializzazione risposte API
     - `CardTraderGameDto.cs`
     - `CardTraderExpansionDto.cs`
     - `CardTraderBlueprintDto.cs`
     - `CardTraderProductDto.cs`
     - `CardTraderOrderDto.cs`
+- **Scryfall/ScryfallApiClient.cs**: Icone e date di rilascio delle espansioni, nomi italiani
+- **MtgJson/MtgJsonClient.cs**: Fonte primaria dei nomi italiani (copertura molto più ampia di Scryfall); match su `identifiers.scryfallId`
+
+#### Services
+- `AutoPricingService.cs`: Orchestra l'autopricer — seleziona le carte, recupera le offerte, invoca il motore, scrive su Card Trader e registra ogni valutazione
+- `PricingRunCoordinator.cs`: Implementa `IPricingRunCoordinator`. **Singleton**: lo slot occupato dev'essere lo stesso per tutti
+- `PriceRefreshQueue.cs`: Coda in memoria dei blueprint da riprezzare. In memoria è sufficiente, perché una richiesta persa per un riavvio viene comunque recuperata dall'esecuzione notturna
+- `AuthService.cs`, `BackupService.cs`, `ExpansionAnalyticsService.cs`, `RedisCacheService.cs`, `XimilarGradingService.cs`
+
+#### BackgroundJobs
+
+| Servizio | Quando gira | Interruttore |
+|----------|-------------|--------------|
+| `ScheduledProductSyncWorker` | Ogni notte all'orario configurato (default 03:00) | `SyncSettings:ProductSyncTime` |
+| `AutoPricingWorker` | Ogni notte dopo la sincronizzazione (default 03:30) | `AutoPricing:Enabled` |
+| `PriceRefreshWorker` | In continuo, consuma `IPriceRefreshQueue` | Decide chi accoda: `AutoPricing:RepriceOnOrder`, `AutoPricing:RepriceOnListingSync` |
+| `PopulateItalianNamesService` | One-shot all'avvio | `SyncSettings:PopulateItalianNamesOnStartup` |
+| `SealedProductPriceService` | One-shot all'avvio | `SyncSettings:PopulateSealedPricesOnStartup` |
+| `BackupService` | Giornaliero | `BackupSettings:Enabled` |
+
+> `AutoPricingWorker` non esegue da sé: passa da `IPricingRunCoordinator` come l'esecuzione
+> manuale e l'applicazione dall'anteprima. Se una manuale è ancora in corso all'orario previsto,
+> la notturna lo registra a log e salta invece di sovrapporsi — il limite di 20 richieste al
+> minuto verso Card Trader è condiviso, e due esecuzioni in parallelo si dimezzano a vicenda.
+
+> **⚠️ I due servizi one-shot terminano con `Environment.Exit(0)`.** La guardia sul flag precede
+> l'uscita, quindi con flag `false` sono innocui — ma non vanno mai abilitati in
+> `appsettings.Production.json`, pena lo spegnimento del servizio Windows a ogni avvio. Si
+> lanciano dagli endpoint dedicati (es. `POST /api/expansions/sync-sealed-prices`).
+
+> `CardTraderSyncWorker` (polling ogni 15 minuti) esiste ancora nel codice ma **è disattivato**:
+> la registrazione in `Program.cs` è commentata. La sincronizzazione periodica la fa
+> `ScheduledProductSyncWorker`, una volta a notte, perché il polling frequente consumava
+> chiamate API senza che i dati di catalogo cambiassero con quella frequenza.
 
 **Caratteristiche**:
 - ✅ Dipende da Domain e Application
 - ✅ Contiene tutte le implementazioni concrete
-- ✅ HttpClient configurato con Bearer Token
+- ✅ HttpClient configurato con Bearer Token e rate limiter condiviso (20 req/min)
 - ✅ Logging completo
 
 ---
@@ -125,37 +180,36 @@ eCommerce.Inventory/
   - CORS configuration
   - Hosted Services registration
 
-- **Controllers/CardTrader/**
+- **Controllers/CardTrader/** — routing specifico del marketplace
   - `CardTraderInventoryController.cs`: CRUD per inventario
-    - GET /api/cardtrader/inventory
-    - GET /api/cardtrader/inventory/{id}
-    - POST /api/cardtrader/inventory
-    - PUT /api/cardtrader/inventory/{id}
-    - DELETE /api/cardtrader/inventory/{id}
+  - `CardTraderBlueprintsController.cs`: Ricerca blueprint (nome, espansione, collector number, nome italiano)
+  - `CardTraderOrdersController.cs`: Ordini, articoli da preparare, backfill dei tag
+  - `CardTraderSyncController.cs`: Operazioni di sincronizzazione
+  - `CardTraderSeedingController.cs`: Popolamento iniziale del catalogo
 
-  - `Controllers/CardTraderWebhooksController.cs`: Webhook receiver
-    - POST /api/cardtraderwebhooks/events
-    - Notifiche real-time da Card Trader (order.create/update/destroy)
-    - Verifica della firma HMAC via `WebhookSignatureVerificationService`
+  > **⚠️ `POST /api/cardtrader/sync/products` e `/orders` non scrivono a database**: recuperano
+  > i dati e restituiscono un conteggio. La sincronizzazione reale è `POST /api/cardtrader/sync`
+  > con i flag della sezione desiderata.
 
-  - `CardTraderSyncController.cs`: Sync operations
-    - POST /api/cardtrader/sync/games
-    - POST /api/cardtrader/sync/expansions
-    - POST /api/cardtrader/sync/blueprints
-    - POST /api/cardtrader/sync/products
-    - POST /api/cardtrader/sync/orders
-    - POST /api/cardtrader/sync/full
+- **Controllers/** — resto dell'applicazione
+  - `AuthController.cs`: Login e cambio password. La registrazione non esiste
+  - `CardTraderWebhooksController.cs`: `POST /api/cardtraderwebhooks/events`, notifiche `order.create/update/destroy`, firma HMAC via `WebhookSignatureVerificationService`
+  - `AutoPricingController.cs`: `/api/pricing` — profili e regole, anteprima, esecuzione, applicazione, storico, copertura
+  - `PendingListingsController.cs`: Inserzioni compilate dalla maschera e loro pubblicazione su Card Trader
+  - `InventoryController.cs`, `GamesController.cs`, `ExpansionsController.cs`
+  - `ReportingController.cs`: Endpoint di reporting (query SQL pesanti)
+  - `GradingController.cs`: AI grading (oggi su servizio mock)
 
-- **appsettings.json**: Configurazione
-  - Connection String SQL Server
-  - Card Trader API Base URL e Token
-  - Serilog settings
+- **Hubs/NotificationHub.cs**: SignalR, avanzamento delle sincronizzazioni e notifiche ordini
+- **HealthChecks/**: `/health` — database, Card Trader, Redis
+- **appsettings.json**: Configurazione senza segreti (i segreti stanno in `appsettings.Production.json`, non committato)
 
 **Caratteristiche**:
-- ✅ RESTful endpoints
+- ✅ RESTful endpoints, risposte incapsulate in `ApiResponse<T>`
 - ✅ Marketplace-specific routing (`/api/cardtrader/...`)
 - ✅ Swagger/OpenAPI documentation
-- ✅ Serilog request/response logging
+- ✅ Serilog request/response logging con Correlation ID
+- ✅ **Chiusa per difetto**: criterio globale che richiede utente autenticato con ruolo `Admin`. Le eccezioni sono dichiarate una per una con `[AllowAnonymous]` — login, webhook, `/health`, `/health-ui`, `/metrics`, hub SignalR
 
 ---
 
@@ -163,52 +217,56 @@ eCommerce.Inventory/
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    External Systems                         │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │ Card Trader API | SQL Server | Webhooks             │  │
-│  └──────────────────────────────────────────────────────┘  │
+│                    Sistemi esterni                          │
+│  Card Trader API (20 req/min) | Scryfall | MTGJSON          │
+│  SQL Server | Webhook Card Trader                           │
 └─────────────────────────────────────────────────────────────┘
                         ↕
 ┌─────────────────────────────────────────────────────────────┐
 │              Infrastructure Layer                           │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │ CardTraderApiClient | DbContext | Repositories     │  │
-│  │ CardTraderSyncWorker | DTOs                        │  │
-│  └──────────────────────────────────────────────────────┘  │
+│  CardTraderApiClient | CardTraderSyncOrchestrator           │
+│  ScryfallApiClient | MtgJsonClient                          │
+│  DbContext | Repositories | DTOs                            │
+│  AutoPricingService | PricingRunCoordinator                 │
+│  PriceRefreshQueue | AuthService | BackupService            │
+│  BackgroundJobs: ScheduledProductSync | AutoPricing         │
+│                 PriceRefresh | Backup | one-shot            │
 └─────────────────────────────────────────────────────────────┘
                         ↕
 ┌─────────────────────────────────────────────────────────────┐
-│             Application Layer (Interfaces)                  │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │ IApplicationDbContext | IInventoryItemRepository    │  │
-│  │ ICardTraderApiService                              │  │
-│  └──────────────────────────────────────────────────────┘  │
+│        Application Layer (interfacce + logica pura)         │
+│  IApplicationDbContext | I*Repository                       │
+│  ICardTraderApiService | ICacheService | IAuthService        │
+│  IPriceRefreshQueue | IPricingRunCoordinator                │
+│  Pricing: PricingEngine | PriceHistoryRecorder              │
+│  Metrics: BusinessMetrics                                   │
 └─────────────────────────────────────────────────────────────┘
                         ↕
 ┌─────────────────────────────────────────────────────────────┐
 │                Domain Layer (Entities)                      │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │ Game | Expansion | Blueprint | InventoryItem |      │  │
-│  │ Order | OrderItem                                   │  │
-│  └──────────────────────────────────────────────────────┘  │
+│  Game | Expansion | Blueprint | Category                    │
+│  InventoryItem | PendingListing | Order | OrderItem | User   │
+│  PricingProfile | PricingRule | PricingRunLog               │
+│  PriceChangeLog | PriceHistoryEntry                         │
 └─────────────────────────────────────────────────────────────┘
                         ↕
 ┌─────────────────────────────────────────────────────────────┐
 │                   API Layer (Controllers)                   │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │ CardTraderInventoryController                       │  │
-│  │ CardTraderWebhooksController                        │  │
-│  │ CardTraderSyncController                            │  │
-│  └──────────────────────────────────────────────────────┘  │
+│  Auth | AutoPricing | PendingListings | Inventory           │
+│  Games | Expansions | Reporting | Grading                   │
+│  CardTrader/: Inventory | Blueprints | Orders | Sync         │
+│  CardTraderWebhooks | NotificationHub | HealthChecks         │
 └─────────────────────────────────────────────────────────────┘
                         ↕
 ┌─────────────────────────────────────────────────────────────┐
-│                   HTTP Clients                              │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │ Browsers | Mobile Apps | Internal Services         │  │
-│  └──────────────────────────────────────────────────────┘  │
+│                        Client                               │
+│  Frontend Angular (IIS) | Webhook Card Trader | Prometheus  │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+> Il Domain non dipende da nulla; l'Application dipende solo dal Domain; Infrastructure e API
+> dipendono da entrambi. Le frecce qui sopra indicano il **flusso dei dati**, non la direzione
+> delle dipendenze, che punta sempre verso il centro.
 
 ---
 
@@ -239,8 +297,13 @@ Blueprints
 ├─ Id (PK)
 ├─ CardTraderId
 ├─ Name
+├─ ItalianName                -- popolato da MTGJSON, fallback Scryfall; usato dalla ricerca
 ├─ Version
-├─ Rarity
+├─ Rarity, CategoryId
+├─ FixedProperties / EditableProperties (JSON)  -- il collector number sta qui
+├─ ScryfallId, CardMarketIds, TcgPlayerId
+├─ ImageUrl, BackImageUrl
+├─ GameId (FK → Games)
 └─ ExpansionId (FK → Expansions)
 
 InventoryItems
@@ -254,8 +317,22 @@ InventoryItems
 ├─ Condition
 ├─ Language
 ├─ IsFoil
-├─ IsSigned
-└─ Location
+├─ IsSigned, IsAltered
+├─ Location
+├─ Tag                        -- organizzazione interna, inviato anche a Card Trader
+└─ Description                -- descrizione visibile sull'inserzione Card Trader
+
+PendingListings               -- inserzione compilata dalla maschera, poi pubblicata su CT
+├─ Id (PK)
+├─ BlueprintId (FK → Blueprints)
+├─ InventoryItemId (FK → InventoryItems, nullable)
+├─ CardTraderProductId        -- nullable, valorizzato dopo la pubblicazione
+├─ Quantity, SellingPrice, PurchasePrice
+├─ Condition, Language, IsFoil, IsSigned
+├─ Tag, Description
+├─ IsUpdate                   -- distingue creazione e modifica di un'inserzione esistente
+├─ IsSynced, SyncedAt, SyncError
+└─ Grading* (score, condizione, sotto-punteggi)  -- oggi da servizio mock
 
 Orders
 ├─ Id (PK)
@@ -275,15 +352,21 @@ OrderItems
 PricingProfiles
 ├─ Id (PK)
 ├─ Name, IsActive, DryRun
-├─ MinPrice, MaxChangePercentPerRun
-├─ filtri venditore (IncludeProSellers, ExcludeVacationSellers, CountryCodesCsv, ...)
-└─ criteri di comparabilità (MatchCondition, MatchLanguage, MatchFoil, ...)
+├─ MinPrice
+├─ MaxIncreasePercentPerRun / MaxDecreasePercentPerRun  ← guardrail asimmetrico
+├─ MaxMedianRatio                 -- scarta i prezzi di comodo anche con poche offerte
+├─ scarto anomalie (EnableOutlierRejection, OutlierMadThreshold, MinOffersForOutlierRejection)
+├─ MinComparableOffers, SkipWhenFewerOffersThanPosition
+├─ filtri venditore (IncludeProSellers, IncludeNormalSellers, ExcludeVacationSellers,
+│                    MinSellerDailyCapacity, CountryCodesCsv)
+└─ criteri di comparabilità (MatchCondition, MatchLanguage, MatchFoil,
+                             ExcludeSigned, ExcludeAltered, ExcludeGraded)
 
 PricingRules
 ├─ Id (PK)
 ├─ PricingProfileId (FK → PricingProfiles, CASCADE)
 ├─ FromPrice / ToPrice (fascia di applicazione)
-├─ ReferenceMode / Position
+├─ ReferenceMode / Position / Percentile
 └─ AdjustmentAmount, AdjustmentPercent, CanIncrease, CanDecrease, Priority
 
 PricingRunLogs                    -- riepilogo di una esecuzione
@@ -301,7 +384,6 @@ PriceChangeLogs                   -- una riga per carta valutata
 ├─ Outcome, Trigger
 ├─ ComparableOffersCount, OutliersRejectedCount
 └─ Reason (nvarchar 1000)
-```
 
 PriceHistoryEntries               -- serie storica del prezzo esposto
 ├─ Id (PK)
@@ -325,7 +407,13 @@ PriceHistoryEntries               -- serie storica del prezzo esposto
 > esposto**, chiunque lo abbia cambiato — autopricer, mano dell'utente o autopricer nativo di
 > Card Trader.
 
-```
+> `PendingListings` è la **fonte del costo d'acquisto e del tag**: Card Trader non li espone,
+> quindi la sincronizzazione notturna li recupera da qui, altrimenti li azzererebbe
+> sull'`InventoryItem`. Lo stesso `CardTraderProductId` può comparire su più righe
+> (ripubblicazioni, riallineamenti): i lookup vanno costruiti raggruppando e tenendo la
+> registrazione più recente, non con un `ToDictionary` diretto — la chiave duplicata solleva
+> un'eccezione, ed è così che la sincronizzazione dell'inventario è rimasta ferma otto mesi.
+
 > `PriceChangeLogs.InventoryItemId` è **nullable con `ON DELETE SET NULL`**: la riga di registro deve sopravvivere alla carta, altrimenti la cancellazione delle carte vendute durante la sincronizzazione notturna porterebbe via lo storico proprio dei casi su cui conviene verificare se il prezzo proposto era corretto. `InventoryItemId IS NULL` identifica le valutazioni di carte non più a magazzino; la carta resta riconoscibile da `BlueprintId`.
 
 ---
