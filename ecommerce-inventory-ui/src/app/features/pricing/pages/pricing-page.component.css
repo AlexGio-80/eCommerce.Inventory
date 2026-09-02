@@ -204,3 +204,42 @@ mat-card {
 ::ng-deep .ct-link:hover {
   color: #0d47a1;
 }
+
+/* --- Esecuzione a richiesta --- */
+.run-card {
+  border-left: 4px solid #1976d2;
+}
+
+.run-progress-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.run-progress-head .spacer {
+  flex: 1;
+}
+
+.run-progress-detail {
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+/* --- Applicazione delle righe scelte in anteprima --- */
+.apply-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 12px 0;
+}
+
+.apply-count {
+  font-weight: 500;
+}
+
+.warn-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #8a6d3b;
+}

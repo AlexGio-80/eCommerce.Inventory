@@ -163,15 +163,28 @@ public class AutoPricingService
     /// <param name="trigger">Cosa ha innescato l'esecuzione.</param>
     /// <param name="forceDryRun">Forza la simulazione anche se il profilo è in modalità reale (usato dall'anteprima).</param>
     /// <param name="refreshPricesFirst">Riallinea i prezzi locali a Card Trader prima di valutare.</param>
+    /// <param name="forceApply">
+    /// Scrive davvero anche se il profilo è in dry-run. È il caso dell'applicazione dall'anteprima:
+    /// un gesto esplicito su carte appena esaminate una per una, che è il modo di uscire dalla
+    /// simulazione un pezzo alla volta senza aprire la scrittura sull'esecuzione notturna.
+    /// Non prevale su <paramref name="forceDryRun"/>: l'anteprima non deve poter scrivere mai.
+    /// </param>
+    /// <param name="onRunCreated">
+    /// Invocato appena la riga di storico esiste a database. Serve a chi segue l'esecuzione
+    /// da fuori: la preparazione (selezione delle carte e allineamento dei prezzi) può durare
+    /// parecchio, e fino a quel momento non c'è un identificativo da cui leggere l'avanzamento.
+    /// </param>
     public async Task<PricingRunLog> RunAsync(
         IReadOnlyList<int> blueprintIds,
         PricingProfile profile,
         PricingTrigger trigger,
         bool forceDryRun = false,
         bool refreshPricesFirst = true,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Action<PricingRunLog>? onRunCreated = null,
+        bool forceApply = false)
     {
-        var dryRun = profile.DryRun || forceDryRun;
+        var dryRun = forceDryRun || (profile.DryRun && !forceApply);
 
         if (refreshPricesFirst)
         {
@@ -202,6 +215,7 @@ public class AutoPricingService
         {
             _context.PricingRunLogs.Add(run);
             await _context.SaveChangesAsync(cancellationToken);
+            onRunCreated?.Invoke(run);
         }
 
         _logger.LogInformation(
@@ -281,11 +295,18 @@ public class AutoPricingService
         {
             var decision = _engine.Evaluate(item, offers, profile, _myUserId);
 
-            // Il motore decide in base al profilo; qui si tiene conto anche del
-            // dry-run forzato dall'anteprima.
+            // Il motore decide in base al profilo; qui si tiene conto anche di come la
+            // modalità è stata forzata dal chiamante, in entrambi i versi.
             if (dryRun && decision.Outcome == PricingOutcome.Applied)
             {
                 decision.Outcome = PricingOutcome.SimulatedDryRun;
+            }
+            else if (!dryRun && decision.Outcome == PricingOutcome.SimulatedDryRun)
+            {
+                // Il motore ha simulato perché il profilo è in dry-run, ma la scrittura è
+                // stata chiesta esplicitamente per queste carte: senza questo ramo
+                // l'applicazione dall'anteprima non scriverebbe nulla.
+                decision.Outcome = PricingOutcome.Applied;
             }
 
             var log = new PriceChangeLog

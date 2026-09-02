@@ -128,7 +128,9 @@ public class PricingProfileSaveTests
             new Mock<ILogger<AutoPricingService>>().Object);
 
         var controller = new AutoPricingController(
-            context, pricingService, new Mock<ILogger<AutoPricingController>>().Object);
+            context, pricingService,
+            new Mock<IPricingRunCoordinator>().Object,
+            new Mock<ILogger<AutoPricingController>>().Object);
 
         return (controller, context, profile.Id);
     }

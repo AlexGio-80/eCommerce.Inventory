@@ -9,6 +9,76 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-09-02] Prezzi — Esecuzione a richiesta in background, anteprima mirata e applicazione selettiva
+
+#### Problema
+
+L'autopricer si poteva far girare solo alle 03:30. Modificata una regola, per vederne
+l'effetto bisognava aspettare la notte: se il risultato non era quello atteso, la prova
+successiva slittava di ventiquattro ore.
+
+L'endpoint `POST /api/pricing/run` in realtà esisteva già, e anche il metodo `run()` nel
+servizio Angular — ma non era chiamato da nessun punto dell'interfaccia, e non avrebbe
+comunque funzionato: era **sincrono**. Una esecuzione vera dura ore, perché il limite verso
+Card Trader è di 20 richieste al minuto; nessuna richiesta HTTP resta aperta tanto a lungo,
+e chi l'avesse lanciata sarebbe rimasto inchiodato alla pagina.
+
+L'anteprima, che è lo strumento giusto per provare le regole, campionava sempre e solo le
+carte di maggior valore: una modifica alla regola del bulk restava invisibile. E una volta
+guardati i risultati non c'era modo di applicarli — bisognava togliere il dry-run dal
+profilo, che però attiva la scrittura anche sull'esecuzione notturna.
+
+#### Soluzione Implementata
+
+**Esecuzione a richiesta che prosegue in background.** Nuovo `PricingRunCoordinator`
+(singleton): avvia il lavoro fuori dal ciclo di richiesta e ne tiene **una sola alla volta**.
+`POST /api/pricing/run` risponde `202` e restituisce subito il controllo, `409` se qualcosa
+è già in corso. Si aggiungono `GET /api/pricing/run/current` per l'avanzamento e
+`POST /api/pricing/run/cancel` per interrompere.
+
+Anche l'esecuzione notturna passa dal coordinatore: se una manuale lanciata la sera prima è
+ancora in corso alle 03:30, la notturna se ne accorge invece di sovrapporsi.
+
+Lato interfaccia, `PricingRunMonitorService` interroga lo stato da qualunque pagina e un
+indicatore in barra di stato mostra l'avanzamento: si lancia il ricalcolo e si va a lavorare
+sulla maschera di inserimento o sulla coda degli ordini da preparare, con un clic per
+tornare all'autopricer. Lo stato sopravvive anche a un ricaricamento del browser, perché
+l'avanzamento vero sta a database.
+
+**Anteprima mirata.** `POST /api/pricing/preview` accetta ora fascia di prezzo
+(`minPrice`/`maxPrice`) ed espansione, oltre al numero di carte. Si prova la regola sulle
+carte che quella regola riguarda.
+
+**Applicazione selettiva.** Caselle di selezione nella griglia dell'anteprima e nuovo
+`POST /api/pricing/apply`: le carte spuntate vengono riprezzate davvero, **anche con il
+profilo in dry-run**. È il modo di uscire dalla simulazione un pezzo alla volta, senza
+attivare la scrittura sulla notturna. I prezzi calcolati dall'anteprima non vengono
+rimandati al server — arriverebbero dal browser e l'API non deve fidarsene: le carte
+vengono rivalutate su dati di mercato freschi un attimo prima di scrivere.
+
+#### Note Tecniche
+
+- **Nessuna migration.** L'avanzamento si legge da `PricingRunLog`, che `RunAsync` salvava
+  già a ogni blueprint valutato: la riga esisteva, mancava solo chi la interrogasse.
+- `RunAsync` ha due parametri nuovi: `onRunCreated`, per far conoscere l'identificativo
+  appena la riga esiste (la preparazione può durare parecchio, e prima non c'è nulla da cui
+  leggere il progresso), e `forceApply`.
+- **`forceApply` va applicato in due punti, non uno.** Il primo tentativo cambiava solo il
+  calcolo di `dryRun` in `RunAsync`, e l'applicazione non scriveva niente: `PricingEngine`
+  consulta `profile.DryRun` per conto proprio e restituisce già `SimulatedDryRun`. Serve
+  anche il ramo inverso che riporta quell'esito ad `Applied`. Trovato da un test, non a
+  video.
+- `forceApply` non prevale mai su `forceDryRun`: l'anteprima resta innocua per costruzione,
+  ed è verificato da un test dedicato.
+- Lo slot dell'esecuzione si libera in un `finally`: se restasse occupato dopo un errore,
+  nessuna esecuzione ripartirebbe più fino al riavvio del servizio, notturna compresa.
+- L'esecuzione in background non usa il `CancellationToken` della richiesta HTTP — verrebbe
+  annullato appena il chiamante riceve la risposta — ma uno collegato ad
+  `ApplicationStopping`.
+- Il monitoraggio parte da `LayoutComponent`, che esiste solo dopo l'autenticazione:
+  avviarlo prima produrrebbe una raffica di 401. Ritmo di interrogazione 4s mentre qualcosa
+  gira, 20s a riposo.
+
 ### [2026-08-30] Correzione — Il salvataggio del profilo di pricing falliva con le regole
 
 #### Problema

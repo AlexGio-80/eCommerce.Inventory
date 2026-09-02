@@ -1,4 +1,5 @@
-import { Component, OnInit, signal, computed } from '@angular/core';
+import { Component, DestroyRef, OnInit, signal, computed } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AgGridAngular } from 'ag-grid-angular';
@@ -20,6 +21,8 @@ import {
   PricingService, PricingProfile, PricingRule, PricingRunReport,
   PricingRunSummary, CoverageReport, PriceChange, PRICING_OUTCOMES
 } from '../services/pricing.service';
+import { PricingRunMonitorService } from '../services/pricing-run-monitor.service';
+import { Expansion, ExpansionsService } from '../../expansions/services/expansions.service';
 
 @Component({
   selector: 'app-pricing-page',
@@ -84,6 +87,83 @@ import {
                         : 'Le variazioni calcolate vengono applicate davvero alle tue inserzioni.' }}
                   </span>
                 </div>
+              </mat-card-content>
+            </mat-card>
+
+            <!-- L'esecuzione a richiesta serve a non dover aspettare la notte per vedere
+                 l'effetto di una regola appena modificata. Prosegue sul server: si può
+                 cambiare pagina, e l'avanzamento resta nella barra in alto. -->
+            <mat-card class="run-card">
+              <mat-card-header>
+                <mat-card-title>Esegui adesso</mat-card-title>
+                <mat-card-subtitle>
+                  Riprezza subito senza aspettare la notturna. L'esecuzione prosegue in background:
+                  puoi lasciare questa pagina, l'avanzamento resta visibile nella barra in alto.
+                </mat-card-subtitle>
+              </mat-card-header>
+              <mat-card-content>
+
+                <!-- Esecuzione in corso: comandi di avvio sostituiti dall'avanzamento -->
+                <div class="run-progress" *ngIf="monitor.status() as run; else runControls">
+                  <div class="run-progress-head">
+                    <mat-spinner diameter="24"></mat-spinner>
+                    <div>
+                      <strong>{{ run.description }}</strong>
+                      <span class="hint"> — {{ run.phase }}</span>
+                    </div>
+                    <span class="spacer"></span>
+                    <button mat-stroked-button color="warn"
+                            (click)="cancelRun()"
+                            [disabled]="run.cancellationRequested">
+                      <mat-icon>stop</mat-icon>
+                      {{ run.cancellationRequested ? 'Interruzione in corso…' : 'Interrompi' }}
+                    </button>
+                  </div>
+
+                  <div class="run-progress-detail" *ngIf="monitor.progressPercent() as percent">
+                    <strong>{{ percent }}%</strong>
+                    — {{ run.evaluatedCount }} di {{ run.plannedCount }} carte valutate
+                    · applicate {{ run.appliedCount }}
+                    · simulate {{ run.simulatedCount }}
+                    · invariate {{ run.noChangeCount }}
+                    · saltate {{ run.skippedCount }}
+                    · fallite {{ run.failedCount }}
+                  </div>
+
+                  <p class="hint" *ngIf="run.cancellationRequested">
+                    L'arresto avviene fra una carta e la successiva: le valutazioni già fatte
+                    restano a registro e i prezzi già scritti restano scritti.
+                  </p>
+                </div>
+
+                <ng-template #runControls>
+                  <div class="field-row">
+                    <mat-form-field appearance="outline">
+                      <mat-label>Soglia carte di valore (€)</mat-label>
+                      <input matInput type="number" step="0.01" [(ngModel)]="runHighValueThreshold">
+                      <mat-hint>Sopra questo prezzo la carta rientra sempre nella selezione</mat-hint>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline">
+                      <mat-label>Carte bulk da includere</mat-label>
+                      <input matInput type="number" step="100" [(ngModel)]="runBulkSliceSize">
+                      <mat-hint>0 = solo le carte di valore. Il bulk è lento: 20 richieste al minuto</mat-hint>
+                    </mat-form-field>
+                  </div>
+
+                  <div class="actions">
+                    <button mat-raised-button color="primary" (click)="runNow()" [disabled]="starting()">
+                      <mat-icon>play_arrow</mat-icon> Esegui adesso
+                    </button>
+                  </div>
+
+                  <p class="hint" *ngIf="profile() as pr">
+                    {{ pr.dryRun
+                        ? 'Il profilo è in simulazione: l\\'esecuzione calcolerà e registrerà senza toccare i prezzi.'
+                        : 'Il profilo è attivo: i prezzi verranno scritti davvero su Card Trader.' }}
+                  </p>
+                </ng-template>
+
               </mat-card-content>
             </mat-card>
 
@@ -237,9 +317,38 @@ import {
                   <mat-form-field appearance="outline">
                     <mat-label>Quante carte</mat-label>
                     <input matInput type="number" [(ngModel)]="previewLimit">
+                    <mat-hint>Massimo 200</mat-hint>
                   </mat-form-field>
+
+                  <!-- Senza fascia l'anteprima campiona sempre le carte più care, e una
+                       modifica alla regola del bulk resterebbe invisibile. -->
+                  <mat-form-field appearance="outline">
+                    <mat-label>Da prezzo (€)</mat-label>
+                    <input matInput type="number" step="0.01" [(ngModel)]="previewMinPrice"
+                           placeholder="vuoto = nessun limite">
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline">
+                    <mat-label>A prezzo (€)</mat-label>
+                    <input matInput type="number" step="0.01" [(ngModel)]="previewMaxPrice"
+                           placeholder="vuoto = nessun limite">
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline">
+                    <mat-label>Espansione</mat-label>
+                    <mat-select [(ngModel)]="previewExpansionId">
+                      <mat-option [value]="null">Tutte</mat-option>
+                      <mat-option *ngFor="let e of expansions()" [value]="e.id">{{ e.name }}</mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                </div>
+
+                <div class="actions">
                   <button mat-raised-button color="primary" (click)="runPreview()" [disabled]="loading()">
                     <mat-icon>visibility</mat-icon> Calcola anteprima
+                  </button>
+                  <button mat-stroked-button (click)="resetPreviewFilters()" [disabled]="loading()">
+                    <mat-icon>filter_alt_off</mat-icon> Azzera filtri
                   </button>
                   <mat-spinner diameter="28" *ngIf="loading()"></mat-spinner>
                 </div>
@@ -261,14 +370,40 @@ import {
                     </div>
                   </div>
 
+                  <!-- Applicazione delle sole righe spuntate: il senso dell'anteprima è
+                       guardare i risultati uno per uno, quindi anche l'applicazione deve
+                       poter essere selettiva. -->
+                  <div class="apply-bar">
+                    <span class="apply-count">
+                      {{ selectedCount() }} {{ selectedCount() === 1 ? 'carta selezionata' : 'carte selezionate' }}
+                    </span>
+                    <button mat-raised-button color="accent"
+                            (click)="applySelected()"
+                            [disabled]="selectedCount() === 0 || applying() || monitor.isRunning()">
+                      <mat-icon>publish</mat-icon> Applica le selezionate
+                    </button>
+                    <span class="hint" *ngIf="monitor.isRunning()">
+                      Un'altra esecuzione è in corso: attendine la fine o interrompila dalla scheda Regole.
+                    </span>
+                  </div>
+
+                  <p class="hint warn-hint" *ngIf="profile()?.dryRun && selectedCount() > 0">
+                    <mat-icon inline>warning</mat-icon>
+                    Il profilo è in simulazione, ma «Applica» scrive comunque: le carte selezionate
+                    verranno rivalutate su dati aggiornati e i nuovi prezzi finiranno davvero su Card Trader.
+                  </p>
+
                   <ag-grid-angular
                     class="ag-theme-quartz grid"
                     [rowData]="rep.changes"
-                    [columnDefs]="changeColumns"
+                    [columnDefs]="previewColumns"
                     [defaultColDef]="defaultColDef"
+                    [rowSelection]="'multiple'"
+                    [suppressRowClickSelection]="true"
                     [pagination]="true"
                     [paginationPageSize]="25"
-                    (gridReady)="onGridReady($event)">
+                    (gridReady)="onGridReady($event)"
+                    (selectionChanged)="onPreviewSelectionChanged()">
                   </ag-grid-angular>
                 </ng-container>
               </mat-card-content>
@@ -421,6 +556,21 @@ export class PricingPageComponent implements OnInit {
   readonly outcomes = PRICING_OUTCOMES;
 
   previewLimit = 15;
+  previewMinPrice: number | null = null;
+  previewMaxPrice: number | null = null;
+  previewExpansionId: number | null = null;
+  expansions = signal<Expansion[]>([]);
+
+  // Carte spuntate nell'anteprima, le uniche che «Applica» tocca.
+  selectedCount = signal(0);
+  applying = signal(false);
+
+  // Parametri dell'esecuzione a richiesta. Il bulk parte escluso di proposito: sono
+  // migliaia di carte a 20 richieste al minuto, va incluso solo con l'intenzione di farlo.
+  runHighValueThreshold = 1.00;
+  runBulkSliceSize = 0;
+  starting = signal(false);
+
   private gridApi?: GridApi;
 
   defaultColDef: ColDef = { sortable: true, filter: true, resizable: true };
@@ -468,6 +618,20 @@ export class PricingPageComponent implements OnInit {
     { field: 'reason', headerName: 'Motivo', flex: 3, minWidth: 300, tooltipField: 'reason' }
   ];
 
+  /**
+   * Colonne dell'anteprima: le stesse dello storico, più la casella di selezione. Nello
+   * storico non serve — quelle valutazioni sono già avvenute e non c'è nulla da applicare.
+   */
+  previewColumns: ColDef[] = [
+    {
+      headerName: '', width: 50, pinned: 'left',
+      checkboxSelection: true, headerCheckboxSelection: true,
+      headerCheckboxSelectionFilteredOnly: true,
+      sortable: false, filter: false, resizable: false
+    },
+    ...this.changeColumns
+  ];
+
   runColumns: ColDef[] = [
     { field: 'startedAt', headerName: 'Inizio', width: 175, valueFormatter: p => this.dateTime(p.value) },
     { field: 'trigger', headerName: 'Origine', width: 140, valueFormatter: p => this.triggerLabel(p.value) },
@@ -481,12 +645,73 @@ export class PricingPageComponent implements OnInit {
     { field: 'totalPriceDelta', headerName: 'Variazione', width: 125, valueFormatter: p => this.euro(p.value) }
   ];
 
-  constructor(private pricingService: PricingService, private snackBar: MatSnackBar) { }
+  constructor(
+    private pricingService: PricingService,
+    private snackBar: MatSnackBar,
+    public monitor: PricingRunMonitorService,
+    private expansionsService: ExpansionsService,
+    private destroyRef: DestroyRef
+  ) { }
 
   ngOnInit(): void {
     this.loadProfile();
     this.loadRuns();
     this.loadCoverage();
+    this.loadExpansions();
+
+    // A esecuzione finita lo storico e la copertura sono cambiati: ricaricarli evita di
+    // guardare numeri vecchi proprio nel momento in cui si vuole vedere il risultato.
+    this.monitor.runCompleted$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.loadRuns();
+        this.loadCoverage();
+        this.snackBar.open('Esecuzione dell\'autopricer conclusa', 'Chiudi', { duration: 6000 });
+      });
+  }
+
+  /**
+   * Avvia l'esecuzione e restituisce subito il controllo. Da qui in poi è il monitoraggio
+   * globale a seguirla, quindi si può cambiare pagina senza interromperla.
+   */
+  runNow(): void {
+    const p = this.profile();
+    if (!p) return;
+
+    this.starting.set(true);
+
+    this.pricingService.run(p.id, this.runHighValueThreshold, this.runBulkSliceSize).subscribe({
+      next: () => {
+        this.starting.set(false);
+        this.monitor.refreshNow();
+        this.snackBar.open(
+          'Esecuzione avviata: prosegue in background, puoi lasciare questa pagina',
+          'Chiudi', { duration: 8000 });
+      },
+      error: err => {
+        this.starting.set(false);
+        // Il 409 non è un guasto: è l'unicità dell'esecuzione che fa il suo lavoro, e il
+        // messaggio del server dice già quale esecuzione sta occupando il posto.
+        this.monitor.refreshNow();
+        this.snackBar.open(
+          err?.error?.message ?? 'Avvio dell\'esecuzione non riuscito',
+          'Chiudi', { duration: 8000 });
+      }
+    });
+  }
+
+  cancelRun(): void {
+    this.pricingService.cancelRun().subscribe({
+      next: () => {
+        this.monitor.refreshNow();
+        this.snackBar.open(
+          'Interruzione richiesta: si ferma dopo la carta in corso', 'Chiudi', { duration: 6000 });
+      },
+      error: () => {
+        this.monitor.refreshNow();
+        this.snackBar.open('Nessuna esecuzione da interrompere', 'Chiudi', { duration: 4000 });
+      }
+    });
   }
 
   loadProfile(): void {
@@ -575,16 +800,81 @@ export class PricingPageComponent implements OnInit {
     if (!p) return;
 
     this.loading.set(true);
-    this.pricingService.preview(p.id, this.previewLimit).subscribe({
+
+    // Una selezione riferita al calcolo precedente non ha più senso su righe nuove.
+    this.selectedCount.set(0);
+
+    this.pricingService.preview(p.id, {
+      limit: this.previewLimit,
+      minPrice: this.previewMinPrice,
+      maxPrice: this.previewMaxPrice,
+      expansionId: this.previewExpansionId
+    }).subscribe({
       next: rep => {
         this.report.set(rep);
         this.loading.set(false);
-        this.snackBar.open(`Anteprima completata su ${rep.evaluatedCount} carte`, 'Chiudi', { duration: 3000 });
+        this.snackBar.open(
+          rep.evaluatedCount === 0
+            ? 'Nessuna carta corrisponde ai filtri scelti'
+            : `Anteprima completata su ${rep.evaluatedCount} carte`,
+          'Chiudi', { duration: 4000 });
       },
       error: () => {
         this.loading.set(false);
         this.snackBar.open('Errore durante il calcolo dell\'anteprima', 'Chiudi', { duration: 5000 });
       }
+    });
+  }
+
+  resetPreviewFilters(): void {
+    this.previewMinPrice = null;
+    this.previewMaxPrice = null;
+    this.previewExpansionId = null;
+  }
+
+  onPreviewSelectionChanged(): void {
+    this.selectedCount.set(this.gridApi?.getSelectedRows().length ?? 0);
+  }
+
+  /**
+   * Applica i prezzi alle sole carte spuntate. Il server le rivaluta su dati di mercato
+   * freschi prima di scrivere: i prezzi visti a schermo non vengono rimandati indietro,
+   * quindi il risultato può differire di poco se il mercato si è mosso nel frattempo.
+   */
+  applySelected(): void {
+    const p = this.profile();
+    if (!p) return;
+
+    const selected = (this.gridApi?.getSelectedRows() ?? []) as PriceChange[];
+    const blueprintIds = [...new Set(selected.map(c => c.blueprintId))];
+    if (blueprintIds.length === 0) return;
+
+    this.applying.set(true);
+
+    this.pricingService.apply(p.id, blueprintIds).subscribe({
+      next: () => {
+        this.applying.set(false);
+        this.monitor.refreshNow();
+        this.snackBar.open(
+          `Applicazione avviata su ${blueprintIds.length} carte: prosegue in background`,
+          'Chiudi', { duration: 8000 });
+      },
+      error: err => {
+        this.applying.set(false);
+        this.monitor.refreshNow();
+        this.snackBar.open(
+          err?.error?.message ?? 'Applicazione non riuscita',
+          'Chiudi', { duration: 8000 });
+      }
+    });
+  }
+
+  private loadExpansions(): void {
+    this.expansionsService.getExpansions().subscribe({
+      // Il filtro per espansione è un di più: se l'elenco non arriva restano fascia di
+      // prezzo e numero di carte, e l'anteprima funziona lo stesso.
+      next: list => this.expansions.set(list),
+      error: () => this.expansions.set([])
     });
   }
 

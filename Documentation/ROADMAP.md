@@ -10,6 +10,17 @@ _Nessun task attivo al momento._
 
 ---
 
+## Completato (Sessione 2026-09-02)
+
+| Data | Voce |
+|------|------|
+| 2026-09-02 | Feature — **Esecuzione dell'autopricer a richiesta, che prosegue in background**: `POST /api/pricing/run` risponde `202` invece di restare aperto per ore, nuovo `PricingRunCoordinator` che ne tiene una sola alla volta (notturna inclusa), endpoint di stato e di interruzione, indicatore di avanzamento in barra di stato visibile da ogni pagina |
+| 2026-09-02 | Feature — **Anteprima mirata**: filtri per fascia di prezzo ed espansione, per provare una regola sulle carte che quella regola riguarda invece che sempre sulle più care |
+| 2026-09-02 | Feature — **Applicazione selettiva dall'anteprima**: caselle di selezione nella griglia e `POST /api/pricing/apply`, che scrive anche con il profilo in dry-run. È la strada per uscire dalla simulazione un pezzo alla volta |
+| 2026-09-02 | Fix — **`forceApply` non bastava in un punto solo**: `PricingEngine` consulta `profile.DryRun` per conto proprio, quindi l'applicazione non scriveva nulla. Trovato da un test |
+
+---
+
 ## Completato (Sessione 2026-08-29)
 
 | Data | Voce |
@@ -60,8 +71,8 @@ Ne restano due, entrambi sul webhook — cioè sull'unico endpoint che per neces
 
 - [x] ~~**Rivedere la posizione nella fascia 25–100 €**~~ — risolto il 2026-08-29 sostituendo l'ordinale con la collocazione percentuale
 - [x] ~~**Caso limite offerte == posizione**~~ — risolto il 2026-08-29: il riferimento non può più coincidere con l'offerta più cara, in nessuna modalità
-- [ ] **Decidere quando uscire dal dry-run**: la scheda Storico ha ora il dettaglio carta per carta con filtro per esito, quindi il confronto fra proposte e proprie attese si può fare direttamente dall'interfaccia
-- [ ] **Affinare i percentili guardando l'anteprima**: partenza a 15% sul bulk, 20% fra 1 e 25 €, 40% sopra i 25 €. L'analisi di sensibilità su 11 carte reali mostra che le carte davvero sottoprezzo danno lo stesso risultato dal 20% al 60% — il segnale è robusto — mentre il percentile decide sulle altre. Da notare che sui mercati profondi il percentile è più aggressivo del vecchio ordinale (su Overgrown Tomb si passa dalla terza alla quinta posizione)
+- [ ] **Decidere quando uscire dal dry-run**: la scheda Storico ha ora il dettaglio carta per carta con filtro per esito, quindi il confronto fra proposte e proprie attese si può fare direttamente dall'interfaccia. Dal 2026-09-02 non è più una decisione tutto-o-niente: «Applica» dall'anteprima scrive sulle sole carte spuntate anche a profilo in dry-run, quindi si può cominciare da un insieme piccolo e guardato uno per uno
+- [ ] **Affinare i percentili guardando l'anteprima**: partenza a 15% sul bulk, 20% fra 1 e 25 €, 40% sopra i 25 €. Dal 2026-09-02 l'anteprima si può restringere per fascia di prezzo ed espansione, quindi ogni percentile si prova sulle carte che governa. L'analisi di sensibilità su 11 carte reali mostra che le carte davvero sottoprezzo danno lo stesso risultato dal 20% al 60% — il segnale è robusto — mentre il percentile decide sulle altre. Da notare che sui mercati profondi il percentile è più aggressivo del vecchio ordinale (su Overgrown Tomb si passa dalla terza alla quinta posizione)
 - [ ] **Grafici di andamento prezzi**: la raccolta parte dalla notte del 29/08. Ha senso disegnarli quando ci saranno qualche settimana di dati; la serie utile è prezzo e quantità da `PriceHistoryEntries`, affiancata al riferimento di mercato da `PriceChangeLogs`
 - [ ] **Allineare la scala di `PriceChangeLogs.ReferencePrice`**: è un prezzo di vetrina mentre `OldPrice` e `ProposedPrice` sono prezzi venditore, quindi su un grafico finirebbero sullo stesso asse pur misurando cose diverse. Il motore calcola già il prezzo di vetrina, lo scrive solo nella motivazione: basta una colonna
 - [ ] **Valutare se i ribassi vadano concessi affatto**: con il percentile al 40% restano 5 carte su 11 con proposta in ribasso. Il guardrail le limita al 25%, ma si può anche disattivare `CanDecrease` per fascia se l'obiettivo è solo cogliere i rialzi

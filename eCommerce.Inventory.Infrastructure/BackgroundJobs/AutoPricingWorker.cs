@@ -1,9 +1,6 @@
+using eCommerce.Inventory.Application.Interfaces;
 using eCommerce.Inventory.Domain.Entities;
-using eCommerce.Inventory.Infrastructure.Persistence;
-using eCommerce.Inventory.Infrastructure.Services;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -21,16 +18,16 @@ namespace eCommerce.Inventory.Infrastructure.BackgroundJobs;
 /// </summary>
 public class AutoPricingWorker : BackgroundService
 {
-    private readonly IServiceProvider _serviceProvider;
+    private readonly IPricingRunCoordinator _coordinator;
     private readonly ILogger<AutoPricingWorker> _logger;
     private readonly IConfiguration _configuration;
 
     public AutoPricingWorker(
-        IServiceProvider serviceProvider,
+        IPricingRunCoordinator coordinator,
         ILogger<AutoPricingWorker> logger,
         IConfiguration configuration)
     {
-        _serviceProvider = serviceProvider;
+        _coordinator = coordinator;
         _logger = logger;
         _configuration = configuration;
     }
@@ -72,55 +69,38 @@ public class AutoPricingWorker : BackgroundService
         _logger.LogInformation("AutoPricingWorker fermato.");
     }
 
+    /// <summary>
+    /// La notturna non esegue da sé: passa dal coordinatore come qualsiasi altra esecuzione.
+    /// Così se una manuale lanciata la sera prima è ancora in corso all'orario previsto, la
+    /// notturna se ne accorge invece di sovrapporsi e spartirsi il limite di richieste.
+    /// </summary>
     private async Task RunAsync(CancellationToken stoppingToken)
     {
-        using var scope = _serviceProvider.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        var pricingService = scope.ServiceProvider.GetRequiredService<AutoPricingService>();
-
-        var profile = await context.PricingProfiles
-            .Include(p => p.Rules)
-            .FirstOrDefaultAsync(p => p.IsActive, stoppingToken);
-
-        if (profile == null)
-        {
-            _logger.LogWarning("Nessun profilo di pricing attivo: esecuzione notturna saltata");
-            return;
-        }
-
         var highValueThreshold = _configuration.GetValue("AutoPricing:HighValueThreshold", 1.00m);
         var bulkSliceSize = _configuration.GetValue("AutoPricing:BulkSliceSize", 2000);
 
-        var blueprintIds = await pricingService.SelectBlueprintsForScheduledRunAsync(
-            highValueThreshold, bulkSliceSize, stoppingToken);
+        _logger.LogInformation("========================================");
+        _logger.LogInformation("Autopricer notturno: avvio");
+        _logger.LogInformation("========================================");
 
-        if (blueprintIds.Count == 0)
+        var result = _coordinator.Start(new PricingRunStartRequest(
+            PricingTrigger.Scheduled,
+            "Esecuzione notturna",
+            HighValueThreshold: highValueThreshold,
+            BulkSliceSize: bulkSliceSize));
+
+        if (!result.Started)
         {
-            _logger.LogInformation("Nessun blueprint da valutare in questa esecuzione");
+            _logger.LogWarning(
+                "Esecuzione notturna saltata: '{Running}' è iniziata alle {StartedAt} ed è ancora in corso",
+                result.Status.Description, result.Status.StartedAt);
             return;
         }
 
-        _logger.LogInformation("========================================");
-        _logger.LogInformation(
-            "Autopricer notturno: {Count} blueprint da valutare, profilo '{Profile}', dry-run={DryRun}",
-            blueprintIds.Count, profile.Name, profile.DryRun);
-        _logger.LogInformation("========================================");
-
-        var run = await pricingService.RunAsync(
-            blueprintIds,
-            profile,
-            PricingTrigger.Scheduled,
-            forceDryRun: false,
-            refreshPricesFirst: true,
-            stoppingToken);
-
-        _logger.LogInformation("========================================");
-        _logger.LogInformation(
-            "Autopricer notturno concluso: copertura {Coverage}%, applicati {Applied}, simulati {Simulated}, " +
-            "invariati {NoChange}, saltati {Skipped}, falliti {Failed}, delta {Delta:0.00} €",
-            run.CoveragePercent, run.AppliedCount, run.SimulatedCount,
-            run.NoChangeCount, run.SkippedCount, run.FailedCount, run.TotalPriceDelta);
-        _logger.LogInformation("========================================");
+        // Attendere il completamento tiene il ciclo del worker allineato all'esecuzione
+        // reale: senza attesa ripianificherebbe subito la notte successiva mentre questa
+        // sta ancora girando. Il riepilogo finale lo scrive il coordinatore.
+        await result.Completion.WaitAsync(stoppingToken);
     }
 
     /// <summary>

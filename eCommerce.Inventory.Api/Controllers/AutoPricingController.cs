@@ -1,4 +1,5 @@
 using eCommerce.Inventory.Api.Models;
+using eCommerce.Inventory.Application.Interfaces;
 using eCommerce.Inventory.Domain.Entities;
 using eCommerce.Inventory.Infrastructure.Persistence;
 using eCommerce.Inventory.Infrastructure.Services;
@@ -15,15 +16,18 @@ public class AutoPricingController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly AutoPricingService _pricingService;
+    private readonly IPricingRunCoordinator _coordinator;
     private readonly ILogger<AutoPricingController> _logger;
 
     public AutoPricingController(
         ApplicationDbContext context,
         AutoPricingService pricingService,
+        IPricingRunCoordinator coordinator,
         ILogger<AutoPricingController> logger)
     {
         _context = context;
         _pricingService = pricingService;
+        _coordinator = coordinator;
         _logger = logger;
     }
 
@@ -125,18 +129,7 @@ public class AutoPricingController : ControllerBase
 
         if (blueprintIds.Count == 0)
         {
-            // Nessun blueprint indicato: si campionano le carte di maggior valore,
-            // che sono quelle su cui conviene verificare per prime le regole.
-            var limit = Math.Clamp(request.Limit ?? 25, 1, 200);
-            blueprintIds = await _context.InventoryItems
-                .AsNoTracking()
-                .Where(i => i.Quantity > 0)
-                .GroupBy(i => i.BlueprintId)
-                .Select(g => new { BlueprintId = g.Key, MaxPrice = g.Max(i => i.ListingPrice) })
-                .OrderByDescending(x => x.MaxPrice)
-                .Take(limit)
-                .Select(x => x.BlueprintId)
-                .ToListAsync(cancellationToken);
+            blueprintIds = await SelectPreviewBlueprintsAsync(request, cancellationToken);
         }
 
         var run = await _pricingService.RunAsync(
@@ -146,11 +139,63 @@ public class AutoPricingController : ControllerBase
         return Ok(ApiResponse<object>.SuccessResult(await BuildRunReportAsync(run, cancellationToken)));
     }
 
+    /// <summary>
+    /// Sceglie le carte su cui calcolare l'anteprima.
+    ///
+    /// I filtri non sono un vezzo: senza, l'anteprima campiona sempre le carte di maggior
+    /// valore, ed è inutile quando la regola da verificare riguarda un'altra fascia. Una
+    /// modifica alla regola 1–25 € va provata sulle carte fra 1 e 25 €, non sulle più care.
+    /// </summary>
+    private async Task<List<int>> SelectPreviewBlueprintsAsync(
+        PreviewRequest request, CancellationToken cancellationToken)
+    {
+        var limit = Math.Clamp(request.Limit ?? 25, 1, 200);
+
+        // La fascia si valuta sul prezzo più alto fra le copie della stessa carta, come fa
+        // il motore quando sceglie la regola: filtrare sulla singola copia darebbe insiemi
+        // diversi da quelli su cui l'esecuzione lavorerà davvero.
+        var query = _context.InventoryItems
+            .AsNoTracking()
+            .Where(i => i.Quantity > 0);
+
+        if (request.ExpansionId.HasValue)
+        {
+            var expansionId = request.ExpansionId.Value;
+            query = query.Where(i => _context.Blueprints
+                .Any(b => b.Id == i.BlueprintId && b.ExpansionId == expansionId));
+        }
+
+        var perBlueprint = query
+            .GroupBy(i => i.BlueprintId)
+            .Select(g => new { BlueprintId = g.Key, MaxPrice = g.Max(i => i.ListingPrice) });
+
+        if (request.MinPrice.HasValue)
+        {
+            perBlueprint = perBlueprint.Where(x => x.MaxPrice >= request.MinPrice.Value);
+        }
+
+        if (request.MaxPrice.HasValue)
+        {
+            perBlueprint = perBlueprint.Where(x => x.MaxPrice <= request.MaxPrice.Value);
+        }
+
+        return await perBlueprint
+            .OrderByDescending(x => x.MaxPrice)
+            .Take(limit)
+            .Select(x => x.BlueprintId)
+            .ToListAsync(cancellationToken);
+    }
+
     // --- Esecuzione ---
 
     /// <summary>
-    /// Esegue l'autopricer su richiesta. Scrive su Card Trader solo se il profilo
-    /// non è in dry-run: la modalità è una proprietà del profilo, non di questa chiamata.
+    /// Avvia l'autopricer su richiesta e restituisce subito il controllo: l'esecuzione
+    /// prosegue in background, così non è necessario restare sulla pagina che l'ha lanciata.
+    /// Una esecuzione su tutto il magazzino dura ore — a 20 richieste al minuto — e nessuna
+    /// richiesta HTTP resterebbe aperta tanto a lungo.
+    ///
+    /// Scrive su Card Trader solo se il profilo non è in dry-run: la modalità è una
+    /// proprietà del profilo, non di questa chiamata.
     /// </summary>
     [HttpPost("run")]
     public async Task<IActionResult> Run([FromBody] RunRequest request, CancellationToken cancellationToken)
@@ -158,17 +203,106 @@ public class AutoPricingController : ControllerBase
         var profile = await LoadProfileAsync(request.ProfileId, cancellationToken);
         if (profile == null) return NotFound(ApiResponse<object>.ErrorResult("Nessun profilo di pricing disponibile"));
 
-        var blueprintIds = request.BlueprintIds?.ToList()
-            ?? await _pricingService.SelectBlueprintsForScheduledRunAsync(
-                request.HighValueThreshold ?? 1.00m,
-                request.BulkSliceSize ?? 0,
-                cancellationToken);
+        var result = _coordinator.Start(new PricingRunStartRequest(
+            PricingTrigger.Manual,
+            "Esecuzione manuale",
+            ProfileId: profile.Id,
+            BlueprintIds: request.BlueprintIds,
+            HighValueThreshold: request.HighValueThreshold ?? 1.00m,
+            BulkSliceSize: request.BulkSliceSize ?? 0));
 
-        var run = await _pricingService.RunAsync(
-            blueprintIds, profile, PricingTrigger.Manual,
-            forceDryRun: false, refreshPricesFirst: true, cancellationToken);
+        if (!result.Started)
+        {
+            return Conflict(ApiResponse<object>.ErrorResult(
+                $"Un'altra esecuzione è già in corso ({result.Status.Description}, avviata alle " +
+                $"{result.Status.StartedAt.ToLocalTime():HH:mm}). Attenderne la fine oppure interromperla."));
+        }
 
-        return Ok(ApiResponse<object>.SuccessResult(await BuildRunReportAsync(run, cancellationToken)));
+        _logger.LogInformation("Esecuzione manuale dell'autopricer avviata dall'interfaccia");
+
+        return Accepted(ApiResponse<object>.SuccessResult(
+            MapStatus(result.Status, null), "Esecuzione avviata: prosegue in background"));
+    }
+
+    /// <summary>
+    /// Applica i prezzi alle carte scelte a mano nell'anteprima.
+    ///
+    /// Non scrive i prezzi calcolati dall'anteprima: quelli arrivano dal browser e l'API non
+    /// deve fidarsene. Rivaluta le stesse carte su dati di mercato freschi, un attimo prima di
+    /// scrivere — quindi il prezzo applicato può differire di poco da quello visto a schermo,
+    /// se il mercato si è mosso nel frattempo.
+    ///
+    /// Scrive anche con il profilo in dry-run: è un gesto esplicito su carte appena esaminate,
+    /// ed è il modo di uscire dalla simulazione un pezzo alla volta.
+    /// </summary>
+    [HttpPost("apply")]
+    public async Task<IActionResult> Apply([FromBody] ApplyRequest request, CancellationToken cancellationToken)
+    {
+        if (request.BlueprintIds.Count == 0)
+        {
+            return BadRequest(ApiResponse<object>.ErrorResult("Nessuna carta selezionata"));
+        }
+
+        var profile = await LoadProfileAsync(request.ProfileId, cancellationToken);
+        if (profile == null) return NotFound(ApiResponse<object>.ErrorResult("Nessun profilo di pricing disponibile"));
+
+        var blueprintIds = request.BlueprintIds.Distinct().ToList();
+
+        var result = _coordinator.Start(new PricingRunStartRequest(
+            PricingTrigger.Manual,
+            $"Applicazione dall'anteprima ({blueprintIds.Count} carte)",
+            ProfileId: profile.Id,
+            BlueprintIds: blueprintIds,
+            ForceApply: true));
+
+        if (!result.Started)
+        {
+            return Conflict(ApiResponse<object>.ErrorResult(
+                $"Un'altra esecuzione è già in corso ({result.Status.Description}, avviata alle " +
+                $"{result.Status.StartedAt.ToLocalTime():HH:mm}). Attenderne la fine oppure interromperla."));
+        }
+
+        _logger.LogInformation(
+            "Applicazione dall'anteprima avviata su {Count} carte (profilo in dry-run: {DryRun})",
+            blueprintIds.Count, profile.DryRun);
+
+        return Accepted(ApiResponse<object>.SuccessResult(
+            MapStatus(result.Status, null), "Applicazione avviata: prosegue in background"));
+    }
+
+    /// <summary>
+    /// Stato dell'esecuzione in corso, se c'è. È quello che permette di lasciare la pagina
+    /// e ritrovare l'avanzamento al ritorno: la parte in memoria dice a che punto è la
+    /// preparazione, i contatori arrivano dalla riga di storico, aggiornata a ogni carta.
+    /// </summary>
+    [HttpGet("run/current")]
+    public async Task<IActionResult> GetCurrentRun(CancellationToken cancellationToken)
+    {
+        var status = _coordinator.Current;
+        if (status == null) return Ok(ApiResponse<object?>.SuccessResult(null));
+
+        var log = status.RunId.HasValue
+            ? await _context.PricingRunLogs
+                .AsNoTracking()
+                .FirstOrDefaultAsync(r => r.Id == status.RunId.Value, cancellationToken)
+            : null;
+
+        return Ok(ApiResponse<object>.SuccessResult(MapStatus(status, log)));
+    }
+
+    /// <summary>
+    /// Interrompe l'esecuzione in corso. L'arresto avviene fra un blueprint e il successivo:
+    /// le valutazioni già fatte restano a registro, e i prezzi già scritti restano scritti.
+    /// </summary>
+    [HttpPost("run/cancel")]
+    public IActionResult CancelRun()
+    {
+        if (!_coordinator.RequestCancellation())
+        {
+            return NotFound(ApiResponse<object>.ErrorResult("Nessuna esecuzione in corso da interrompere"));
+        }
+
+        return Ok(ApiResponse<object>.SuccessResult(new { }, "Interruzione richiesta"));
     }
 
     // --- Storico e copertura ---
@@ -345,6 +479,31 @@ public class AutoPricingController : ControllerBase
         };
     }
 
+    /// <summary>
+    /// Stato di avanzamento per l'interfaccia. I contatori mancano finché la riga di storico
+    /// non esiste: in quella finestra l'esecuzione sta ancora selezionando le carte o
+    /// allineando i prezzi, e <c>phase</c> è l'unica cosa da mostrare.
+    /// </summary>
+    private static object MapStatus(PricingRunStatus status, PricingRunLog? log) => new
+    {
+        status.RunId,
+        Trigger = status.Trigger.ToString(),
+        status.Description,
+        status.StartedAt,
+        status.Phase,
+        status.CancellationRequested,
+        PlannedCount = log?.PlannedCount,
+        EvaluatedCount = log?.EvaluatedCount,
+        AppliedCount = log?.AppliedCount,
+        SimulatedCount = log?.SimulatedCount,
+        NoChangeCount = log?.NoChangeCount,
+        SkippedCount = log?.SkippedCount,
+        FailedCount = log?.FailedCount,
+        TotalPriceDelta = log?.TotalPriceDelta,
+        CoveragePercent = log?.CoveragePercent,
+        DryRun = log?.DryRun
+    };
+
     private static object MapChange(PriceChangeLog c) => MapChange(c, new Dictionary<int, BlueprintRef>());
 
     private static object MapChange(PriceChangeLog c, IReadOnlyDictionary<int, BlueprintRef> fallback)
@@ -422,6 +581,22 @@ public class PreviewRequest
 
     /// <summary>Quante carte campionare se non se ne indicano di specifiche.</summary>
     public int? Limit { get; set; }
+
+    /// <summary>Estremo inferiore della fascia di prezzo da campionare. Vuoto = nessun limite.</summary>
+    public decimal? MinPrice { get; set; }
+
+    /// <summary>Estremo superiore della fascia di prezzo da campionare. Vuoto = nessun limite.</summary>
+    public decimal? MaxPrice { get; set; }
+
+    /// <summary>Limita il campione a una singola espansione.</summary>
+    public int? ExpansionId { get; set; }
+}
+
+/// <summary>Carte scelte a mano nell'anteprima, da riprezzare davvero.</summary>
+public class ApplyRequest
+{
+    public int? ProfileId { get; set; }
+    public List<int> BlueprintIds { get; set; } = new();
 }
 
 public class RunRequest

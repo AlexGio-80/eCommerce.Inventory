@@ -110,6 +110,12 @@ builder.Services.AddScoped<AutoPricingService>();
 // inserzioni) e il worker che la consuma: dev'essere singleton
 builder.Services.AddSingleton<IPriceRefreshQueue, PriceRefreshQueue>();
 
+// Tiene una sola esecuzione dell'autopricer alla volta e la porta avanti in background,
+// fuori dalla richiesta HTTP. Singleton perché lo slot occupato dev'essere lo stesso per
+// tutti: la notturna, l'esecuzione manuale e l'applicazione dall'anteprima si spartirebbero
+// altrimenti lo stesso limite di 20 richieste al minuto verso Card Trader.
+builder.Services.AddSingleton<IPricingRunCoordinator, PricingRunCoordinator>();
+
 // Esecuzione notturna dell'autopricer (attivabile via AutoPricing:Enabled)
 builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJobs.AutoPricingWorker>();
 

@@ -11,6 +11,8 @@ import { MatMenuModule } from '@angular/material/menu';
 import { TabBarComponent } from '../components/tab-bar/tab-bar.component';
 import { TabManagerService } from '../../core/services';
 import { AuthService } from '../../core/services/auth.service';
+import { PricingRunIndicatorComponent } from '../../features/pricing/components/pricing-run-indicator.component';
+import { PricingRunMonitorService } from '../../features/pricing/services/pricing-run-monitor.service';
 
 interface NavItem {
   label: string;
@@ -32,6 +34,7 @@ interface NavItem {
     MatTooltipModule,
     MatMenuModule,
     TabBarComponent,
+    PricingRunIndicatorComponent,
   ],
   templateUrl: './layout.component.html',
   styleUrls: ['./layout.component.scss'],
@@ -57,10 +60,15 @@ export class LayoutComponent implements OnInit {
   constructor(
     private router: Router,
     private tabManager: TabManagerService,
-    private authService: AuthService
+    private authService: AuthService,
+    private pricingRunMonitor: PricingRunMonitorService
   ) { }
 
   ngOnInit(): void {
+    // Il guscio esiste solo dopo l'autenticazione: è il punto giusto per far partire il
+    // monitoraggio dell'autopricer, che altrimenti interrogherebbe l'API da sloggati.
+    this.pricingRunMonitor.start();
+
     // Initialize tab based on current route
     const currentRoute = this.router.url;
     const navItem = this.navItems.find(item => item.route === currentRoute);
@@ -72,6 +80,7 @@ export class LayoutComponent implements OnInit {
   }
 
   logout(): void {
+    this.pricingRunMonitor.stop();
     this.authService.logout();
     this.router.navigate(['/login']);
   }
