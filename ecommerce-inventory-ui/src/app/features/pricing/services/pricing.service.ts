@@ -41,6 +41,8 @@ export interface PricingProfile {
     includeProSellers: boolean;
     includeNormalSellers: boolean;
     excludeVacationSellers: boolean;
+    /** Solo venditori Cardtrader Zero: passano dal magazzino/controllo qualità di Card Trader. */
+    includeOnlyCtZeroSellers: boolean;
     minSellerDailyCapacity?: number | null;
     countryCodesCsv?: string | null;
     enableOutlierRejection: boolean;

@@ -337,6 +337,8 @@ public class PricingEngine
 
             if (profile.ExcludeVacationSellers && o.OnVacation) return false;
 
+            if (profile.IncludeOnlyCtZeroSellers && !u.CanSellViaHub) return false;
+
             var isPro = string.Equals(u.UserType, "pro", StringComparison.OrdinalIgnoreCase);
             if (isPro && !profile.IncludeProSellers) return false;
             if (!isPro && !profile.IncludeNormalSellers) return false;

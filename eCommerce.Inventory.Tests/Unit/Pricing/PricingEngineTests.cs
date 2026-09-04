@@ -69,7 +69,8 @@ public class PricingEngineTests
         bool graded = false,
         bool onVacation = false,
         int capacity = 10,
-        int quantity = 1)
+        int quantity = 1,
+        bool canSellViaHub = false)
         => new()
         {
             Id = Random.Shared.Next(1, 100000),
@@ -90,7 +91,8 @@ public class PricingEngineTests
                 Id = userId,
                 UserType = userType,
                 CountryCode = country,
-                MaxSellableIn24hQuantity = capacity
+                MaxSellableIn24hQuantity = capacity,
+                CanSellViaHub = canSellViaHub
             }
         };
 
@@ -373,6 +375,28 @@ public class PricingEngineTests
 
         decision.ComparableOffersCount.Should().Be(1);
         decision.ReferencePrice.Should().Be(8.00m);
+    }
+
+    [Fact]
+    public void Filtra_solo_venditori_ct_zero()
+    {
+        // can_sell_via_hub è il campo con cui l'API segnala i venditori Cardtrader Zero:
+        // passano dal magazzino/controllo qualità di Card Trader, quindi sono un riferimento
+        // più affidabile dei venditori nuovi o casuali che mettono prezzi fuori mercato.
+        var engine = new PricingEngine();
+        var profile = Profile(NthLowestRule(1.01m, 100m, 1));
+        profile.IncludeOnlyCtZeroSellers = true;
+
+        var offers = new List<CardTraderMarketplaceProductDto>
+        {
+            Offer(2.00m, canSellViaHub: false), // scartato: non è CT Zero
+            Offer(9.00m, canSellViaHub: true)   // ammesso
+        };
+
+        var decision = engine.Evaluate(Item(20.00m), offers, profile, MyUserId);
+
+        decision.ComparableOffersCount.Should().Be(1);
+        decision.ReferencePrice.Should().Be(9.00m);
     }
 
     [Fact]

@@ -9,6 +9,37 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-09-04] Prezzi — Filtro "solo venditori Cardtrader Zero"
+
+#### Problema
+
+Il motore di pricing prende a riferimento tutte le offerte comparabili, incluse quelle di
+venditori nuovi o casuali che spesso pubblicano prezzi molto più bassi del mercato reale.
+Una carta di valore superiore a 1€ venduta a un prezzo allineato a un venditore nuovo,
+invece che ai venditori consolidati, è un danno diretto.
+
+#### Soluzione Implementata
+
+Nuovo filtro `IncludeOnlyCtZeroSellers` su `PricingProfile` (default `false`, migration
+`20260904170854_AddIncludeOnlyCtZeroSellers`): se attivo, `PricingEngine.FilterSellers`
+tiene solo le offerte il cui venditore ha `can_sell_via_hub = true`. Verificato sulla
+documentazione ufficiale Card Trader che questo è esattamente il campo con cui l'API segnala
+i venditori **Cardtrader Zero** (passano dal magazzino/controllo qualità di Card Trader),
+non un dato nuovo da recuperare. Checkbox "Solo venditori Cardtrader Zero" nella scheda
+Venditori di riferimento dell'autopricer.
+
+Richiesto anche un filtro per area geografica (europei/americani/canadesi/brasiliani/asiatici,
+come su cardtrader.com). L'API espone solo il `country_code` ISO del singolo venditore, non
+categorie regionali: il campo "Paesi ammessi" già esistente (CSV di codici ISO) copre il
+bisogno senza bisogno di codice nuovo. Valutati preset per regione, rimandati: avrebbero
+richiesto di decidere a tavolino quali paesi entrano in ciascuna categoria.
+
+#### Note Tecniche
+
+`CardTraderMarketplaceUserDto.CanSellViaHub` (campo `can_sell_via_hub`) era già mappato ma
+non ancora usato in nessun filtro: la sua interpretazione come "venditore Cardtrader Zero" è
+confermata dalla documentazione API di Card Trader, non dedotta dal nome del campo.
+
 ### [2026-09-02] Prezzi — Esecuzione a richiesta in background, anteprima mirata e applicazione selettiva
 
 #### Problema

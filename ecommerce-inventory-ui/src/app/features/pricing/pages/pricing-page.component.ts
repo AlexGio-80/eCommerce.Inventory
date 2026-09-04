@@ -221,6 +221,14 @@ import { Expansion, ExpansionsService } from '../../expansions/services/expansio
                   <mat-checkbox [(ngModel)]="p.enableOutlierRejection">Scarta le offerte anomale</mat-checkbox>
                 </div>
 
+                <div class="checkbox-row">
+                  <mat-checkbox [(ngModel)]="p.includeOnlyCtZeroSellers">Solo venditori Cardtrader Zero</mat-checkbox>
+                  <span class="mode-hint">
+                    Riferimento solo ai venditori che passano dal magazzino/controllo qualità di Card Trader —
+                    esclude i venditori nuovi o casuali che spesso mettono prezzi fuori mercato
+                  </span>
+                </div>
+
                 <div class="field-row">
                   <mat-form-field appearance="outline">
                     <mat-label>Paesi ammessi</mat-label>

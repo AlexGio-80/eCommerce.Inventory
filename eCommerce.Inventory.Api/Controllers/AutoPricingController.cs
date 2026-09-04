@@ -77,6 +77,7 @@ public class AutoPricingController : ControllerBase
         profile.IncludeProSellers = request.IncludeProSellers ?? profile.IncludeProSellers;
         profile.IncludeNormalSellers = request.IncludeNormalSellers ?? profile.IncludeNormalSellers;
         profile.ExcludeVacationSellers = request.ExcludeVacationSellers ?? profile.ExcludeVacationSellers;
+        profile.IncludeOnlyCtZeroSellers = request.IncludeOnlyCtZeroSellers ?? profile.IncludeOnlyCtZeroSellers;
         profile.MinSellerDailyCapacity = request.MinSellerDailyCapacity ?? profile.MinSellerDailyCapacity;
         profile.CountryCodesCsv = request.CountryCodesCsv ?? profile.CountryCodesCsv;
         profile.EnableOutlierRejection = request.EnableOutlierRejection ?? profile.EnableOutlierRejection;
@@ -547,6 +548,7 @@ public class AutoPricingController : ControllerBase
         p.IncludeProSellers,
         p.IncludeNormalSellers,
         p.ExcludeVacationSellers,
+        p.IncludeOnlyCtZeroSellers,
         p.MinSellerDailyCapacity,
         p.CountryCodesCsv,
         p.EnableOutlierRejection,
@@ -620,6 +622,7 @@ public class UpdateProfileRequest
     public bool? IncludeProSellers { get; set; }
     public bool? IncludeNormalSellers { get; set; }
     public bool? ExcludeVacationSellers { get; set; }
+    public bool? IncludeOnlyCtZeroSellers { get; set; }
     public int? MinSellerDailyCapacity { get; set; }
     public string? CountryCodesCsv { get; set; }
     public bool? EnableOutlierRejection { get; set; }

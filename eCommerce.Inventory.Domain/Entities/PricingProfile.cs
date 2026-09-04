@@ -44,11 +44,21 @@ public class PricingProfile
     // NB: l'API Card Trader non espone il numero di recensioni di un venditore,
     // quindi un filtro "almeno N feedback" non è realizzabile. Il campo user espone
     // solo: id, username, user_type, country_code, max_sellable_in24h_quantity,
-    // one_day_ready, can_sell_via_hub, can_sell_sealed_with_ct_zero, on_vacation.
+    // one_day_ready, can_sell_via_hub (= venditore Cardtrader Zero, vedi sotto),
+    // can_sell_sealed_with_ct_zero, on_vacation.
 
     public bool IncludeProSellers { get; set; } = true;
     public bool IncludeNormalSellers { get; set; } = true;
     public bool ExcludeVacationSellers { get; set; } = true;
+
+    /// <summary>
+    /// Tiene solo le offerte di venditori Cardtrader Zero (l'API espone questa informazione
+    /// come <c>can_sell_via_hub</c> sull'oggetto utente, cioè "acquistabile tramite il servizio
+    /// Zero"). Un venditore Zero passa dal magazzino/controllo qualità di Card Trader: è un
+    /// segnale di affidabilità che l'API non dà altrimenti, dato che non espone recensioni.
+    /// Utile per non prendere a riferimento venditori nuovi o casuali con prezzi fuori mercato.
+    /// </summary>
+    public bool IncludeOnlyCtZeroSellers { get; set; } = false;
 
     /// <summary>
     /// Soglia minima su max_sellable_in24h_quantity: proxy della dimensione del venditore,
