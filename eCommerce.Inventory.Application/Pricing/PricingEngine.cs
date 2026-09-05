@@ -25,11 +25,17 @@ public class PricingEngine
     /// <param name="offers">Offerte marketplace grezze per il blueprint, comprese le mie.</param>
     /// <param name="profile">Profilo con filtri e guardrail.</param>
     /// <param name="myUserId">Id venditore da escludere: le proprie offerte non sono un riferimento.</param>
+    /// <param name="bypassGuardrail">
+    /// Ignora il limite di variazione massima per questa valutazione. Riservato a un gesto
+    /// esplicito su una carta già vista bloccata nello storico: il guardrail resta attivo per
+    /// tutte le altre, qui si accetta consapevolmente lo scarto più ampio.
+    /// </param>
     public PricingDecision Evaluate(
         InventoryItem item,
         IReadOnlyList<CardTraderMarketplaceProductDto> offers,
         PricingProfile profile,
-        int myUserId)
+        int myUserId,
+        bool bypassGuardrail = false)
     {
         var currentPrice = item.ListingPrice;
 
@@ -184,6 +190,8 @@ public class PricingEngine
         }
 
         // 10. Guardrail, asimmetrico per direzione: le due non hanno lo stesso costo se sbagliate.
+        var guardrailBypassed = false;
+
         if (currentPrice > 0)
         {
             var isIncrease = proposed > currentPrice;
@@ -194,17 +202,24 @@ public class PricingEngine
                 var changePercent = Math.Abs((proposed - currentPrice) / currentPrice * 100m);
                 if (changePercent > limit)
                 {
-                    decision.Outcome = PricingOutcome.BlockedByGuardrail;
-                    decision.Reason =
-                        $"{(isIncrease ? "Aumento" : "Ribasso")} del {changePercent:0.0}% oltre il massimo consentito " +
-                        $"del {limit:0.0}% ({currentPrice:0.00} € → {proposed:0.00} €). {context}";
-                    return decision;
+                    if (!bypassGuardrail)
+                    {
+                        decision.Outcome = PricingOutcome.BlockedByGuardrail;
+                        decision.Reason =
+                            $"{(isIncrease ? "Aumento" : "Ribasso")} del {changePercent:0.0}% oltre il massimo consentito " +
+                            $"del {limit:0.0}% ({currentPrice:0.00} € → {proposed:0.00} €). {context}";
+                        return decision;
+                    }
+
+                    guardrailBypassed = true;
                 }
             }
         }
 
         decision.Outcome = profile.DryRun ? PricingOutcome.SimulatedDryRun : PricingOutcome.Applied;
-        decision.Reason = $"{currentPrice:0.00} € → {proposed:0.00} €. {context}";
+        decision.Reason = guardrailBypassed
+            ? $"Guardrail ignorato su richiesta esplicita. {currentPrice:0.00} € → {proposed:0.00} €. {context}"
+            : $"{currentPrice:0.00} € → {proposed:0.00} €. {context}";
 
         return decision;
     }

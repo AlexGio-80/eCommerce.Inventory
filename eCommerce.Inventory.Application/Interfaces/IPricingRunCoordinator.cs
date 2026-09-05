@@ -47,6 +47,11 @@ public interface IPricingRunCoordinator
 /// dove le carte sono state guardate una per una: è il modo di uscire dalla simulazione
 /// gradualmente, senza attivare la scrittura anche sull'esecuzione notturna.
 /// </param>
+/// <param name="BypassGuardrail">
+/// Ignora il limite di variazione massima per le carte di questa esecuzione. Riservato ad
+/// «Applica comunque» dalla scheda Storico, su carte già viste bloccate: un gesto esplicito
+/// e circoscritto a quelle carte, non un cambio del guardrail per l'esecuzione notturna.
+/// </param>
 public record PricingRunStartRequest(
     PricingTrigger Trigger,
     string Description,
@@ -54,7 +59,8 @@ public record PricingRunStartRequest(
     IReadOnlyList<int>? BlueprintIds = null,
     decimal HighValueThreshold = 1.00m,
     int BulkSliceSize = 0,
-    bool ForceApply = false);
+    bool ForceApply = false,
+    bool BypassGuardrail = false);
 
 /// <summary>
 /// Stato di un'esecuzione in corso, per la parte che vive in memoria.

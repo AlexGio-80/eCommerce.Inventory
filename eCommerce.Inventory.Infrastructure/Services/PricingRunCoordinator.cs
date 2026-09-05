@@ -152,6 +152,14 @@ public class PricingRunCoordinator : IPricingRunCoordinator
                 blueprintIds.Count, profile.Name);
         }
 
+        if (request.BypassGuardrail)
+        {
+            // Idem: qui il limite di variazione massima non protegge, ed è voluto.
+            _logger.LogWarning(
+                "Guardrail ignorato su richiesta esplicita per {Count} carte (profilo '{Profile}')",
+                blueprintIds.Count, profile.Name);
+        }
+
         var run = await pricingService.RunAsync(
             blueprintIds,
             profile,
@@ -164,7 +172,8 @@ public class PricingRunCoordinator : IPricingRunCoordinator
                 active.RunId = created.Id;
                 active.Phase = "Valutazione delle carte";
             },
-            forceApply: request.ForceApply);
+            forceApply: request.ForceApply,
+            bypassGuardrail: request.BypassGuardrail);
 
         _logger.LogInformation(
             "Autopricer ({Description}) concluso: copertura {Coverage}%, applicati {Applied}, simulati {Simulated}, " +

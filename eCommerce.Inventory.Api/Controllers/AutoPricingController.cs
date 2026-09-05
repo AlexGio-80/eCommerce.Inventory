@@ -226,12 +226,14 @@ public class AutoPricingController : ControllerBase
     }
 
     /// <summary>
-    /// Applica i prezzi alle carte scelte a mano nell'anteprima.
+    /// Applica i prezzi alle carte scelte a mano nell'anteprima, oppure — con
+    /// <see cref="ApplyRequest.BypassGuardrail"/> — alle carte scelte a mano nello storico che
+    /// il guardrail aveva bloccato.
     ///
-    /// Non scrive i prezzi calcolati dall'anteprima: quelli arrivano dal browser e l'API non
-    /// deve fidarsene. Rivaluta le stesse carte su dati di mercato freschi, un attimo prima di
-    /// scrivere — quindi il prezzo applicato può differire di poco da quello visto a schermo,
-    /// se il mercato si è mosso nel frattempo.
+    /// Non scrive i prezzi calcolati dall'anteprima o dallo storico: quelli arrivano dal browser
+    /// e l'API non deve fidarsene. Rivaluta le stesse carte su dati di mercato freschi, un attimo
+    /// prima di scrivere — quindi il prezzo applicato può differire di poco da quello visto a
+    /// schermo, se il mercato si è mosso nel frattempo.
     ///
     /// Scrive anche con il profilo in dry-run: è un gesto esplicito su carte appena esaminate,
     /// ed è il modo di uscire dalla simulazione un pezzo alla volta.
@@ -249,12 +251,17 @@ public class AutoPricingController : ControllerBase
 
         var blueprintIds = request.BlueprintIds.Distinct().ToList();
 
+        var description = request.BypassGuardrail
+            ? $"Applicazione forzata oltre il guardrail ({blueprintIds.Count} carte)"
+            : $"Applicazione dall'anteprima ({blueprintIds.Count} carte)";
+
         var result = _coordinator.Start(new PricingRunStartRequest(
             PricingTrigger.Manual,
-            $"Applicazione dall'anteprima ({blueprintIds.Count} carte)",
+            description,
             ProfileId: profile.Id,
             BlueprintIds: blueprintIds,
-            ForceApply: true));
+            ForceApply: true,
+            BypassGuardrail: request.BypassGuardrail));
 
         if (!result.Started)
         {
@@ -264,8 +271,8 @@ public class AutoPricingController : ControllerBase
         }
 
         _logger.LogInformation(
-            "Applicazione dall'anteprima avviata su {Count} carte (profilo in dry-run: {DryRun})",
-            blueprintIds.Count, profile.DryRun);
+            "{Description} avviata su {Count} carte (profilo in dry-run: {DryRun}, guardrail ignorato: {BypassGuardrail})",
+            description, blueprintIds.Count, profile.DryRun, request.BypassGuardrail);
 
         return Accepted(ApiResponse<object>.SuccessResult(
             MapStatus(result.Status, null), "Applicazione avviata: prosegue in background"));
@@ -594,11 +601,17 @@ public class PreviewRequest
     public int? ExpansionId { get; set; }
 }
 
-/// <summary>Carte scelte a mano nell'anteprima, da riprezzare davvero.</summary>
+/// <summary>Carte scelte a mano nell'anteprima o nello storico, da riprezzare davvero.</summary>
 public class ApplyRequest
 {
     public int? ProfileId { get; set; }
     public List<int> BlueprintIds { get; set; } = new();
+
+    /// <summary>
+    /// Ignora il limite di variazione massima per queste carte. Riservato ad «Applica comunque»
+    /// dalla scheda Storico, su carte già viste con esito BlockedByGuardrail.
+    /// </summary>
+    public bool BypassGuardrail { get; set; }
 }
 
 public class RunRequest

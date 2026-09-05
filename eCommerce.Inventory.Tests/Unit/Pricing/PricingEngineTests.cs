@@ -217,6 +217,47 @@ public class PricingEngineTests
     }
 
     /// <summary>
+    /// «Applica comunque» dalla scheda Storico: un gesto esplicito su una carta già vista
+    /// bloccata, non un cambio del guardrail per tutte le altre. Deve scrivere esattamente
+    /// come se il guardrail non fosse mai scattato, con una motivazione che lo dichiari.
+    /// </summary>
+    [Fact]
+    public void Il_bypass_del_guardrail_scrive_comunque()
+    {
+        var engine = new PricingEngine();
+        var profile = Profile(NthLowestRule(1.01m, 100m, 1));
+        profile.MaxDecreasePercentPerRun = 50m;
+
+        var offers = new List<CardTraderMarketplaceProductDto> { Offer(1.00m), Offer(1.10m) };
+
+        var bloccata = engine.Evaluate(Item(50.00m), offers, profile, MyUserId);
+        bloccata.Outcome.Should().Be(PricingOutcome.BlockedByGuardrail, "senza bypass il comportamento non cambia");
+
+        var forzata = engine.Evaluate(Item(50.00m), offers, profile, MyUserId, bypassGuardrail: true);
+
+        forzata.Outcome.Should().Be(PricingOutcome.Applied);
+        forzata.ShouldWrite.Should().BeTrue();
+        forzata.ProposedPrice.Should().Be(bloccata.ProposedPrice, "il prezzo calcolato non cambia, solo la decisione di scriverlo");
+        forzata.Reason.Should().Contain("ignorato", "la motivazione deve dichiarare che il guardrail è stato scavalcato");
+    }
+
+    [Fact]
+    public void Il_bypass_del_guardrail_non_serve_se_non_scatta()
+    {
+        // Senza guardrail da scavalcare il flag non deve cambiare nulla: un normale rialzo
+        // di mercato resta identico con o senza bypass.
+        var engine = new PricingEngine();
+        var offers = new List<CardTraderMarketplaceProductDto> { Offer(50.00m), Offer(55.00m) };
+
+        var normale = engine.Evaluate(Item(20.00m), offers, Profile(NthLowestRule(1.01m, 100m, 1)), MyUserId);
+        var conBypass = engine.Evaluate(Item(20.00m), offers, Profile(NthLowestRule(1.01m, 100m, 1)), MyUserId, bypassGuardrail: true);
+
+        normale.Outcome.Should().Be(PricingOutcome.Applied);
+        conBypass.Outcome.Should().Be(PricingOutcome.Applied);
+        conBypass.ProposedPrice.Should().Be(normale.ProposedPrice);
+    }
+
+    /// <summary>
     /// Le due direzioni non comportano lo stesso rischio: un rialzo eccessivo lascia la carta
     /// invenduta e si corregge alla prossima esecuzione, un ribasso eccessivo la fa comprare
     /// subito al prezzo sbagliato. Il guardrail deve quindi essere asimmetrico.

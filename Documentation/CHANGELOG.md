@@ -9,6 +9,44 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-09-05] Prezzi — "Applica comunque" per bypassare il guardrail dalla scheda Storico
+
+#### Problema
+
+Una carta con esito `BlockedByGuardrail` restava al prezzo vecchio anche rilanciando
+l'esecuzione: il blocco scatta dentro `PricingEngine.Evaluate`, prima del ramo che decide fra
+simulazione e scrittura, quindi nemmeno `ForceApply` (usato da "Applica le selezionate"
+nell'anteprima) lo scavalcava. L'unico modo di sistemare una carta così era cambiarne il
+prezzo a mano su Card Trader.
+
+#### Soluzione Implementata
+
+Nuovo parametro `bypassGuardrail` che attraversa tutta la catena con lo stesso meccanismo già
+usato per `ForceApply`/`ForceDryRun`: `PricingEngine.Evaluate` (se il guardrail scatterebbe,
+lo ignora e lo dichiara nella motivazione) → `AutoPricingService.RunAsync`/`EvaluateBlueprintAsync`
+→ `PricingRunStartRequest.BypassGuardrail` → `PricingRunCoordinator`. Riusato lo stesso endpoint
+`POST /api/pricing/apply` dell'anteprima (nuovo campo `BypassGuardrail` su `ApplyRequest`), invece
+di duplicarne uno: la meccanica è identica, cambia solo se il guardrail viene rispettato.
+
+Nella scheda Storico, la griglia dei calcoli di una esecuzione mostra la casella di selezione
+solo sulle righe con esito `BlockedByGuardrail` (nessun "seleziona tutto": un bypass del
+guardrail va scelto carta per carta, non in blocco). Il pulsante "Applica comunque" rivaluta
+le carte scelte su dati di mercato freschi e scrive su Card Trader anche se il nuovo calcolo
+supera ancora il limite di variazione — con un avviso esplicito a schermo.
+
+#### Note Tecniche
+
+File: [`PricingEngine.cs`](../eCommerce.Inventory.Application/Pricing/PricingEngine.cs),
+[`AutoPricingService.cs`](../eCommerce.Inventory.Infrastructure/Services/AutoPricingService.cs),
+[`PricingRunCoordinator.cs`](../eCommerce.Inventory.Infrastructure/Services/PricingRunCoordinator.cs),
+[`AutoPricingController.cs`](../eCommerce.Inventory.Api/Controllers/AutoPricingController.cs),
+[`pricing-page.component.ts`](../ecommerce-inventory-ui/src/app/features/pricing/pages/pricing-page.component.ts).
+Test: [`PricingEngineTests.cs`](../eCommerce.Inventory.Tests/Unit/Pricing/PricingEngineTests.cs)
+(due nuovi casi), [`ApplicaComunqueTests.cs`](../eCommerce.Inventory.Tests/Unit/Pricing/ApplicaComunqueTests.cs)
+(nuovo file, sul modello di `ApplicaDallAnteprimaTests.cs`). Non verificato dal vivo nel
+browser: l'app richiede login e non erano disponibili credenziali in sessione — verificato con
+build Angular pulita (nessun errore del template type-checker) e 91/91 test .NET.
+
 ### [2026-09-05] Fix — Header firma webhook sbagliato + shared secret mai impostato
 
 #### Problema

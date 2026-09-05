@@ -525,14 +525,40 @@ import { Expansion, ExpansionsService } from '../../expansions/services/expansio
                   Nessuna carta con questo esito in questa esecuzione.
                 </p>
 
+                <!-- Applicazione forzata delle sole carte bloccate dal guardrail, scelte a
+                     mano: solo quelle righe mostrano la casella di selezione. -->
+                <div class="apply-bar" *ngIf="changes().length > 0">
+                  <span class="apply-count">
+                    {{ changeSelectedCount() }} {{ changeSelectedCount() === 1 ? 'carta selezionata' : 'carte selezionate' }}
+                  </span>
+                  <button mat-raised-button color="warn"
+                          (click)="applyAnyway()"
+                          [disabled]="changeSelectedCount() === 0 || applyingAnyway() || monitor.isRunning()">
+                    <mat-icon>bolt</mat-icon> Applica comunque
+                  </button>
+                  <span class="hint" *ngIf="monitor.isRunning()">
+                    Un'altra esecuzione è in corso: attendine la fine o interrompila dalla scheda Regole.
+                  </span>
+                </div>
+
+                <p class="hint warn-hint" *ngIf="changeSelectedCount() > 0">
+                  <mat-icon inline>warning</mat-icon>
+                  Ignora il limite di variazione massima solo per le carte selezionate: vengono rivalutate
+                  su dati aggiornati e il nuovo prezzo scritto su Card Trader anche se supera il guardrail.
+                </p>
+
                 <ag-grid-angular
                   *ngIf="changes().length > 0"
                   class="ag-theme-quartz grid"
                   [rowData]="changes()"
-                  [columnDefs]="changeColumns"
+                  [columnDefs]="changeColumnsSelectable"
                   [defaultColDef]="defaultColDef"
+                  [rowSelection]="'multiple'"
+                  [suppressRowClickSelection]="true"
                   [pagination]="true"
-                  [paginationPageSize]="25">
+                  [paginationPageSize]="25"
+                  (gridReady)="onChangesGridReady($event)"
+                  (selectionChanged)="onChangeSelectionChanged()">
                 </ag-grid-angular>
               </mat-card-content>
             </mat-card>
@@ -573,6 +599,11 @@ export class PricingPageComponent implements OnInit {
   selectedCount = signal(0);
   applying = signal(false);
 
+  // Carte spuntate nello storico per «Applica comunque»: solo quelle bloccate dal guardrail
+  // sono selezionabili, vedi changeColumnsSelectable.
+  changeSelectedCount = signal(0);
+  applyingAnyway = signal(false);
+
   // Parametri dell'esecuzione a richiesta. Il bulk parte escluso di proposito: sono
   // migliaia di carte a 20 richieste al minuto, va incluso solo con l'intenzione di farlo.
   runHighValueThreshold = 1.00;
@@ -580,6 +611,7 @@ export class PricingPageComponent implements OnInit {
   starting = signal(false);
 
   private gridApi?: GridApi;
+  private changesGridApi?: GridApi;
 
   defaultColDef: ColDef = { sortable: true, filter: true, resizable: true };
 
@@ -635,6 +667,21 @@ export class PricingPageComponent implements OnInit {
       headerName: '', width: 50, pinned: 'left',
       checkboxSelection: true, headerCheckboxSelection: true,
       headerCheckboxSelectionFilteredOnly: true,
+      sortable: false, filter: false, resizable: false
+    },
+    ...this.changeColumns
+  ];
+
+  /**
+   * Colonne dello storico con casella di selezione, per «Applica comunque». A differenza
+   * dell'anteprima la casella compare solo sulle righe bloccate dal guardrail: è l'unico
+   * esito che questo pulsante può sbloccare, e senza «seleziona tutto» — un bypass del
+   * genere va scelto carta per carta, non in blocco.
+   */
+  changeColumnsSelectable: ColDef[] = [
+    {
+      headerName: '', width: 50, pinned: 'left',
+      checkboxSelection: (params) => params.data?.outcome === 'BlockedByGuardrail',
       sortable: false, filter: false, resizable: false
     },
     ...this.changeColumns
@@ -781,6 +828,7 @@ export class PricingPageComponent implements OnInit {
     this.changes.set([]);
     this.changesTotal.set(0);
     this.changesOutcome = '';
+    this.changeSelectedCount.set(0);
   }
 
   loadRunChanges(): void {
@@ -788,6 +836,8 @@ export class PricingPageComponent implements OnInit {
     if (!run) return;
 
     this.loadingChanges.set(true);
+    // Una selezione riferita alle righe precedenti non ha più senso su un dettaglio nuovo.
+    this.changeSelectedCount.set(0);
     this.pricingService.getRunChanges(run.id, this.changesOutcome || undefined).subscribe({
       next: page => {
         this.changes.set(page.items);
@@ -869,6 +919,47 @@ export class PricingPageComponent implements OnInit {
       },
       error: err => {
         this.applying.set(false);
+        this.monitor.refreshNow();
+        this.snackBar.open(
+          err?.error?.message ?? 'Applicazione non riuscita',
+          'Chiudi', { duration: 8000 });
+      }
+    });
+  }
+
+  onChangesGridReady(event: GridReadyEvent): void {
+    this.changesGridApi = event.api;
+  }
+
+  onChangeSelectionChanged(): void {
+    this.changeSelectedCount.set(this.changesGridApi?.getSelectedRows().length ?? 0);
+  }
+
+  /**
+   * Applica comunque le carte bloccate dal guardrail, scelte a mano nello storico. Stesso
+   * meccanismo di `applySelected`: le rivaluta su dati freschi prima di scrivere, ma qui il
+   * guardrail viene ignorato solo per queste carte, non per l'esecuzione notturna.
+   */
+  applyAnyway(): void {
+    const p = this.profile();
+    if (!p) return;
+
+    const selected = (this.changesGridApi?.getSelectedRows() ?? []) as PriceChange[];
+    const blueprintIds = [...new Set(selected.map(c => c.blueprintId))];
+    if (blueprintIds.length === 0) return;
+
+    this.applyingAnyway.set(true);
+
+    this.pricingService.apply(p.id, blueprintIds, true).subscribe({
+      next: () => {
+        this.applyingAnyway.set(false);
+        this.monitor.refreshNow();
+        this.snackBar.open(
+          `Applicazione forzata avviata su ${blueprintIds.length} carte: prosegue in background`,
+          'Chiudi', { duration: 8000 });
+      },
+      error: err => {
+        this.applyingAnyway.set(false);
         this.monitor.refreshNow();
         this.snackBar.open(
           err?.error?.message ?? 'Applicazione non riuscita',

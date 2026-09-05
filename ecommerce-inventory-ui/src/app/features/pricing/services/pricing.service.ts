@@ -202,12 +202,13 @@ export class PricingService {
     }
 
     /**
-     * Applica davvero alle carte scelte nell'anteprima. Le rivaluta su dati freschi prima di
-     * scrivere, e scrive anche se il profilo è in dry-run. Come `run`, ritorna subito.
+     * Applica davvero alle carte scelte nell'anteprima (o, con `bypassGuardrail`, alle carte
+     * scelte nello storico che il guardrail aveva bloccato). Le rivaluta su dati freschi prima
+     * di scrivere, e scrive anche se il profilo è in dry-run. Come `run`, ritorna subito.
      */
-    apply(profileId: number, blueprintIds: number[]): Observable<PricingRunStatus> {
+    apply(profileId: number, blueprintIds: number[], bypassGuardrail = false): Observable<PricingRunStatus> {
         return this.http.post<ApiResponse<PricingRunStatus>>(`${this.baseUrl}/apply`,
-            { profileId, blueprintIds })
+            { profileId, blueprintIds, bypassGuardrail })
             .pipe(map(r => r.data!));
     }
 

@@ -169,6 +169,11 @@ public class AutoPricingService
     /// simulazione un pezzo alla volta senza aprire la scrittura sull'esecuzione notturna.
     /// Non prevale su <paramref name="forceDryRun"/>: l'anteprima non deve poter scrivere mai.
     /// </param>
+    /// <param name="bypassGuardrail">
+    /// Ignora il limite di variazione massima per le carte di questa esecuzione. È il caso
+    /// di «Applica comunque» dalla scheda Storico, su carte già viste bloccate da <see cref="PricingOutcome.BlockedByGuardrail"/>:
+    /// un gesto esplicito, carta per carta, non un cambio del guardrail per tutte le altre.
+    /// </param>
     /// <param name="onRunCreated">
     /// Invocato appena la riga di storico esiste a database. Serve a chi segue l'esecuzione
     /// da fuori: la preparazione (selezione delle carte e allineamento dei prezzi) può durare
@@ -182,7 +187,8 @@ public class AutoPricingService
         bool refreshPricesFirst = true,
         CancellationToken cancellationToken = default,
         Action<PricingRunLog>? onRunCreated = null,
-        bool forceApply = false)
+        bool forceApply = false,
+        bool bypassGuardrail = false)
     {
         var dryRun = forceDryRun || (profile.DryRun && !forceApply);
 
@@ -222,6 +228,14 @@ public class AutoPricingService
             "Autopricer avviato | profilo={Profile} blueprint={Count} trigger={Trigger} dryRun={DryRun}",
             profile.Name, blueprintIds.Count, trigger, dryRun);
 
+        if (bypassGuardrail)
+        {
+            // Va detto a chiaro nel registro: qui il guardrail non protegge, ed è voluto.
+            _logger.LogWarning(
+                "Guardrail ignorato su richiesta esplicita per {Count} carte (profilo '{Profile}')",
+                blueprintIds.Count, profile.Name);
+        }
+
         foreach (var blueprintId in blueprintIds)
         {
             if (cancellationToken.IsCancellationRequested)
@@ -234,7 +248,7 @@ public class AutoPricingService
 
             try
             {
-                await EvaluateBlueprintAsync(blueprintId, profile, trigger, dryRun, run, persistRun, cancellationToken);
+                await EvaluateBlueprintAsync(blueprintId, profile, trigger, dryRun, run, persistRun, cancellationToken, bypassGuardrail);
             }
             catch (Exception ex)
             {
@@ -268,7 +282,8 @@ public class AutoPricingService
         bool dryRun,
         PricingRunLog run,
         bool persistRun,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool bypassGuardrail = false)
     {
         var items = await _context.InventoryItems
             .Where(i => i.BlueprintId == blueprintId && i.Quantity > 0)
@@ -293,7 +308,7 @@ public class AutoPricingService
 
         foreach (var item in items)
         {
-            var decision = _engine.Evaluate(item, offers, profile, _myUserId);
+            var decision = _engine.Evaluate(item, offers, profile, _myUserId, bypassGuardrail);
 
             // Il motore decide in base al profilo; qui si tiene conto anche di come la
             // modalità è stata forzata dal chiamante, in entrambi i versi.
