@@ -157,6 +157,7 @@ public class PricingEngine
             OldPrice = currentPrice,
             ProposedPrice = proposed,
             ReferencePrice = reference,
+            ReferenceSellerPrice = Math.Round(reference / marketMarkup, 2, MidpointRounding.AwayFromZero),
             ComparableOffersCount = candidates.Count,
             OutliersRejectedCount = outliersRejected,
             RuleId = rule.Id,

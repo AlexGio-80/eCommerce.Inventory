@@ -175,7 +175,8 @@ public class CardTraderBlueprintsController : ControllerBase
     }
     /// <summary>
     /// Serie storica del prezzo delle mie inserzioni per questa carta, una per ogni inserzione
-    /// su Card Trader (condizione/lingua/foil possono differire fra le copie della stessa carta).
+    /// su Card Trader (condizione/lingua/foil possono differire fra le copie della stessa carta),
+    /// affiancata al riferimento di mercato usato dall'autopricer nelle sue valutazioni.
     /// Alimentata dalla sincronizzazione notturna a partire dal 2026-08-29: le carte pubblicate
     /// prima non hanno storia pregressa. Usata dal grafico nella pagina "Nuovo Prodotto", per
     /// vedere l'andamento prima di decidere un prezzo.
@@ -200,7 +201,21 @@ public class CardTraderBlueprintsController : ControllerBase
                 Points = g.Select(e => new { e.RecordedAt, e.Price, e.Quantity })
             });
 
-        return Ok(eCommerce.Inventory.Api.Models.ApiResponse<object>.SuccessResult(series));
+        // Riportato alla scala venditore da PricingEngine (vedi PriceChangeLog.ReferenceSellerPrice):
+        // il ReferencePrice grezzo è in scala vetrina e non sarebbe comparabile sullo stesso asse.
+        // Null sulle valutazioni scritte prima che il campo esistesse, escluse qui.
+        var marketReference = await _context.PriceChangeLogs
+            .AsNoTracking()
+            .Where(c => c.BlueprintId == id && c.ReferenceSellerPrice != null)
+            .OrderBy(c => c.CreatedAt)
+            .Select(c => new { RecordedAt = c.CreatedAt, Price = c.ReferenceSellerPrice!.Value })
+            .ToListAsync(cancellationToken);
+
+        return Ok(eCommerce.Inventory.Api.Models.ApiResponse<object>.SuccessResult(new
+        {
+            Series = series,
+            MarketReference = marketReference
+        }));
     }
 
     /// <summary>

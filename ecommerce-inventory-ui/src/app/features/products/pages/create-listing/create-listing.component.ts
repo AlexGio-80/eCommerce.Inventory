@@ -24,7 +24,7 @@ import { Router } from '@angular/router';
 import { BlueprintSelectorComponent } from '../../../../shared/components/blueprint-selector/blueprint-selector.component';
 import { ProductsService } from '../../services/products.service';
 import { PendingListingsService, PendingListing, CreatePendingListingDto, BlueprintListingInfo } from '../../services/pending-listings.service';
-import { Blueprint, PriceHistorySeries } from '../../../../core/models';
+import { Blueprint, PriceHistorySeries, PriceHistoryResponse } from '../../../../core/models';
 import { GradingService, GradingResult } from '../../../../core/services/grading.service';
 
 // Registrato qui perché questo componente è standalone e caricato lazy: a differenza di
@@ -209,7 +209,7 @@ export class CreateListingComponent {
   isLoadingBlueprintListings = signal(false);
 
   // Storico prezzi (grafico)
-  priceHistory = signal<PriceHistorySeries[]>([]);
+  priceHistory = signal<PriceHistoryResponse>({ series: [], marketReference: [] });
   isLoadingPriceHistory = signal(false);
   priceHistoryChartData: any = { labels: [], datasets: [] };
   priceHistoryChartOptions: any = {
@@ -366,44 +366,67 @@ export class CreateListingComponent {
    */
   loadPriceHistory(blueprintId: number) {
     this.isLoadingPriceHistory.set(true);
-    this.priceHistory.set([]);
+    this.priceHistory.set({ series: [], marketReference: [] });
     this.cardTraderService.getPriceHistory(blueprintId).subscribe({
-      next: (series) => {
-        this.priceHistory.set(series);
-        this.buildPriceHistoryChart(series);
+      next: (history) => {
+        this.priceHistory.set(history);
+        this.buildPriceHistoryChart(history);
         this.isLoadingPriceHistory.set(false);
       },
       error: () => this.isLoadingPriceHistory.set(false)
     });
   }
 
+  hasPriceHistory(): boolean {
+    const h = this.priceHistory();
+    return h.series.length > 0 || h.marketReference.length > 0;
+  }
+
   /**
-   * Le serie sono a delta (un punto solo quando il prezzo cambia) e non allineate fra loro:
+   * Le serie (mie inserzioni e riferimento di mercato) sono a delta e non allineate fra loro:
    * per disegnarle sullo stesso asse si uniscono tutte le date in un'unica scaletta ordinata,
-   * e ogni serie vi si proietta lasciando un vuoto dove quel giorno non ha una rilevazione.
+   * e ognuna vi si proietta lasciando un vuoto dove quel giorno non ha una rilevazione.
    */
-  private buildPriceHistoryChart(series: PriceHistorySeries[]): void {
+  private buildPriceHistoryChart(history: PriceHistoryResponse): void {
     const palette = ['#1976d2', '#e65100', '#2e7d32', '#6a1b9a', '#c62828', '#00838f'];
 
     const allDates = new Set<string>();
-    for (const s of series) {
+    for (const s of history.series) {
       for (const p of s.points) allDates.add(p.recordedAt.substring(0, 10));
     }
+    for (const p of history.marketReference) allDates.add(p.recordedAt.substring(0, 10));
     const sortedDates = [...allDates].sort();
+
+    const datasets = history.series.map((s, i) => {
+      const byDate = new Map(s.points.map(p => [p.recordedAt.substring(0, 10), p.price]));
+      return {
+        label: this.priceHistorySeriesLabel(s),
+        data: sortedDates.map(d => byDate.get(d) ?? null),
+        spanGaps: true,
+        tension: 0.1,
+        borderColor: palette[i % palette.length],
+        backgroundColor: palette[i % palette.length]
+      };
+    });
+
+    if (history.marketReference.length > 0) {
+      // L'ultima valutazione del giorno vince quando l'autopricer valuta più volte
+      // nella stessa giornata (notturna, riprezzo dopo vendita, dopo nuova inserzione).
+      const referenceByDate = new Map(history.marketReference.map(p => [p.recordedAt.substring(0, 10), p.price]));
+      datasets.push({
+        label: 'Riferimento di mercato',
+        data: sortedDates.map(d => referenceByDate.get(d) ?? null),
+        spanGaps: true,
+        tension: 0.1,
+        borderDash: [6, 4],
+        borderColor: '#757575',
+        backgroundColor: '#757575'
+      } as any);
+    }
 
     this.priceHistoryChartData = {
       labels: sortedDates.map(d => new Date(d).toLocaleDateString('it-IT')),
-      datasets: series.map((s, i) => {
-        const byDate = new Map(s.points.map(p => [p.recordedAt.substring(0, 10), p.price]));
-        return {
-          label: this.priceHistorySeriesLabel(s),
-          data: sortedDates.map(d => byDate.get(d) ?? null),
-          spanGaps: true,
-          tension: 0.1,
-          borderColor: palette[i % palette.length],
-          backgroundColor: palette[i % palette.length]
-        };
-      })
+      datasets
     };
   }
 
@@ -547,7 +570,7 @@ export class CreateListingComponent {
     this.editingId.set(null);
     this.ctNativeProductId = null;
     this.blueprintListings.set([]);
-    this.priceHistory.set([]);
+    this.priceHistory.set({ series: [], marketReference: [] });
     this.priceHistoryChartData = { labels: [], datasets: [] };
     this.resetFormState();
   }

@@ -70,7 +70,7 @@ public class CardTraderBlueprintsControllerPriceHistoryTests
         // del tipo anonimo restano PascalCase e le asserzioni sotto non troverebbero nulla.
         var json = JsonSerializer.Serialize(response.Data, JsonOptions);
         using var doc = JsonDocument.Parse(json);
-        var series = doc.RootElement.EnumerateArray().ToList();
+        var series = doc.RootElement.GetProperty("series").EnumerateArray().ToList();
 
         series.Should().HaveCount(2, "due CardTraderProductId distinti per il blueprint 10");
 
@@ -84,7 +84,7 @@ public class CardTraderBlueprintsControllerPriceHistoryTests
     }
 
     [Fact]
-    public async Task Senza_storico_restituisce_una_lista_vuota()
+    public async Task Senza_storico_restituisce_liste_vuote()
     {
         var context = CreateContext();
         var controller = CreateController(context);
@@ -98,6 +98,50 @@ public class CardTraderBlueprintsControllerPriceHistoryTests
         // del tipo anonimo restano PascalCase e le asserzioni sotto non troverebbero nulla.
         var json = JsonSerializer.Serialize(response.Data, JsonOptions);
         using var doc = JsonDocument.Parse(json);
-        doc.RootElement.GetArrayLength().Should().Be(0);
+        doc.RootElement.GetProperty("series").GetArrayLength().Should().Be(0);
+        doc.RootElement.GetProperty("marketReference").GetArrayLength().Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Il_riferimento_di_mercato_e_in_scala_venditore_non_vetrina()
+    {
+        var context = CreateContext();
+        context.PriceChangeLogs.AddRange(
+            new PriceChangeLog
+            {
+                BlueprintId = 10, OldPrice = 5.00m, ProposedPrice = 5.00m,
+                ReferencePrice = 6.00m, ReferenceSellerPrice = 5.20m,
+                CreatedAt = new DateTime(2026, 8, 29)
+            },
+            new PriceChangeLog
+            {
+                // Valutazione precedente all'introduzione del campo: va esclusa, non convertibile.
+                BlueprintId = 10, OldPrice = 5.00m, ProposedPrice = 5.00m,
+                ReferencePrice = 6.10m, ReferenceSellerPrice = null,
+                CreatedAt = new DateTime(2026, 8, 28)
+            },
+            new PriceChangeLog
+            {
+                // Blueprint diverso: non deve comparire nella risposta.
+                BlueprintId = 99, OldPrice = 1.00m, ProposedPrice = 1.00m,
+                ReferencePrice = 1.20m, ReferenceSellerPrice = 1.05m,
+                CreatedAt = new DateTime(2026, 8, 29)
+            });
+        await context.SaveChangesAsync();
+
+        var controller = CreateController(context);
+
+        var result = await controller.GetPriceHistory(10);
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<ApiResponse<object>>().Subject;
+
+        var json = JsonSerializer.Serialize(response.Data, JsonOptions);
+        using var doc = JsonDocument.Parse(json);
+        var marketReference = doc.RootElement.GetProperty("marketReference").EnumerateArray().ToList();
+
+        marketReference.Should().HaveCount(1, "la valutazione senza ReferenceSellerPrice va esclusa");
+        marketReference[0].GetProperty("price").GetDecimal().Should().Be(5.20m,
+            "il grafico confronta con OldPrice/ProposedPrice, non con ReferencePrice grezzo");
     }
 }

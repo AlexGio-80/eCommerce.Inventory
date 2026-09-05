@@ -9,6 +9,57 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-09-05] Feature — Riferimento di mercato affiancato al grafico storico prezzi
+
+#### Problema
+
+Il grafico storico prezzi appena aggiunto in "Nuovo Prodotto" mostra solo i prezzi delle mie
+inserzioni (`PriceHistoryEntries`): senza un riferimento, non dà il contesto per capire se un
+prezzo era corretto quando è stato scritto. Il riferimento di mercato calcolato dall'autopricer
+c'era già (`PriceChangeLogs.ReferencePrice`), ma non era comparabile: è un prezzo di vetrina
+(quello che vede l'acquirente) mentre lo storico prezzi e `OldPrice`/`ProposedPrice` sono prezzi
+venditore — messi sullo stesso asse senza conversione sarebbero apparsi sfalsati pur non
+essendo un errore. Era un punto già aperto in ROADMAP, separato da questo ma con la stessa
+causa.
+
+#### Soluzione Implementata
+
+Nuovo campo `PriceChangeLog.ReferenceSellerPrice`: `PricingEngine.Evaluate` lo calcola
+dividendo `ReferencePrice` per il sovrapprezzo di Card Trader (lo stesso fattore che l'engine
+usa già per convertire il prezzo proposto), nello stesso punto in cui popola `ReferencePrice`
+— quindi vale per ogni esito che raggiunge quel punto della valutazione, non solo per le carte
+poi effettivamente riprezzate. `GET /api/cardtrader/blueprints/{id}/price-history` lo espone
+come serie `marketReference` separata, aggregata per giorno (l'ultima valutazione vince se
+l'autopricer ha valutato la carta più volte nella stessa giornata). Nel grafico compare come
+linea tratteggiata grigia "Riferimento di mercato", con lo stesso trattamento a delta delle
+altre serie (unione delle date, `spanGaps` dove manca il punto).
+
+#### Note Tecniche
+
+File: [`PricingDecision.cs`](../eCommerce.Inventory.Application/Pricing/PricingDecision.cs),
+[`PricingEngine.cs`](../eCommerce.Inventory.Application/Pricing/PricingEngine.cs),
+[`PriceChangeLog.cs`](../eCommerce.Inventory.Domain/Entities/PriceChangeLog.cs),
+[`AutoPricingService.cs`](../eCommerce.Inventory.Infrastructure/Services/AutoPricingService.cs),
+[`CardTraderBlueprintsController.cs`](../eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderBlueprintsController.cs),
+[`price-history.ts`](../ecommerce-inventory-ui/src/app/core/models/price-history.ts),
+[`create-listing.component.ts`](../ecommerce-inventory-ui/src/app/features/products/pages/create-listing/create-listing.component.ts).
+Migration `20260905092416_AddReferenceSellerPriceToPriceChangeLogs` (colonna nullable, si
+applica da sola all'avvio come le altre). Spostato anche il grafico dalla card a piena
+larghezza sotto la maschera alla colonna "Le mie inserzioni" (allargata da 250 a 340px),
+sotto la legenda dei badge — richiesto dopo la prima verifica in produzione, per vederlo
+senza scorrere la pagina. Null sulle righe scritte prima che il campo
+esistesse: l'endpoint le esclude, quindi lo storico anteriore a oggi non mostra il riferimento.
+Test: due nuovi casi in [`PricingEngineTests.cs`](../eCommerce.Inventory.Tests/Unit/Pricing/PricingEngineTests.cs)
+(calcolo del riportato a scala venditore) e in
+[`CardTraderBlueprintsControllerPriceHistoryTests.cs`](../eCommerce.Inventory.Tests/Unit/Controllers/CardTraderBlueprintsControllerPriceHistoryTests.cs)
+(esclusione delle righe senza il campo). **Verificato in produzione dall'utente il 2026-09-05.**
+
+Dopo la prima verifica, il grafico è stato spostato dalla card a piena larghezza sotto la
+maschera alla colonna "Le mie inserzioni" (allargata da 250 a 340px), per vederlo senza
+scorrere la pagina — **verificato anche questo in produzione**. Riserva dell'utente: su
+carte con molte inserzioni diverse la colonna risulta un po' affollata; da tenere d'occhio,
+non ci sono modifiche ulteriori programmate per ora.
+
 ### [2026-09-05] Feature — Grafico storico prezzi, link Card Trader e nome italiano in "Nuovo Prodotto"
 
 #### Problema

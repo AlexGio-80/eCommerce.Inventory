@@ -673,6 +673,33 @@ public class PricingEngineTests
         decision.Reason.Should().Contain("posizione 3");
     }
 
+    /// <summary>
+    /// Il grafico dello storico prezzi in "Nuovo Prodotto" affianca il riferimento di mercato
+    /// alle mie inserzioni: per essere sullo stesso asse deve essere in scala venditore come
+    /// <c>OldPrice</c>/<c>ProposedPrice</c>, non in scala vetrina come <c>ReferencePrice</c> grezzo.
+    /// </summary>
+    [Fact]
+    public void Il_riferimento_di_mercato_si_riporta_alla_scala_venditore()
+    {
+        var engine = new PricingEngine();
+
+        var item = Item(10.00m);
+        item.CardTraderProductId = 500;
+
+        var mine = Offer(11.00m, userId: MyUserId); // markup 11,00/10,00 = 1,1
+        mine.Id = item.CardTraderProductId.Value;
+
+        var offers = new List<CardTraderMarketplaceProductDto> { mine, Offer(22.00m) };
+
+        var rule = NthLowestRule(1.01m, 100m, 1, adjust: -1.00m);
+        var decision = engine.Evaluate(item, offers, Profile(rule), MyUserId);
+
+        decision.ReferencePrice.Should().Be(22.00m, "riferimento grezzo, in scala vetrina");
+        decision.ReferenceSellerPrice.Should().Be(20.00m, "22,00 € di vetrina al netto del sovrapprezzo dell'1,1x");
+        decision.ProposedPrice.Should().NotBe(decision.ReferenceSellerPrice,
+            "lo scostamento della regola si applica al proposto, non al riferimento: devono poter differire");
+    }
+
     [Fact]
     public void Senza_la_mia_offerta_nel_feed_non_inventa_il_sovrapprezzo()
     {

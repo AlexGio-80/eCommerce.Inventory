@@ -249,8 +249,8 @@
                     </form>
                 </div>
 
-                <!-- Right Column: Le mie inserzioni per questa carta -->
-                <div class="listings-column" style="flex: 0 0 250px;">
+                <!-- Right Column: Le mie inserzioni per questa carta + storico prezzi -->
+                <div class="listings-column" style="flex: 0 0 340px;">
                     <div style="position: sticky; top: 24px;">
                         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
                             <h4 style="margin: 0; font-size: 14px; font-weight: 600; color: #333;">Le mie inserzioni</h4>
@@ -309,33 +309,25 @@
                             <div style="margin-top: 4px;"><span class="listing-status-badge badge-ct-native">Solo CT</span> Mai gestito da qui</div>
                             <div style="margin-top: 4px;"><span class="listing-status-badge badge-pending-new">In coda</span> Non ancora su CT</div>
                         </div>
+
+                        <!-- Storico prezzi: andamento delle mie inserzioni per la carta selezionata -->
+                        <mat-divider style="margin: 16px 0;"></mat-divider>
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                            <h4 style="margin: 0; font-size: 14px; font-weight: 600; color: #333;">Storico prezzi</h4>
+                            <mat-spinner *ngIf="isLoadingPriceHistory()" diameter="16"></mat-spinner>
+                        </div>
+                        <div *ngIf="!isLoadingPriceHistory() && !hasPriceHistory()"
+                            style="color: #999; font-size: 12px; text-align: center; padding: 8px 0;">
+                            Nessuno storico ancora disponibile per questa carta.
+                        </div>
+                        <div *ngIf="!isLoadingPriceHistory() && hasPriceHistory()" style="height: 220px;">
+                            <canvas baseChart [data]="priceHistoryChartData" [options]="priceHistoryChartOptions"
+                                [legend]="true" chartType="line">
+                            </canvas>
+                        </div>
                     </div>
                 </div>
 
-            </div>
-        </mat-card-content>
-    </mat-card>
-
-    <!-- Storico prezzi: andamento delle mie inserzioni per la carta selezionata -->
-    <mat-card style="margin-top: 24px;" *ngIf="selectedBlueprint()">
-        <mat-card-header>
-            <mat-card-title>Storico prezzi</mat-card-title>
-            <mat-card-subtitle>
-                Andamento delle mie inserzioni per questa carta. Un punto per ogni notte in cui il prezzo è cambiato.
-            </mat-card-subtitle>
-        </mat-card-header>
-        <mat-card-content>
-            <div *ngIf="isLoadingPriceHistory()" style="color: #666; font-size: 14px;">
-                Caricamento storico...
-            </div>
-            <div *ngIf="!isLoadingPriceHistory() && priceHistory().length === 0" style="color: #999; font-size: 13px;">
-                Nessuno storico ancora disponibile per questa carta. La serie parte dal 29/08/2026 e cresce solo
-                quando il prezzo di una inserzione cambia.
-            </div>
-            <div *ngIf="!isLoadingPriceHistory() && priceHistory().length > 0" style="height: 280px;">
-                <canvas baseChart [data]="priceHistoryChartData" [options]="priceHistoryChartOptions"
-                    [legend]="true" chartType="line">
-                </canvas>
             </div>
         </mat-card-content>
     </mat-card>

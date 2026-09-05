@@ -16,3 +16,18 @@ export interface PriceHistorySeries {
   isFoil: boolean;
   points: PriceHistoryPoint[];
 }
+
+/**
+ * Riferimento di mercato usato dall'autopricer in una sua valutazione, già riportato alla
+ * scala venditore (quella di PriceHistoryPoint.price) — vedi PriceChangeLog.ReferenceSellerPrice.
+ */
+export interface MarketReferencePoint {
+  recordedAt: string;
+  price: number;
+}
+
+/** Risposta di GET /api/cardtrader/blueprints/{id}/price-history. */
+export interface PriceHistoryResponse {
+  series: PriceHistorySeries[];
+  marketReference: MarketReferencePoint[];
+}

@@ -10,7 +10,17 @@ public class PricingDecision
 {
     public decimal OldPrice { get; set; }
     public decimal ProposedPrice { get; set; }
+
+    /// <summary>Prezzo di riferimento in scala vetrina (quello che vede l'acquirente).</summary>
     public decimal? ReferencePrice { get; set; }
+
+    /// <summary>
+    /// Lo stesso riferimento riportato alla scala venditore (quella di <see cref="OldPrice"/> e
+    /// <see cref="ProposedPrice"/>), dividendo per il sovrapprezzo di Card Trader. È il valore da
+    /// mettere in grafico accanto allo storico prezzi: <see cref="ReferencePrice"/> da solo
+    /// misurerebbe una cosa diversa e apparirebbe sfalsato pur non essendo un errore.
+    /// </summary>
+    public decimal? ReferenceSellerPrice { get; set; }
 
     public PricingOutcome Outcome { get; set; }
     public string Reason { get; set; } = string.Empty;

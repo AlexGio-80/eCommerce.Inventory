@@ -85,8 +85,19 @@ public class PriceChangeLog
     public PricingTrigger Trigger { get; set; }
     public PricingOutcome Outcome { get; set; }
 
-    /// <summary>Prezzo di riferimento estratto dal marketplace prima degli scostamenti.</summary>
+    /// <summary>
+    /// Prezzo di riferimento estratto dal marketplace prima degli scostamenti, in scala vetrina
+    /// (quella che vede l'acquirente, comprensiva del sovrapprezzo di Card Trader).
+    /// </summary>
     public decimal? ReferencePrice { get; set; }
+
+    /// <summary>
+    /// Lo stesso riferimento riportato alla scala venditore, quella di <see cref="OldPrice"/> e
+    /// <see cref="ProposedPrice"/>. Serve per metterlo in grafico accanto allo storico prezzi:
+    /// <see cref="ReferencePrice"/> da solo misura una cosa diversa e apparirebbe sfalsato pur
+    /// non essendo un errore. Null sulle righe scritte prima che il campo esistesse.
+    /// </summary>
+    public decimal? ReferenceSellerPrice { get; set; }
 
     /// <summary>Offerte comparabili rimaste dopo filtri venditore e scarto outlier.</summary>
     public int ComparableOffersCount { get; set; }

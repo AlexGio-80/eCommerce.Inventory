@@ -333,6 +333,7 @@ public class AutoPricingService
                 OldPrice = decision.OldPrice,
                 ProposedPrice = decision.ProposedPrice,
                 ReferencePrice = decision.ReferencePrice,
+                ReferenceSellerPrice = decision.ReferenceSellerPrice,
                 ComparableOffersCount = decision.ComparableOffersCount,
                 OutliersRejectedCount = decision.OutliersRejectedCount,
                 Trigger = trigger,

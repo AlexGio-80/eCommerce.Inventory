@@ -13,7 +13,7 @@ import {
   ApiResponse,
   UnpreparedItemDto,
   MarketplaceStats,
-  PriceHistorySeries,
+  PriceHistoryResponse,
 } from '../models';
 import { environment } from '../../../environments/environment';
 
@@ -74,12 +74,13 @@ export class CardTraderApiService {
 
   /**
    * Storico dei prezzi delle mie inserzioni per questa carta, una serie per inserzione
-   * (condizione/lingua/foil possono differire). Alimentato dalla sincronizzazione notturna
-   * a partire dal 2026-08-29: le carte pubblicate prima non hanno storia pregressa.
+   * (condizione/lingua/foil possono differire), affiancato al riferimento di mercato usato
+   * dall'autopricer nelle sue valutazioni. Alimentato dalla sincronizzazione notturna a
+   * partire dal 2026-08-29: le carte pubblicate prima non hanno storia pregressa.
    */
-  getPriceHistory(blueprintId: number): Observable<PriceHistorySeries[]> {
-    return this.http.get<ApiResponse<PriceHistorySeries[]>>(`${this.apiUrl}/blueprints/${blueprintId}/price-history`)
-      .pipe(map(r => r.data ?? []));
+  getPriceHistory(blueprintId: number): Observable<PriceHistoryResponse> {
+    return this.http.get<ApiResponse<PriceHistoryResponse>>(`${this.apiUrl}/blueprints/${blueprintId}/price-history`)
+      .pipe(map(r => r.data ?? { series: [], marketReference: [] }));
   }
 
   // Inventory Items
