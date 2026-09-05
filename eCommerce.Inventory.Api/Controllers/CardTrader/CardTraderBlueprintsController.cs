@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using eCommerce.Inventory.Application.DTOs;
 using eCommerce.Inventory.Application.Interfaces;
 using eCommerce.Inventory.Domain.Entities;
+using eCommerce.Inventory.Infrastructure.Persistence;
 
 namespace eCommerce.Inventory.Api.Controllers.CardTrader;
 
@@ -14,13 +16,16 @@ namespace eCommerce.Inventory.Api.Controllers.CardTrader;
 public class CardTraderBlueprintsController : ControllerBase
 {
     private readonly IBlueprintRepository _blueprintRepository;
+    private readonly ApplicationDbContext _context;
     private readonly ILogger<CardTraderBlueprintsController> _logger;
 
     public CardTraderBlueprintsController(
         IBlueprintRepository blueprintRepository,
+        ApplicationDbContext context,
         ILogger<CardTraderBlueprintsController> logger)
     {
         _blueprintRepository = blueprintRepository;
+        _context = context;
         _logger = logger;
     }
 
@@ -168,6 +173,36 @@ public class CardTraderBlueprintsController : ControllerBase
         var count = await _blueprintRepository.GetCountAsync(cancellationToken);
         return Ok(count);
     }
+    /// <summary>
+    /// Serie storica del prezzo delle mie inserzioni per questa carta, una per ogni inserzione
+    /// su Card Trader (condizione/lingua/foil possono differire fra le copie della stessa carta).
+    /// Alimentata dalla sincronizzazione notturna a partire dal 2026-08-29: le carte pubblicate
+    /// prima non hanno storia pregressa. Usata dal grafico nella pagina "Nuovo Prodotto", per
+    /// vedere l'andamento prima di decidere un prezzo.
+    /// </summary>
+    [HttpGet("{id:int}/price-history")]
+    public async Task<IActionResult> GetPriceHistory(int id, CancellationToken cancellationToken = default)
+    {
+        var entries = await _context.PriceHistoryEntries
+            .AsNoTracking()
+            .Where(e => e.BlueprintId == id)
+            .OrderBy(e => e.RecordedAt)
+            .ToListAsync(cancellationToken);
+
+        var series = entries
+            .GroupBy(e => e.CardTraderProductId)
+            .Select(g => new
+            {
+                CardTraderProductId = g.Key,
+                g.Last().Condition,
+                g.Last().Language,
+                g.Last().IsFoil,
+                Points = g.Select(e => new { e.RecordedAt, e.Price, e.Quantity })
+            });
+
+        return Ok(eCommerce.Inventory.Api.Models.ApiResponse<object>.SuccessResult(series));
+    }
+
     /// <summary>
     /// Get the next or previous blueprint based on collector number
     /// </summary>

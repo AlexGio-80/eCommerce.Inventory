@@ -29,8 +29,22 @@
 
                         <div class="blueprint-details" style="margin-top: 12px; text-align: center;">
                             <h3 style="margin: 0 0 4px 0; font-size: 14px;">{{ selectedBlueprint()?.name }}</h3>
-                            <p style="margin: 0; color: #666; font-size: 12px;">{{ selectedBlueprint()?.expansion?.name }}</p>
+                            <p *ngIf="selectedBlueprint()?.italianName" style="margin: 0 0 4px 0; color: #888; font-size: 12px; font-style: italic;">
+                                {{ selectedBlueprint()?.italianName }}
+                            </p>
+                            <p style="margin: 0; color: #666; font-size: 12px;">
+                                {{ selectedBlueprint()?.expansion?.name }}
+                                <ng-container *ngIf="getCollectorNumber() as num"> · #{{ num }}</ng-container>
+                            </p>
                             <p style="margin: 0; color: #666; font-size: 11px;">{{ selectedBlueprint()?.rarity }}</p>
+
+                            <a *ngIf="selectedBlueprint()?.cardTraderId"
+                                [href]="'https://www.cardtrader.com/cards/' + selectedBlueprint()!.cardTraderId"
+                                target="_blank" rel="noopener"
+                                style="display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; font-size: 12px; color: #1976d2; text-decoration: none;">
+                                <mat-icon style="font-size: 14px; height: 14px; width: 14px;">open_in_new</mat-icon>
+                                Vedi su Card Trader
+                            </a>
 
                             <div style="display: flex; justify-content: center; gap: 4px; margin-top: 8px;">
                                 <button mat-icon-button (click)="loadPreviousBlueprint()" matTooltip="Carta precedente">
@@ -302,6 +316,30 @@
         </mat-card-content>
     </mat-card>
 
+    <!-- Storico prezzi: andamento delle mie inserzioni per la carta selezionata -->
+    <mat-card style="margin-top: 24px;" *ngIf="selectedBlueprint()">
+        <mat-card-header>
+            <mat-card-title>Storico prezzi</mat-card-title>
+            <mat-card-subtitle>
+                Andamento delle mie inserzioni per questa carta. Un punto per ogni notte in cui il prezzo è cambiato.
+            </mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+            <div *ngIf="isLoadingPriceHistory()" style="color: #666; font-size: 14px;">
+                Caricamento storico...
+            </div>
+            <div *ngIf="!isLoadingPriceHistory() && priceHistory().length === 0" style="color: #999; font-size: 13px;">
+                Nessuno storico ancora disponibile per questa carta. La serie parte dal 29/08/2026 e cresce solo
+                quando il prezzo di una inserzione cambia.
+            </div>
+            <div *ngIf="!isLoadingPriceHistory() && priceHistory().length > 0" style="height: 280px;">
+                <canvas baseChart [data]="priceHistoryChartData" [options]="priceHistoryChartOptions"
+                    [legend]="true" chartType="line">
+                </canvas>
+            </div>
+        </mat-card-content>
+    </mat-card>
+
     <!-- Pending Listings Grid (global queue) -->
     <mat-card style="margin-top: 24px;">
         <mat-card-header>
@@ -341,6 +379,18 @@
                         <span *ngIf="element.isFoil" style="color: #ffd700; font-weight: bold;">(Foil)</span>
                         <span *ngIf="element.isSigned" style="color: #ff4081; font-weight: bold;">(Firmata)</span>
                         <span *ngIf="element.isUpdate" style="color: #e65100; font-size: 11px; margin-left: 4px;">[UPDATE]</span>
+                    </td>
+                </ng-container>
+
+                <!-- Card Trader Link Column -->
+                <ng-container matColumnDef="ctLink">
+                    <th mat-header-cell *matHeaderCellDef> CT </th>
+                    <td mat-cell *matCellDef="let element">
+                        <a *ngIf="element.blueprint?.cardTraderId" [href]="'https://www.cardtrader.com/cards/' + element.blueprint.cardTraderId"
+                            target="_blank" rel="noopener" matTooltip="Apri la carta su Card Trader"
+                            style="display: inline-flex; color: #1976d2;">
+                            <mat-icon style="font-size: 18px; height: 18px; width: 18px;">open_in_new</mat-icon>
+                        </a>
                     </td>
                 </ng-container>
 

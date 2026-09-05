@@ -9,6 +9,51 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-09-05] Feature — Grafico storico prezzi, link Card Trader e nome italiano in "Nuovo Prodotto"
+
+#### Problema
+
+I grafici di andamento prezzi erano un punto aperto in ROADMAP da quando è partita la
+raccolta storico (`PriceHistoryEntries`, 29/08). La pagina "Nuovo Prodotto" inoltre non
+aveva un modo diretto per aprire la carta su Card Trader, né mostrava il nome italiano o
+il numero di raccolta — dati già usati come filtri nella ricerca blueprint, ma non
+visibili qui dove servirebbero per riconoscere la carta a colpo d'occhio.
+
+#### Soluzione Implementata
+
+- Nuovo endpoint `GET /api/cardtrader/blueprints/{id}/price-history`: legge
+  `PriceHistoryEntries` per il blueprint e le raggruppa per inserzione (`CardTraderProductId`),
+  perché condizione/lingua/foil diversi della stessa carta sono serie distinte, non punti
+  di un'unica linea.
+- Grafico Chart.js nella pagina "Nuovo Prodotto" (sotto la maschera, sopra "Coda
+  inserzioni"): una linea per inserzione. Le serie sono a delta e non allineate fra loro,
+  quindi si uniscono tutte le date in un'unica scaletta ordinata e ogni serie vi si
+  proietta lasciando un vuoto dove quel giorno non ha una rilevazione (`spanGaps`).
+- Link "Vedi su Card Trader" sotto l'immagine della carta selezionata, e colonna "CT" nella
+  griglia "Coda inserzioni" — stesso link `cardtrader.com/cards/{id}` già usato in
+  Storico/Anteprima autopricer, Items to Prepare e Inventario.
+- Sotto l'immagine compaiono ora anche il nome italiano (quando disponibile) e il numero
+  di raccolta, estratto da `fixedProperties` — dati già usati come filtri di ricerca ma
+  finora non mostrati in questa pagina.
+
+#### Note Tecniche
+
+File: [`CardTraderBlueprintsController.cs`](../eCommerce.Inventory.Api/Controllers/CardTrader/CardTraderBlueprintsController.cs)
+(`GetPriceHistory`), [`cardtrader-api.service.ts`](../ecommerce-inventory-ui/src/app/core/services/cardtrader-api.service.ts),
+[`price-history.ts`](../ecommerce-inventory-ui/src/app/core/models/price-history.ts) (nuovo modello),
+[`create-listing.component.ts`](../ecommerce-inventory-ui/src/app/features/products/pages/create-listing/create-listing.component.ts)
+e relativo `.html`. Il componente è standalone e caricato lazy: `Chart.register(...registerables)`
+va richiamato nel file stesso (non basta quello nel costruttore di `ReportingModule`, che
+potrebbe non essere mai stato caricato prima di arrivare su questa pagina).
+Test: [`CardTraderBlueprintsControllerPriceHistoryTests.cs`](../eCommerce.Inventory.Tests/Unit/Controllers/CardTraderBlueprintsControllerPriceHistoryTests.cs)
+(nuovo file) copre il raggruppamento per inserzione. Non verificato dal vivo nel browser
+(nessuna credenziale disponibile in sessione): verificato con build Angular e .NET pulite
+e 93/93 test.
+
+Deciso anche di non estendere per ora il link Card Trader ad altre griglie (Report Vendite/
+Inventario oggi non hanno il campo `cardTraderId` nelle query di reporting): resta
+circoscritto a "Nuovo Prodotto" finché non se ne discute la priorità.
+
 ### [2026-09-05] Fix — Filtro per Origine nello storico dell'autopricer
 
 #### Problema

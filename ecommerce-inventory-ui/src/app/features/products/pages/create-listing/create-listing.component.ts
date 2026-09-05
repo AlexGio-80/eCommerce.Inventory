@@ -17,13 +17,20 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatDividerModule } from '@angular/material/divider';
+import { BaseChartDirective } from 'ng2-charts';
+import { Chart, registerables } from 'chart.js';
 import { CardTraderApiService } from '../../../../core/services/cardtrader-api.service';
 import { Router } from '@angular/router';
 import { BlueprintSelectorComponent } from '../../../../shared/components/blueprint-selector/blueprint-selector.component';
 import { ProductsService } from '../../services/products.service';
 import { PendingListingsService, PendingListing, CreatePendingListingDto, BlueprintListingInfo } from '../../services/pending-listings.service';
-import { Blueprint } from '../../../../core/models';
+import { Blueprint, PriceHistorySeries } from '../../../../core/models';
 import { GradingService, GradingResult } from '../../../../core/services/grading.service';
+
+// Registrato qui perché questo componente è standalone e caricato lazy: a differenza di
+// ReportingModule (che lo registra nel proprio costruttore), niente garantisce che quel
+// modulo sia già stato visitato prima di arrivare su questa pagina.
+Chart.register(...registerables);
 
 @Component({
   selector: 'app-create-listing',
@@ -46,6 +53,7 @@ import { GradingService, GradingResult } from '../../../../core/services/grading
     MatButtonToggleModule,
     MatChipsModule,
     MatDividerModule,
+    BaseChartDirective,
     BlueprintSelectorComponent
   ],
   templateUrl: './create-listing.component.html',
@@ -192,13 +200,23 @@ export class CreateListingComponent {
 
   // Pending Listings (global queue, bottom panel)
   pendingListings = signal<PendingListing[]>([]);
-  displayedColumns: string[] = ['image', 'name', 'condition', 'quantity', 'price', 'status', 'actions'];
+  displayedColumns: string[] = ['image', 'name', 'ctLink', 'condition', 'quantity', 'price', 'status', 'actions'];
   filterStatus = signal<'all' | 'synced' | 'unsynced' | 'error'>('unsynced');
   isSyncing = signal(false);
 
   // Blueprint-specific listings (right panel)
   blueprintListings = signal<BlueprintListingInfo[]>([]);
   isLoadingBlueprintListings = signal(false);
+
+  // Storico prezzi (grafico)
+  priceHistory = signal<PriceHistorySeries[]>([]);
+  isLoadingPriceHistory = signal(false);
+  priceHistoryChartData: any = { labels: [], datasets: [] };
+  priceHistoryChartOptions: any = {
+    responsive: true,
+    scales: { y: { ticks: { callback: (v: number) => `€${v}` } } },
+    plugins: { tooltip: { callbacks: { label: (ctx: any) => `${ctx.dataset.label}: €${ctx.parsed.y?.toFixed(2)}` } } }
+  };
 
   private readonly STORAGE_KEY = 'listing_defaults';
   private formSubscription?: Subscription;
@@ -314,6 +332,19 @@ export class CreateListingComponent {
     this.resetFormState();
     this.loadMarketplaceStats();
     this.loadBlueprintListings(blueprint.id);
+    this.loadPriceHistory(blueprint.id);
+  }
+
+  /** Numero di raccolta della carta selezionata, estratto da fixedProperties (JSON). */
+  getCollectorNumber(): string | null {
+    const bp = this.selectedBlueprint();
+    if (!bp?.fixedProperties) return null;
+    try {
+      const props = JSON.parse(bp.fixedProperties);
+      return props.collector_number ?? null;
+    } catch {
+      return null;
+    }
   }
 
   loadBlueprintListings(blueprintId: number) {
@@ -326,6 +357,58 @@ export class CreateListingComponent {
       },
       error: () => this.isLoadingBlueprintListings.set(false)
     });
+  }
+
+  /**
+   * Storico prezzi per il grafico: una serie per inserzione (condizione/lingua/foil possono
+   * differire fra le copie della stessa carta). Alimentato dalla sincronizzazione notturna,
+   * quindi le carte pubblicate da poco possono non avere ancora punti in serie.
+   */
+  loadPriceHistory(blueprintId: number) {
+    this.isLoadingPriceHistory.set(true);
+    this.priceHistory.set([]);
+    this.cardTraderService.getPriceHistory(blueprintId).subscribe({
+      next: (series) => {
+        this.priceHistory.set(series);
+        this.buildPriceHistoryChart(series);
+        this.isLoadingPriceHistory.set(false);
+      },
+      error: () => this.isLoadingPriceHistory.set(false)
+    });
+  }
+
+  /**
+   * Le serie sono a delta (un punto solo quando il prezzo cambia) e non allineate fra loro:
+   * per disegnarle sullo stesso asse si uniscono tutte le date in un'unica scaletta ordinata,
+   * e ogni serie vi si proietta lasciando un vuoto dove quel giorno non ha una rilevazione.
+   */
+  private buildPriceHistoryChart(series: PriceHistorySeries[]): void {
+    const palette = ['#1976d2', '#e65100', '#2e7d32', '#6a1b9a', '#c62828', '#00838f'];
+
+    const allDates = new Set<string>();
+    for (const s of series) {
+      for (const p of s.points) allDates.add(p.recordedAt.substring(0, 10));
+    }
+    const sortedDates = [...allDates].sort();
+
+    this.priceHistoryChartData = {
+      labels: sortedDates.map(d => new Date(d).toLocaleDateString('it-IT')),
+      datasets: series.map((s, i) => {
+        const byDate = new Map(s.points.map(p => [p.recordedAt.substring(0, 10), p.price]));
+        return {
+          label: this.priceHistorySeriesLabel(s),
+          data: sortedDates.map(d => byDate.get(d) ?? null),
+          spanGaps: true,
+          tension: 0.1,
+          borderColor: palette[i % palette.length],
+          backgroundColor: palette[i % palette.length]
+        };
+      })
+    };
+  }
+
+  priceHistorySeriesLabel(s: PriceHistorySeries): string {
+    return `${s.condition} · ${s.language}${s.isFoil ? ' · Foil' : ''}`;
   }
 
   /**
@@ -464,6 +547,8 @@ export class CreateListingComponent {
     this.editingId.set(null);
     this.ctNativeProductId = null;
     this.blueprintListings.set([]);
+    this.priceHistory.set([]);
+    this.priceHistoryChartData = { labels: [], datasets: [] };
     this.resetFormState();
   }
 
