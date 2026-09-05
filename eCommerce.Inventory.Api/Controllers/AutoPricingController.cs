@@ -315,11 +315,32 @@ public class AutoPricingController : ControllerBase
 
     // --- Storico e copertura ---
 
+    /// <summary>
+    /// Elenco delle esecuzioni, più recenti prima. Il filtro per origine serve perché una
+    /// giornata con molte carte pubblicate produce una esecuzione "Nuova inserzione" per
+    /// ognuna: senza filtro, quelle affollano le prime righe e la notturna di quella stessa
+    /// notte scompare oltre il limite prima che si riesca a scorrere fin lì.
+    /// </summary>
     [HttpGet("runs")]
-    public async Task<IActionResult> GetRuns([FromQuery] int limit = 20, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetRuns(
+        [FromQuery] int limit = 20,
+        [FromQuery] string? trigger = null,
+        CancellationToken cancellationToken = default)
     {
-        var runs = await _context.PricingRunLogs
-            .AsNoTracking()
+        var query = _context.PricingRunLogs.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(trigger))
+        {
+            if (!Enum.TryParse<PricingTrigger>(trigger, ignoreCase: true, out var parsedTrigger))
+            {
+                return BadRequest(ApiResponse<object>.ErrorResult(
+                    $"Origine '{trigger}' non riconosciuta. Valori ammessi: {string.Join(", ", Enum.GetNames<PricingTrigger>())}."));
+            }
+
+            query = query.Where(r => r.Trigger == parsedTrigger);
+        }
+
+        var runs = await query
             .OrderByDescending(r => r.StartedAt)
             .Take(Math.Clamp(limit, 1, 200))
             .ToListAsync(cancellationToken);

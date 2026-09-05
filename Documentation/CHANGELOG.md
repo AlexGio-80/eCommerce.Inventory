@@ -9,6 +9,32 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-09-05] Fix — Filtro per Origine nello storico dell'autopricer
+
+#### Problema
+
+La scheda Storico caricava solo le ultime 20 esecuzioni in assoluto. In una giornata con
+molte carte pubblicate, ognuna produce una esecuzione "Nuova inserzione": quelle affollano
+le prime righe e la notturna della stessa notte finisce fuori dal limite, senza modo di
+scorrere per ritrovarla. Emerso verificando in produzione "Applica comunque" subito dopo
+il deploy.
+
+#### Soluzione Implementata
+
+Filtro per Origine nella scheda Esecuzioni (stesso pattern del filtro per Esito già presente
+nel dettaglio di una esecuzione): nuovo parametro `trigger` su `GET /api/pricing/runs`, e un
+menù a tendina in interfaccia per restringere a "Notturna", "Vendita", "Manuale" o "Nuova
+inserzione". Il limite di righe caricate è salito da 20 a 50 di default.
+
+#### Note Tecniche
+
+File: [`AutoPricingController.cs`](../eCommerce.Inventory.Api/Controllers/AutoPricingController.cs)
+(`GetRuns`), [`pricing.service.ts`](../ecommerce-inventory-ui/src/app/features/pricing/services/pricing.service.ts)
+(`PRICING_TRIGGERS`, `getRuns`), [`pricing-page.component.ts`](../ecommerce-inventory-ui/src/app/features/pricing/pages/pricing-page.component.ts).
+Non aggiunto un test HTTP dedicato: stesso pattern collaudato del filtro `outcome` su
+`GetRunChanges`, già coperto da uso in produzione. Non verificato dal vivo nel browser
+(nessuna credenziale disponibile in sessione): verificato con build Angular e .NET pulite.
+
 ### [2026-09-05] Prezzi — "Applica comunque" per bypassare il guardrail dalla scheda Storico
 
 #### Problema

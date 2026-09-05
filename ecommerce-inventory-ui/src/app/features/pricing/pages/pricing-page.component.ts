@@ -19,7 +19,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { MatDividerModule } from '@angular/material/divider';
 import {
   PricingService, PricingProfile, PricingRule, PricingRunReport,
-  PricingRunSummary, CoverageReport, PriceChange, PRICING_OUTCOMES
+  PricingRunSummary, CoverageReport, PriceChange, PRICING_OUTCOMES, PRICING_TRIGGERS
 } from '../services/pricing.service';
 import { PricingRunMonitorService } from '../services/pricing-run-monitor.service';
 import { Expansion, ExpansionsService } from '../../expansions/services/expansions.service';
@@ -469,9 +469,19 @@ import { Expansion, ExpansionsService } from '../../expansions/services/expansio
             <mat-card>
               <mat-card-header><mat-card-title>Esecuzioni</mat-card-title></mat-card-header>
               <mat-card-content>
-                <button mat-stroked-button (click)="loadRuns()">
-                  <mat-icon>refresh</mat-icon> Aggiorna
-                </button>
+                <div class="field-row">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Origine</mat-label>
+                    <mat-select [(ngModel)]="runsTrigger" (selectionChange)="loadRuns()">
+                      <mat-option [value]="''">Tutte</mat-option>
+                      <mat-option *ngFor="let t of triggers" [value]="t.value">{{ t.label }}</mat-option>
+                    </mat-select>
+                    <mat-hint>Utile a trovare la notturna in una giornata con molte nuove inserzioni</mat-hint>
+                  </mat-form-field>
+                  <button mat-stroked-button (click)="loadRuns()">
+                    <mat-icon>refresh</mat-icon> Aggiorna
+                  </button>
+                </div>
                 <p class="hint">Clicca una esecuzione per vedere i calcoli carta per carta.</p>
                 <ag-grid-angular
                   class="ag-theme-quartz grid"
@@ -574,6 +584,8 @@ export class PricingPageComponent implements OnInit {
   profile = signal<PricingProfile | null>(null);
   report = signal<PricingRunReport | null>(null);
   runs = signal<PricingRunSummary[]>([]);
+  runsTrigger = '';
+  readonly triggers = PRICING_TRIGGERS;
   coverage = signal<CoverageReport | null>(null);
   loading = signal(false);
   saving = signal(false);
@@ -795,7 +807,7 @@ export class PricingPageComponent implements OnInit {
   }
 
   loadRuns(): void {
-    this.pricingService.getRuns().subscribe({
+    this.pricingService.getRuns(50, this.runsTrigger || undefined).subscribe({
       next: runs => this.runs.set(runs),
       error: () => this.snackBar.open('Impossibile caricare lo storico', 'Chiudi', { duration: 4000 })
     });

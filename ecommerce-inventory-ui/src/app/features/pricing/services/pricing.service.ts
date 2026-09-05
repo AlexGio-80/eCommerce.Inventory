@@ -74,6 +74,18 @@ export interface PriceChange {
     createdAt: string;
 }
 
+/**
+ * Origini possibili di una esecuzione, allineate all'enum PricingTrigger del backend.
+ * "Preview" è escluso: l'anteprima non finisce mai nello storico, quindi non comparirebbe
+ * mai fra i risultati di questo filtro.
+ */
+export const PRICING_TRIGGERS: { value: string; label: string }[] = [
+    { value: 'Scheduled', label: 'Notturna' },
+    { value: 'OrderReceived', label: 'Vendita' },
+    { value: 'Manual', label: 'Manuale' },
+    { value: 'ListingCreated', label: 'Nuova inserzione' }
+];
+
 /** Esiti possibili di una valutazione, allineati all'enum PricingOutcome del backend. */
 export const PRICING_OUTCOMES: { value: string; label: string }[] = [
     { value: 'Applied', label: 'Applicate' },
@@ -235,8 +247,16 @@ export class PricingService {
             .pipe(map(() => void 0));
     }
 
-    getRuns(limit = 20): Observable<PricingRunSummary[]> {
-        return this.http.get<ApiResponse<PricingRunSummary[]>>(`${this.baseUrl}/runs?limit=${limit}`)
+    /**
+     * Esecuzioni più recenti, opzionalmente filtrate per origine. Il filtro serve a trovare
+     * la notturna in una giornata in cui molte "Nuova inserzione" l'hanno spinta oltre `limit`.
+     */
+    getRuns(limit = 50, trigger?: string): Observable<PricingRunSummary[]> {
+        let url = `${this.baseUrl}/runs?limit=${limit}`;
+        if (trigger) {
+            url += `&trigger=${encodeURIComponent(trigger)}`;
+        }
+        return this.http.get<ApiResponse<PricingRunSummary[]>>(url)
             .pipe(map(r => r.data ?? []));
     }
 
