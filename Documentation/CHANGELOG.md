@@ -46,9 +46,8 @@ e relativo `.html`. Il componente è standalone e caricato lazy: `Chart.register
 va richiamato nel file stesso (non basta quello nel costruttore di `ReportingModule`, che
 potrebbe non essere mai stato caricato prima di arrivare su questa pagina).
 Test: [`CardTraderBlueprintsControllerPriceHistoryTests.cs`](../eCommerce.Inventory.Tests/Unit/Controllers/CardTraderBlueprintsControllerPriceHistoryTests.cs)
-(nuovo file) copre il raggruppamento per inserzione. Non verificato dal vivo nel browser
-(nessuna credenziale disponibile in sessione): verificato con build Angular e .NET pulite
-e 93/93 test.
+(nuovo file) copre il raggruppamento per inserzione. **Verificato in produzione dall'utente
+il 2026-09-05** dopo il deploy: grafico, link e nome italiano/numero di raccolta funzionano.
 
 Deciso anche di non estendere per ora il link Card Trader ad altre griglie (Report Vendite/
 Inventario oggi non hanno il campo `cardTraderId` nelle query di reporting): resta
