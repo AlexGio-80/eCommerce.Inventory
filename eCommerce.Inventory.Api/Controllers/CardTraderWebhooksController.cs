@@ -1,3 +1,4 @@
+using eCommerce.Inventory.Api.Filters;
 using eCommerce.Inventory.Application.Commands;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.DTOs;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
@@ -39,6 +40,7 @@ public class CardTraderWebhooksController : ControllerBase
     /// <param name="webhook">The webhook payload from Card Trader</param>
     /// <returns>NoContent on success</returns>
     [HttpPost("events")]
+    [EnableRequestBodyBuffering]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -58,25 +60,25 @@ public class CardTraderWebhooksController : ControllerBase
                 "Received Card Trader webhook - ID: {WebhookId}, Cause: {Cause}, ObjectId: {ObjectId}",
                 webhook.Id, webhook.Cause, webhook.ObjectId);
 
-            // Verify webhook signature if present in request
+            // La firma è obbligatoria: senza, chiunque conosca l'URL può fingersi Card Trader
+            // e, dato che la vendita scala subito la giacenza, alterare l'inventario a piacere.
             var signatureHeader = Request.Headers["X-Signature"].FirstOrDefault();
-            if (!string.IsNullOrEmpty(signatureHeader))
+            if (string.IsNullOrEmpty(signatureHeader))
             {
-                // Read request body for signature verification
-                Request.EnableBuffering();
-                var requestBody = await new StreamReader(Request.Body).ReadToEndAsync();
-                Request.Body.Position = 0;
-
-                if (!_signatureVerificationService.VerifyWebhookSignature(requestBody, signatureHeader))
-                {
-                    _logger.LogWarning("Webhook signature verification failed for webhook {WebhookId}", webhook.Id);
-                    return Unauthorized("Webhook signature verification failed");
-                }
+                _logger.LogWarning("Webhook {WebhookId} rifiutato: header X-Signature mancante", webhook.Id);
+                return Unauthorized("X-Signature header is required");
             }
-            else
+
+            // [EnableRequestBodyBuffering] ha reso lo stream riavvolgibile prima del model
+            // binding, quindi qui la rilettura integrale del corpo restituisce davvero il payload.
+            Request.Body.Position = 0;
+            var requestBody = await new StreamReader(Request.Body).ReadToEndAsync();
+            Request.Body.Position = 0;
+
+            if (!_signatureVerificationService.VerifyWebhookSignature(requestBody, signatureHeader))
             {
-                _logger.LogWarning("X-Signature header missing from webhook {WebhookId}", webhook.Id);
-                // Optionally, you can require signature verification. For now, we'll continue processing.
+                _logger.LogWarning("Webhook signature verification failed for webhook {WebhookId}", webhook.Id);
+                return Unauthorized("Webhook signature verification failed");
             }
 
             // Create and send the MediatR command to process the webhook

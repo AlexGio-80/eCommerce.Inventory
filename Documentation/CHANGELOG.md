@@ -9,6 +9,40 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-09-05] Sicurezza — Firma obbligatoria sul webhook Card Trader
+
+#### Problema
+
+`CardTraderWebhooksController.HandleWebhookEvent` verificava la firma HMAC solo se l'header
+`X-Signature` era presente; se mancava, loggava un warning e processava comunque l'evento.
+Da quando la vendita scala subito la giacenza (2026-08-29), chiunque conoscesse l'URL del
+webhook poteva inventare un `order.create` e alterare l'inventario senza autenticarsi.
+
+Il codice conteneva anche un secondo problema, mai verificato: `Request.EnableBuffering()`
+veniva chiamato dentro l'azione, dopo che `[FromBody]` aveva già consumato lo stream non
+riavvolgibile di Kestrel per deserializzare `WebhookDto`. Una rilettura del corpo a quel punto
+avrebbe restituito una stringa vuota, quindi anche una firma corretta sarebbe stata rifiutata:
+rendere la firma obbligatoria senza sistemare questo avrebbe rotto il webhook vero.
+
+#### Soluzione Implementata
+
+- La firma è ora obbligatoria: header mancante o non valido → `401`, nessuna eccezione.
+- Nuovo `EnableRequestBodyBufferingAttribute` (resource filter, gira prima del model
+  binding) applicato sull'azione: abilita il buffering *prima* che `[FromBody]` legga lo
+  stream, così la rilettura successiva per la verifica HMAC ottiene il payload vero.
+- Aggiunti test HTTP end-to-end con `TestServer` (non solo unit test sulla firma come i
+  precedenti): coprono header mancante, firma non valida e firma valida, e in particolare
+  dimostrano che il corpo riletto non è vuoto nel caso valido — il dubbio lasciato aperto
+  in ROADMAP.md.
+
+#### Note Tecniche
+
+File: [`CardTraderWebhooksController.cs`](../eCommerce.Inventory.Api/Controllers/CardTraderWebhooksController.cs),
+[`Filters/EnableRequestBodyBufferingAttribute.cs`](../eCommerce.Inventory.Api/Filters/EnableRequestBodyBufferingAttribute.cs).
+Test: [`CardTraderWebhooksControllerHttpIntegrationTests.cs`](../eCommerce.Inventory.Tests/Integration/Controllers/CardTraderWebhooksControllerHttpIntegrationTests.cs).
+Resta aperto il secondo punto del 2026-08-29: verificare come il webhook è instradato
+dall'esterno (l'API ascolta solo su `localhost:5152`).
+
 ### [2026-09-04] Prezzi — Filtro "solo venditori Cardtrader Zero"
 
 #### Problema

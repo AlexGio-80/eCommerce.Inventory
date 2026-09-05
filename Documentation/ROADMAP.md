@@ -10,6 +10,14 @@ _Nessun task attivo al momento._
 
 ---
 
+## Completato (Sessione 2026-09-05)
+
+| Data | Voce |
+|------|------|
+| 2026-09-05 | Sicurezza — **Firma obbligatoria sul webhook Card Trader**: header `X-Signature` mancante o non valido ora restituisce `401` invece di processare l'evento. Sistemato anche l'ordine `EnableBuffering()`/model binding (nuovo resource filter `EnableRequestBodyBufferingAttribute`), altrimenti la rilettura del corpo per la firma sarebbe sempre stata vuota. Aggiunti test HTTP end-to-end con `TestServer` |
+
+---
+
 ## Completato (Sessione 2026-09-02)
 
 | Data | Voce |
@@ -62,10 +70,10 @@ _Nessun task attivo al momento._
 
 Tutti erano **preesistenti**, non introdotti dal lavoro sull'autopricer. Codice risolto e messo in produzione il 2026-08-29, password di `admin` cambiata e utente `testuser` eliminato lo stesso giorno. Dettaglio nel CHANGELOG.
 
-Ne restano due, entrambi sul webhook — cioè sull'unico endpoint che per necessità è anonimo:
+Ne restava uno sul webhook, risolto; uno resta aperto — sull'unico endpoint che per necessità è anonimo:
 
-- [ ] **La firma del webhook si aggira omettendo l'header** (emerso il 2026-08-29 durante la pulizia del segnaposto): in `CardTraderWebhooksController.HandleWebhookEvent` la verifica scatta solo `if (!string.IsNullOrEmpty(signatureHeader))`; se `X-Signature` manca, il controller logga un warning e processa l'evento lo stesso. Da quando la vendita scala la giacenza, un `order.create` inventato modifica il magazzino e innesca una rivalutazione. Da rendere obbligatoria. Nota per chi lo sistema: `Request.EnableBuffering()` viene chiamato **dopo** che `[FromBody]` ha già letto il corpo, quindi va verificato che il corpo riletto per la firma non sia vuoto anche nel caso con header presente
-- [ ] **Verificare com'è instradato il webhook dall'esterno**: l'API ascolta su `localhost:5152`, ma l'endpoint webhook dev'essere raggiungibile da Card Trader, quindi un varco verso l'esterno probabilmente esiste. Ora dietro quel varco c'è un'API che richiede autenticazione ovunque tranne che sugli endpoint dichiarati, ma vale la pena sapere qual è il percorso e che cosa altro espone
+- [x] ~~**La firma del webhook si aggira omettendo l'header**~~ — risolto il 2026-09-05: header `X-Signature` mancante o non valido restituisce `401`. Sistemato anche l'ordine `EnableBuffering()`/model binding con un resource filter dedicato, altrimenti la rilettura del corpo per la firma sarebbe sempre stata vuota (dubbio lasciato aperto dalla nota precedente, ora verificato con test HTTP end-to-end)
+- [ ] **Verificare com'è instradato il webhook dall'esterno**: l'API ascolta su `localhost:5152`, ma l'endpoint webhook dev'essere raggiungibile da Card Trader, quindi un varco verso l'esterno probabilmente esiste. Ora dietro quel varco c'è un'API che richiede autenticazione ovunque tranne che sugli endpoint dichiarati (e sul webhook la firma è ora obbligatoria), ma vale la pena sapere qual è il percorso e che cosa altro espone
 
 ### Autopricer — taratura dopo le prime notti in simulazione
 
