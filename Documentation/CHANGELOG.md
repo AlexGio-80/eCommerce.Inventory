@@ -9,6 +9,46 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-09-05] Fix — Header firma webhook sbagliato + shared secret mai impostato
+
+#### Problema
+
+Verificando dove fosse instradato il webhook dall'esterno (punto aperto in ROADMAP.md), è
+emerso che **non lo è mai stato**: nel pannello Card Trader il campo "Indirizzo del tuo
+endpoint webhook" risultava vuoto, quindi nessun `webhook_url` è mai stato registrato lato
+Card Trader. Controllando la documentazione ufficiale (`cardtrader.com/en/docs/api/full/reference`)
+sono emersi altri due problemi nel nostro codice, indipendenti da quello:
+
+1. Il controller leggeva l'header `X-Signature`, ma Card Trader firma con un header chiamato
+   **`Signature`** (senza prefisso `X-`). Con il nome sbagliato la verifica non ha **mai**
+   potuto corrispondere a un webhook vero, nemmeno prima del fix di oggi sulla obbligatorietà
+   — semplicemente cadeva sempre nel ramo "header mancante".
+2. `CardTraderApi:SharedSecret` in produzione (`Publish/api/appsettings.Production.json`,
+   il file realmente caricato dal servizio) era ancora il placeholder
+   `YOUR_PRODUCTION_SHARED_SECRET_HERE`. Il vero valore non si trova nel pannello web: si
+   ottiene da `GET /info` (già autenticato con il Bearer token esistente), campo
+   `shared_secret`.
+
+Se non corretti, il fix del punto precedente (firma obbligatoria) avrebbe rifiutato con 401
+ogni webhook vero non appena Card Trader fosse stato configurato per inviarli.
+
+#### Soluzione Implementata
+
+- `CardTraderWebhooksController` ora legge l'header `Signature` invece di `X-Signature`.
+- `CardTraderApi:SharedSecret` impostato al valore reale (recuperato via `GET /info`) sia nel
+  sorgente (`eCommerce.Inventory.Api/appsettings.Production.json`, copiato in automatico da
+  `dotnet publish`) sia nel file già in esecuzione (`Publish/api/appsettings.Production.json`),
+  per non aspettare un redeploy.
+- Test HTTP end-to-end aggiornati per usare l'header corretto.
+
+#### Note Tecniche
+
+Resta da fare, separatamente: registrare il `webhook_url` presso Card Trader (via
+`PATCH /app` o dal pannello) e risolvere la reale esposizione dall'esterno — oggi Kestrel
+ascolta solo su `127.0.0.1:5152` e IIS (porta 80, unico sito con Host header `inventory.local`)
+non ha nessuna regola di reverse proxy verso l'API, quindi anche con l'URL registrato il
+webhook non avrebbe comunque un percorso funzionante fino a quando questo non viene sistemato.
+
 ### [2026-09-05] Sicurezza — Firma obbligatoria sul webhook Card Trader
 
 #### Problema

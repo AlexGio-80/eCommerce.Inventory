@@ -70,10 +70,13 @@ _Nessun task attivo al momento._
 
 Tutti erano **preesistenti**, non introdotti dal lavoro sull'autopricer. Codice risolto e messo in produzione il 2026-08-29, password di `admin` cambiata e utente `testuser` eliminato lo stesso giorno. Dettaglio nel CHANGELOG.
 
-Ne restava uno sul webhook, risolto; uno resta aperto — sull'unico endpoint che per necessità è anonimo:
+Ne restava uno sul webhook, risolto; uno era da verificare ed è emerso che il webhook non è
+mai stato raggiungibile dall'esterno, per due motivi distinti — indagine e fix del 2026-09-05:
 
-- [x] ~~**La firma del webhook si aggira omettendo l'header**~~ — risolto il 2026-09-05: header `X-Signature` mancante o non valido restituisce `401`. Sistemato anche l'ordine `EnableBuffering()`/model binding con un resource filter dedicato, altrimenti la rilettura del corpo per la firma sarebbe sempre stata vuota (dubbio lasciato aperto dalla nota precedente, ora verificato con test HTTP end-to-end)
-- [ ] **Verificare com'è instradato il webhook dall'esterno**: l'API ascolta su `localhost:5152`, ma l'endpoint webhook dev'essere raggiungibile da Card Trader, quindi un varco verso l'esterno probabilmente esiste. Ora dietro quel varco c'è un'API che richiede autenticazione ovunque tranne che sugli endpoint dichiarati (e sul webhook la firma è ora obbligatoria), ma vale la pena sapere qual è il percorso e che cosa altro espone
+- [x] ~~**La firma del webhook si aggira omettendo l'header**~~ — risolto il 2026-09-05: header `Signature` mancante o non valido restituisce `401`. Sistemato anche l'ordine `EnableBuffering()`/model binding con un resource filter dedicato, altrimenti la rilettura del corpo per la firma sarebbe sempre stata vuota (dubbio lasciato aperto dalla nota precedente, ora verificato con test HTTP end-to-end)
+- [x] ~~**Verificare com'è instradato il webhook dall'esterno**~~ — verificato il 2026-09-05: non lo era. Il pannello Card Trader non ha mai avuto un `webhook_url` configurato, e il controller cercava comunque l'header sbagliato (`X-Signature` invece di `Signature`, vedi sopra) con lo shared secret di produzione ancora al placeholder. Tre problemi indipendenti che si sommavano
+- [ ] **Registrare il `webhook_url` presso Card Trader** (via pannello, campo "Indirizzo del tuo endpoint webhook", o `PATCH /app`): oggi è vuoto, quindi Card Trader non invia nulla
+- [ ] **Esporre davvero l'endpoint dall'esterno**: anche con l'URL registrato, oggi non c'è un percorso funzionante fino alla macchina di produzione. Kestrel ascolta solo su `127.0.0.1:5152` (da `Api:BaseUrl`), irraggiungibile perfino dalla LAN; IIS ascolta su `*:80` ma il suo unico sito (`InventorySite`) risponde solo all'Host header `inventory.local` e serve solo i file statici Angular — nessuna applicazione o regola di reverse proxy verso `:5152`. Serve decidere se: (a) IIS fa da reverse proxy verso `localhost:5152` per il percorso `/api/*` (richiede Application Request Routing + URL Rewrite), oppure (b) Kestrel si espone direttamente su un'interfaccia raggiungibile e il router inoltra lì. In entrambi i casi serve anche la regola di port forwarding sul router, che va verificata a parte
 
 ### Autopricer — taratura dopo le prime notti in simulazione
 

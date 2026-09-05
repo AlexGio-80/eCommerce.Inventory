@@ -130,7 +130,7 @@ public class CardTraderWebhooksControllerHttpIntegrationTests
         {
             Content = new StringContent(BuildPayload(), Encoding.UTF8, "application/json")
         };
-        request.Headers.Add("X-Signature", "clearly-not-valid");
+        request.Headers.Add("Signature", "clearly-not-valid");
 
         var response = await client.SendAsync(request);
 
@@ -152,7 +152,7 @@ public class CardTraderWebhooksControllerHttpIntegrationTests
         {
             Content = new StringContent(payload, Encoding.UTF8, "application/json")
         };
-        request.Headers.Add("X-Signature", GenerateSignature(payload, SharedSecret));
+        request.Headers.Add("Signature", GenerateSignature(payload, SharedSecret));
 
         var response = await client.SendAsync(request);
 

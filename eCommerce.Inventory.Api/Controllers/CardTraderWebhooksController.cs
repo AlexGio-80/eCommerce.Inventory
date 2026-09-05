@@ -62,11 +62,13 @@ public class CardTraderWebhooksController : ControllerBase
 
             // La firma è obbligatoria: senza, chiunque conosca l'URL può fingersi Card Trader
             // e, dato che la vendita scala subito la giacenza, alterare l'inventario a piacere.
-            var signatureHeader = Request.Headers["X-Signature"].FirstOrDefault();
+            // Documentazione ufficiale Card Trader: l'header si chiama "Signature", non
+            // "X-Signature" — con il nome sbagliato la verifica non ha mai potuto funzionare.
+            var signatureHeader = Request.Headers["Signature"].FirstOrDefault();
             if (string.IsNullOrEmpty(signatureHeader))
             {
-                _logger.LogWarning("Webhook {WebhookId} rifiutato: header X-Signature mancante", webhook.Id);
-                return Unauthorized("X-Signature header is required");
+                _logger.LogWarning("Webhook {WebhookId} rifiutato: header Signature mancante", webhook.Id);
+                return Unauthorized("Signature header is required");
             }
 
             // [EnableRequestBodyBuffering] ha reso lo stream riavvolgibile prima del model
