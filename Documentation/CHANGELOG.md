@@ -32,8 +32,8 @@ File: [`AutoPricingController.cs`](../eCommerce.Inventory.Api/Controllers/AutoPr
 (`GetRuns`), [`pricing.service.ts`](../ecommerce-inventory-ui/src/app/features/pricing/services/pricing.service.ts)
 (`PRICING_TRIGGERS`, `getRuns`), [`pricing-page.component.ts`](../ecommerce-inventory-ui/src/app/features/pricing/pages/pricing-page.component.ts).
 Non aggiunto un test HTTP dedicato: stesso pattern collaudato del filtro `outcome` su
-`GetRunChanges`, già coperto da uso in produzione. Non verificato dal vivo nel browser
-(nessuna credenziale disponibile in sessione): verificato con build Angular e .NET pulite.
+`GetRunChanges`, già coperto da uso in produzione. **Verificato in produzione dall'utente
+il 2026-09-05** dopo il deploy: il filtro trova correttamente la notturna.
 
 ### [2026-09-05] Prezzi — "Applica comunque" per bypassare il guardrail dalla scheda Storico
 
@@ -69,9 +69,9 @@ File: [`PricingEngine.cs`](../eCommerce.Inventory.Application/Pricing/PricingEng
 [`pricing-page.component.ts`](../ecommerce-inventory-ui/src/app/features/pricing/pages/pricing-page.component.ts).
 Test: [`PricingEngineTests.cs`](../eCommerce.Inventory.Tests/Unit/Pricing/PricingEngineTests.cs)
 (due nuovi casi), [`ApplicaComunqueTests.cs`](../eCommerce.Inventory.Tests/Unit/Pricing/ApplicaComunqueTests.cs)
-(nuovo file, sul modello di `ApplicaDallAnteprimaTests.cs`). Non verificato dal vivo nel
-browser: l'app richiede login e non erano disponibili credenziali in sessione — verificato con
-build Angular pulita (nessun errore del template type-checker) e 91/91 test .NET.
+(nuovo file, sul modello di `ApplicaDallAnteprimaTests.cs`). **Verificato in produzione
+dall'utente il 2026-09-05** dopo il deploy: forza correttamente il prezzo su una carta
+bloccata dal guardrail.
 
 ### [2026-09-05] Fix — Header firma webhook sbagliato + shared secret mai impostato
 
