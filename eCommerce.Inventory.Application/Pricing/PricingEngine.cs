@@ -11,12 +11,24 @@ namespace eCommerce.Inventory.Application.Pricing;
 public class PricingEngine
 {
     /// <summary>
-    /// Limite di plausibilità del sovrapprezzo applicato da Card Trader all'acquirente.
-    /// Non è una regola commerciale: serve solo a riconoscere che le due letture di prezzo
-    /// (export e marketplace) non sono dello stesso istante, tipicamente perché il prezzo
-    /// è stato appena modificato a mano. In quel caso il rapporto non è utilizzabile.
+    /// Limite di plausibilità del sovrapprezzo applicato da Card Trader all'acquirente:
+    /// una quota fissa più una quota proporzionale al prezzo. Non è una regola commerciale:
+    /// serve solo a riconoscere che le due letture di prezzo (export e marketplace) non sono
+    /// dello stesso istante, tipicamente perché il prezzo è appena cambiato e il feed del
+    /// marketplace espone ancora il valore vecchio. In quel caso la differenza non è utilizzabile.
+    /// Tarato su 1.089 coppie reali del 2026-09-25: il sovrapprezzo massimo osservato sta
+    /// sotto questa soglia a ogni fascia di prezzo.
     /// </summary>
-    private const decimal MaxPlausibleMarketMarkup = 1.15m;
+    private const decimal MaxPlausibleMarketFeeFixed = 0.20m;
+    private const decimal MaxPlausibleMarketFeePercent = 5m;
+
+    /// <summary>
+    /// Sovrapprezzo da sottrarre quando non si può ricavare dalla mia offerta: il minimo
+    /// osservato, applicato a tutte le carte fino a 0,25 €. Sulle carte più care il sovrapprezzo
+    /// reale è maggiore, quindi il prezzo proposto resta al più un po' alto, mai sotto il dovuto.
+    /// Sottrarre zero, come si faceva prima, sul bulk significava prezzare quasi al doppio.
+    /// </summary>
+    private const decimal FallbackMarketFee = 0.09m;
 
     /// <summary>
     /// Valuta il prezzo di una carta.
@@ -45,14 +57,15 @@ public class PricingEngine
         //    sovrapprezzo che Card Trader aggiunge: la mia stessa inserzione compare nel feed
         //    a un valore più alto di quello che ho impostato. Confrontarli direttamente mi fa
         //    sembrare più economico di quanto sia, e la posizione calcolata risulta sbagliata.
-        //    Il rapporto si ricava dalla mia offerta nel feed, senza dover conoscere la
-        //    formula della commissione: è esatto per definizione e si aggiorna da solo.
+        //    Il sovrapprezzo è un importo a scaglioni, non una percentuale: 0,09 € fino a
+        //    0,25 €, 0,10 € fino a circa 5 €, poi qualche decina di centesimi. Si ricava dalla
+        //    mia offerta nel feed come differenza, senza dover conoscere la tabella.
         var myOffer = item.CardTraderProductId.HasValue
             ? offers.FirstOrDefault(o => o.Id == item.CardTraderProductId.Value)
             : null;
 
         var myMarketPrice = myOffer != null ? myOffer.PriceCents / 100m : (decimal?)null;
-        var marketMarkup = ResolveMarketMarkup(currentPrice, myMarketPrice);
+        var (marketFee, feeDerived) = ResolveMarketFee(currentPrice, myMarketPrice);
 
         // 1. Le mie inserzioni non sono un riferimento di mercato.
         //    Senza questa esclusione il motore inseguirebbe il proprio prezzo verso il basso
@@ -144,7 +157,7 @@ public class PricingEngine
             proposedMarket += proposedMarket * (rule.AdjustmentPercent / 100m);
         }
 
-        var proposed = Math.Round(proposedMarket / marketMarkup, 2, MidpointRounding.AwayFromZero);
+        var proposed = Math.Round(proposedMarket - marketFee, 2, MidpointRounding.AwayFromZero);
 
         // 8. Il prezzo minimo non è mai valicabile.
         if (proposed < profile.MinPrice)
@@ -157,7 +170,7 @@ public class PricingEngine
             OldPrice = currentPrice,
             ProposedPrice = proposed,
             ReferencePrice = reference,
-            ReferenceSellerPrice = Math.Round(reference / marketMarkup, 2, MidpointRounding.AwayFromZero),
+            ReferenceSellerPrice = Math.Round(reference - marketFee, 2, MidpointRounding.AwayFromZero),
             ComparableOffersCount = candidates.Count,
             OutliersRejectedCount = outliersRejected,
             RuleId = rule.Id,
@@ -165,7 +178,7 @@ public class PricingEngine
         };
 
         var context = DescribeContext(
-            currentPrice, myMarketPrice, marketMarkup, reference, proposedMarket,
+            currentPrice, myMarketPrice, marketFee, feeDerived, reference, proposedMarket,
             sortedPrices, rule, candidates.Count, outliersRejected);
 
         if (proposed == currentPrice)
@@ -226,26 +239,31 @@ public class PricingEngine
     }
 
     /// <summary>
-    /// Rapporto fra il prezzo che l'acquirente vede sul marketplace e il prezzo che incasso io.
+    /// Differenza fra il prezzo che l'acquirente vede sul marketplace e il prezzo che incasso io.
     /// Si ricava dalla mia stessa inserzione presente nel feed, quindi non richiede di conoscere
-    /// la formula della commissione di Card Trader, che non è documentata e non è una percentuale
-    /// fissa (osservata fra lo 0,8% e l'1,4% a seconda della fascia).
-    /// Restituisce 1 quando il rapporto non è ricavabile: in quel caso il confronto avviene
-    /// comunque, ma sulla scala del prezzo venditore, e la motivazione lo dichiara.
+    /// la tabella della commissione di Card Trader, che non è documentata.
+    ///
+    /// È una differenza e non un rapporto perché il sovrapprezzo è un importo a scaglioni:
+    /// sul bulk vale 0,09 € su 0,10 €, cioè un rapporto di 1,9. Il vecchio limite di plausibilità
+    /// sul rapporto (1,15) scartava tutte le carte sotto 0,25 € e le confrontava senza
+    /// conversione, prezzandole circa 0,09 € sopra la posizione configurata.
+    ///
+    /// Quando non è ricavabile restituisce <see cref="FallbackMarketFee"/>, e la motivazione lo dichiara.
     /// </summary>
-    private static decimal ResolveMarketMarkup(decimal sellerPrice, decimal? marketPrice)
+    private static (decimal Fee, bool Derived) ResolveMarketFee(decimal sellerPrice, decimal? marketPrice)
     {
-        if (sellerPrice <= 0 || marketPrice is null || marketPrice <= 0) return 1m;
+        if (sellerPrice <= 0 || marketPrice is null || marketPrice <= 0) return (FallbackMarketFee, false);
 
-        var ratio = marketPrice.Value / sellerPrice;
+        var fee = marketPrice.Value - sellerPrice;
+        var maxPlausible = MaxPlausibleMarketFeeFixed + sellerPrice * MaxPlausibleMarketFeePercent / 100m;
 
-        // Il prezzo esposto non può essere inferiore a quello che incasso io. Se lo è, oppure se
+        // Il prezzo esposto è sempre maggiore di quello che incasso io. Se non lo è, oppure se
         // il sovrapprezzo risulta implausibile, le due letture non sono dello stesso istante:
-        // succede quando il prezzo è stato appena cambiato a mano e il marketplace non si è
-        // ancora allineato. Meglio non convertire che convertire con un fattore inventato.
-        if (ratio < 1m || ratio > MaxPlausibleMarketMarkup) return 1m;
+        // succede quando il prezzo è appena cambiato e il feed del marketplace espone ancora il
+        // valore vecchio. Meglio il minimo noto che una differenza inventata.
+        if (fee <= 0 || fee > maxPlausible) return (FallbackMarketFee, false);
 
-        return ratio;
+        return (fee, true);
     }
 
     /// <summary>
@@ -256,7 +274,8 @@ public class PricingEngine
     private static string DescribeContext(
         decimal sellerPrice,
         decimal? myMarketPrice,
-        decimal markup,
+        decimal fee,
+        bool feeDerived,
         decimal reference,
         decimal proposedMarket,
         List<decimal> sortedComparablePrices,
@@ -266,7 +285,7 @@ public class PricingEngine
     {
         var parts = new List<string>();
 
-        if (myMarketPrice.HasValue && markup > 1m)
+        if (myMarketPrice.HasValue && feeDerived)
         {
             // A parità di prezzo l'altra offerta compare prima della mia, quindi il confronto è
             // "minore o uguale": è la lettura pessimistica, la stessa che si vede sul sito.
@@ -279,8 +298,8 @@ public class PricingEngine
         else
         {
             parts.Add(
-                $"Sovrapprezzo di Card Trader non ricavabile per questa carta: confronto fatto sul prezzo " +
-                $"venditore di {sellerPrice:0.00} € su {comparableCount} offerte comparabili");
+                $"Sovrapprezzo di Card Trader non ricavabile per questa carta, usato il minimo noto di " +
+                $"{fee:0.00} € (incasso {sellerPrice:0.00} €, {comparableCount} offerte comparabili)");
         }
 
         parts.Add($"riferimento {reference:0.00} € ({DescribeReference(rule)} in vetrina)");
@@ -290,10 +309,7 @@ public class PricingEngine
             parts.Add($"con gli scostamenti della regola diventa {proposedMarket:0.00} € in vetrina");
         }
 
-        if (markup > 1m)
-        {
-            parts.Add($"che al netto del sovrapprezzo vale {proposedMarket / markup:0.00} € per me");
-        }
+        parts.Add($"che al netto del sovrapprezzo vale {proposedMarket - fee:0.00} € per me");
 
         if (outliersRejected > 0)
         {

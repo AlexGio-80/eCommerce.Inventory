@@ -9,6 +9,58 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-09-25] Fix — L'autopricer prezzava il bulk circa 0,09 € sopra la posizione configurata
+
+#### Problema
+
+Da quando l'autopricer gira in modalità reale le comuni da pochi centesimi non si vendevano
+quasi più: copie a ≤0,25 € vendute passate da circa 500–1.000 a settimana (luglio–agosto) a
+126 nella settimana del 14/09 e 62 in quella del 21/09. Unstable Obelisk (Commander Masters),
+per esempio, secondo il registro era "2ª offerta più bassa", in realtà 55ª su 187.
+
+Il motore ricavava il sovrapprezzo di Card Trader come **rapporto** fra il prezzo della mia
+offerta in vetrina e l'incasso, e scartava come implausibile ogni rapporto sopra 1,15. Ma il
+sovrapprezzo è un **importo a scaglioni**, non una percentuale: 0,09 € fino a 0,25 €, 0,10 €
+fino a circa 5 €, poi qualche decina di centesimi (misurato su 1.089 coppie reali). Sul bulk
+significa un rapporto di 1,3–1,9: la conversione falliva sempre sotto 0,25 € (31.686 casi su
+31.686 in dieci giorni) e il motore confrontava l'incasso con i prezzi di vetrina alla pari —
+cioè scriveva come incasso il prezzo che voleva ottenere in vetrina. 26.547 delle 26.585
+inserzioni a 0,05 € del 30/08 sono state alzate, in media a 0,107 €.
+
+Emerso nella stessa indagine, indipendente: **lo storico prezzi non registrava i riprezzi
+dell'autopricer**. La sincronizzazione confrontava l'export con `InventoryItem.ListingPrice`,
+che l'autopricer aggiorna già quando scrive su Card Trader: i due valori coincidevano e il
+cambio non veniva registrato. Dal 30/08 una manciata di rilevazioni a notte contro circa
+3.000 riprezzi, e il grafico in "Nuovo Prodotto" risultava quasi piatto.
+
+#### Soluzione Implementata
+
+- `PricingEngine`: il sovrapprezzo si ricava come **differenza** (vetrina − incasso) e si
+  sottrae invece di dividere. È plausibile se positivo e non oltre 0,20 € + 5% del prezzo,
+  soglia che copre ogni coppia reale osservata e scarta le letture sfasate (feed del
+  marketplace ancora fermo al prezzo di prima di un riprezzo). Quando non è ricavabile si
+  sottrae il minimo noto, 0,09 €, invece di zero: esatto sul bulk, al più un po' alto sulle
+  carte care, mai sotto il dovuto.
+- `CardTraderSyncOrchestrator`: lo stato precedente per lo storico prezzi è l'ultima
+  rilevazione di `PriceHistoryEntries`, non l'`InventoryItem`.
+- Nuovo script una tantum `Scripts/Ripristina-PrezziBulk.ps1`: riporta al prezzo corretto le
+  inserzioni che erano a 0,05 € il 30/08 e il cui prezzo attuale viene da una valutazione con
+  la conversione fallita. Prezzo nuovo = attuale − sovrapprezzo, mai sotto 0,05 € (26.540
+  inserzioni: circa 25.970 tornano a 0,05 €, le altre scendono solo del sovrapprezzo perché il
+  loro mercato è davvero salito). Scrive con `POST /products/bulk_update` e allinea il
+  database rileggendo l'export. Senza `-Apply` mostra solo cosa farebbe.
+
+#### Note Tecniche
+
+- Va lanciato **dopo** la pubblicazione: con il motore vecchio la notturna rialzerebbe di nuovo le carte.
+- Le serie dello storico prezzi non recuperano il periodo 30/08–25/09 per le carte ripristinate:
+  l'ultima rilevazione è 0,05 € e il ritorno a 0,05 € non è un cambiamento.
+- Il caricamento dello stato precedente legge tutte le righe di `PriceHistoryEntries` (circa 37.000
+  oggi, qualche migliaio in più a notte da ora): se diventasse pesante, sostituirlo con una query
+  finestra lato SQL.
+- Test: tre casi nuovi in `PricingEngineTests` (bulk con sovrapprezzo fisso, sovrapprezzo
+  implausibilmente alto, e il ripiego sul minimo noto), attesi aggiornati sugli altri.
+
 ### [2026-09-05] Feature — Riferimento di mercato affiancato al grafico storico prezzi
 
 #### Problema

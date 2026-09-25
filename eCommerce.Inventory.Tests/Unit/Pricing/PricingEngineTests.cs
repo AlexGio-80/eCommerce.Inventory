@@ -124,11 +124,12 @@ public class PricingEngineTests
             Offer(10.00m), Offer(12.00m), Offer(14.00m), Offer(16.00m)
         };
 
-        // Voglio essere il 2° venditore, un centesimo sotto.
+        // Voglio essere il 2° venditore, un centesimo sotto. Senza la mia offerta nel feed
+        // si sottrae il sovrapprezzo minimo noto (0,09 €).
         var decision = engine.Evaluate(Item(20.00m), offers, Profile(NthLowestRule(1.01m, 25m, 2, -0.01m)), MyUserId);
 
         decision.ReferencePrice.Should().Be(12.00m);
-        decision.ProposedPrice.Should().Be(11.99m);
+        decision.ProposedPrice.Should().Be(11.90m);
         decision.Outcome.Should().Be(PricingOutcome.Applied);
     }
 
@@ -379,7 +380,7 @@ public class PricingEngineTests
         var decision = engine.Evaluate(Item(20.00m), offers, profile, MyUserId);
 
         decision.Outcome.Should().Be(PricingOutcome.SimulatedDryRun);
-        decision.ProposedPrice.Should().Be(7.99m, "il calcolo avviene comunque, per poterlo valutare");
+        decision.ProposedPrice.Should().Be(7.90m, "il calcolo avviene comunque, per poterlo valutare");
         decision.ShouldWrite.Should().BeFalse("in dry-run non si scrive su Card Trader");
     }
 
@@ -629,7 +630,8 @@ public class PricingEngineTests
         var engine = new PricingEngine();
         var offers = new List<CardTraderMarketplaceProductDto> { Offer(10.00m), Offer(12.00m) };
 
-        var decision = engine.Evaluate(Item(9.99m), offers, Profile(NthLowestRule(1.01m, 100m, 1, -0.01m)), MyUserId);
+        // 10,00 € in vetrina, meno un centesimo, meno il sovrapprezzo minimo noto.
+        var decision = engine.Evaluate(Item(9.90m), offers, Profile(NthLowestRule(1.01m, 100m, 1, -0.01m)), MyUserId);
 
         decision.Outcome.Should().Be(PricingOutcome.NoChangeNeeded);
         decision.ShouldWrite.Should().BeFalse();
@@ -686,7 +688,7 @@ public class PricingEngineTests
         var item = Item(10.00m);
         item.CardTraderProductId = 500;
 
-        var mine = Offer(11.00m, userId: MyUserId); // markup 11,00/10,00 = 1,1
+        var mine = Offer(10.15m, userId: MyUserId); // Card Trader aggiunge 0,15 €
         mine.Id = item.CardTraderProductId.Value;
 
         var offers = new List<CardTraderMarketplaceProductDto> { mine, Offer(22.00m) };
@@ -695,13 +697,13 @@ public class PricingEngineTests
         var decision = engine.Evaluate(item, offers, Profile(rule), MyUserId);
 
         decision.ReferencePrice.Should().Be(22.00m, "riferimento grezzo, in scala vetrina");
-        decision.ReferenceSellerPrice.Should().Be(20.00m, "22,00 € di vetrina al netto del sovrapprezzo dell'1,1x");
+        decision.ReferenceSellerPrice.Should().Be(21.85m, "22,00 € di vetrina al netto dei 0,15 € di sovrapprezzo");
         decision.ProposedPrice.Should().NotBe(decision.ReferenceSellerPrice,
             "lo scostamento della regola si applica al proposto, non al riferimento: devono poter differire");
     }
 
     [Fact]
-    public void Senza_la_mia_offerta_nel_feed_non_inventa_il_sovrapprezzo()
+    public void Senza_la_mia_offerta_nel_feed_usa_il_sovrapprezzo_minimo_noto()
     {
         var engine = new PricingEngine();
 
@@ -717,19 +719,19 @@ public class PricingEngineTests
 
         var decision = engine.Evaluate(item, offers, Profile(NthLowestRule(1.01m, 25m, 3, -0.01m)), MyUserId);
 
-        decision.ProposedPrice.Should().Be(20.25m,
-            "senza fattore di conversione si resta sulla scala del venditore, e il riferimento " +
-            "non può essere l'offerta più cara");
+        decision.ProposedPrice.Should().Be(20.16m,
+            "senza la mia offerta si sottraggono i 0,09 € del sovrapprezzo minimo, e il riferimento " +
+            "non può essere l'offerta più cara (20,26 - 0,01 - 0,09)");
         decision.Reason.Should().Contain("non ricavabile");
     }
 
     /// <summary>
     /// Se il prezzo è stato appena modificato a mano, il marketplace può ancora esporre il
-    /// valore vecchio e il rapporto risultare assurdo (osservato: prezzo di vetrina inferiore
-    /// a quello che incasso). In quel caso non si converte.
+    /// valore vecchio e la differenza risultare assurda (osservato: prezzo di vetrina inferiore
+    /// a quello che incasso). In quel caso si usa il sovrapprezzo minimo noto.
     /// </summary>
     [Fact]
-    public void Rapporto_implausibile_viene_ignorato()
+    public void Sovrapprezzo_negativo_viene_ignorato()
     {
         var engine = new PricingEngine();
 
@@ -749,8 +751,62 @@ public class PricingEngineTests
 
         var decision = engine.Evaluate(item, offers, Profile(NthLowestRule(100.01m, 2000m, 3, -0.01m)), MyUserId);
 
-        decision.ProposedPrice.Should().Be(112.83m,
-            "senza conversione il riferimento resta grezzo, e non può essere l'offerta più cara");
+        decision.ProposedPrice.Should().Be(112.74m,
+            "la lettura sfasata non si usa: 112,84 - 0,01 - 0,09 di sovrapprezzo minimo");
+        decision.Reason.Should().Contain("non ricavabile");
+    }
+
+    /// <summary>
+    /// Caso reale di Unstable Obelisk (Commander Masters) del 2026-09-25. Incasso 0,10 €, in
+    /// vetrina 0,19 €: Card Trader aggiunge 0,09 €, cioè un rapporto di 1,9. Il vecchio limite
+    /// sul rapporto (1,15) lo scartava e confrontava 0,10 € di incasso con 0,11 € di vetrina:
+    /// il motore si credeva al 2° posto ed era al 55°.
+    /// </summary>
+    [Fact]
+    public void Sul_bulk_il_sovrapprezzo_fisso_viene_riconosciuto()
+    {
+        var engine = new PricingEngine();
+
+        var item = Item(0.10m);
+        item.CardTraderProductId = 229307518;
+
+        var mine = Offer(0.19m, userId: MyUserId);
+        mine.Id = item.CardTraderProductId.Value;
+
+        var offers = new List<CardTraderMarketplaceProductDto>
+        {
+            mine, Offer(0.11m), Offer(0.11m), Offer(0.12m), Offer(0.14m), Offer(0.19m), Offer(0.29m)
+        };
+
+        var decision = engine.Evaluate(item, offers, Profile(NthLowestRule(0.02m, 1m, 2, -0.01m)), MyUserId);
+
+        decision.ProposedPrice.Should().Be(0.05m,
+            "0,11 € di vetrina meno un centesimo meno 0,09 € di sovrapprezzo scende sotto il minimo del profilo");
+        decision.ReferenceSellerPrice.Should().Be(0.02m);
+        decision.Reason.Should().Contain("Card Trader aggiunge 0,09");
+        decision.Reason.Should().NotContain("non ricavabile");
+    }
+
+    /// <summary>
+    /// Osservato il 2026-09-25: carta riprezzata nella notte da 56,00 a 7,05 €, feed del
+    /// marketplace ancora fermo al prezzo vecchio. Una differenza di 49 € non è un sovrapprezzo.
+    /// </summary>
+    [Fact]
+    public void Sovrapprezzo_implausibilmente_alto_viene_ignorato()
+    {
+        var engine = new PricingEngine();
+
+        var item = Item(7.05m);
+        item.CardTraderProductId = 777;
+
+        var stale = Offer(56.66m, userId: MyUserId);
+        stale.Id = item.CardTraderProductId.Value;
+
+        var offers = new List<CardTraderMarketplaceProductDto> { stale, Offer(7.20m), Offer(7.50m) };
+
+        var decision = engine.Evaluate(item, offers, Profile(NthLowestRule(1.01m, 25m, 1)), MyUserId);
+
+        decision.ProposedPrice.Should().Be(7.11m, "7,20 € meno il sovrapprezzo minimo noto, non meno 49 €");
         decision.Reason.Should().Contain("non ricavabile");
     }
 }

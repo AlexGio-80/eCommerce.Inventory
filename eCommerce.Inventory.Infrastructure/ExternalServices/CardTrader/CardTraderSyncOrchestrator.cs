@@ -535,13 +535,6 @@ public class CardTraderSyncOrchestrator
             .GroupBy(pl => pl.CardTraderProductId!.Value)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(pl => pl.CreatedAt).First());
 
-        // Stato precedente di ogni inserzione, catturato prima che il mapper sovrascriva le
-        // entità in memoria: dopo l'aggiornamento il valore vecchio non è più recuperabile, e
-        // senza non si può sapere se il prezzo è cambiato.
-        var previousStateByProductId = existingItemsMap.ToDictionary(
-            kvp => kvp.Key,
-            kvp => new PriceHistoryRecorder.PreviousState(kvp.Value.ListingPrice, kvp.Value.Quantity));
-
         var observations = new List<PriceHistoryRecorder.Observation>();
 
         var processedProductIds = new HashSet<int>();
@@ -638,18 +631,23 @@ public class CardTraderSyncOrchestrator
         //    nello storico e sarebbe indistinguibile da una di cui non si sa nulla.
         try
         {
-            var alreadyTracked = await _dbContext.PriceHistoryEntries
-                .AsNoTracking()
-                .Select(h => h.CardTraderProductId)
-                .Distinct()
-                .ToListAsync(cancellationToken);
-
-            var alreadyTrackedSet = alreadyTracked.ToHashSet();
-
-            // Un'inserzione senza storico va trattata come cambiata, così riceve il suo primo punto.
-            var previousForRecorder = previousStateByProductId
-                .Where(kvp => alreadyTrackedSet.Contains(kvp.Key))
-                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            // Il confronto si fa con l'ultima rilevazione a storico, non con l'InventoryItem: quando
+            // l'autopricer scrive un prezzo su Card Trader aggiorna subito anche ListingPrice, quindi
+            // alla sincronizzazione i due valori coincidevano e il cambio non veniva mai registrato
+            // (dal 30/08 al 25/09 una manciata di rilevazioni a notte contro ~3.000 riprezzi).
+            // Un'inserzione senza storico non compare nel dizionario, quindi riceve il suo primo punto.
+            var previousForRecorder = (await _dbContext.PriceHistoryEntries
+                    .AsNoTracking()
+                    .Select(h => new { h.Id, h.CardTraderProductId, h.Price, h.Quantity, h.RecordedAt })
+                    .ToListAsync(cancellationToken))
+                .GroupBy(h => h.CardTraderProductId)
+                .ToDictionary(
+                    g => g.Key,
+                    g =>
+                    {
+                        var last = g.OrderByDescending(h => h.RecordedAt).ThenByDescending(h => h.Id).First();
+                        return new PriceHistoryRecorder.PreviousState(last.Price, last.Quantity);
+                    });
 
             var historyEntries = PriceHistoryRecorder.SelectEntriesToRecord(
                 observations, previousForRecorder, DateTime.UtcNow);

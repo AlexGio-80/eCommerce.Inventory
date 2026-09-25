@@ -2,6 +2,26 @@
 
 - [`Cambia-PasswordAdmin.ps1`](#cambia-passwordadminps1) — cambia la password di un utente
 - [`BulkImportOrders.ps1`](#bulk-orders-import-script) — importa gli ordini storici da Card Trader
+- [`Ripristina-PrezziBulk.ps1`](#ripristina-prezzibulkps1) — una tantum, **già eseguito il 2026-09-25**: riporta al prezzo corretto il bulk alzato per errore dall'autopricer
+
+---
+
+## Ripristina-PrezziBulk.ps1
+
+Intervento una tantum, **eseguito il 2026-09-25** (26.011 inserzioni tornate a 0,05 €): non va
+rilanciato. Dal 30/08 al 25/09 l'autopricer scartava il sovrapprezzo di Card Trader sotto
+0,25 € e scriveva come incasso il prezzo che voleva ottenere in vetrina, circa 0,09 € di troppo.
+Lo script prende le inserzioni che erano a 0,05 € alla prima rilevazione dello storico e il cui
+prezzo attuale viene da una valutazione del motore vecchio, e le porta a prezzo attuale meno il
+sovrapprezzo (mai sotto 0,05 €). Scrive con `POST /products/bulk_update` e allinea il database
+rileggendo l'export. Legge token e connection string da `Publish/api/appsettings.Production.json`.
+
+```powershell
+.\Ripristina-PrezziBulk.ps1          # prova: mostra cosa farebbe, nessuna scrittura
+.\Ripristina-PrezziBulk.ps1 -Apply   # applica
+```
+
+Dettaglio in `Documentation/CHANGELOG.md`, voce del 2026-09-25.
 
 ---
 
