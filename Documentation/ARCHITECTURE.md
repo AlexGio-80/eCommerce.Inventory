@@ -354,6 +354,7 @@ PricingProfiles
 ├─ Name, IsActive, DryRun
 ├─ MinPrice
 ├─ MaxIncreasePercentPerRun / MaxDecreasePercentPerRun  ← guardrail asimmetrico
+├─ GuardrailExemptAmount          -- sotto questa variazione in euro i limiti % non scattano
 ├─ MaxMedianRatio                 -- scarta i prezzi di comodo anche con poche offerte
 ├─ scarto anomalie (EnableOutlierRejection, OutlierMadThreshold, MinOffersForOutlierRejection)
 ├─ MinComparableOffers, SkipWhenFewerOffersThanPosition
@@ -525,6 +526,7 @@ L'architettura è progettata per aggiungere facilmente nuovi marketplace:
 | 2026-08-29 | Le regole di pricing ragionano sui prezzi di vetrina, non su quelli incassati | `ListingPrice` viene dall'export ed è il netto venditore, mentre il marketplace espone prezzi comprensivi del sovrapprezzo di Card Trader: sono due scale diverse. La posizione fra i venditori è un fatto di vetrina, quindi si calcola lì e si riconverte solo alla fine, quando si deve scrivere |
 | 2026-08-29 | Il sovrapprezzo si ricava dalla propria offerta nel feed | Il sovrapprezzo non è documentato. Dedurlo dalla propria inserzione lo rende esatto e autoaggiornante. La forma a rapporto scelta allora è stata sostituita il 2026-09-25 (riga sotto) |
 | 2026-09-25 | Il sovrapprezzo si ricava come differenza e si sottrae, non come rapporto | È un importo a scaglioni (0,09 € fino a 0,25 €, 0,10 € fino a circa 5 €, poi decine di centesimi): sul bulk il rapporto arriva a 1,9 e il limite di plausibilità di 1,15 scartava tutte le carte sotto 0,25 €, prezzandole circa 0,09 € sopra la posizione configurata. Se non ricavabile si sottrae il minimo noto (0,09 €), non zero |
+| 2026-09-26 | Soglia in euro sotto la quale il guardrail percentuale non scatta | Sul bulk le percentuali ingannano (0,13 → 0,05 € è −62% ma vale 8 centesimi), e il guardrail non applica ribassi parziali: senza soglia una carta sopra mercato resta bloccata ogni notte, per sempre. Sopra la soglia il guardrail è invariato |
 | 2026-09-25 | Lo storico prezzi confronta con l'ultima rilevazione salvata, non con l'`InventoryItem` | L'autopricer aggiorna `ListingPrice` quando scrive su Card Trader, quindi alla sincronizzazione export e `InventoryItem` coincidevano e nessun suo riprezzo veniva registrato |
 | 2026-08-29 | Collocazione percentuale al posto dell'ordinale, e mai sull'offerta più cara | La profondità di mercato varia da 3 a 29 offerte comparabili: un ordinale fisso degenera in "sii il più caro" sui mercati sottili |
 | 2026-08-29 | Guardrail asimmetrico fra rialzo e ribasso | I due errori non costano uguale: il rialzo è reversibile alla prossima esecuzione, il ribasso si traduce in una vendita immediata |

@@ -190,6 +190,12 @@ import { Expansion, ExpansionsService } from '../../expansions/services/expansio
                   </mat-form-field>
 
                   <mat-form-field appearance="outline">
+                    <mat-label>Variazione libera (€)</mat-label>
+                    <input matInput type="number" step="0.01" min="0" [(ngModel)]="p.guardrailExemptAmount">
+                    <mat-hint>Sotto questa cifra i limiti % non scattano: sul bulk 0,13 → 0,05 è −62% ma vale 8 centesimi</mat-hint>
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline">
                     <mat-label>Rapporto massimo sulla mediana</mat-label>
                     <input matInput type="number" step="0.5" [(ngModel)]="p.maxMedianRatio">
                     <mat-hint>Scarta i prezzi di comodo e quelli irrealistici, anche con poche offerte</mat-hint>

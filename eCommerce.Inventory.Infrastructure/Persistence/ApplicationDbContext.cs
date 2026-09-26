@@ -195,6 +195,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(p => p.MinPrice).HasPrecision(18, 2);
             entity.Property(p => p.MaxIncreasePercentPerRun).HasPrecision(9, 2);
             entity.Property(p => p.MaxDecreasePercentPerRun).HasPrecision(9, 2);
+            entity.Property(p => p.GuardrailExemptAmount).HasPrecision(9, 2);
             entity.Property(p => p.MaxMedianRatio).HasPrecision(9, 2);
             entity.Property(p => p.OutlierMadThreshold).HasPrecision(9, 4);
 

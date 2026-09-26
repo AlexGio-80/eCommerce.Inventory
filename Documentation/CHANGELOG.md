@@ -9,6 +9,34 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-09-26] Feature — Soglia in euro sotto la quale il guardrail percentuale non scatta
+
+#### Problema
+
+Nella prima notturna dopo il fix del sovrapprezzo, 226 carte di bulk sono risultate ferme al
+guardrail. Erano state alzate anche loro dal difetto, ma il ripristino non le ha toccate perché
+il 30/08 non erano a 0,05 €. Il motore le porterebbe da circa 0,15 a 0,06 €, ma il ribasso
+supera il 50% e il guardrail blocca: non applica ribassi parziali, quindi quelle carte sarebbero
+rimaste bloccate ogni notte, per sempre. Sul bulk le percentuali ingannano: da 0,13 a 0,05 € è
+un −62%, ma vale otto centesimi. Lo stesso problema tocca le carte nuove caricate volutamente a
+prezzo alto (punto aperto dal 30/08).
+
+#### Soluzione Implementata
+
+Nuovo campo `PricingProfile.GuardrailExemptAmount` (default 0,10 €, "Variazione libera" nella
+sezione Guardrail): se la variazione proposta in euro non supera la soglia, i limiti percentuali
+non si applicano, in entrambe le direzioni. Zero la disattiva. Sopra la soglia il guardrail
+funziona esattamente come prima, quindi la protezione sulle carte care resta intatta.
+
+#### Note Tecniche
+
+- Migration `20260926050752_AddGuardrailExemptAmount`, con default 0,10 scritto a mano (EF genera 0,
+  che avrebbe aggiunto la soglia disattivata al profilo esistente). Si applica da sola all'avvio.
+- In produzione la soglia è stata impostata a 0,15 € dall'interfaccia.
+- Delle carte ferme al guardrail al 26/09, la soglia a 0,10 € sblocca 195 su 197 sotto 0,25 € (a 0,15 € tutte). Si
+  riallineano man mano che la rotazione notturna le rivaluta (circa 2.000 carte di bulk a notte).
+- Test: tre casi nuovi in `PricingEngineTests` (bulk sbloccato, soglia a zero, protezione intatta oltre la soglia).
+
 ### [2026-09-25] Fix — L'autopricer prezzava il bulk circa 0,09 € sopra la posizione configurata
 
 #### Problema

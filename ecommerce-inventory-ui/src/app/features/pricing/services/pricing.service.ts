@@ -37,6 +37,8 @@ export interface PricingProfile {
     minPrice: number;
     maxIncreasePercentPerRun: number;
     maxDecreasePercentPerRun: number;
+    /** Variazione in euro sotto la quale i limiti percentuali non scattano. */
+    guardrailExemptAmount: number;
     maxMedianRatio: number;
     includeProSellers: boolean;
     includeNormalSellers: boolean;

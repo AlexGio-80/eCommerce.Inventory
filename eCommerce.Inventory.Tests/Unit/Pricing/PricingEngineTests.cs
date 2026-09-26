@@ -809,4 +809,55 @@ public class PricingEngineTests
         decision.ProposedPrice.Should().Be(7.11m, "7,20 € meno il sovrapprezzo minimo noto, non meno 49 €");
         decision.Reason.Should().Contain("non ricavabile");
     }
+
+    /// <summary>
+    /// Caso reale della notturna del 2026-09-26: 226 carte di bulk alzate per errore a circa
+    /// 0,13 € e ferme al guardrail del −50%, che non applica ribassi parziali. Senza la soglia
+    /// in euro sarebbero rimaste bloccate ogni notte, per sempre.
+    /// </summary>
+    [Fact]
+    public void Sotto_la_soglia_in_euro_il_guardrail_non_blocca_il_bulk()
+    {
+        var engine = new PricingEngine();
+        var profile = Profile(NthLowestRule(0.02m, 1m, 1, -0.01m));
+        profile.MaxDecreasePercentPerRun = 50m;
+        profile.GuardrailExemptAmount = 0.10m;
+
+        var offers = new List<CardTraderMarketplaceProductDto> { Offer(0.11m), Offer(0.12m) };
+
+        var decision = engine.Evaluate(Item(0.13m), offers, profile, MyUserId);
+
+        decision.Outcome.Should().Be(PricingOutcome.Applied, "da 0,13 a 0,05 € sono 8 centesimi, anche se è il 62%");
+        decision.ProposedPrice.Should().Be(0.05m);
+    }
+
+    [Fact]
+    public void Con_soglia_a_zero_il_guardrail_torna_puramente_percentuale()
+    {
+        var engine = new PricingEngine();
+        var profile = Profile(NthLowestRule(0.02m, 1m, 1, -0.01m));
+        profile.MaxDecreasePercentPerRun = 50m;
+        profile.GuardrailExemptAmount = 0m;
+
+        var offers = new List<CardTraderMarketplaceProductDto> { Offer(0.11m), Offer(0.12m) };
+
+        engine.Evaluate(Item(0.13m), offers, profile, MyUserId)
+            .Outcome.Should().Be(PricingOutcome.BlockedByGuardrail);
+    }
+
+    [Fact]
+    public void Oltre_la_soglia_in_euro_il_guardrail_resta_attivo()
+    {
+        // La soglia non deve indebolire la protezione dove conta: 0,60 → 0,25 € sono
+        // 35 centesimi, oltre la soglia, e il −58% va fermato come prima.
+        var engine = new PricingEngine();
+        var profile = Profile(NthLowestRule(0.02m, 1m, 1, -0.01m));
+        profile.MaxDecreasePercentPerRun = 50m;
+        profile.GuardrailExemptAmount = 0.10m;
+
+        var offers = new List<CardTraderMarketplaceProductDto> { Offer(0.35m), Offer(0.40m) };
+
+        engine.Evaluate(Item(0.60m), offers, profile, MyUserId)
+            .Outcome.Should().Be(PricingOutcome.BlockedByGuardrail);
+    }
 }

@@ -7,6 +7,7 @@
 ## In Corso
 
 - [ ] **Fix sovrapprezzo sul bulk + storico prezzi (2026-09-25), pubblicato e ripristino eseguito il 2026-09-25, resta da verificare la prima notturna**: il motore prezzava il bulk circa 0,09 € sopra la posizione configurata (sovrapprezzo di Card Trader scartato come implausibile sotto 0,25 €), e lo storico prezzi non registrava i riprezzi dell'autopricer. Ripristino eseguito: l'export di Card Trader conferma 26.011 inserzioni a 0,05 €. Da controllare nella scheda Storico che le carte di bulk abbiano la motivazione "Card Trader aggiunge 0,09 €" e non più "non ricavabile", e che il log della sincronizzazione registri migliaia di rilevazioni a notte invece di poche decine. Dettaglio nel CHANGELOG
+- [ ] **Soglia in euro per il guardrail (2026-09-26), pubblicata; campo verificato in interfaccia, effetto da vedere nelle notturne**: nuovo campo "Variazione libera" (default 0,10 €, in produzione impostato a 0,15 €) nella sezione Guardrail; sotto quella cifra i limiti percentuali non scattano. Sblocca 195 carte di bulk ferme al −50% dopo il fix del sovrapprezzo. Da verificare: nelle notturne successive le carte di bulk con esito `BlockedByGuardrail` devono sparire, salvo ribassi oltre 0,10 €
 - [ ] **Rivalutare "N-esima più bassa" contro percentile** dopo una settimana col fix: il passaggio a "N-esima" era stato fatto per recuperare le vendite del bulk, che il fix risolve alla radice. Cambiare una cosa alla volta per poter misurare
 
 ---

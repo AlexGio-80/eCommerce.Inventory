@@ -40,6 +40,15 @@ public class PricingProfile
     /// </summary>
     public decimal MaxDecreasePercentPerRun { get; set; } = 25m;
 
+    /// <summary>
+    /// Variazione in euro sotto la quale i limiti percentuali non si applicano, in entrambe le
+    /// direzioni. Sul bulk le percentuali ingannano: da 0,13 a 0,05 € è un ribasso del 62%, ma
+    /// vale otto centesimi e non è la svendita da cui il guardrail deve proteggere. Senza questa
+    /// soglia il guardrail blocca la carta ogni notte, per sempre, perché non applica ribassi
+    /// parziali. Zero la disattiva.
+    /// </summary>
+    public decimal GuardrailExemptAmount { get; set; } = 0.10m;
+
     // --- Filtri sui venditori di riferimento ---
     // NB: l'API Card Trader non espone il numero di recensioni di un venditore,
     // quindi un filtro "almeno N feedback" non è realizzabile. Il campo user espone

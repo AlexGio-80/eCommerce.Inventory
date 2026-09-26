@@ -206,7 +206,11 @@ public class PricingEngine
         // 10. Guardrail, asimmetrico per direzione: le due non hanno lo stesso costo se sbagliate.
         var guardrailBypassed = false;
 
-        if (currentPrice > 0)
+        // Sotto la soglia in euro le percentuali non dicono nulla di utile: sul bulk qualunque
+        // riallineamento sembra enorme, e bloccarlo lo fermerebbe per sempre.
+        var withinExemptAmount = Math.Abs(proposed - currentPrice) <= profile.GuardrailExemptAmount;
+
+        if (currentPrice > 0 && !withinExemptAmount)
         {
             var isIncrease = proposed > currentPrice;
             var limit = isIncrease ? profile.MaxIncreasePercentPerRun : profile.MaxDecreasePercentPerRun;

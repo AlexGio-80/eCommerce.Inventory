@@ -72,6 +72,7 @@ public class AutoPricingController : ControllerBase
         profile.MinPrice = request.MinPrice ?? profile.MinPrice;
         profile.MaxIncreasePercentPerRun = request.MaxIncreasePercentPerRun ?? profile.MaxIncreasePercentPerRun;
         profile.MaxDecreasePercentPerRun = request.MaxDecreasePercentPerRun ?? profile.MaxDecreasePercentPerRun;
+        profile.GuardrailExemptAmount = request.GuardrailExemptAmount ?? profile.GuardrailExemptAmount;
         profile.MaxMedianRatio = request.MaxMedianRatio ?? profile.MaxMedianRatio;
         profile.MinOffersForOutlierRejection = request.MinOffersForOutlierRejection ?? profile.MinOffersForOutlierRejection;
         profile.IncludeProSellers = request.IncludeProSellers ?? profile.IncludeProSellers;
@@ -572,6 +573,7 @@ public class AutoPricingController : ControllerBase
         p.MinPrice,
         p.MaxIncreasePercentPerRun,
         p.MaxDecreasePercentPerRun,
+        p.GuardrailExemptAmount,
         p.MaxMedianRatio,
         p.IncludeProSellers,
         p.IncludeNormalSellers,
@@ -651,6 +653,7 @@ public class UpdateProfileRequest
     public decimal? MinPrice { get; set; }
     public decimal? MaxIncreasePercentPerRun { get; set; }
     public decimal? MaxDecreasePercentPerRun { get; set; }
+    public decimal? GuardrailExemptAmount { get; set; }
     public decimal? MaxMedianRatio { get; set; }
     public int? MinOffersForOutlierRejection { get; set; }
     public bool? IncludeProSellers { get; set; }
