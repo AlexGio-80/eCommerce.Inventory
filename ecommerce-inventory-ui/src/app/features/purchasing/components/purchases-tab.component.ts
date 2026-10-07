@@ -13,6 +13,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import {
   ProductPurchase, ProductPurchaseInput, PurchasingService, SealedProductAnalysis
 } from '../services/purchasing.service';
+import { GridStateDirective } from '../../../shared/directives/grid-state.directive';
 
 interface PurchaseForm {
   id?: number;
@@ -34,7 +35,7 @@ interface PurchaseForm {
 @Component({
   selector: 'app-purchases-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule, AgGridAngular, MatButtonModule, MatIconModule, MatFormFieldModule,
+  imports: [GridStateDirective, CommonModule, FormsModule, AgGridAngular, MatButtonModule, MatIconModule, MatFormFieldModule,
     MatInputModule, MatSelectModule, MatTooltipModule, MatSnackBarModule],
   template: `
     <div class="tab-container">
@@ -95,7 +96,7 @@ interface PurchaseForm {
         </div>
       </div>
       <div class="grid-wrapper">
-        <ag-grid-angular class="ag-theme-material" [rowData]="purchases()" [columnDefs]="columnDefs"
+        <ag-grid-angular appGridState="purchasing-purchases-grid" class="ag-theme-material" [rowData]="purchases()" [columnDefs]="columnDefs"
           [defaultColDef]="defaultColDef" style="width: 100%; height: 100%;"></ag-grid-angular>
       </div>
     </div>

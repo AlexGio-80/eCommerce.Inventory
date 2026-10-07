@@ -15,6 +15,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import {
   AlertNotification, AlertRule, AlertRuleInput, AlertRuleType, PurchasingService, SealedProductAnalysis
 } from '../services/purchasing.service';
+import { GridStateDirective } from '../../../shared/directives/grid-state.directive';
 
 interface RuleForm {
   id?: number;
@@ -40,7 +41,7 @@ interface RuleForm {
 @Component({
   selector: 'app-alerts-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule, AgGridAngular, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule,
+  imports: [GridStateDirective, CommonModule, FormsModule, AgGridAngular, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule,
     MatSelectModule, MatCheckboxModule, MatTooltipModule, MatProgressSpinnerModule, MatSnackBarModule],
   template: `
     <div class="tab-container">
@@ -141,14 +142,14 @@ interface RuleForm {
       <div class="grids">
         <div class="grid-block">
           <div class="block-title">Regole</div>
-          <ag-grid-angular class="ag-theme-material" [rowData]="rules()" [columnDefs]="ruleColumns" [defaultColDef]="defaultColDef"
+          <ag-grid-angular appGridState="purchasing-alert-rules-grid" class="ag-theme-material" [rowData]="rules()" [columnDefs]="ruleColumns" [defaultColDef]="defaultColDef"
             style="width: 100%; height: 100%;"></ag-grid-angular>
         </div>
         <div class="grid-block">
           <div class="block-title">Avvisi emessi
             <button mat-button (click)="markAllRead()" *ngIf="unread() > 0">Segna tutti come letti ({{ unread() }})</button>
           </div>
-          <ag-grid-angular class="ag-theme-material" [rowData]="notifications()" [columnDefs]="notificationColumns" [defaultColDef]="defaultColDef"
+          <ag-grid-angular appGridState="purchasing-alert-notifications-grid" class="ag-theme-material" [rowData]="notifications()" [columnDefs]="notificationColumns" [defaultColDef]="defaultColDef"
             (rowClicked)="openNotification($event.data)" style="width: 100%; height: 100%;"></ag-grid-angular>
         </div>
       </div>

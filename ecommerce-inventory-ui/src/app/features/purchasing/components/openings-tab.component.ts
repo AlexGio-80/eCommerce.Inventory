@@ -9,6 +9,7 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { OpeningBalance, PurchasingService } from '../services/purchasing.service';
+import { GridStateDirective } from '../../../shared/directives/grid-state.directive';
 
 /**
  * Bilancio reale delle aperture (Fase 5): costo, venduto e ancora in vendita per tag, con l'incasso
@@ -17,7 +18,7 @@ import { OpeningBalance, PurchasingService } from '../services/purchasing.servic
 @Component({
   selector: 'app-openings-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule, AgGridAngular, MatButtonModule, MatIconModule, MatSlideToggleModule,
+  imports: [GridStateDirective, CommonModule, FormsModule, AgGridAngular, MatButtonModule, MatIconModule, MatSlideToggleModule,
     MatProgressSpinnerModule, MatSnackBarModule],
   template: `
     <div class="tab-container">
@@ -34,7 +35,7 @@ import { OpeningBalance, PurchasingService } from '../services/purchasing.servic
       </div>
       <div class="grid-wrapper">
         <div class="loading" *ngIf="isLoading()"><mat-spinner diameter="32"></mat-spinner></div>
-        <ag-grid-angular class="ag-theme-material" [rowData]="visible()" [columnDefs]="columnDefs"
+        <ag-grid-angular appGridState="purchasing-openings-grid" class="ag-theme-material" [rowData]="visible()" [columnDefs]="columnDefs"
           [defaultColDef]="defaultColDef" style="width: 100%; height: 100%;"></ag-grid-angular>
       </div>
     </div>

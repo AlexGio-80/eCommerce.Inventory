@@ -238,8 +238,10 @@ export class OrdersListComponent implements OnInit {
             }
         }
 
-        // Auto-size columns to fit
-        this.gridApi.sizeColumnsToFit();
+        // Adatta le colonne alla finestra solo senza una configurazione salvata, che ha le sue larghezze
+        if (!savedState?.columnState) {
+            this.gridApi.sizeColumnsToFit();
+        }
     }
 
     refreshOrders(): void {

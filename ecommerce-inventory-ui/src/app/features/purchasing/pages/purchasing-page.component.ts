@@ -23,6 +23,7 @@ import { PurchasesTabComponent } from '../components/purchases-tab.component';
 import {
   OpeningValueParams, PackValue, PurchasingService, SealedProductAnalysis, SealedSetAnalysis, SealedSetOption
 } from '../services/purchasing.service';
+import { GridStateDirective } from '../../../shared/directives/grid-state.directive';
 
 /**
  * Analisi acquisti — Fase 1: convenienza fra i formati di un'uscita.
@@ -32,7 +33,7 @@ import {
 @Component({
   selector: 'app-purchasing-page',
   standalone: true,
-  imports: [
+  imports: [GridStateDirective, 
     CommonModule, FormsModule, AgGridAngular, MatCardModule, MatButtonModule, MatFormFieldModule,
     MatSelectModule, MatProgressSpinnerModule, MatSnackBarModule, MatIconModule, MatTooltipModule,
     MatSlideToggleModule, MatInputModule, MatTabsModule, OpeningsTabComponent, OpportunitiesTabComponent, PurchasesTabComponent, AlertsTabComponent
@@ -168,7 +169,7 @@ import {
       <mat-card class="grid-card">
         <mat-card-content>
           <div class="loading" *ngIf="isLoading()"><mat-spinner diameter="32"></mat-spinner></div>
-          <ag-grid-angular
+          <ag-grid-angular appGridState="purchasing-analysis-grid"
             class="ag-theme-material"
             [rowData]="visibleProducts()"
             [columnDefs]="columnDefs"

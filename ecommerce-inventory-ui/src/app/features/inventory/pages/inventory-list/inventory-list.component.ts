@@ -253,7 +253,10 @@ export class InventoryListComponent implements OnInit {
     };
 
     this.gridApi.setGridOption('datasource', dataSource);
-    this.gridApi.sizeColumnsToFit();
+    // Con una configurazione salvata si tengono le sue larghezze
+    if (!savedState?.columnState) {
+      this.gridApi.sizeColumnsToFit();
+    }
   }
 
   private buildFiltersFromModel(filterModel: any): any {

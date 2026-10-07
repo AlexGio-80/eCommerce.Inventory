@@ -16,6 +16,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
+import { GridStateDirective } from '../../../shared/directives/grid-state.directive';
 
 // Register AG Grid modules
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -26,6 +27,7 @@ ModuleRegistry.registerModules([AllCommunityModule]);
     imports: [
         CommonModule,
         AgGridAngular,
+        GridStateDirective,
         MatCardModule,
         MatButtonModule,
         MatFormFieldModule,
@@ -172,17 +174,6 @@ export class GamesPageComponent implements OnInit {
 
     onGridReady(params: GridReadyEvent) {
         this.gridApi = params.api;
-
-        // Restore saved grid state
-        const savedState = this.gridStateService.loadGridState(this.GRID_ID);
-        if (savedState) {
-            if (savedState.columnState) {
-                this.gridApi.applyColumnState({ state: savedState.columnState, applyOrder: true });
-            }
-            if (savedState.sortModel) {
-                this.gridApi.applyColumnState({ state: savedState.sortModel });
-            }
-        }
     }
 
     loadGames() {
@@ -293,18 +284,6 @@ export class GamesPageComponent implements OnInit {
         this.gridApi.sizeColumnsToFit();
 
         this.snackBar.open('Grid configuration reset to defaults', 'Close', { duration: 3000 });
-    }
-
-    onColumnMoved(): void {
-        this.saveGridState();
-    }
-
-    onColumnVisible(): void {
-        this.saveGridState();
-    }
-
-    onSortChanged(): void {
-        this.saveGridState();
     }
 
     // Column Visibility Helper

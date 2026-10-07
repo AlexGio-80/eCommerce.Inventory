@@ -77,10 +77,9 @@
         </mat-menu>
       </div>
 
-      <ag-grid-angular class="ag-theme-material" [rowData]="games()" [columnDefs]="columnDefs"
+      <ag-grid-angular appGridState="games-grid" class="ag-theme-material" [rowData]="games()" [columnDefs]="columnDefs"
         [defaultColDef]="defaultColDef" [gridOptions]="gridOptions" [pagination]="true" [paginationPageSize]="20"
         [rowSelection]="'single'" (gridReady)="onGridReady($event)" (selectionChanged)="onSelectionChanged($event)"
-        (columnMoved)="onColumnMoved()" (columnVisible)="onColumnVisible()" (sortChanged)="onSortChanged()"
         style="height: 600px; width: 100%;">
       </ag-grid-angular>
     </mat-card-content>

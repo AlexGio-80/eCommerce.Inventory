@@ -16,6 +16,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDividerModule } from '@angular/material/divider';
 import { FormsModule } from '@angular/forms';
+import { GridStateDirective } from '../../../shared/directives/grid-state.directive';
 
 @Component({
   selector: 'app-expansions-page',
@@ -23,6 +24,7 @@ import { FormsModule } from '@angular/forms';
   imports: [
     CommonModule,
     AgGridAngular,
+    GridStateDirective,
     MatCardModule,
     MatButtonModule,
     MatFormFieldModule,
@@ -268,6 +270,7 @@ import { FormsModule } from '@angular/forms';
           </div>
 
           <ag-grid-angular
+            appGridState="expansions-grid"
             class="ag-theme-material"
             [rowData]="expansions()"
             [columnDefs]="columnDefs"
@@ -278,9 +281,6 @@ import { FormsModule } from '@angular/forms';
             [rowSelection]="'single'"
             (gridReady)="onGridReady($event)"
             (selectionChanged)="onSelectionChanged($event)"
-            (columnMoved)="onColumnMoved()"
-            (columnVisible)="onColumnVisible()"
-            (sortChanged)="onSortChanged()"
             style="width: 100%; height: 100%;">
           </ag-grid-angular>
         </mat-card-content>
@@ -780,17 +780,6 @@ export class ExpansionsPageComponent implements OnInit {
 
   onGridReady(params: GridReadyEvent) {
     this.gridApi = params.api;
-
-    // Restore saved grid state
-    const savedState = this.gridStateService.loadGridState(this.GRID_ID);
-    if (savedState) {
-      if (savedState.columnState) {
-        this.gridApi.applyColumnState({ state: savedState.columnState, applyOrder: true });
-      }
-      if (savedState.sortModel) {
-        this.gridApi.applyColumnState({ state: savedState.sortModel });
-      }
-    }
   }
 
   loadExpansions() {
@@ -995,18 +984,6 @@ export class ExpansionsPageComponent implements OnInit {
     this.gridApi.sizeColumnsToFit();
 
     this.snackBar.open('Grid configuration reset to defaults', 'Close', { duration: 3000 });
-  }
-
-  onColumnMoved(): void {
-    this.saveGridState();
-  }
-
-  onColumnVisible(): void {
-    this.saveGridState();
-  }
-
-  onSortChanged(): void {
-    this.saveGridState();
   }
 
   // Column Visibility Helper

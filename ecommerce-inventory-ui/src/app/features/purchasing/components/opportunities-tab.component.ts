@@ -13,6 +13,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Opportunity, OpportunityList, PurchasePlan, PurchasingService } from '../services/purchasing.service';
 import { PurchasePlanPanelComponent } from './purchase-plan-panel.component';
+import { GridStateDirective } from '../../../shared/directives/grid-state.directive';
 
 /**
  * Classifica delle opportunità sui sigillati di tutte le uscite (Fase 3): valore atteso dell'apertura
@@ -21,7 +22,7 @@ import { PurchasePlanPanelComponent } from './purchase-plan-panel.component';
 @Component({
   selector: 'app-opportunities-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule, AgGridAngular, MatButtonModule, MatIconModule, MatFormFieldModule,
+  imports: [GridStateDirective, CommonModule, FormsModule, AgGridAngular, MatButtonModule, MatIconModule, MatFormFieldModule,
     MatInputModule, MatSelectModule, MatTooltipModule, MatProgressSpinnerModule, MatSnackBarModule, PurchasePlanPanelComponent],
   template: `
     <div class="tab-container">
@@ -77,7 +78,7 @@ import { PurchasePlanPanelComponent } from './purchase-plan-panel.component';
       <app-purchase-plan-panel *ngIf="plan() as p" [plan]="p" (close)="plan.set(null)"></app-purchase-plan-panel>
       <div class="grid-wrapper">
         <div class="loading" *ngIf="isLoading()"><mat-spinner diameter="32"></mat-spinner></div>
-        <ag-grid-angular class="ag-theme-material" [rowData]="visible()" [columnDefs]="columnDefs"
+        <ag-grid-angular appGridState="purchasing-opportunities-grid" class="ag-theme-material" [rowData]="visible()" [columnDefs]="columnDefs"
           [defaultColDef]="defaultColDef" (rowClicked)="openRelease.emit($event.data?.mainSetCode)"
           style="width: 100%; height: 100%;"></ag-grid-angular>
       </div>

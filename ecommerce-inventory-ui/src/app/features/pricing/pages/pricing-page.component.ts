@@ -23,11 +23,12 @@ import {
 } from '../services/pricing.service';
 import { PricingRunMonitorService } from '../services/pricing-run-monitor.service';
 import { Expansion, ExpansionsService } from '../../expansions/services/expansions.service';
+import { GridStateDirective } from '../../../shared/directives/grid-state.directive';
 
 @Component({
   selector: 'app-pricing-page',
   standalone: true,
-  imports: [
+  imports: [GridStateDirective, 
     CommonModule, FormsModule, AgGridAngular,
     MatCardModule, MatButtonModule, MatFormFieldModule, MatInputModule,
     MatSelectModule, MatCheckboxModule, MatSlideToggleModule,
@@ -407,7 +408,7 @@ import { Expansion, ExpansionsService } from '../../expansions/services/expansio
                     verranno rivalutate su dati aggiornati e i nuovi prezzi finiranno davvero su Card Trader.
                   </p>
 
-                  <ag-grid-angular
+                  <ag-grid-angular appGridState="pricing-preview-grid"
                     class="ag-theme-quartz grid"
                     [rowData]="rep.changes"
                     [columnDefs]="previewColumns"
@@ -489,7 +490,7 @@ import { Expansion, ExpansionsService } from '../../expansions/services/expansio
                   </button>
                 </div>
                 <p class="hint">Clicca una esecuzione per vedere i calcoli carta per carta.</p>
-                <ag-grid-angular
+                <ag-grid-angular appGridState="pricing-runs-grid"
                   class="ag-theme-quartz grid"
                   [rowData]="runs()"
                   [columnDefs]="runColumns"
@@ -563,7 +564,7 @@ import { Expansion, ExpansionsService } from '../../expansions/services/expansio
                   su dati aggiornati e il nuovo prezzo scritto su Card Trader anche se supera il guardrail.
                 </p>
 
-                <ag-grid-angular
+                <ag-grid-angular appGridState="pricing-changes-grid"
                   *ngIf="changes().length > 0"
                   class="ag-theme-quartz grid"
                   [rowData]="changes()"
