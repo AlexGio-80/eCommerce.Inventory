@@ -153,6 +153,35 @@ export interface OpeningBalance {
     predictedNet?: number;
 }
 
+/** Prodotto nella classifica delle opportunità (Fase 3). */
+export interface Opportunity {
+    sealedProductId: number;
+    name: string;
+    category?: string;
+    subtype?: string;
+    mainSetCode: string;
+    setName: string;
+    releaseDate?: string;
+    cmTrend?: number;
+    cmLow?: number;
+    openValueCm?: number;
+    coverageCm?: number;
+    sealedNetCm?: number;
+    openingRoiPercent?: number;
+    decision?: string;
+    trendChange7?: number;
+    trendChange30?: number;
+    valueChange7?: number;
+    valueChange30?: number;
+    cardTraderBlueprintId?: number;
+}
+
+export interface OpportunityList {
+    date?: string;
+    computedAt?: string;
+    items: Opportunity[];
+}
+
 export interface ProductPurchaseInput {
     sealedProductId: number;
     quantity: number;
@@ -244,6 +273,15 @@ export class PurchasingService {
     getOpenings(): Observable<OpeningBalance[]> {
         return this.http.get<ApiResponse<OpeningBalance[]>>(`${this.apiUrl}/openings`)
             .pipe(map(response => response.data ?? []));
+    }
+
+    getOpportunities(): Observable<OpportunityList> {
+        return this.http.get<ApiResponse<OpportunityList>>(`${this.apiUrl}/opportunities`)
+            .pipe(map(response => response.data ?? { items: [] }));
+    }
+
+    computeOpportunities(): Observable<unknown> {
+        return this.http.post<ApiResponse<unknown>>(`${this.apiUrl}/opportunities/compute`, {});
     }
 
     getPurchases(): Observable<ProductPurchase[]> {

@@ -15,6 +15,7 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatInputModule } from '@angular/material/input';
 import { MatTabsModule } from '@angular/material/tabs';
 import { OpeningsTabComponent } from '../components/openings-tab.component';
+import { OpportunitiesTabComponent } from '../components/opportunities-tab.component';
 import { PurchasesTabComponent } from '../components/purchases-tab.component';
 import {
   OpeningValueParams, PackValue, PurchasingService, SealedProductAnalysis, SealedSetAnalysis, SealedSetOption
@@ -31,7 +32,7 @@ import {
   imports: [
     CommonModule, FormsModule, AgGridAngular, MatCardModule, MatButtonModule, MatFormFieldModule,
     MatSelectModule, MatProgressSpinnerModule, MatSnackBarModule, MatIconModule, MatTooltipModule,
-    MatSlideToggleModule, MatInputModule, MatTabsModule, OpeningsTabComponent, PurchasesTabComponent
+    MatSlideToggleModule, MatInputModule, MatTabsModule, OpeningsTabComponent, OpportunitiesTabComponent, PurchasesTabComponent
   ],
   template: `
     <mat-tab-group class="tabs" [(selectedIndex)]="tabIndex" animationDuration="0ms">
@@ -174,6 +175,12 @@ import {
         </mat-card-content>
       </mat-card>
     </div>
+    </mat-tab>
+
+    <mat-tab label="Opportunità">
+      <ng-template matTabContent>
+        <app-opportunities-tab (openRelease)="openReleaseFromOpportunities($event)"></app-opportunities-tab>
+      </ng-template>
     </mat-tab>
 
     <mat-tab label="Aperture">
@@ -374,12 +381,19 @@ export class PurchasingPageComponent implements OnInit {
     return parts.join(' · ');
   }
 
+  /** Dalla classifica delle opportunità all'analisi completa dell'uscita. */
+  openReleaseFromOpportunities(code: string | undefined) {
+    if (!code) return;
+    this.selectSet(code);
+    this.tabIndex = 0;
+  }
+
   /** Dalla tabella di analisi al registro acquisti, con il prodotto già scelto. */
   registerPurchase(product: SealedProductAnalysis) {
     this.prefillProductId.set(null);
     setTimeout(() => {
       this.prefillProductId.set(product.id);
-      this.tabIndex = 2;
+      this.tabIndex = 3;
     });
   }
 

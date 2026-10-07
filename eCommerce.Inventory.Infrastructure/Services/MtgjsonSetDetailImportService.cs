@@ -107,6 +107,52 @@ public class MtgjsonSetDetailImportService
         return candidates.Count;
     }
 
+    /// <summary>
+    /// Scaricamento graduale per la classifica delle opportunità: ogni giorno un lotto di uscite che
+    /// non hanno ancora i dati delle buste, partendo dalle più recenti e solo fra quelle con almeno un
+    /// sigillato in vendita su Cardmarket. Scaricarle tutte insieme vorrebbe dire 1-2 GB in un colpo.
+    /// Un'uscita che fallisce non ferma le altre.
+    /// </summary>
+    public async Task<int> ImportPendingAsync(int batchSize, CancellationToken cancellationToken = default)
+    {
+        var sets = await _db.MtgjsonSets.AsNoTracking().ToListAsync(cancellationToken);
+        var codes = sets.Select(s => s.Code).ToHashSet();
+
+        var withPrice = (await _db.SealedProducts.AsNoTracking()
+                .Where(p => p.CardmarketId != null && _db.CardmarketLatestPrices.Any(c => c.IdProduct == p.CardmarketId && c.Trend > 0))
+                .Select(p => p.SetCode)
+                .Distinct()
+                .ToListAsync(cancellationToken))
+            .Select(code => sets.FirstOrDefault(s => s.Code == code))
+            .Where(s => s != null)
+            .Select(s => s!.ParentCode != null && codes.Contains(s.ParentCode) ? s.ParentCode : s.Code)
+            .ToHashSet();
+
+        var pending = sets
+            .Where(s => withPrice.Contains(s.Code) && s.DetailImportedAt == null)
+            .OrderByDescending(s => s.ReleaseDate)
+            .Take(batchSize)
+            .Select(s => s.Code)
+            .ToList();
+
+        var imported = 0;
+        foreach (var code in pending)
+        {
+            try
+            {
+                await ImportGroupAsync(code, cancellationToken);
+                imported++;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Dati delle buste MTGJSON di {Set} non importati", code);
+                _db.ChangeTracker.Clear();
+            }
+        }
+
+        return imported;
+    }
+
     private async Task ReplaceSetAsync(
         string code, MtgJsonSetDetailDto detail, bool includeBoostersAndDecks,
         SetDetailImportResult result, CancellationToken cancellationToken)
@@ -196,6 +242,10 @@ public class MtgjsonSetDetailImportService
         }
 
         await _db.SaveChangesAsync(cancellationToken);
+
+        // Le righe salvate non servono più: tenerle tracciate, importando decine di uscite di fila,
+        // accumulerebbe centinaia di migliaia di oggetti e rallenterebbe ogni salvataggio successivo.
+        _db.ChangeTracker.Clear();
         result.Sets++;
     }
 

@@ -246,6 +246,35 @@ sopra, e il trend CM delle singole subito dopo l'uscita non è il prezzo a cui v
 Classifica di tutti i prodotti sigillati per rapporto valore atteso / prezzo d'acquisto CM, filtrabile
 per tipo di prodotto ed età dell'espansione, con l'andamento del prezzo dalla Fase 0.
 
+**Implementazione (2026-10-07):**
+- **Volume**: 268 uscite hanno sigillati con un prezzo Cardmarket (2.609 prodotti); i file MTGJSON
+  pesano 3-5 MB per set e un'uscita ne ha 2-4, per un totale di 1-2 GB. Per questo i dati delle buste
+  si scaricano **a lotti**: ogni giorno il worker ne scarica `Purchasing:DetailImportBatchSize` (60)
+  fra le uscite che non li hanno, partendo dalle più recenti (`ImportPendingAsync`): copertura completa
+  in circa 5 giorni. Dopo ogni set il tracciamento EF viene azzerato, altrimenti le righe salvate si
+  accumulerebbero in memoria per tutto il lotto.
+- **Classifica giornaliera** (`SealedOpportunityService`, tabella `SealedOpportunities`, migration
+  `AddSealedOpportunities`): dopo gli import, valore atteso, sigillato netto, resa e decisione di ogni
+  prodotto di ogni uscita con i dati delle buste, una riga per prodotto e giorno. Si salva lo storico:
+  la variazione del valore atteso a 7 e 30 giorni, accanto a quella del prezzo del sigillato, è il dato
+  che serve per "quando comprare". L'analisi in serie carica catalogo e parametri una volta sola
+  (`AnalyzeManyAsync`).
+- Scheda **"Opportunità"** nella pagina Acquisti: filtri per decisione (predefinito: solo "Apri"), tipo
+  di prodotto, resa minima e copertura minima (predefinita 90%), clic su una riga per l'analisi completa
+  dell'uscita, pulsante per ricalcolare subito.
+- **Provato su SQL Server** su una copia ripristinata del backup (poi cancellata): lotto di 20 uscite in
+  33 s con 200 MB di memoria (23.775 carte, 60.014 carte nei fogli, 410 mazzi), classifica in 4 s
+  (293 prodotti: 125 "Apri", 128 "Tieni sigillato", 38 "Dati incompleti", 2 "Prezzo CM dubbio").
+
+**Pubblicata e verificata il 2026-10-07**: al primo avvio il worker ha scaricato i dati delle buste di 65 uscite e calcolato la classifica (755 prodotti di 63 uscite, 326 "Apri"); il clic su una riga apre l'analisi dell'uscita.
+
+**Limite noto:** in cima alla classifica ci sono quasi solo mazzi Commander e prodotti a contenuto
+fisso (MH3 Collector's Edition oltre +140%, Foundations Commander +90%). È plausibile, ma il valore
+atteso presuppone di vendere tutte le carte del mazzo, comprese quelle fra 0,25 e 1 € che si vendono
+lentamente: la resa reale arriva più tardi e il fattore "prezzo realizzato" è misurato sulle carte da
+1 € in su. Da affinare con una misura di liquidità (quota del valore nelle carte sopra una soglia)
+quando ci saranno aperture di mazzi registrate.
+
 ### Fase 4 — Avvisi
 
 Regole valutate dopo ogni import giornaliero, ad esempio "Play Box di TRK sotto 130 € di trend",

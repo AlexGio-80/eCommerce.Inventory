@@ -9,6 +9,31 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-07] Feature — Classifica giornaliera delle opportunità sui sigillati (Fase 3 analisi acquisti)
+
+#### Problema
+
+Il valore atteso si vedeva solo un'uscita alla volta: per trovare i sigillati che conviene comprare
+oggi, anche di espansioni uscite da anni, bisognava aprirle tutte a mano.
+
+#### Soluzione Implementata
+
+- Dati delle buste MTGJSON scaricati a lotti giornalieri (60 uscite, dalle più recenti) per tutte le
+  uscite con sigillati in vendita su Cardmarket
+- `SealedOpportunityService`: classifica calcolata ogni giorno dopo gli import e salvata in
+  `SealedOpportunities`, con lo storico del valore atteso
+- Scheda "Opportunità" nella pagina Acquisti: filtri, variazione di prezzo e valore atteso a 7/30 giorni,
+  clic per l'analisi completa dell'uscita
+
+#### Note Tecniche
+
+- Migration `AddSealedOpportunities`: una tabella nuova
+- `AnalyzeManyAsync` carica catalogo e parametri una volta sola per tutte le uscite
+- Dopo ogni set importato il tracciamento EF viene azzerato: con un lotto di 60 uscite le righe
+  tracciate sarebbero centinaia di migliaia
+- Provato su una copia ripristinata del backup: 20 uscite in 33 s e 200 MB, classifica in 4 s
+- **Pubblicato e verificato il 2026-10-07**: 65 uscite scaricate al primo avvio, classifica di 755 prodotti
+
 ### [2026-10-07] Feature — Taratura sulle vendite reali, bilancio delle aperture e registro acquisti (Fase 5 analisi acquisti)
 
 #### Problema

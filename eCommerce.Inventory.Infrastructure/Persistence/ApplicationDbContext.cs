@@ -43,6 +43,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<CardmarketLatestPrice> CardmarketLatestPrices { get; set; }
     public DbSet<CardTraderCardPrice> CardTraderCardPrices { get; set; }
     public DbSet<ProductPurchase> ProductPurchases { get; set; }
+    public DbSet<SealedOpportunity> SealedOpportunities { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -455,6 +456,24 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
                 .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasIndex(p => p.Tag).HasDatabaseName("IX_ProductPurchase_Tag");
+        });
+
+        modelBuilder.Entity<SealedOpportunity>(entity =>
+        {
+            entity.Property(o => o.MainSetCode).HasMaxLength(20);
+            entity.Property(o => o.Decision).HasMaxLength(30);
+            foreach (var property in new[] { "CmTrend", "CmLow", "OpenValueCm", "SealedNetCm" })
+                entity.Property<decimal?>(property).HasPrecision(18, 2);
+            entity.Property(o => o.CoverageCm).HasPrecision(5, 1);
+            entity.Property(o => o.OpeningRoiPercent).HasPrecision(9, 1);
+
+            entity.HasOne(o => o.SealedProduct)
+                .WithMany()
+                .HasForeignKey(o => o.SealedProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(o => o.Date).HasDatabaseName("IX_SealedOpportunity_Date");
+            entity.HasIndex(o => new { o.SealedProductId, o.Date }).HasDatabaseName("IX_SealedOpportunity_Product_Date");
         });
     }
 }

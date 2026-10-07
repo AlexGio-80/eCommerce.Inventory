@@ -19,6 +19,7 @@ public class PurchasingController : ControllerBase
     private readonly MtgjsonSetDetailImportService _detailImport;
     private readonly OpeningBalanceService _openingBalance;
     private readonly ProductPurchaseService _purchases;
+    private readonly SealedOpportunityService _opportunities;
     private readonly IConfiguration _configuration;
     private readonly ILogger<PurchasingController> _logger;
 
@@ -28,9 +29,11 @@ public class PurchasingController : ControllerBase
         MtgjsonSetDetailImportService detailImport,
         OpeningBalanceService openingBalance,
         ProductPurchaseService purchases,
+        SealedOpportunityService opportunities,
         IConfiguration configuration,
         ILogger<PurchasingController> logger)
     {
+        _opportunities = opportunities;
         _openingBalance = openingBalance;
         _purchases = purchases;
         _configuration = configuration;
@@ -100,6 +103,30 @@ public class PurchasingController : ControllerBase
         var threshold = _configuration.GetValue("Purchasing:BulkThreshold", 0.25m);
         var openings = await _openingBalance.GetAsync(threshold, cancellationToken);
         return Ok(ApiResponse<List<OpeningBalance>>.SuccessResult(openings));
+    }
+
+    /// <summary>Ultima classifica delle opportunità sui sigillati di tutte le uscite.</summary>
+    [HttpGet("opportunities")]
+    public async Task<IActionResult> GetOpportunities(CancellationToken cancellationToken)
+    {
+        var list = await _opportunities.GetLatestAsync(cancellationToken);
+        return Ok(ApiResponse<OpportunityList>.SuccessResult(list));
+    }
+
+    /// <summary>Ricalcola subito la classifica di oggi (gira comunque da sola ogni giorno).</summary>
+    [HttpPost("opportunities/compute")]
+    public async Task<IActionResult> ComputeOpportunities(CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogInformation("Ricalcolo della classifica delle opportunità lanciato dall'interfaccia");
+            var rows = await _opportunities.ComputeAsync(cancellationToken);
+            return Ok(ApiResponse<object>.SuccessResult(new { rows }));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(ApiResponse<object>.ErrorResult(ex.Message));
+        }
     }
 
     [HttpGet("purchases")]

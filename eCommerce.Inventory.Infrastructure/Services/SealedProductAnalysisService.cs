@@ -80,17 +80,53 @@ public class SealedProductAnalysisService
         OpeningValueOverrides? overrides = null,
         CancellationToken cancellationToken = default)
     {
-        setCode = setCode.ToUpperInvariant();
-        var sets = await _db.MtgjsonSets.AsNoTracking().ToListAsync(cancellationToken);
-        var main = sets.FirstOrDefault(s => s.Code == setCode);
-        if (main == null) return null;
+        var context = await LoadContextAsync(overrides, cancellationToken);
+        return await AnalyzeCoreAsync(setCode, context, cancellationToken);
+    }
 
-        var groupCodes = GroupCodes(setCode, sets);
+    /// <summary>
+    /// Analisi in serie di più uscite (classifica delle opportunità): catalogo e parametri si
+    /// caricano una volta sola invece che per ogni uscita.
+    /// </summary>
+    public async Task<List<SealedSetAnalysis>> AnalyzeManyAsync(IEnumerable<string> setCodes, CancellationToken cancellationToken = default)
+    {
+        var context = await LoadContextAsync(null, cancellationToken);
+        var result = new List<SealedSetAnalysis>();
+        foreach (var code in setCodes)
+        {
+            var analysis = await AnalyzeCoreAsync(code, context, cancellationToken);
+            if (analysis != null) result.Add(analysis);
+        }
+        return result;
+    }
+
+    private record AnalysisContext(
+        List<MtgjsonSet> Sets,
+        Dictionary<Guid, SealedProduct> Catalog,
+        (OpeningValueSettings Values, OpeningValueSettingsDto Dto) Settings);
+
+    private async Task<AnalysisContext> LoadContextAsync(OpeningValueOverrides? overrides, CancellationToken cancellationToken)
+    {
+        var sets = await _db.MtgjsonSets.AsNoTracking().ToListAsync(cancellationToken);
 
         // Tutto il catalogo in memoria (qualche migliaio di righe): i prodotti di un'uscita possono
         // contenere prodotti di un altro set, e la scomposizione li deve trovare.
         var catalog = await _db.SealedProducts.AsNoTracking().Include(p => p.Contents)
             .ToDictionaryAsync(p => p.Uuid, cancellationToken);
+
+        var settings = await ResolveSettingsAsync(overrides, cancellationToken);
+        return new AnalysisContext(sets, catalog, settings);
+    }
+
+    private async Task<SealedSetAnalysis?> AnalyzeCoreAsync(string setCode, AnalysisContext context, CancellationToken cancellationToken)
+    {
+        setCode = setCode.ToUpperInvariant();
+        var sets = context.Sets;
+        var main = sets.FirstOrDefault(s => s.Code == setCode);
+        if (main == null) return null;
+
+        var groupCodes = GroupCodes(setCode, sets);
+        var catalog = context.Catalog;
 
         var products = catalog.Values.Where(p => groupCodes.Contains(p.SetCode)).ToList();
         var prices = await LoadLatestCardmarketPricesAsync(
@@ -105,7 +141,7 @@ public class SealedProductAnalysisService
 
         var references = ComputeReferences(rows.Select(r => (r.Product.Name, r.Composition, r.Price?.Trend)));
 
-        var settings = await ResolveSettingsAsync(overrides, cancellationToken);
+        var settings = context.Settings;
         var opening = await BuildCalculatorsAsync(rows.Select(r => r.Composition).ToList(), groupCodes, settings.Values, cancellationToken);
 
         var productDtos = rows

@@ -101,6 +101,13 @@ public class CardmarketImportWorker : BackgroundService
             // compare su MTGJSON intorno all'uscita, e così arriva senza doverla chiedere a mano.
             var details = scope.ServiceProvider.GetRequiredService<MtgjsonSetDetailImportService>();
             await details.ImportRecentAsync(stoppingToken);
+
+            // Le altre uscite a lotti, per la classifica delle opportunità (Fase 3): in pochi giorni
+            // tutte le uscite con sigillati in vendita hanno i dati delle buste.
+            await details.ImportPendingAsync(_configuration.GetValue("Purchasing:DetailImportBatchSize", 60), stoppingToken);
+
+            var opportunities = scope.ServiceProvider.GetRequiredService<SealedOpportunityService>();
+            await opportunities.ComputeAsync(stoppingToken);
         }
         catch (OperationCanceledException)
         {
@@ -108,7 +115,7 @@ public class CardmarketImportWorker : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Import del catalogo sigillati o dei dati delle buste MTGJSON fallito");
+            _logger.LogError(ex, "Import del catalogo sigillati, dei dati delle buste MTGJSON o classifica delle opportunità falliti");
         }
     }
 
