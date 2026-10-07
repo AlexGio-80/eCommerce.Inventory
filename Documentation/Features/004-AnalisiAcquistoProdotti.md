@@ -300,6 +300,25 @@ Le credenziali SMTP le imposta l'utente nella configurazione di produzione.
 - Migration `AddPurchaseAlerts`: tre tabelle nuove.
 - **Pubblicata e verificata il 2026-10-07** (regole, valutazione, campanella). L'invio email resta da verificare quando l'utente avrà configurato le credenziali SMTP.
 
+**Regole generiche (richiesta dell'utente, 2026-10-07):** inserire a mano una regola per prodotto
+avrebbe voluto dire centinaia di regole. Invece di generarle in automatico, ogni regola ha un
+**ambito**: un solo prodotto oppure tutti i prodotti che passano i filtri (uscita, categoria,
+sottotipo, uscite degli ultimi N giorni compresi i preordini; i case sono sempre esclusi).
+- Scartata la soglia fissa in euro per tipo di prodotto (es. "Collector sotto 400 €"): i 53 Collector
+  Booster Box in vendita vanno da 189 € a 5.780 € (media 633 €), e i più economici costano poco perché
+  valgono poco (gli otto sotto 280 € sono tutti "Tieni sigillato"). Si usano confronti relativi: con
+  il valore delle carte ("apertura conveniente") o con la storia del prodotto.
+- Nuovo tipo **prezzo al minimo**: trend al valore più basso degli ultimi N giorni, solo per i prodotti
+  il cui storico parte prima della finestra.
+- **Un avviso per regola e per giro**, con l'elenco dei prodotti (i primi 15, ordinati dal più
+  interessante): con regole generiche decine di prodotti possono scattare insieme.
+- **Regole predefinite** create una volta dalla migration `AddAlertRuleScopes` (se cancellate non
+  ricompaiono): box con resa ≥ 15%; box delle uscite degli ultimi 180 giorni in calo ≥ 10% in 7 giorni;
+  box delle uscite degli ultimi 365 giorni al minimo di 90 giorni. Al 07/10 la prima scatta su 17 box
+  (in cima Jumpstart e Theme: restringere il sottotipo se interessano solo Play e Collector); il calo a
+  7 giorni funziona dal 14/10, il minimo a 90 giorni da gennaio 2027.
+- **Pubblicate e verificate il 2026-10-07**: al primo giro un unico avviso con 17 box.
+
 **Configurare l'email (da fare dall'utente):** in `appsettings.Production.json`, sezione `Email` (già
 presente, vuota e disattivata): `UserName` e `From` = indirizzo Gmail, `Password` = una **password
 per le app** creata su myaccount.google.com/apppasswords (richiede la verifica in due passaggi; non è

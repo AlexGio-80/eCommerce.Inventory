@@ -20,9 +20,13 @@ interface RuleForm {
   id?: number;
   name: string;
   type: AlertRuleType;
+  /** Un solo prodotto oppure tutti quelli che passano i filtri. */
+  scope: 'product' | 'group';
   sealedProductId: number | null;
   onlyThisRelease: boolean;
   category: string;
+  subtype: string;
+  recentReleaseDays: number | null;
   threshold: number | null;
   useLowPrice: boolean;
   isActive: boolean;
@@ -48,9 +52,10 @@ interface RuleForm {
           <mat-form-field appearance="outline" class="medium">
             <mat-label>Tipo</mat-label>
             <mat-select [(ngModel)]="form.type">
-              <mat-option value="PriceBelow">Prezzo sotto soglia</mat-option>
-              <mat-option value="PriceDrop">Calo di prezzo in 7 giorni</mat-option>
               <mat-option value="OpeningOpportunity">Apertura conveniente</mat-option>
+              <mat-option value="PriceDrop">Calo di prezzo in 7 giorni</mat-option>
+              <mat-option value="PriceAtLow">Prezzo al minimo</mat-option>
+              <mat-option value="PriceBelow">Prezzo sotto soglia</mat-option>
             </mat-select>
           </mat-form-field>
           <mat-form-field appearance="outline" class="name">
@@ -58,7 +63,15 @@ interface RuleForm {
             <input matInput [(ngModel)]="form.name" placeholder="es. Play Box Star Trek sotto 130 €">
           </mat-form-field>
 
-          <ng-container *ngIf="form.type !== 'OpeningOpportunity'">
+          <mat-form-field appearance="outline" class="medium">
+            <mat-label>Ambito</mat-label>
+            <mat-select [(ngModel)]="form.scope">
+              <mat-option value="group">Gruppo di prodotti</mat-option>
+              <mat-option value="product">Un solo prodotto</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <ng-container *ngIf="form.scope === 'product'">
             <mat-form-field appearance="outline" class="product">
               <mat-label>Prodotto</mat-label>
               <mat-select [(ngModel)]="form.sealedProductId">
@@ -67,7 +80,7 @@ interface RuleForm {
             </mat-form-field>
           </ng-container>
 
-          <ng-container *ngIf="form.type === 'OpeningOpportunity'">
+          <ng-container *ngIf="form.scope === 'group'">
             <mat-checkbox [(ngModel)]="form.onlyThisRelease" [disabled]="!setCode">Solo {{ setName || 'questa uscita' }}</mat-checkbox>
             <mat-form-field appearance="outline" class="medium">
               <mat-label>Tipo di prodotto</mat-label>
@@ -81,6 +94,23 @@ interface RuleForm {
                 <mat-option value="limited_aid_tool">Draft/Prerelease</mat-option>
                 <mat-option value="subset">Set di mazzi</mat-option>
               </mat-select>
+            </mat-form-field>
+            <mat-form-field appearance="outline" class="medium">
+              <mat-label>Sottotipo</mat-label>
+              <mat-select [(ngModel)]="form.subtype">
+                <mat-option value="">Tutti</mat-option>
+                <mat-option value="play">Play</mat-option>
+                <mat-option value="collector">Collector</mat-option>
+                <mat-option value="draft">Draft</mat-option>
+                <mat-option value="set">Set</mat-option>
+                <mat-option value="jumpstart">Jumpstart</mat-option>
+                <mat-option value="theme">Theme</mat-option>
+                <mat-option value="commander">Commander</mat-option>
+              </mat-select>
+            </mat-form-field>
+            <mat-form-field appearance="outline" class="small" matTooltip="Vuoto = tutte le uscite. Es. 180 = uscite degli ultimi sei mesi e quelle in arrivo">
+              <mat-label>Uscite degli ultimi giorni</mat-label>
+              <input matInput type="number" min="1" [(ngModel)]="form.recentReleaseDays">
             </mat-form-field>
           </ng-container>
 
@@ -156,7 +186,7 @@ export class AlertsTabComponent implements OnInit {
   form: RuleForm = this.emptyForm();
 
   private static readonly typeLabels: Record<AlertRuleType, string> = {
-    PriceBelow: 'Prezzo sotto soglia', PriceDrop: 'Calo di prezzo', OpeningOpportunity: 'Apertura conveniente'
+    PriceBelow: 'Prezzo sotto soglia', PriceDrop: 'Calo di prezzo', OpeningOpportunity: 'Apertura conveniente', PriceAtLow: 'Prezzo al minimo'
   };
 
   ruleColumns: ColDef<AlertRule>[] = [
@@ -167,9 +197,14 @@ export class AlertsTabComponent implements OnInit {
       valueGetter: p => {
         const r = p.data;
         if (!r) return '';
-        if (r.type === 'PriceBelow') return `${r.productName}: ${r.useLowPrice ? 'low' : 'trend'} ≤ ${r.threshold} €`;
-        if (r.type === 'PriceDrop') return `${r.productName}: calo ≥ ${r.threshold}% in 7 giorni`;
-        return `"Apri" con resa ≥ ${r.threshold}%${r.setCode ? ' · ' + r.setCode : ''}${r.category ? ' · ' + r.category : ''}`;
+        const scope = r.sealedProductId ? r.productName
+          : [r.setCode, r.category, r.subtype, r.recentReleaseDays ? `uscite ultimi ${r.recentReleaseDays} gg` : null]
+              .filter(x => !!x).join(' · ') || 'tutti i prodotti';
+        const condition = r.type === 'PriceBelow' ? `${r.useLowPrice ? 'low' : 'trend'} ≤ ${r.threshold} €`
+          : r.type === 'PriceDrop' ? `calo ≥ ${r.threshold}% in 7 giorni`
+          : r.type === 'PriceAtLow' ? `al minimo di ${r.threshold} giorni`
+          : `"Apri" con resa ≥ ${r.threshold}%`;
+        return `${scope}: ${condition}`;
       }
     },
     { headerName: 'Vera ora per', field: 'matchingCount', width: 120, type: 'numericColumn',
@@ -194,7 +229,8 @@ export class AlertsTabComponent implements OnInit {
     { headerName: 'Quando', field: 'createdAt', width: 150, sort: 'desc', valueFormatter: p => p.value ? new Date(p.value).toLocaleString('it-IT') : '',
       cellClass: p => p.data?.readAt ? '' : 'unread' },
     { headerName: 'Avviso', field: 'title', width: 380, cellClass: p => p.data?.readAt ? '' : 'unread' },
-    { headerName: 'Dettaglio', field: 'message', flex: 1, minWidth: 300, tooltipField: 'message' },
+    { headerName: 'Dettaglio', field: 'message', flex: 1, minWidth: 300, wrapText: true, autoHeight: true,
+      cellStyle: { 'white-space': 'pre-line', 'line-height': '1.4', 'padding-top': '6px', 'padding-bottom': '6px' } },
     {
       headerName: 'Email', width: 120,
       valueGetter: p => !p.data?.emailRequested ? '—' : p.data.emailSentAt ? 'inviata' : p.data.emailError ? 'non inviata' : 'in attesa',
@@ -211,7 +247,10 @@ export class AlertsTabComponent implements OnInit {
   }
 
   thresholdLabel(): string {
-    return this.form.type === 'PriceBelow' ? 'Soglia €' : this.form.type === 'PriceDrop' ? 'Calo minimo %' : 'Resa minima %';
+    return this.form.type === 'PriceBelow' ? 'Soglia €'
+      : this.form.type === 'PriceDrop' ? 'Calo minimo %'
+      : this.form.type === 'PriceAtLow' ? 'Giorni di storico'
+      : 'Resa minima %';
   }
 
   load() {
@@ -227,12 +266,19 @@ export class AlertsTabComponent implements OnInit {
       this.snackBar.open('Nome e soglia sono obbligatori', 'Chiudi', { duration: 4000 });
       return;
     }
+    if (this.form.scope === 'product' && !this.form.sealedProductId) {
+      this.snackBar.open('Scegli il prodotto, o passa a "Gruppo di prodotti"', 'Chiudi', { duration: 4000 });
+      return;
+    }
+    const group = this.form.scope === 'group';
     const input: AlertRuleInput = {
       name: this.form.name,
       type: this.form.type,
-      sealedProductId: this.form.type === 'OpeningOpportunity' ? null : this.form.sealedProductId,
-      setCode: this.form.type === 'OpeningOpportunity' && this.form.onlyThisRelease ? this.setCode : null,
-      category: this.form.type === 'OpeningOpportunity' && this.form.category ? this.form.category : null,
+      sealedProductId: group ? null : this.form.sealedProductId,
+      setCode: group && this.form.onlyThisRelease ? this.setCode : null,
+      category: group && this.form.category ? this.form.category : null,
+      subtype: group && this.form.subtype ? this.form.subtype : null,
+      recentReleaseDays: group && this.form.recentReleaseDays ? this.form.recentReleaseDays : null,
       threshold: this.form.threshold,
       useLowPrice: this.form.useLowPrice,
       isActive: this.form.isActive,
@@ -246,8 +292,10 @@ export class AlertsTabComponent implements OnInit {
 
   edit(rule: AlertRule) {
     this.form = {
-      id: rule.id, name: rule.name, type: rule.type, sealedProductId: rule.sealedProductId ?? null,
-      onlyThisRelease: !!rule.setCode, category: rule.category ?? '', threshold: rule.threshold,
+      id: rule.id, name: rule.name, type: rule.type, scope: rule.sealedProductId ? 'product' : 'group',
+      sealedProductId: rule.sealedProductId ?? null,
+      onlyThisRelease: !!rule.setCode, category: rule.category ?? '', subtype: rule.subtype ?? '',
+      recentReleaseDays: rule.recentReleaseDays ?? null, threshold: rule.threshold,
       useLowPrice: rule.useLowPrice, isActive: rule.isActive, sendEmail: rule.sendEmail
     };
     if (rule.sealedProductId && !this.products.some(p => p.id === rule.sealedProductId)) {
@@ -296,8 +344,8 @@ export class AlertsTabComponent implements OnInit {
   }
 
   private emptyForm(): RuleForm {
-    return { name: '', type: 'PriceBelow', sealedProductId: null, onlyThisRelease: false, category: '', threshold: null,
-      useLowPrice: false, isActive: true, sendEmail: true };
+    return { name: '', type: 'OpeningOpportunity', scope: 'group', sealedProductId: null, onlyThisRelease: false, category: '',
+      subtype: '', recentReleaseDays: null, threshold: null, useLowPrice: false, isActive: true, sendEmail: true };
   }
 
   private error(what: string, err: { error?: { message?: string }; message?: string }) {

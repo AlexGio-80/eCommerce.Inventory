@@ -9,6 +9,31 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-07] Feature — Regole di avviso generiche per gruppi di prodotti
+
+#### Problema
+
+Le regole di avviso valevano per un prodotto alla volta: per seguire tutti i box di tutte le uscite
+sarebbero servite centinaia di regole inserite a mano.
+
+#### Soluzione Implementata
+
+- Ogni regola ha un ambito: un solo prodotto o tutti quelli che passano i filtri (uscita, categoria,
+  sottotipo, uscite degli ultimi N giorni compresi i preordini)
+- Nuovo tipo "prezzo al minimo": trend al valore più basso degli ultimi N giorni
+- Un avviso per regola e per giro con l'elenco dei prodotti, invece di uno per prodotto
+- Tre regole predefinite create dalla migration: box da aprire (resa ≥ 15%), box recenti in calo
+  (≥ 10% in 7 giorni), box recenti al minimo di 90 giorni
+
+#### Note Tecniche
+
+- Migration `AddAlertRuleScopes`: colonne `Subtype` e `RecentReleaseDays` su `AlertRules`, più
+  l'inserimento delle regole predefinite (solo regole generiche, nessun dato personale)
+- "Prezzo al minimo" scatta solo se lo storico del singolo prodotto parte prima della finestra: un
+  prodotto comparso da pochi giorni avrebbe un minimo senza significato (trovato da un test)
+- Scartate le soglie fisse in euro per tipo di prodotto: vedi Decisioni in CONTEXT
+- **Pubblicato e verificato il 2026-10-07**: la regola "Box da aprire" è scattata su 17 box in un unico avviso
+
 ### [2026-10-07] Feature — Avvisi sugli acquisti nella campanella e via email (Fase 4 analisi acquisti)
 
 #### Problema

@@ -484,6 +484,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(r => r.Name).HasMaxLength(200);
             entity.Property(r => r.SetCode).HasMaxLength(20);
             entity.Property(r => r.Category).HasMaxLength(50);
+            entity.Property(r => r.Subtype).HasMaxLength(50);
             entity.Property(r => r.Threshold).HasPrecision(18, 2);
 
             entity.HasOne(r => r.SealedProduct)

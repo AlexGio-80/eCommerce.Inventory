@@ -9,13 +9,19 @@ namespace eCommerce.Inventory.Infrastructure.Services;
 
 /// <summary>
 /// Avvisi sugli acquisti di sigillati (Fase 4 dell'analisi acquisti): valuta le regole sui dati del
-/// giorno (listino Cardmarket e classifica delle opportunità), emette un avviso per ogni prodotto
-/// per cui una regola è diventata vera e manda un'unica email di riepilogo per giro.
+/// giorno (listino Cardmarket, storico giornaliero dei sigillati, classifica delle opportunità).
+///
+/// Una regola vale per un prodotto o per tutti quelli che passano i suoi filtri. Per ogni regola,
+/// i prodotti per cui la condizione è diventata vera in questo giro diventano un unico avviso con
+/// l'elenco; l'email è un unico riepilogo per giro.
 /// </summary>
 public class AlertService
 {
     private static readonly SemaphoreSlim Gate = new(1, 1);
     private static readonly CultureInfo Italian = CultureInfo.GetCultureInfo("it-IT");
+
+    /// <summary>Prodotti elencati per esteso in un avviso; gli altri si riassumono con il numero.</summary>
+    private const int MaxListedProducts = 15;
 
     private readonly ApplicationDbContext _db;
     private readonly IEmailSender _email;
@@ -37,7 +43,7 @@ public class AlertService
         try
         {
             var rules = await _db.AlertRules.Where(r => r.IsActive).ToListAsync(cancellationToken);
-            var context = await LoadContextAsync(cancellationToken);
+            var context = await LoadContextAsync(rules, cancellationToken);
             var created = new List<AlertNotification>();
 
             foreach (var rule in rules)
@@ -46,18 +52,13 @@ public class AlertService
                 var previous = await _db.AlertRuleMatches.Where(m => m.AlertRuleId == rule.Id).ToListAsync(cancellationToken);
                 var previousIds = previous.Select(m => m.SealedProductId).ToHashSet();
 
-                foreach (var match in current.Where(m => !previousIds.Contains(m.ProductId)))
-                {
+                var fresh = current.Where(m => !previousIds.Contains(m.ProductId)).ToList();
+                foreach (var match in fresh)
                     _db.AlertRuleMatches.Add(new AlertRuleMatch { AlertRuleId = rule.Id, SealedProductId = match.ProductId });
-                    var notification = new AlertNotification
-                    {
-                        AlertRuleId = rule.Id,
-                        SealedProductId = match.ProductId,
-                        SetCode = match.SetCode,
-                        Title = Truncate($"{rule.Name}: {match.ProductName}", 300),
-                        Message = Truncate(match.Message, 2000),
-                        EmailRequested = rule.SendEmail
-                    };
+
+                if (fresh.Count > 0)
+                {
+                    var notification = BuildNotification(rule, fresh);
                     _db.AlertNotifications.Add(notification);
                     created.Add(notification);
                 }
@@ -82,6 +83,27 @@ public class AlertService
         {
             Gate.Release();
         }
+    }
+
+    private static AlertNotification BuildNotification(AlertRule rule, List<Match> fresh)
+    {
+        var ordered = fresh.OrderByDescending(m => m.SortKey).ToList();
+        var single = ordered.Count == 1 ? ordered[0] : null;
+        var sets = ordered.Select(m => m.SetCode).Distinct().ToList();
+
+        var lines = ordered.Take(MaxListedProducts).Select(m => single != null ? m.Detail : $"• {m.ProductName}: {m.Detail}").ToList();
+        if (ordered.Count > MaxListedProducts)
+            lines.Add($"… e altri {ordered.Count - MaxListedProducts} prodotti (scheda Opportunità o Avvisi della pagina Acquisti)");
+
+        return new AlertNotification
+        {
+            AlertRuleId = rule.Id,
+            SealedProductId = single?.ProductId,
+            SetCode = sets.Count == 1 ? sets[0] : null,
+            Title = Truncate(single != null ? $"{rule.Name}: {single.ProductName}" : $"{rule.Name}: {ordered.Count} prodotti", 300),
+            Message = Truncate(string.Join("\n", lines), 2000),
+            EmailRequested = rule.SendEmail
+        };
     }
 
     public async Task SendTestEmailAsync(CancellationToken cancellationToken = default) =>
@@ -109,13 +131,15 @@ public class AlertService
         if (string.IsNullOrWhiteSpace(input.Name)) throw new ArgumentException("Il nome è obbligatorio");
         if (input.Threshold <= 0 && input.Type != AlertRuleType.OpeningOpportunity)
             throw new ArgumentException("La soglia deve essere maggiore di zero");
+        if (input.Type == AlertRuleType.PriceAtLow && input.Threshold < 7)
+            throw new ArgumentException("Per \"prezzo al minimo\" la soglia sono i giorni di storico: almeno 7");
 
         SealedProduct? product = null;
-        if (input.Type is AlertRuleType.PriceBelow or AlertRuleType.PriceDrop)
+        if (input.SealedProductId is { } productId)
         {
-            product = await _db.SealedProducts.FirstOrDefaultAsync(p => p.Id == input.SealedProductId, cancellationToken)
-                      ?? throw new ArgumentException("Per un avviso sul prezzo serve il prodotto");
-            if (product.CardmarketId == null)
+            product = await _db.SealedProducts.FirstOrDefaultAsync(p => p.Id == productId, cancellationToken)
+                      ?? throw new ArgumentException($"Prodotto {productId} inesistente");
+            if (product.CardmarketId == null && input.Type != AlertRuleType.OpeningOpportunity)
                 throw new ArgumentException($"\"{product.Name}\" non ha un prodotto Cardmarket abbinato: il prezzo non è controllabile");
         }
 
@@ -127,7 +151,9 @@ public class AlertService
 
             // Cambiando la condizione lo stato precedente non vale più: si riparte da zero.
             if (rule.Type != input.Type || rule.SealedProductId != product?.Id || rule.Threshold != input.Threshold
-                || rule.UseLowPrice != input.UseLowPrice || rule.SetCode != Clean(input.SetCode) || rule.Category != Clean(input.Category))
+                || rule.UseLowPrice != input.UseLowPrice || rule.SetCode != Clean(input.SetCode)?.ToUpperInvariant()
+                || rule.Category != Clean(input.Category) || rule.Subtype != Clean(input.Subtype)
+                || rule.RecentReleaseDays != input.RecentReleaseDays)
             {
                 _db.AlertRuleMatches.RemoveRange(await _db.AlertRuleMatches.Where(m => m.AlertRuleId == rule.Id).ToListAsync(cancellationToken));
             }
@@ -141,8 +167,11 @@ public class AlertService
         rule.Name = Truncate(input.Name.Trim(), 200);
         rule.Type = input.Type;
         rule.SealedProductId = product?.Id;
-        rule.SetCode = input.Type == AlertRuleType.OpeningOpportunity ? Clean(input.SetCode)?.ToUpperInvariant() : null;
-        rule.Category = input.Type == AlertRuleType.OpeningOpportunity ? Clean(input.Category) : null;
+        // Con un prodotto preciso i filtri non servono: si azzerano per non lasciare condizioni nascoste.
+        rule.SetCode = product == null ? Clean(input.SetCode)?.ToUpperInvariant() : null;
+        rule.Category = product == null ? Clean(input.Category) : null;
+        rule.Subtype = product == null ? Clean(input.Subtype) : null;
+        rule.RecentReleaseDays = product == null && input.RecentReleaseDays is > 0 ? input.RecentReleaseDays : null;
         rule.Threshold = input.Threshold;
         rule.UseLowPrice = input.Type == AlertRuleType.PriceBelow && input.UseLowPrice;
         rule.IsActive = input.IsActive;
@@ -185,111 +214,169 @@ public class AlertService
     }
 
     private static AlertRuleDto MapRule(AlertRule r, int matching) => new(
-        r.Id, r.Name, r.Type, r.SealedProductId, r.SealedProduct?.Name, r.SetCode, r.Category,
+        r.Id, r.Name, r.Type, r.SealedProductId, r.SealedProduct?.Name, r.SetCode, r.Category, r.Subtype, r.RecentReleaseDays,
         r.Threshold, r.UseLowPrice, r.IsActive, r.SendEmail, r.LastEvaluatedAt, matching);
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private record ProductInfo(int Id, string Name, string? Category, string SetCode, int? CardmarketId);
+    // ---------------------------------------------------------------------------------------------
+    // Valutazione
+
+    private record ProductInfo(int Id, string Name, string? Category, string? Subtype, string MainSetCode, DateOnly? ReleaseDate, int? CardmarketId);
 
     private record EvaluationContext(
         Dictionary<int, ProductInfo> Products,
         Dictionary<int, CardmarketLatestPrice> LatestPrices,
         Dictionary<int, decimal?> TrendWeekAgo,
-        List<SealedOpportunity> Opportunities,
-        Dictionary<string, string> MainSetBySet);
+        Dictionary<int, List<(DateOnly Date, decimal Trend)>> History,
+        Dictionary<int, DateOnly> FirstSeen,
+        List<SealedOpportunity> Opportunities);
 
-    private async Task<EvaluationContext> LoadContextAsync(CancellationToken cancellationToken)
+    private async Task<EvaluationContext> LoadContextAsync(List<AlertRule> rules, CancellationToken cancellationToken)
     {
-        var products = await _db.SealedProducts.AsNoTracking()
-            .Select(p => new ProductInfo(p.Id, p.Name, p.Category, p.SetCode, p.CardmarketId))
-            .ToDictionaryAsync(p => p.Id, cancellationToken);
+        var sets = await _db.MtgjsonSets.AsNoTracking().Select(s => new { s.Code, s.ParentCode, s.ReleaseDate }).ToListAsync(cancellationToken);
+        var setByCode = sets.ToDictionary(s => s.Code);
+        string MainOf(string code) =>
+            setByCode.TryGetValue(code, out var s) && s.ParentCode != null && setByCode.ContainsKey(s.ParentCode) ? s.ParentCode : code;
 
-        var cmIds = await _db.AlertRules.Where(r => r.IsActive && r.SealedProductId != null)
-            .Select(r => r.SealedProduct!.CardmarketId)
-            .Where(id => id != null)
-            .Select(id => id!.Value)
-            .ToListAsync(cancellationToken);
+        // I case si escludono: non si comprano, e il loro prezzo Cardmarket è spesso abbinato male.
+        var products = (await _db.SealedProducts.AsNoTracking()
+                .Where(p => p.Category == null || !p.Category.EndsWith("_case"))
+                .Select(p => new { p.Id, p.Name, p.Category, p.Subtype, p.SetCode, p.CardmarketId })
+                .ToListAsync(cancellationToken))
+            .Select(p =>
+            {
+                var main = MainOf(p.SetCode);
+                return new ProductInfo(p.Id, p.Name, p.Category, p.Subtype, main,
+                    setByCode.TryGetValue(main, out var s) ? s.ReleaseDate : null, p.CardmarketId);
+            })
+            .ToDictionary(p => p.Id);
 
         var latest = await _db.CardmarketLatestPrices.AsNoTracking()
-            .Where(p => cmIds.Contains(p.IdProduct))
+            .Where(p => _db.SealedProducts.Any(s => s.CardmarketId == p.IdProduct))
             .ToDictionaryAsync(p => p.IdProduct, cancellationToken);
 
-        // Trend di 7 giorni prima dallo storico giornaliero dei sigillati.
-        var weekAgo = DateOnly.FromDateTime(DateTime.Today).AddDays(-7);
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var weekAgo = today.AddDays(-7);
         var trendWeekAgo = await _db.CardmarketPriceSnapshots.AsNoTracking()
-            .Where(s => cmIds.Contains(s.IdProduct) && s.Date == weekAgo)
+            .Where(s => s.Date == weekAgo && _db.SealedProducts.Any(p => p.CardmarketId == s.IdProduct))
             .ToDictionaryAsync(s => s.IdProduct, s => s.Trend, cancellationToken);
+
+        // Storico per "prezzo al minimo": solo se qualche regola lo usa, ed è il più lungo richiesto.
+        var lowWindow = rules.Where(r => r.Type == AlertRuleType.PriceAtLow).Select(r => (int)r.Threshold).DefaultIfEmpty(0).Max();
+        var history = new Dictionary<int, List<(DateOnly, decimal)>>();
+        var firstSeen = new Dictionary<int, DateOnly>();
+        if (lowWindow > 0)
+        {
+            var from = today.AddDays(-lowWindow);
+            history = (await _db.CardmarketPriceSnapshots.AsNoTracking()
+                    .Where(s => s.Date >= from && s.Trend != null && _db.SealedProducts.Any(p => p.CardmarketId == s.IdProduct))
+                    .Select(s => new { s.IdProduct, s.Date, Trend = s.Trend!.Value })
+                    .ToListAsync(cancellationToken))
+                .GroupBy(s => s.IdProduct)
+                .ToDictionary(g => g.Key, g => g.Select(s => (s.Date, s.Trend)).ToList());
+            // Prima rilevazione di ogni prodotto: il minimo di una finestra ha senso solo se lo storico
+            // del prodotto parte prima della finestra.
+            firstSeen = await _db.CardmarketPriceSnapshots.AsNoTracking()
+                .Where(s => _db.SealedProducts.Any(p => p.CardmarketId == s.IdProduct))
+                .GroupBy(s => s.IdProduct)
+                .Select(g => new { IdProduct = g.Key, First = g.Min(s => s.Date) })
+                .ToDictionaryAsync(x => x.IdProduct, x => x.First, cancellationToken);
+        }
 
         var lastDate = await _db.SealedOpportunities.Select(o => (DateOnly?)o.Date).MaxAsync(cancellationToken);
         var opportunities = lastDate == null
             ? new List<SealedOpportunity>()
             : await _db.SealedOpportunities.AsNoTracking().Where(o => o.Date == lastDate).ToListAsync(cancellationToken);
 
-        var sets = await _db.MtgjsonSets.AsNoTracking().Select(s => new { s.Code, s.ParentCode }).ToListAsync(cancellationToken);
-        var codes = sets.Select(s => s.Code).ToHashSet();
-        var mainSetBySet = sets.ToDictionary(s => s.Code, s => s.ParentCode != null && codes.Contains(s.ParentCode) ? s.ParentCode : s.Code);
-
-        return new EvaluationContext(products, latest, trendWeekAgo, opportunities, mainSetBySet);
+        return new EvaluationContext(products, latest, trendWeekAgo, history, firstSeen, opportunities);
     }
 
-    private record Match(int ProductId, string ProductName, string? SetCode, string Message);
+    /// <param name="SortKey">Per ordinare l'elenco nell'avviso: prima i prodotti più interessanti.</param>
+    private record Match(int ProductId, string ProductName, string SetCode, string Detail, decimal SortKey);
+
+    /// <summary>Prodotti a cui si applica la regola: quello scelto, o tutti quelli che passano i filtri.</summary>
+    private static IEnumerable<ProductInfo> InScope(AlertRule rule, EvaluationContext context)
+    {
+        if (rule.SealedProductId is { } id)
+            return context.Products.TryGetValue(id, out var p) ? new[] { p } : Array.Empty<ProductInfo>();
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        return context.Products.Values.Where(p =>
+            (rule.SetCode == null || string.Equals(p.MainSetCode, rule.SetCode, StringComparison.OrdinalIgnoreCase))
+            && (rule.Category == null || p.Category == rule.Category)
+            && (rule.Subtype == null || p.Subtype == rule.Subtype)
+            && (rule.RecentReleaseDays == null || (p.ReleaseDate is { } release && release >= today.AddDays(-rule.RecentReleaseDays.Value))));
+    }
 
     private static List<Match> Matches(AlertRule rule, EvaluationContext context)
     {
         var result = new List<Match>();
-        switch (rule.Type)
+        var today = DateOnly.FromDateTime(DateTime.Today);
+
+        if (rule.Type == AlertRuleType.OpeningOpportunity)
         {
-            case AlertRuleType.PriceBelow:
+            var scope = InScope(rule, context).Select(p => p.Id).ToHashSet();
+            foreach (var o in context.Opportunities.Where(o => o.Decision == "Apri" && o.OpeningRoiPercent >= rule.Threshold && scope.Contains(o.SealedProductId)))
             {
-                if (ProductPrice(rule, context) is not { } product) break;
-                var (info, price) = product;
-                var value = rule.UseLowPrice ? price.Low : price.Trend;
-                if (value is > 0 && value <= rule.Threshold)
-                    result.Add(new Match(info.Id, info.Name, MainSet(info, context),
-                        $"{(rule.UseLowPrice ? "Prezzo più basso" : "Trend")} Cardmarket {Euro(value.Value)}, sotto la soglia di {Euro(rule.Threshold)}."));
-                break;
+                var info = context.Products[o.SealedProductId];
+                result.Add(new Match(info.Id, info.Name, info.MainSetCode,
+                    $"aprirlo rende il {o.OpeningRoiPercent!.Value.ToString("+0.0;-0.0", Italian)}% (valore atteso netto {Euro(o.OpenValueCm ?? 0)}, trend {Euro(o.CmTrend ?? 0)})",
+                    o.OpeningRoiPercent.Value));
             }
+            return result;
+        }
 
-            case AlertRuleType.PriceDrop:
+        foreach (var info in InScope(rule, context))
+        {
+            if (info.CardmarketId is not { } cmId || !context.LatestPrices.TryGetValue(cmId, out var price)) continue;
+
+            switch (rule.Type)
             {
-                if (ProductPrice(rule, context) is not { } product) break;
-                var (info, price) = product;
-                var before = context.TrendWeekAgo.GetValueOrDefault(info.CardmarketId!.Value);
-                if (price.Trend is > 0 && before is > 0)
+                case AlertRuleType.PriceBelow:
                 {
-                    var drop = (before.Value - price.Trend.Value) / before.Value * 100m;
-                    if (drop >= rule.Threshold)
-                        result.Add(new Match(info.Id, info.Name, MainSet(info, context),
-                            $"Trend Cardmarket sceso del {drop.ToString("0.0", Italian)}% in 7 giorni: da {Euro(before.Value)} a {Euro(price.Trend.Value)}."));
+                    var value = rule.UseLowPrice ? price.Low : price.Trend;
+                    if (value is > 0 && value <= rule.Threshold)
+                        result.Add(new Match(info.Id, info.Name, info.MainSetCode,
+                            $"{(rule.UseLowPrice ? "prezzo più basso" : "trend")} Cardmarket {Euro(value.Value)}, sotto la soglia di {Euro(rule.Threshold)}",
+                            rule.Threshold - value.Value));
+                    break;
                 }
-                break;
-            }
 
-            case AlertRuleType.OpeningOpportunity:
-                foreach (var o in context.Opportunities.Where(o => o.Decision == "Apri" && o.OpeningRoiPercent >= rule.Threshold))
+                case AlertRuleType.PriceDrop:
                 {
-                    if (!context.Products.TryGetValue(o.SealedProductId, out var info)) continue;
-                    if (rule.SetCode != null && !string.Equals(o.MainSetCode, rule.SetCode, StringComparison.OrdinalIgnoreCase)) continue;
-                    if (rule.Category != null && info.Category != rule.Category) continue;
-                    result.Add(new Match(info.Id, info.Name, o.MainSetCode,
-                        $"Aprirlo rende il {o.OpeningRoiPercent!.Value.ToString("+0.0;-0.0", Italian)}%: valore atteso netto {Euro(o.OpenValueCm ?? 0)} contro un trend di {Euro(o.CmTrend ?? 0)}."));
+                    var before = context.TrendWeekAgo.GetValueOrDefault(cmId);
+                    if (price.Trend is > 0 && before is > 0)
+                    {
+                        var drop = (before.Value - price.Trend.Value) / before.Value * 100m;
+                        if (drop >= rule.Threshold)
+                            result.Add(new Match(info.Id, info.Name, info.MainSetCode,
+                                $"trend sceso del {drop.ToString("0.0", Italian)}% in 7 giorni, da {Euro(before.Value)} a {Euro(price.Trend.Value)}",
+                                drop));
+                    }
+                    break;
                 }
-                break;
+
+                case AlertRuleType.PriceAtLow:
+                {
+                    // Un minimo ha senso solo se lo storico del prodotto copre tutta la finestra: uno
+                    // comparso su Cardmarket da pochi giorni avrebbe un "minimo dei 90 giorni" di pochi giorni.
+                    var window = (int)rule.Threshold;
+                    if (!context.FirstSeen.TryGetValue(cmId, out var first) || first > today.AddDays(-window)) break;
+                    if (price.Trend is not > 0 || !context.History.TryGetValue(cmId, out var points)) break;
+
+                    var previousMin = points.Where(p => p.Date < today).Select(p => p.Trend).DefaultIfEmpty(decimal.MaxValue).Min();
+                    if (previousMin != decimal.MaxValue && price.Trend.Value < previousMin)
+                        result.Add(new Match(info.Id, info.Name, info.MainSetCode,
+                            $"trend {Euro(price.Trend.Value)}, il più basso degli ultimi {window} giorni (minimo precedente {Euro(previousMin)})",
+                            (previousMin - price.Trend.Value) / previousMin * 100m));
+                    break;
+                }
+            }
         }
 
         return result;
     }
-
-    private static (ProductInfo Info, CardmarketLatestPrice Price)? ProductPrice(AlertRule rule, EvaluationContext context)
-    {
-        if (rule.SealedProductId is not { } id || !context.Products.TryGetValue(id, out var info) || info.CardmarketId is not { } cmId)
-            return null;
-        return context.LatestPrices.TryGetValue(cmId, out var price) ? (info, price) : null;
-    }
-
-    private static string MainSet(ProductInfo info, EvaluationContext context) =>
-        context.MainSetBySet.GetValueOrDefault(info.SetCode, info.SetCode);
 
     /// <summary>Un'unica email per giro con tutti gli avvisi nuovi; l'esito resta sull'avviso.</summary>
     private async Task<string> SendDigestAsync(List<AlertNotification> notifications, CancellationToken cancellationToken)
@@ -304,7 +391,7 @@ public class AlertService
 
         var body = "<p>Nuovi avvisi sugli acquisti di sigillati:</p><ul>"
                    + string.Concat(notifications.Select(n =>
-                       $"<li><strong>{WebUtility.HtmlEncode(n.Title)}</strong><br>{WebUtility.HtmlEncode(n.Message)}</li>"))
+                       $"<li><strong>{WebUtility.HtmlEncode(n.Title)}</strong><br>{WebUtility.HtmlEncode(n.Message).Replace("\n", "<br>")}</li>"))
                    + "</ul><p>Dettagli nella pagina Acquisti di eCommerce.Inventory.</p>";
         var subject = notifications.Count == 1 ? notifications[0].Title : $"{notifications.Count} nuovi avvisi sugli acquisti";
 
@@ -331,6 +418,8 @@ public class AlertService
 
 public record AlertEvaluationResult(int RulesEvaluated, int NewNotifications, string Email);
 
+/// <param name="SealedProductId">Un solo prodotto; null = tutti quelli che passano i filtri.</param>
+/// <param name="RecentReleaseDays">Solo uscite di non più di tanti giorni fa, comprese quelle in arrivo.</param>
 public record AlertRuleInput(
     string Name,
     AlertRuleType Type,
@@ -340,7 +429,9 @@ public record AlertRuleInput(
     decimal Threshold,
     bool UseLowPrice,
     bool IsActive,
-    bool SendEmail);
+    bool SendEmail,
+    string? Subtype = null,
+    int? RecentReleaseDays = null);
 
 /// <param name="MatchingCount">Prodotti per cui la regola è vera dall'ultima valutazione.</param>
 public record AlertRuleDto(
@@ -351,6 +442,8 @@ public record AlertRuleDto(
     string? ProductName,
     string? SetCode,
     string? Category,
+    string? Subtype,
+    int? RecentReleaseDays,
     decimal Threshold,
     bool UseLowPrice,
     bool IsActive,

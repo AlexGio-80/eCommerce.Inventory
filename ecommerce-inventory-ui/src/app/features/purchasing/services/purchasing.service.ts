@@ -182,7 +182,7 @@ export interface OpportunityList {
     items: Opportunity[];
 }
 
-export type AlertRuleType = 'PriceBelow' | 'PriceDrop' | 'OpeningOpportunity';
+export type AlertRuleType = 'PriceBelow' | 'PriceDrop' | 'OpeningOpportunity' | 'PriceAtLow';
 
 export interface AlertRuleInput {
     name: string;
@@ -190,6 +190,10 @@ export interface AlertRuleInput {
     sealedProductId?: number | null;
     setCode?: string | null;
     category?: string | null;
+    /** Sottotipo MTGJSON (es. collector, play). */
+    subtype?: string | null;
+    /** Solo uscite di non più di tanti giorni fa, comprese quelle in arrivo. */
+    recentReleaseDays?: number | null;
     threshold: number;
     useLowPrice: boolean;
     isActive: boolean;

@@ -42,7 +42,7 @@ import { AlertNotification, PurchasingService } from '../services/purchasing.ser
     ::ng-deep .alert-item .mat-mdc-menu-item-text { white-space: normal; }
     .title { font-weight: 500; }
     .alert-item.unread .title { font-weight: 700; }
-    .message { font-size: 12px; color: #616161; }
+    .message { font-size: 12px; color: #616161; white-space: pre-line; max-height: 7.5em; overflow: hidden; }
     .when { font-size: 11px; color: #9e9e9e; }
   `]
 })
