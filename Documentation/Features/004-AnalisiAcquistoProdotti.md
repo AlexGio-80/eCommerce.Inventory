@@ -1,8 +1,8 @@
 # eCommerce.Inventory - Richieste di Implementazione
 
 > Documento di progetto della feature. L'analisi manuale fatta dall'utente per l'uscita di Star Trek,
-> da cui la feature nasce, è in `Features/004-ProductBuying.md` (radice del repository) e resta lì
-> come documentazione di partenza.
+> da cui la feature nasce, è in `Features/004-ProductBuying.md` sul computer dell'utente, **escluso dal
+> repository** (`.gitignore`): contiene i suoi acquisti con prezzi e venditori, e il repository è pubblico.
 
 ---
 
