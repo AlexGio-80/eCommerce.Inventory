@@ -20,6 +20,7 @@ public class PurchasingController : ControllerBase
     private readonly OpeningBalanceService _openingBalance;
     private readonly ProductPurchaseService _purchases;
     private readonly SealedOpportunityService _opportunities;
+    private readonly AlertService _alerts;
     private readonly IConfiguration _configuration;
     private readonly ILogger<PurchasingController> _logger;
 
@@ -30,9 +31,11 @@ public class PurchasingController : ControllerBase
         OpeningBalanceService openingBalance,
         ProductPurchaseService purchases,
         SealedOpportunityService opportunities,
+        AlertService alerts,
         IConfiguration configuration,
         ILogger<PurchasingController> logger)
     {
+        _alerts = alerts;
         _opportunities = opportunities;
         _openingBalance = openingBalance;
         _purchases = purchases;
@@ -126,6 +129,78 @@ public class PurchasingController : ControllerBase
         catch (InvalidOperationException ex)
         {
             return Conflict(ApiResponse<object>.ErrorResult(ex.Message));
+        }
+    }
+
+    [HttpGet("alerts")]
+    public async Task<IActionResult> GetAlertRules(CancellationToken cancellationToken) =>
+        Ok(ApiResponse<List<AlertRuleDto>>.SuccessResult(await _alerts.ListRulesAsync(cancellationToken)));
+
+    [HttpPost("alerts")]
+    public Task<IActionResult> CreateAlertRule([FromBody] AlertRuleInput input, CancellationToken cancellationToken) =>
+        SaveAlertRuleAsync(null, input, cancellationToken);
+
+    [HttpPut("alerts/{id:int}")]
+    public Task<IActionResult> UpdateAlertRule(int id, [FromBody] AlertRuleInput input, CancellationToken cancellationToken) =>
+        SaveAlertRuleAsync(id, input, cancellationToken);
+
+    [HttpDelete("alerts/{id:int}")]
+    public async Task<IActionResult> DeleteAlertRule(int id, CancellationToken cancellationToken) =>
+        await _alerts.DeleteRuleAsync(id, cancellationToken)
+            ? Ok(ApiResponse<object>.SuccessResult(new { id }))
+            : NotFound(ApiResponse<object>.ErrorResult($"Regola {id} inesistente"));
+
+    /// <summary>Valuta subito le regole (gira comunque da sola ogni mattina dopo la classifica).</summary>
+    [HttpPost("alerts/evaluate")]
+    public async Task<IActionResult> EvaluateAlerts(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _alerts.EvaluateAsync(cancellationToken);
+            return Ok(ApiResponse<AlertEvaluationResult>.SuccessResult(result));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(ApiResponse<object>.ErrorResult(ex.Message));
+        }
+    }
+
+    [HttpPost("alerts/test-email")]
+    public async Task<IActionResult> SendTestEmail(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _alerts.SendTestEmailAsync(cancellationToken);
+            return Ok(ApiResponse<object>.SuccessResult(new { sent = true }));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Email di prova degli avvisi non inviata");
+            return BadRequest(ApiResponse<object>.ErrorResult($"Email non inviata: {ex.Message}"));
+        }
+    }
+
+    [HttpGet("notifications")]
+    public async Task<IActionResult> GetNotifications([FromQuery] int take = 50, CancellationToken cancellationToken = default) =>
+        Ok(ApiResponse<AlertNotificationList>.SuccessResult(await _alerts.ListNotificationsAsync(take, cancellationToken)));
+
+    /// <summary>Segna come letto un avviso; senza id, tutti.</summary>
+    [HttpPost("notifications/read")]
+    public async Task<IActionResult> MarkNotificationsRead([FromQuery] int? id, CancellationToken cancellationToken)
+    {
+        await _alerts.MarkReadAsync(id, cancellationToken);
+        return Ok(ApiResponse<object>.SuccessResult(new { id }));
+    }
+
+    private async Task<IActionResult> SaveAlertRuleAsync(int? id, AlertRuleInput input, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Ok(ApiResponse<AlertRuleDto>.SuccessResult(await _alerts.SaveRuleAsync(id, input, cancellationToken)));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ApiResponse<object>.ErrorResult(ex.Message));
         }
     }
 

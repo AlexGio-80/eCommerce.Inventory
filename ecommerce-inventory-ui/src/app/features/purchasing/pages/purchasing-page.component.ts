@@ -1,4 +1,6 @@
-import { Component, OnInit, computed, signal } from '@angular/core';
+import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AgGridAngular } from 'ag-grid-angular';
@@ -16,6 +18,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatTabsModule } from '@angular/material/tabs';
 import { OpeningsTabComponent } from '../components/openings-tab.component';
 import { OpportunitiesTabComponent } from '../components/opportunities-tab.component';
+import { AlertsTabComponent } from '../components/alerts-tab.component';
 import { PurchasesTabComponent } from '../components/purchases-tab.component';
 import {
   OpeningValueParams, PackValue, PurchasingService, SealedProductAnalysis, SealedSetAnalysis, SealedSetOption
@@ -32,7 +35,7 @@ import {
   imports: [
     CommonModule, FormsModule, AgGridAngular, MatCardModule, MatButtonModule, MatFormFieldModule,
     MatSelectModule, MatProgressSpinnerModule, MatSnackBarModule, MatIconModule, MatTooltipModule,
-    MatSlideToggleModule, MatInputModule, MatTabsModule, OpeningsTabComponent, OpportunitiesTabComponent, PurchasesTabComponent
+    MatSlideToggleModule, MatInputModule, MatTabsModule, OpeningsTabComponent, OpportunitiesTabComponent, PurchasesTabComponent, AlertsTabComponent
   ],
   template: `
     <mat-tab-group class="tabs" [(selectedIndex)]="tabIndex" animationDuration="0ms">
@@ -192,6 +195,13 @@ import {
     <mat-tab label="Registro acquisti">
       <app-purchases-tab [products]="analysis()?.products ?? []" [setCode]="selectedCode()"
         [setName]="analysis()?.name ?? null" [prefillProductId]="prefillProductId()"></app-purchases-tab>
+    </mat-tab>
+
+    <mat-tab label="Avvisi">
+      <ng-template matTabContent>
+        <app-alerts-tab [products]="analysis()?.products ?? []" [setCode]="selectedCode()" [setName]="analysis()?.name ?? null"
+          (openRelease)="openReleaseFromOpportunities($event)"></app-alerts-tab>
+      </ng-template>
     </mat-tab>
     </mat-tab-group>
   `,
@@ -369,6 +379,9 @@ export class PurchasingPageComponent implements OnInit {
 
   defaultColDef: ColDef = { sortable: true, resizable: true, filter: true };
 
+  private route = inject(ActivatedRoute);
+  private destroyRef = inject(DestroyRef);
+
   constructor(private purchasing: PurchasingService, private snackBar: MatSnackBar) { }
 
   private coverageTooltip(d: SealedProductAnalysis | undefined, source: 'cm' | 'ct'): string {
@@ -436,6 +449,15 @@ export class PurchasingPageComponent implements OnInit {
   }
 
   ngOnInit() {
+    // Dalla campanella degli avvisi: ?set=TRK apre l'analisi di quell'uscita, ?tab=avvisi la scheda Avvisi.
+    this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
+      const set = params.get('set');
+      if (set) {
+        this.selectSet(set.toUpperCase());
+        this.tabIndex = 0;
+      }
+      if (params.get('tab') === 'avvisi') this.tabIndex = 4;
+    });
     this.loadSets();
   }
 

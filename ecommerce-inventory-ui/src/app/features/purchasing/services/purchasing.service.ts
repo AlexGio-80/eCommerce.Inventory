@@ -182,6 +182,53 @@ export interface OpportunityList {
     items: Opportunity[];
 }
 
+export type AlertRuleType = 'PriceBelow' | 'PriceDrop' | 'OpeningOpportunity';
+
+export interface AlertRuleInput {
+    name: string;
+    type: AlertRuleType;
+    sealedProductId?: number | null;
+    setCode?: string | null;
+    category?: string | null;
+    threshold: number;
+    useLowPrice: boolean;
+    isActive: boolean;
+    sendEmail: boolean;
+}
+
+export interface AlertRule extends AlertRuleInput {
+    id: number;
+    productName?: string;
+    lastEvaluatedAt?: string;
+    matchingCount: number;
+}
+
+export interface AlertNotification {
+    id: number;
+    alertRuleId?: number;
+    sealedProductId?: number;
+    setCode?: string;
+    title: string;
+    message: string;
+    createdAt: string;
+    readAt?: string;
+    emailRequested: boolean;
+    emailSentAt?: string;
+    emailError?: string;
+}
+
+export interface AlertNotificationList {
+    unread: number;
+    emailConfigured: boolean;
+    items: AlertNotification[];
+}
+
+export interface AlertEvaluationResult {
+    rulesEvaluated: number;
+    newNotifications: number;
+    email: string;
+}
+
 export interface ProductPurchaseInput {
     sealedProductId: number;
     quantity: number;
@@ -282,6 +329,40 @@ export class PurchasingService {
 
     computeOpportunities(): Observable<unknown> {
         return this.http.post<ApiResponse<unknown>>(`${this.apiUrl}/opportunities/compute`, {});
+    }
+
+    getAlertRules(): Observable<AlertRule[]> {
+        return this.http.get<ApiResponse<AlertRule[]>>(`${this.apiUrl}/alerts`).pipe(map(r => r.data ?? []));
+    }
+
+    saveAlertRule(input: AlertRuleInput, id?: number): Observable<AlertRule> {
+        const request = id
+            ? this.http.put<ApiResponse<AlertRule>>(`${this.apiUrl}/alerts/${id}`, input)
+            : this.http.post<ApiResponse<AlertRule>>(`${this.apiUrl}/alerts`, input);
+        return request.pipe(map(r => r.data!));
+    }
+
+    deleteAlertRule(id: number): Observable<unknown> {
+        return this.http.delete<ApiResponse<unknown>>(`${this.apiUrl}/alerts/${id}`);
+    }
+
+    evaluateAlerts(): Observable<AlertEvaluationResult> {
+        return this.http.post<ApiResponse<AlertEvaluationResult>>(`${this.apiUrl}/alerts/evaluate`, {}).pipe(map(r => r.data!));
+    }
+
+    sendTestEmail(): Observable<unknown> {
+        return this.http.post<ApiResponse<unknown>>(`${this.apiUrl}/alerts/test-email`, {});
+    }
+
+    getNotifications(take = 50): Observable<AlertNotificationList> {
+        return this.http.get<ApiResponse<AlertNotificationList>>(`${this.apiUrl}/notifications`, { params: { take } })
+            .pipe(map(r => r.data ?? { unread: 0, emailConfigured: false, items: [] }));
+    }
+
+    /** Segna come letto un avviso; senza id, tutti. */
+    markNotificationsRead(id?: number): Observable<unknown> {
+        const params: Record<string, string> = id ? { id: String(id) } : {};
+        return this.http.post<ApiResponse<unknown>>(`${this.apiUrl}/notifications/read`, {}, { params });
     }
 
     getPurchases(): Observable<ProductPurchase[]> {

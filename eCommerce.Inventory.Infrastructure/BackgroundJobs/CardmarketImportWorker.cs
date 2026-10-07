@@ -108,6 +108,10 @@ public class CardmarketImportWorker : BackgroundService
 
             var opportunities = scope.ServiceProvider.GetRequiredService<SealedOpportunityService>();
             await opportunities.ComputeAsync(stoppingToken);
+
+            // Avvisi sugli acquisti (Fase 4): sui dati appena aggiornati.
+            var alerts = scope.ServiceProvider.GetRequiredService<AlertService>();
+            await alerts.EvaluateAsync(stoppingToken);
         }
         catch (OperationCanceledException)
         {

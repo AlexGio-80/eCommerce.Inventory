@@ -13,6 +13,7 @@ import { TabManagerService } from '../../core/services';
 import { AuthService } from '../../core/services/auth.service';
 import { PricingRunIndicatorComponent } from '../../features/pricing/components/pricing-run-indicator.component';
 import { PricingRunMonitorService } from '../../features/pricing/services/pricing-run-monitor.service';
+import { AlertBellComponent } from '../../features/purchasing/components/alert-bell.component';
 
 interface NavItem {
   label: string;
@@ -35,6 +36,7 @@ interface NavItem {
     MatMenuModule,
     TabBarComponent,
     PricingRunIndicatorComponent,
+    AlertBellComponent,
   ],
   templateUrl: './layout.component.html',
   styleUrls: ['./layout.component.scss'],

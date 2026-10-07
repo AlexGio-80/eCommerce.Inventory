@@ -44,6 +44,9 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<CardTraderCardPrice> CardTraderCardPrices { get; set; }
     public DbSet<ProductPurchase> ProductPurchases { get; set; }
     public DbSet<SealedOpportunity> SealedOpportunities { get; set; }
+    public DbSet<AlertRule> AlertRules { get; set; }
+    public DbSet<AlertRuleMatch> AlertRuleMatches { get; set; }
+    public DbSet<AlertNotification> AlertNotifications { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -474,6 +477,47 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
 
             entity.HasIndex(o => o.Date).HasDatabaseName("IX_SealedOpportunity_Date");
             entity.HasIndex(o => new { o.SealedProductId, o.Date }).HasDatabaseName("IX_SealedOpportunity_Product_Date");
+        });
+
+        modelBuilder.Entity<AlertRule>(entity =>
+        {
+            entity.Property(r => r.Name).HasMaxLength(200);
+            entity.Property(r => r.SetCode).HasMaxLength(20);
+            entity.Property(r => r.Category).HasMaxLength(50);
+            entity.Property(r => r.Threshold).HasPrecision(18, 2);
+
+            entity.HasOne(r => r.SealedProduct)
+                .WithMany()
+                .HasForeignKey(r => r.SealedProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AlertRuleMatch>(entity =>
+        {
+            entity.HasOne(m => m.AlertRule)
+                .WithMany()
+                .HasForeignKey(m => m.AlertRuleId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(m => new { m.AlertRuleId, m.SealedProductId }).IsUnique()
+                .HasDatabaseName("IX_AlertRuleMatch_Rule_Product");
+        });
+
+        modelBuilder.Entity<AlertNotification>(entity =>
+        {
+            entity.Property(n => n.SetCode).HasMaxLength(20);
+            entity.Property(n => n.Title).HasMaxLength(300);
+            entity.Property(n => n.Message).HasMaxLength(2000);
+            entity.Property(n => n.EmailError).HasMaxLength(1000);
+
+            // Un avviso già emesso resta anche se la regola viene cancellata.
+            entity.HasOne(n => n.AlertRule)
+                .WithMany()
+                .HasForeignKey(n => n.AlertRuleId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(n => n.CreatedAt).HasDatabaseName("IX_AlertNotification_CreatedAt");
+            entity.HasIndex(n => n.ReadAt).HasDatabaseName("IX_AlertNotification_ReadAt");
         });
     }
 }

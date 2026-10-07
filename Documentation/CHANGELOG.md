@@ -9,6 +9,31 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-07] Feature — Avvisi sugli acquisti nella campanella e via email (Fase 4 analisi acquisti)
+
+#### Problema
+
+Per sapere quando un box scende di prezzo o quando un prodotto diventa conveniente da aprire bisognava
+aprire la pagina Acquisti ogni giorno e controllare a mano.
+
+#### Soluzione Implementata
+
+- Regole di avviso: prezzo sotto soglia, calo di prezzo in 7 giorni, apertura conveniente (con filtri
+  per uscita e categoria)
+- Valutazione ogni mattina dopo la classifica delle opportunità; l'avviso scatta quando la condizione
+  diventa vera, non ogni giorno
+- Campanella nella barra in alto con gli avvisi non letti; scheda "Avvisi" nella pagina Acquisti
+- Email di riepilogo via SMTP, con pulsante di prova
+
+#### Note Tecniche
+
+- Migration `AddPurchaseAlerts`: `AlertRules`, `AlertRuleMatches`, `AlertNotifications`
+- Credenziali SMTP solo in `appsettings.Production.json` (sezione `Email`, disattivata finché non
+  configurata); con Gmail serve una password per le app
+- Il calo di prezzo a 7 giorni è valutabile dal 14/10/2026: lo storico giornaliero dei sigillati parte
+  dal 07/10
+- **Pubblicato e verificato il 2026-10-07**; invio email da verificare dopo la configurazione SMTP
+
 ### [2026-10-07] Feature — Classifica giornaliera delle opportunità sui sigillati (Fase 3 analisi acquisti)
 
 #### Problema

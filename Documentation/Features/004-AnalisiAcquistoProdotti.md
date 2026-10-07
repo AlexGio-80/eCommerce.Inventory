@@ -282,6 +282,30 @@ Regole valutate dopo ogni import giornaliero, ad esempio "Play Box di TRK sotto 
 (elenco + indicatore in barra di stato, come per l'avanzamento dell'autopricer) ed email via SMTP.
 Le credenziali SMTP le imposta l'utente nella configurazione di produzione.
 
+**Implementazione (2026-10-07):**
+- Tre tipi di regola (`AlertRule`): **prezzo sotto soglia** (trend o low CM di un prodotto),
+  **calo di prezzo** (trend sceso di almeno X% rispetto a 7 giorni prima, dallo storico giornaliero dei
+  sigillati: funziona dal 14/10/2026, una settimana dopo l'inizio dello storico), **apertura
+  conveniente** (prodotto in "Apri" con resa ≥ X%, facoltativamente solo per un'uscita o una categoria).
+- **Un avviso scatta quando la condizione diventa vera** (`AlertRuleMatch` tiene i prodotti per cui è
+  già vera): niente avvisi ripetuti ogni giorno; se la condizione smette di essere vera e poi lo
+  ridiventa, l'avviso scatta di nuovo. Cambiando la condizione di una regola lo stato riparte da zero.
+- Valutazione ogni mattina nel worker dopo la classifica delle opportunità, e a richiesta ("Valuta ora").
+- **Email**: un unico riepilogo per giro con tutti gli avvisi nuovi, via SMTP (`SmtpEmailSender`,
+  sezione `Email` della configurazione, solo in uscita). L'esito (inviata / errore) resta su ogni
+  avviso. Pulsante "Email di prova".
+- **Nell'app**: campanella nella barra in alto (era già presente ma inattiva) con il numero di avvisi
+  non letti, aggiornata ogni 5 minuti; clic su un avviso → analisi dell'uscita. Scheda **"Avvisi"**
+  nella pagina Acquisti con regole e storico degli avvisi.
+- Migration `AddPurchaseAlerts`: tre tabelle nuove.
+- **Pubblicata e verificata il 2026-10-07** (regole, valutazione, campanella). L'invio email resta da verificare quando l'utente avrà configurato le credenziali SMTP.
+
+**Configurare l'email (da fare dall'utente):** in `appsettings.Production.json`, sezione `Email` (già
+presente, vuota e disattivata): `UserName` e `From` = indirizzo Gmail, `Password` = una **password
+per le app** creata su myaccount.google.com/apppasswords (richiede la verifica in due passaggi; non è
+la password dell'account), `To` = dove ricevere gli avvisi, `Enabled` = true. Poi pubblicare e
+premere "Email di prova" nella scheda Avvisi.
+
 ### Fase 5 — Resa reale delle aperture e quanti box
 
 - Registro degli acquisti: prodotto, quantità, prezzo pagato, data di acquisto e di apertura, Tag

@@ -252,6 +252,8 @@ builder.Services.AddScoped<PriceRealizationService>();
 builder.Services.AddScoped<OpeningBalanceService>();
 builder.Services.AddScoped<ProductPurchaseService>();
 builder.Services.AddScoped<SealedOpportunityService>();
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+builder.Services.AddScoped<AlertService>();
 builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJobs.CardmarketImportWorker>();
 
 // Register Scryfall API Client
