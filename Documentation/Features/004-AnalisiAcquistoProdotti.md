@@ -10,6 +10,9 @@
 
 **Titolo feature:** `Analisi acquisto prodotti sigillati`
 **Priorità:** Alta
+**Stato (2026-10-07):** tutte le fasi (0-5) in produzione e verificate, più il piano d'acquisto su Card
+Trader e le regole di avviso generiche. Restano da fare dall'utente: configurare l'email degli avvisi e
+completare il registro acquisti (vedi ROADMAP). Secret Lair: capitolo a parte, da discutere.
 
 Quando esce un'espansione, e anche sulle espansioni già uscite, l'utente deve decidere **cosa
 comprare** (quale formato: Play Box, Collector Box, Draft Night, bundle, Commander, Scene Box...),
@@ -318,6 +321,25 @@ sottotipo, uscite degli ultimi N giorni compresi i preordini; i case sono sempre
   (in cima Jumpstart e Theme: restringere il sottotipo se interessano solo Play e Collector); il calo a
   7 giorni funziona dal 14/10, il minimo a 90 giorni da gennaio 2027.
 - **Pubblicate e verificate il 2026-10-07**: al primo giro un unico avviso con 17 box.
+
+**Piano d'acquisto su Card Trader (richiesta dell'utente, 2026-10-07):** comprare da uno stesso
+venditore più prodotti convenienti per risparmiare sulla spedizione.
+- **Cardmarket non è utilizzabile**: il listino pubblico ha solo prezzi aggregati, senza venditori; le
+  offerte per venditore richiederebbero l'API (chiusa) o la lettura delle pagine (esclusa). Per
+  Cardmarket resta lo "Shopping Wizard" del sito: si mettono i prodotti in una lista dei desideri e il
+  sito trova la combinazione di venditori più economica, spedizioni comprese.
+- **Card Trader sì**: il marketplace dà le offerte per venditore, con paese e possibilità di spedire i
+  sigillati con **Card Trader Zero** (`CanSellSealedWithCtZero`), che riunisce in un'unica spedizione
+  articoli di venditori diversi.
+- `PurchasePlanService`: per i prodotti filtrati nella scheda Opportunità (al massimo 40), una chiamata
+  al marketplace per prodotto (limitatore condiviso: circa 3 s a prodotto); tiene le offerte in inglese
+  a cui aprire il prodotto conviene (resa calcolata sul prezzo reale dell'offerta, non sul trend), le
+  raggruppa per venditore (per ogni prodotto la sua offerta più economica) e costruisce il carrello CT
+  Zero (per ogni prodotto l'offerta CT Zero più economica).
+- Scelte dell'utente: parte dalla classifica con i filtri impostati; **solo a richiesta** (pulsante
+  "Piano d'acquisto" nella scheda Opportunità), perché le offerte cambiano di ora in ora.
+- Spedizione esclusa dai conti: Card Trader la calcola al carrello.
+- **Pubblicato e verificato il 2026-10-07.**
 
 **Configurare l'email (da fare dall'utente):** in `appsettings.Production.json`, sezione `Email` (già
 presente, vuota e disattivata): `UserName` e `From` = indirizzo Gmail, `Password` = una **password

@@ -135,9 +135,33 @@ Creare `src/eCommerce.Inventory.Api/appsettings.Production.json` (non committare
     "Issuer": "eCommerce.Inventory",
     "Audience": "eCommerce.Inventory",
     "ExpiryMinutes": 1440
+  },
+  "CardmarketImport": {
+    "Enabled": true,
+    "RunTime": "07:00",
+    "SinglesTrackingMonths": 12
+  },
+  "Email": {
+    "Enabled": false,
+    "Host": "smtp.gmail.com",
+    "Port": 587,
+    "EnableSsl": true,
+    "UserName": "",
+    "Password": "***",
+    "From": "",
+    "To": ""
   }
 }
 ```
+
+> **Email degli avvisi sugli acquisti**: con Gmail `UserName` e `From` sono l'indirizzo Gmail e
+> `Password` è una **password per le app** (myaccount.google.com/apppasswords, richiede la verifica in
+> due passaggi), non la password dell'account. Poi `Enabled` a `true`, pubblicare e usare "Email di
+> prova" nella scheda Avvisi della pagina Acquisti. L'invio è solo in uscita: nessuna porta da aprire.
+
+> **Accesso a internet in uscita**: oltre a Card Trader e Scryfall, il servizio scarica ogni giorno
+> i file pubblici di Cardmarket (`downloads.s3.cardmarket.com`, ~50 MB) e i file di MTGJSON
+> (`mtgjson.com`, ~12 MB più qualche MB per uscita).
 
 ### 3. Creare il Windows Service (prima volta)
 
@@ -169,6 +193,9 @@ icacls "C:\{install-path}\Publish\api\logs" /grant "*S-1-5-20:(OI)(CI)M"
 | `CardTraderSettings:BearerToken` | Token API Card Trader |
 | `CardTraderSettings:SharedSecret` | Shared secret per verifica webhook HMAC |
 | `JwtSettings:SecretKey` | Chiave firma JWT (min 32 caratteri) |
+| `CardmarketImport:Enabled` / `RunTime` | Import giornaliero listino Cardmarket, catalogo MTGJSON, classifica e avvisi (in produzione `true`, 07:00) |
+| `Purchasing:*` | Parametri del valore atteso (soglia e prezzo del bulk, costi di vendita) e lotto giornaliero di uscite MTGJSON |
+| `Email:*` | SMTP per le email degli avvisi (password solo qui) |
 
 > In produzione: usare `appsettings.Production.json` (non committato) o variabili d'ambiente di sistema.
 
@@ -217,4 +244,5 @@ Log IIS: `C:\inetpub\logs\LogFiles\`
 - [ ] `http://inventory.local` risponde correttamente
 - [ ] Log puliti (nessun errore all'avvio) — e la cartella `logs` **contiene un file**: se è vuota, la diagnostica non sta funzionando
 - [ ] Test funzionale rapido (login, sync, lista ordini)
+- [ ] Pagina Espansioni: il pulsante "Listino Cardmarket" riporta un import riuscito (registro in `CardmarketImportLogs`); pagina Acquisti: la scheda Opportunità ha la classifica del giorno
 - [ ] Il giorno dopo il deploy: verificare nei log l'esito della sincronizzazione notturna, che il conteggio articoli coincida con Card Trader, e la riga `Storico prezzi: N rilevazioni registrate` (vedi "Effetti alla prima sincronizzazione")

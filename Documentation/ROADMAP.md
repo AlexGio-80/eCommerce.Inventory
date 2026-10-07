@@ -12,6 +12,21 @@
 
 ---
 
+## Completato (Sessione 2026-10-07)
+
+| Data | Voce |
+|------|------|
+| 2026-10-07 | Feature — **Analisi acquisto prodotti sigillati, Fase 0**: import giornaliero del listino pubblico Cardmarket (storico dei sigillati, singole recenti, ultimo prezzo di tutti i prodotti) |
+| 2026-10-07 | Feature — **Fase 1**: pagina "Acquisti" con catalogo sigillati MTGJSON e convenienza fra formati per busta equivalente |
+| 2026-10-07 | Feature — **Fase 2**: valore atteso dell'apertura (probabilità per slot da MTGJSON, prezzi CM e CT affiancati, bulk alla quota venduta misurata) e decisione Apri / Tieni sigillato |
+| 2026-10-07 | Feature — **Fase 5**: fattore "prezzo realizzato" (~120% del trend CM sulle carte da 1 € in su), bilancio reale delle aperture per tag, registro acquisti con previsione |
+| 2026-10-07 | Feature — **Fase 3**: classifica giornaliera delle opportunità su tutte le uscite, dati delle buste scaricati a lotti |
+| 2026-10-07 | Feature — **Fase 4**: avvisi nella campanella e via email; regole generiche per gruppo di prodotti, tipo "prezzo al minimo", tre regole predefinite |
+| 2026-10-07 | Feature — **Piano d'acquisto su Card Trader** per venditore e carrello Card Trader Zero |
+| 2026-10-07 | Fix — **Report di redditività**: il costo delle modifiche fatte dalla maschera era contato due volte (Marvel 3.674 € invece di 1.587 €); costo unico da `PurchaseCostService`, giacenza per tag non più moltiplicata |
+
+---
+
 ## Completato (Sessione 2026-09-25/26)
 
 | Data | Voce |
@@ -95,6 +110,7 @@ giornalieri di Cardmarket (l'API CM non accetta nuove richieste), abbinamento CT
 - [x] **Fase 3 — Opportunità su espansioni già uscite** — pubblicata e verificata il 2026-10-07: classifica dei prodotti per valore atteso / prezzo d'acquisto, con andamento
 - [x] **Fase 4 — Avvisi** — pubblicata e verificata il 2026-10-07 (invio email da verificare dopo la configurazione SMTP): regole valutate dopo ogni import, notifica nell'app + email (SMTP, solo in uscita)
 - [x] **Fase 5 — Resa reale delle aperture e quanti box** — pubblicata e verificata il 2026-10-07 (regola automatica sul "quanti box" rimandata a quando ci saranno aperture registrate con la previsione): registro acquisti, resa dai Tag `CODICE_TIPO_AAAAMMGG`, fattore di correzione, tetto sul numero di box, report per Tag raggruppato per prefisso
+- [x] **Piano d'acquisto su Card Trader (2026-10-07), pubblicato e verificato**: pulsante "Piano d'acquisto" nella scheda Opportunità; offerte convenienti raggruppate per venditore e carrello Card Trader Zero
 - [x] **Report di redditività: le modifiche dalla maschera contano due volte il costo (trovato il 2026-10-07) — corretto, pubblicato e verificato il 2026-10-07**: costo da `PurchaseCostService` per pagina Espansioni, redditività per espansione, per Tag e Tag → espansione; corretta anche la giacenza per Tag, che moltiplicava le inserzioni modificate. Dettaglio nel CHANGELOG. Voce originale: — la vista `ExpansionsROI` somma `PurchasePrice × Quantity` di tutte le righe di `PendingListings`, comprese le modifiche (`IsUpdate`), la cui quantità è il nuovo totale dell'inserzione. Per Marvel il "Totale acquistato" è 3.674 € invece di circa 2.040 €. Il bilancio delle aperture (pagina Acquisti) conta già solo le copie aggiunte; il report per espansione/tag va allineato con la stessa logica (`OpeningBalanceService.AddedCopiesAsync`)
 - [ ] **Secret Lair — capitolo a parte, da discutere quando l'utente vorrà**: comprati dal sito Wizards al drop (circa ogni due settimane), margine di solito molto buono. Lo storico di rivendita su Cardmarket si accumula già con la Fase 0 (~890 prodotti). Dettaglio nel documento della feature
 - [ ] **Da fare dall'utente: configurare l'email degli avvisi** — in `appsettings.Production.json`, sezione `Email` (già presente, disattivata): `UserName` e `From` = indirizzo Gmail, `Password` = password per le app (myaccount.google.com/apppasswords, serve la verifica in due passaggi), `To` = destinatario, `Enabled` = true; pubblicare e premere "Email di prova" nella scheda Avvisi

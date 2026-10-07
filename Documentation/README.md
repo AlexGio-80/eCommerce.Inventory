@@ -30,6 +30,8 @@ In `src/eCommerce.Inventory.Api/appsettings.json` verificare e adattare:
 - `CardTraderSettings:BearerToken` — token API Card Trader
 - `JwtSettings:SecretKey` — chiave JWT (min 32 caratteri)
 - `BackupSettings:BackupPath` e `BackupDestinationPath` — percorsi backup
+- `CardmarketImport:Enabled` — import giornaliero del listino Cardmarket e dei dati MTGJSON per la pagina Acquisti (`false` in sviluppo, `true` in produzione)
+- `Purchasing:*` — parametri del valore atteso dei sigillati; `Email:*` — SMTP per gli avvisi (vedi `DEPLOY.md`)
 
 > In produzione i segreti vanno in `appsettings.Production.json` sul server (non committare).
 

@@ -9,6 +9,28 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-07] Feature — Piano d'acquisto su Card Trader raggruppato per venditore
+
+#### Problema
+
+La classifica delle opportunità dice quali prodotti conviene comprare, ma non da chi: per ridurre le
+spese di spedizione serve sapere quali venditori hanno più prodotti convenienti insieme.
+
+#### Soluzione Implementata
+
+- `PurchasePlanService` e pulsante "Piano d'acquisto" nella scheda Opportunità: per i prodotti filtrati
+  (al massimo 40) legge le offerte Card Trader in inglese, tiene quelle a cui aprire il prodotto
+  conviene (resa sul prezzo dell'offerta) e le raggruppa per venditore
+- Carrello Card Trader Zero: per ogni prodotto l'offerta CT Zero più economica, perché con CT Zero
+  venditori diversi arrivano in un'unica spedizione
+
+#### Note Tecniche
+
+- Cardmarket non dà i venditori nel listino pubblico: per quel lato resta lo Shopping Wizard del sito
+- Una chiamata al marketplace per prodotto, con il limitatore condiviso delle 20 richieste al minuto
+- Solo a richiesta; spedizione esclusa dai conti
+- **Pubblicato e verificato il 2026-10-07**
+
 ### [2026-10-07] Fix — Il report di redditività contava due volte il costo delle modifiche dalla maschera
 
 #### Problema

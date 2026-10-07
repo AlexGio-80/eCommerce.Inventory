@@ -39,7 +39,7 @@ eCommerce.Inventory/
   - `SealedCategoryIds.cs`: quali categorie sono prodotto sigillato, per gioco
   - `InventoryItem.cs`: Oggetto nell'inventario
   - `PendingListing.cs`: Inserzione compilata dalla maschera, in attesa di pubblicazione su Card Trader. È la fonte del costo d'acquisto e del tag, che Card Trader non espone
-  - `ExpansionROI.cs`: vista di sola lettura sulla redditività per espansione
+  - `ExpansionROI.cs`: vista di sola lettura, se ne legge solo il venduto per espansione (il costo viene da `PurchaseCostService`)
 - **Entities/** — ordini e utenti
   - `Order.cs`: Ordine ricevuto da un marketplace
   - `OrderItem.cs`: Riga di un ordine
@@ -50,6 +50,13 @@ eCommerce.Inventory/
   - `PricingRunLog.cs`: Riepilogo di una esecuzione, con i contatori per esito
   - `PriceChangeLog.cs`: Una riga per carta valutata, con esito e motivazione
   - `PriceHistoryEntry.cs`: Serie storica del prezzo effettivamente esposto
+- **Entities/** — analisi acquisto prodotti sigillati (vedi `Documentation/Features/004-AnalisiAcquistoProdotti.md`)
+  - `CardmarketProduct.cs`, `CardmarketPriceSnapshot.cs`, `CardmarketImportLog.cs`: catalogo, storico giornaliero ed esiti dell'import del listino pubblico Cardmarket
+  - `BoosterData.cs`: `CardmarketLatestPrice` (ultimo prezzo di tutti i prodotti CM), `MtgjsonCard`, `BoosterConfig`/`BoosterConfigSlot`, `BoosterSheet`/`BoosterSheetCard` (composizione delle buste con i pesi), `MtgjsonDeck`/`MtgjsonDeckCard`, `CardTraderCardPrice`
+  - `SealedProduct.cs`: `MtgjsonSet`, `SealedProduct`, `SealedProductContent` (catalogo sigillati MTGJSON con contenuto e id Cardmarket/Card Trader)
+  - `SealedOpportunity.cs`: classifica giornaliera del valore atteso dell'apertura
+  - `ProductPurchase.cs`: registro acquisti con la previsione del modello
+  - `AlertRule.cs`: `AlertRule`, `AlertRuleMatch` (stato: per quali prodotti la regola è già vera), `AlertNotification`
 
 **Caratteristiche**:
 - ✅ No dependencies su altri strati
@@ -125,12 +132,23 @@ eCommerce.Inventory/
     - `CardTraderOrderDto.cs`
 - **Scryfall/ScryfallApiClient.cs**: Icone e date di rilascio delle espansioni, nomi italiani
 - **MtgJson/MtgJsonClient.cs**: Fonte primaria dei nomi italiani (copertura molto più ampia di Scryfall); match su `identifiers.scryfallId`
+- **MtgJson/MtgJsonSetListClient.cs**: `SetList.json` (catalogo sigillati di tutte le espansioni, ~12 MB) e file dei singoli set (carte, composizione delle buste, mazzi)
+- **Cardmarket/CardmarketDownloadClient.cs**: file pubblici giornalieri di Cardmarket (listino prezzi e catalogo prodotti), senza login. L'API Cardmarket non accetta nuove richieste: non viene usata
 
 #### Services
 - `AutoPricingService.cs`: Orchestra l'autopricer — seleziona le carte, recupera le offerte, invoca il motore, scrive su Card Trader e registra ogni valutazione
 - `PricingRunCoordinator.cs`: Implementa `IPricingRunCoordinator`. **Singleton**: lo slot occupato dev'essere lo stesso per tutti
 - `PriceRefreshQueue.cs`: Coda in memoria dei blueprint da riprezzare. In memoria è sufficiente, perché una richiesta persa per un riavvio viene comunque recuperata dall'esecuzione notturna
 - `AuthService.cs`, `BackupService.cs`, `ExpansionAnalyticsService.cs`, `RedisCacheService.cs`, `XimilarGradingService.cs`
+- Analisi acquisti:
+  - `CardmarketPriceImportService.cs`: import del listino CM nello storico e negli ultimi prezzi
+  - `SealedCatalogImportService.cs`, `MtgjsonSetDetailImportService.cs`: catalogo sigillati e dati delle buste da MTGJSON
+  - `SealedProductAnalysisService.cs`: scomposizione in buste, convenienza fra formati, valore atteso e decisione; `OpeningValueCalculator.cs` il calcolo puro
+  - `BulkSellThroughService.cs`, `PriceRealizationService.cs`: quota di bulk venduto e prezzo realizzato rispetto al trend CM, misurati sulle vendite
+  - `SealedOpportunityService.cs`: classifica giornaliera; `PurchasePlanService.cs`: piano d'acquisto su Card Trader per venditore
+  - `OpeningBalanceService.cs`, `ProductPurchaseService.cs`: bilancio delle aperture e registro acquisti
+  - `AlertService.cs`, `EmailSender.cs` (`IEmailSender`/`SmtpEmailSender`): avvisi ed email di riepilogo
+  - `PurchaseCostService.cs`: **unica fonte del costo d'acquisto** (pagina Espansioni, report di redditività, bilancio aperture)
 
 #### BackgroundJobs
 
@@ -142,6 +160,7 @@ eCommerce.Inventory/
 | `PopulateItalianNamesService` | One-shot all'avvio | `SyncSettings:PopulateItalianNamesOnStartup` |
 | `SealedProductPriceService` | One-shot all'avvio | `SyncSettings:PopulateSealedPricesOnStartup` |
 | `BackupService` | Giornaliero | `BackupSettings:Enabled` |
+| `CardmarketImportWorker` | All'avvio e ogni giorno (default 07:00): listino CM, catalogo e dati buste MTGJSON, classifica opportunità, avvisi | `CardmarketImport:Enabled`, `CardmarketImport:RunTime` |
 
 > `AutoPricingWorker` non esegue da sé: passa da `IPricingRunCoordinator` come l'esecuzione
 > manuale e l'applicazione dall'anteprima. Se una manuale è ancora in corso all'orario previsto,
@@ -219,6 +238,7 @@ eCommerce.Inventory/
 ┌─────────────────────────────────────────────────────────────┐
 │                    Sistemi esterni                          │
 │  Card Trader API (20 req/min) | Scryfall | MTGJSON          │
+│  File pubblici Cardmarket | SMTP (solo uscita)              │
 │  SQL Server | Webhook Card Trader                           │
 └─────────────────────────────────────────────────────────────┘
                         ↕
@@ -229,8 +249,11 @@ eCommerce.Inventory/
 │  DbContext | Repositories | DTOs                            │
 │  AutoPricingService | PricingRunCoordinator                 │
 │  PriceRefreshQueue | AuthService | BackupService            │
+│  Analisi acquisti: CardmarketPriceImport | SealedCatalog    │
+│    SealedProductAnalysis | SealedOpportunity | Alert        │
+│    PurchaseCost | PurchasePlan | OpeningBalance             │
 │  BackgroundJobs: ScheduledProductSync | AutoPricing         │
-│                 PriceRefresh | Backup | one-shot            │
+│     PriceRefresh | Backup | CardmarketImport | one-shot     │
 └─────────────────────────────────────────────────────────────┘
                         ↕
 ┌─────────────────────────────────────────────────────────────┐
@@ -248,12 +271,15 @@ eCommerce.Inventory/
 │  InventoryItem | PendingListing | Order | OrderItem | User   │
 │  PricingProfile | PricingRule | PricingRunLog               │
 │  PriceChangeLog | PriceHistoryEntry                         │
+│  Cardmarket* | Mtgjson* | SealedProduct | Booster*          │
+│  SealedOpportunity | ProductPurchase | Alert*               │
 └─────────────────────────────────────────────────────────────┘
                         ↕
 ┌─────────────────────────────────────────────────────────────┐
 │                   API Layer (Controllers)                   │
 │  Auth | AutoPricing | PendingListings | Inventory           │
 │  Games | Expansions | Reporting | Grading                   │
+│  Cardmarket | Purchasing                                    │
 │  CardTrader/: Inventory | Blueprints | Orders | Sync         │
 │  CardTraderWebhooks | NotificationHub | HealthChecks         │
 └─────────────────────────────────────────────────────────────┘
@@ -415,6 +441,27 @@ PriceHistoryEntries               -- serie storica del prezzo esposto
 > registrazione più recente, non con un `ToDictionary` diretto — la chiave duplicata solleva
 > un'eccezione, ed è così che la sincronizzazione dell'inventario è rimasta ferma otto mesi.
 
+> **Costo d'acquisto**: in una modifica fatta dalla maschera (`PendingListing.IsUpdate`) la quantità è
+> il nuovo totale dell'inserzione, non le copie aggiunte. Il costo si calcola solo con
+> `PurchaseCostService`: il primo caricamento di un'inserzione conta per intero, le modifiche
+> successive solo per la differenza con la quantità precedente (storico prezzi o caricamento
+> precedente). Le colonne `TotaleAcquistato` e `Differenza` della vista `ExpansionsROI` (creata a mano
+> nel database) contano le modifiche per intero e non sono mappate.
+
+### Tabelle dell'analisi acquisti (dal 2026-10-07)
+
+| Tabella | Contenuto | Volume |
+|---------|-----------|--------|
+| `CardmarketPriceSnapshots` | Prezzi CM per prodotto e giorno di listino: sigillati ogni giorno, singole recenti solo a variazione | ~5.100 sigillati al giorno |
+| `CardmarketLatestPrices` | Ultimo prezzo di ogni prodotto del listino, aggiornato solo se cambia | ~128.000 righe |
+| `CardmarketProducts`, `CardmarketImportLogs` | Catalogo dei prodotti seguiti, esito di ogni import | |
+| `MtgjsonSets`, `SealedProducts`, `SealedProductContents` | Catalogo sigillati MTGJSON con contenuto | ~4.200 prodotti |
+| `MtgjsonCards`, `BoosterConfigs`/`Slots`, `BoosterSheets`/`Cards`, `MtgjsonDecks`/`Cards` | Carte, composizione delle buste, mazzi delle uscite scaricate | qualche migliaio di righe per uscita |
+| `CardTraderCardPrices` | Prezzo CT delle singole (media delle 3 offerte EN NM più basse), a richiesta | |
+| `SealedOpportunities` | Classifica giornaliera del valore atteso | una riga per prodotto e giorno |
+| `ProductPurchases` | Registro acquisti con previsione | |
+| `AlertRules`, `AlertRuleMatches`, `AlertNotifications` | Regole, stato, avvisi emessi | |
+
 > `PriceChangeLogs.InventoryItemId` è **nullable con `ON DELETE SET NULL`**: la riga di registro deve sopravvivere alla carta, altrimenti la cancellazione delle carte vendute durante la sincronizzazione notturna porterebbe via lo storico proprio dei casi su cui conviene verificare se il prezzo proposto era corretto. `InventoryItemId IS NULL` identifica le valutazioni di carte non più a magazzino; la carta resta riconoscibile da `BlueprintId`.
 
 ---
@@ -536,6 +583,12 @@ L'architettura è progettata per aggiungere facilmente nuovi marketplace:
 | 2026-09-02 | L'esecuzione a richiesta risponde `202` e prosegue in background, invece di restare aperta | Una esecuzione reale dura ore: nessuna richiesta HTTP resta viva tanto a lungo, e tenerla aperta legherebbe l'utente alla pagina che l'ha lanciata. Il token di annullamento non può essere quello della richiesta — verrebbe annullato appena il chiamante riceve la risposta — ma uno collegato ad `ApplicationStopping` |
 | 2026-09-02 | L'avanzamento si legge da `PricingRunLog`, non da uno stato in memoria | I contatori erano già scritti a database a ogni blueprint valutato: leggerli da lì evita una migration, sopravvive a un ricaricamento della pagina e resta corretto anche se il browser si disconnette. In memoria resta solo la fase della preparazione, quando la riga non esiste ancora |
 | 2026-09-02 | «Applica» dall'anteprima rivaluta invece di scrivere i prezzi calcolati | I prezzi mostrati a schermo arrivano dal browser, e l'API non deve fidarsene. Rivalutare costa le chiamate al marketplace una seconda volta — accettabile su un campione — e in cambio scrive su dati di mercato freschi |
+| 2026-10-07 | Prezzi d'acquisto dai file pubblici giornalieri di Cardmarket | L'API CM non accetta nuove richieste; il listino pubblico contiene sigillati (anche in preordine) e singole. Lo scraping delle pagine è escluso |
+| 2026-10-07 | Catalogo sigillati e composizione delle buste da MTGJSON | Contenuto strutturato di ogni prodotto con id CM e CT, e probabilità reali per slot |
+| 2026-10-07 | Storico CM: sigillati ogni giorno, singole a variazione; ultimo prezzo di tutto in tabella separata | La serie dei sigillati si legge senza ricostruzioni; per le singole basta sapere quando cambiano; il valore atteso delle uscite vecchie ha bisogno di tutti i prezzi, non dello storico |
+| 2026-10-07 | Classifica delle opportunità calcolata ogni giorno e salvata | Centinaia di uscite: la pagina resta istantanea e lo storico del valore atteso dice quando comprare |
+| 2026-10-07 | Costo d'acquisto da un servizio unico in C#, non dalla vista | La regola delle copie aggiunte serve in quattro report e nel bilancio aperture: una sola implementazione evita versioni SQL e C# che divergono |
+| 2026-10-07 | Avvisi con stato: scattano quando la condizione diventa vera | Senza stato un "prezzo sotto soglia" vero per settimane manderebbe la stessa email ogni mattina |
 | 2026-09-02 | «Applica» scavalca il dry-run del profilo, l'anteprima no | Sono due gesti diversi: l'applicazione riguarda carte appena esaminate una per una, ed è il modo di uscire dalla simulazione gradualmente senza attivare la scrittura sulla notturna. L'anteprima invece è lo strumento con cui si prova, e deve restare innocua per costruzione: `forceApply` non prevale mai su `forceDryRun` |
 
 ---
@@ -551,8 +604,13 @@ File/sezioni necessarie in `appsettings.json`:
   "CardTraderSettings": { "BaseUrl": "https://api.cardtrader.com/api/v2", "BearerToken": "***" },
   "SyncSettings": { "RunAnalyticsDuringSync": false },
   "BackupSettings": { "Enabled": true, "Schedule": "0 2 * * *", "RetentionDays": 3 },
+  "CardmarketImport": { "Enabled": true, "RunTime": "07:00", "SinglesTrackingMonths": 12 },
+  "Purchasing": { "BulkThreshold": 0.25, "BulkPrice": 0.05, "SellingCostPercent": 15, "DetailImportBatchSize": 60 },
+  "Email": { "Enabled": false, "Host": "smtp.gmail.com", "Port": 587, "EnableSsl": true, "UserName": "", "Password": "***", "From": "", "To": "" },
   "Serilog": { ... }
 }
 ```
 
-> Segreti (`SecretKey`, `BearerToken`, password DB) in `appsettings.Production.json` sul server (non committato).
+> Segreti (`SecretKey`, `BearerToken`, password DB, password SMTP) in `appsettings.Production.json` sul server (non committato).
+> `CardmarketImport:Enabled` è `false` nella configurazione base e `true` in produzione: in sviluppo
+> l'import scaricherebbe circa 50 MB a ogni avvio.
