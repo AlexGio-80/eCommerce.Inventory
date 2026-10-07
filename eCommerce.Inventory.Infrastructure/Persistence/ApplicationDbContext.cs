@@ -30,6 +30,9 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<CardmarketProduct> CardmarketProducts { get; set; }
     public DbSet<CardmarketPriceSnapshot> CardmarketPriceSnapshots { get; set; }
     public DbSet<CardmarketImportLog> CardmarketImportLogs { get; set; }
+    public DbSet<MtgjsonSet> MtgjsonSets { get; set; }
+    public DbSet<SealedProduct> SealedProducts { get; set; }
+    public DbSet<SealedProductContent> SealedProductContents { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -328,6 +331,42 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
         {
             entity.Property(l => l.Message).HasMaxLength(2000);
             entity.HasIndex(l => l.StartedAt).HasDatabaseName("IX_CardmarketImportLog_StartedAt");
+        });
+
+        modelBuilder.Entity<MtgjsonSet>(entity =>
+        {
+            entity.HasKey(s => s.Code);
+            entity.Property(s => s.Code).HasMaxLength(20);
+            entity.Property(s => s.Name).HasMaxLength(200);
+            entity.Property(s => s.ParentCode).HasMaxLength(20);
+            entity.Property(s => s.Type).HasMaxLength(50);
+
+            entity.HasIndex(s => s.ParentCode).HasDatabaseName("IX_MtgjsonSet_ParentCode");
+        });
+
+        modelBuilder.Entity<SealedProduct>(entity =>
+        {
+            entity.Property(p => p.SetCode).HasMaxLength(20);
+            entity.Property(p => p.Name).HasMaxLength(300);
+            entity.Property(p => p.Category).HasMaxLength(50);
+            entity.Property(p => p.Subtype).HasMaxLength(50);
+            entity.Property(p => p.CtMinPrice).HasPrecision(18, 2);
+
+            entity.HasIndex(p => p.Uuid).IsUnique().HasDatabaseName("IX_SealedProduct_Uuid");
+            entity.HasIndex(p => p.SetCode).HasDatabaseName("IX_SealedProduct_SetCode");
+            entity.HasIndex(p => p.CardmarketId).HasDatabaseName("IX_SealedProduct_CardmarketId");
+
+            entity.HasMany(p => p.Contents)
+                .WithOne(c => c.SealedProduct)
+                .HasForeignKey(c => c.SealedProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SealedProductContent>(entity =>
+        {
+            entity.Property(c => c.Name).HasMaxLength(500);
+            entity.Property(c => c.SetCode).HasMaxLength(20);
+            entity.Property(c => c.PackCode).HasMaxLength(200);
         });
     }
 }

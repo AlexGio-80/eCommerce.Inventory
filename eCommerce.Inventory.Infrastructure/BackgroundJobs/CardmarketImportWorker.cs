@@ -8,7 +8,8 @@ using Microsoft.Extensions.Logging;
 namespace eCommerce.Inventory.Infrastructure.BackgroundJobs;
 
 /// <summary>
-/// Import giornaliero del listino Cardmarket (attivabile via <c>CardmarketImport:Enabled</c>).
+/// Import giornaliero del listino Cardmarket e del catalogo sigillati MTGJSON (attivabile via
+/// <c>CardmarketImport:Enabled</c>).
 ///
 /// Cardmarket rigenera il listino intorno all'01:00 italiana; l'import parte all'orario
 /// <c>CardmarketImport:RunTime</c> (default 07:00). Gira anche all'avvio del servizio: dopo una
@@ -85,6 +86,24 @@ public class CardmarketImportWorker : BackgroundService
             // L'esito di un import fallito è già a registro; qui arriva solo ciò che è successo
             // prima di poterlo scrivere (es. database irraggiungibile). Il giorno dopo si riprova.
             _logger.LogError(ex, "Errore nel CardmarketImportWorker");
+        }
+
+        // Catalogo dei sigillati da MTGJSON, nello stesso giro ma indipendente: un errore qui non
+        // tocca lo storico prezzi, e viceversa. Il contenuto dei prodotti cambia di rado, ma i
+        // prodotti nuovi delle uscite in preordine compaiono nel giro di pochi giorni.
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var catalog = scope.ServiceProvider.GetRequiredService<SealedCatalogImportService>();
+            await catalog.ImportAsync(stoppingToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Import del catalogo sigillati MTGJSON fallito");
         }
     }
 

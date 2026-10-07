@@ -238,6 +238,14 @@ builder.Services.AddHttpClient<eCommerce.Inventory.Infrastructure.ExternalServic
     client.Timeout = TimeSpan.FromMinutes(5);
 });
 builder.Services.AddScoped<CardmarketPriceImportService>();
+builder.Services.AddHttpClient<eCommerce.Inventory.Infrastructure.ExternalServices.MtgJson.IMtgJsonSetListClient,
+    eCommerce.Inventory.Infrastructure.ExternalServices.MtgJson.MtgJsonSetListClient>(client =>
+{
+    client.BaseAddress = new Uri("https://mtgjson.com/api/v5/");
+    client.Timeout = TimeSpan.FromMinutes(5);
+});
+builder.Services.AddScoped<SealedCatalogImportService>();
+builder.Services.AddScoped<SealedProductAnalysisService>();
 builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJobs.CardmarketImportWorker>();
 
 // Register Scryfall API Client

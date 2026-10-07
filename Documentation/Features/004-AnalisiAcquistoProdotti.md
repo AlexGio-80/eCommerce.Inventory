@@ -138,10 +138,36 @@ altro) e mostra il costo per busta su CM (trend, low accanto) e su CT.
 di allora la Draft Night risultava leggermente più conveniente (~3%) della combinazione Play Box +
 Collector Box, anche se il box sigillato si rivende meglio.
 
+**Implementazione (2026-10-07):**
+- **Catalogo**: un solo file, `SetList.json` di MTGJSON (~12 MB), contiene tutte le espansioni con
+  tutti i prodotti sigillati (4.161 al 07/10), il loro contenuto, l'id Cardmarket (`mcmId`) e l'id
+  del blueprint Card Trader (`cardtraderId`). `SealedCatalogImportService` lo importa in
+  `MtgjsonSets`, `SealedProducts`, `SealedProductContents` (3 s), nello stesso giro giornaliero del
+  listino Cardmarket e a richiesta. Migration `AddSealedProductCatalog`.
+- **Uscita** = espansione MTGJSON più i set figli (`parentCode`): Star Trek comprende Star Trek
+  Commander e Stardates.
+- **Scomposizione** (`SealedProductAnalysisService.Resolve`): ogni prodotto si riduce a buste per set
+  e tipo (es. `TRK:play`), anche su più livelli (case → box → busta). Mazzi e carte specifiche
+  rendono il prodotto "a contenuto fisso"; terre, dadi, scatole sono extra. I "Land Pack" dei bundle,
+  che MTGJSON registra come mazzo, sono trattati da extra.
+- **Prezzo di riferimento per busta** = il €/busta più basso (trend CM) fra i prodotti fatti di un
+  solo tipo di busta. **Δ vs buste** = prezzo del prodotto rispetto alle sue buste a quel prezzo;
+  calcolato solo per i prodotti fatti di buste (più extra).
+- **Prezzi Card Trader** a richiesta (pulsante "Prezzi Card Trader"): una chiamata al marketplace per
+  espansione CT coinvolta, minimo in inglese salvato sul prodotto (`CtMinPrice`, `CtOfferCount`).
+  Le offerte senza lingua indicata sono accettate: non è verificato che CT la riporti sui sigillati.
+- Pagina **"Acquisti"** nel menu, endpoint `api/purchasing/*`.
+- **Provato su SQL Server** con un database a parte (poi cancellato). La prova ha trovato codici busta
+  MTGJSON lunghi fino a 80 caratteri e nomi di extra fino a 203: colonne dimensionate di conseguenza.
+  Primi risultati: Star Trek — Draft Night +6,9% rispetto alle sue buste, Bundle +31,5%, buste
+  sciolte +22/26% rispetto ai box; Reality Fracture — Draft Night −5,0%.
+- **Pubblicata e verificata il 2026-10-07**: catalogo importato in produzione al primo avvio (4.161 prodotti), pagina "Acquisti" funzionante.
+- **Ancora da verificare**: il pulsante "Prezzi Card Trader" non è ancora stato usato in produzione (nessun prodotto con `CtPriceUpdatedAt` al 07/10).
+
 **Criteri di accettazione:**
-- [ ] Per un'espansione si vedono tutti i suoi prodotti sigillati con contenuto, prezzo CM (trend + low), prezzo CT e costo per busta equivalente
-- [ ] I prodotti con contenuto mancante su MTGJSON sono segnalati, non scartati in silenzio
-- [ ] Il contenuto si può correggere a mano se MTGJSON è incompleto
+- [x] Per un'espansione si vedono tutti i suoi prodotti sigillati con contenuto, prezzo CM (trend + low), prezzo CT e costo per busta equivalente
+- [x] I prodotti con contenuto mancante su MTGJSON sono segnalati, non scartati in silenzio ("Contenuto non indicato da MTGJSON" / "non scomponibile")
+- [ ] Il contenuto si può correggere a mano se MTGJSON è incompleto — **rimandato**: sui dati reali non è servito, il catalogo copre tutti i prodotti Star Trek. Da riprendere se capita un caso concreto
 
 ### Fase 2 — Valore atteso dell'apertura e "aprire o tenere sigillato"
 

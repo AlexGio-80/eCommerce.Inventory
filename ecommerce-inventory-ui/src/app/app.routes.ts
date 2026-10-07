@@ -62,6 +62,11 @@ export const routes: Routes = [
         data: { title: 'Unprepared Items' }
       },
       {
+        path: 'purchasing',
+        loadComponent: () => import('./features/purchasing/pages/purchasing-page.component').then(m => m.PurchasingPageComponent),
+        data: { title: 'Acquisti' }
+      },
+      {
         path: 'pricing',
         loadComponent: () => import('./features/pricing/pages/pricing-page.component').then(m => m.PricingPageComponent),
         data: { title: 'Autopricer' }

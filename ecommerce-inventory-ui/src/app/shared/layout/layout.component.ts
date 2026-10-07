@@ -50,6 +50,7 @@ export class LayoutComponent implements OnInit {
     { label: 'Expansions', route: '/layout/expansions', icon: 'extension' },
     { label: 'Nuovo Prodotto', route: '/layout/products/create', icon: 'add_circle' },
     { label: 'Autopricer', route: '/layout/pricing', icon: 'price_change' },
+    { label: 'Acquisti', route: '/layout/purchasing', icon: 'shopping_bag' },
     { label: 'AI Grading', route: '/layout/grading', icon: 'camera_enhance' },
     { label: 'Ordini', route: '/layout/orders', icon: 'shopping_cart' },
     { label: 'Da Preparare', route: '/layout/orders/unprepared', icon: 'checklist' },

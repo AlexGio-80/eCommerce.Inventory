@@ -9,6 +9,38 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-07] Feature — Pagina "Acquisti": convenienza fra i formati di un'uscita (Fase 1 analisi acquisti)
+
+#### Problema
+
+Per Star Trek la scelta fra Draft Night, Play Box + Collector Box, bundle e buste sciolte è stata
+fatta a mano, con conteggi del contenuto presi da un'IA generica (sbagliati: la Play Booster ha 14
+carte, non 15) e un confronto per costo a carta che mette sullo stesso piano carte di valore molto
+diverso.
+
+#### Soluzione Implementata
+
+- Catalogo dei prodotti sigillati da MTGJSON (`SetList.json`: 4.161 prodotti di tutte le espansioni,
+  con contenuto, id Cardmarket e id Card Trader), importato ogni giorno insieme al listino Cardmarket
+  e a richiesta
+- `SealedProductAnalysisService`: scompone ogni prodotto in buste (anche case → box → busta), calcola
+  il prezzo di riferimento per tipo di busta (il €/busta più basso fra i prodotti di un solo tipo, su
+  trend Cardmarket) e confronta ogni prodotto con il valore delle sue buste
+- Prezzi Card Trader dei sigillati a richiesta, una chiamata per espansione
+- Nuova pagina **"Acquisti"**: scelta dell'uscita (con i set figli, es. Star Trek + Commander), prezzi
+  di riferimento, tabella con trend/low CM, minimo CT, €/busta, valore buste e Δ%
+
+#### Note Tecniche
+
+- Migration `AddSealedProductCatalog`: tre tabelle nuove (`MtgjsonSets`, `SealedProducts`, `SealedProductContents`)
+- Provato su SQL Server con un database a parte: ha fatto emergere codici busta MTGJSON fino a 80
+  caratteri, che i test in memoria non potevano vedere
+- I "Land Pack" dei bundle sono registrati da MTGJSON come mazzi: trattati da extra
+- Il formato valuta della pagina usa `Intl` e non la pipe `currency` con locale `it`, che l'app non
+  registra e avrebbe dato errore a runtime
+- **Pubblicato e verificato il 2026-10-07** (catalogo importato, pagina funzionante); il pulsante
+  "Prezzi Card Trader" è ancora da provare in produzione
+
 ### [2026-10-07] Feature — Import giornaliero del listino Cardmarket (Fase 0 analisi acquisti)
 
 #### Problema
