@@ -44,6 +44,11 @@ import { PurchasePlanPanelComponent } from './purchase-plan-panel.component';
           <mat-label>Resa minima %</mat-label>
           <input matInput type="number" [ngModel]="minRoi()" (ngModelChange)="minRoi.set($event)">
         </mat-form-field>
+        <mat-form-field appearance="outline" class="num"
+          matTooltip="Nasconde le rese irreali, di solito prodotti vecchi con un prezzo Cardmarket di pochi centesimi che non si trovano davvero in vendita. Vuoto = nessun limite">
+          <mat-label>Resa massima %</mat-label>
+          <input matInput type="number" [ngModel]="maxRoi()" (ngModelChange)="maxRoi.set($event)">
+        </mat-form-field>
         <mat-form-field appearance="outline" class="num">
           <mat-label>Copertura minima %</mat-label>
           <input matInput type="number" [ngModel]="minCoverage()" (ngModelChange)="minCoverage.set($event)">
@@ -102,6 +107,7 @@ export class OpportunitiesTabComponent implements OnInit {
   decision = signal<string>('Apri');
   category = signal<string>('');
   minRoi = signal<number | null>(null);
+  maxRoi = signal<number | null>(300);
   minCoverage = signal<number | null>(90);
   isLoading = signal(false);
   isComputing = signal(false);
@@ -117,6 +123,7 @@ export class OpportunitiesTabComponent implements OnInit {
     (!this.decision() || i.decision === this.decision())
     && (!this.category() || i.category === this.category())
     && (this.minRoi() == null || (i.openingRoiPercent ?? -Infinity) >= this.minRoi()!)
+    && (this.maxRoi() == null || (i.openingRoiPercent ?? -Infinity) <= this.maxRoi()!)
     && (this.minCoverage() == null || (i.coverageCm ?? 0) >= this.minCoverage()!)));
 
   private static readonly euroFormat = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' });
