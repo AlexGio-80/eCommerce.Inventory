@@ -42,6 +42,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<MtgjsonDeckCard> MtgjsonDeckCards { get; set; }
     public DbSet<CardmarketLatestPrice> CardmarketLatestPrices { get; set; }
     public DbSet<CardTraderCardPrice> CardTraderCardPrices { get; set; }
+    public DbSet<ProductPurchase> ProductPurchases { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -434,6 +435,26 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
         {
             entity.HasKey(p => new { p.BlueprintId, p.IsFoil });
             entity.Property(p => p.Price).HasPrecision(18, 2);
+        });
+
+        modelBuilder.Entity<ProductPurchase>(entity =>
+        {
+            entity.Property(p => p.UnitPrice).HasPrecision(18, 2);
+            entity.Property(p => p.PredictedOpenValueNet).HasPrecision(18, 2);
+            entity.Property(p => p.PredictionCoverage).HasPrecision(5, 1);
+            entity.Property(p => p.Store).HasMaxLength(100);
+            entity.Property(p => p.Seller).HasMaxLength(100);
+            entity.Property(p => p.Tag).HasMaxLength(100);
+            entity.Property(p => p.Notes).HasMaxLength(1000);
+
+            // Il catalogo sigillati non cancella mai i prodotti, ma un acquisto non deve comunque
+            // poter sparire insieme a un prodotto: è un dato dell'utente, non di riferimento.
+            entity.HasOne(p => p.SealedProduct)
+                .WithMany()
+                .HasForeignKey(p => p.SealedProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(p => p.Tag).HasDatabaseName("IX_ProductPurchase_Tag");
         });
     }
 }

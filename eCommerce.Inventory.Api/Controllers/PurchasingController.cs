@@ -17,14 +17,23 @@ public class PurchasingController : ControllerBase
     private readonly SealedProductAnalysisService _analysis;
     private readonly SealedCatalogImportService _catalogImport;
     private readonly MtgjsonSetDetailImportService _detailImport;
+    private readonly OpeningBalanceService _openingBalance;
+    private readonly ProductPurchaseService _purchases;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<PurchasingController> _logger;
 
     public PurchasingController(
         SealedProductAnalysisService analysis,
         SealedCatalogImportService catalogImport,
         MtgjsonSetDetailImportService detailImport,
+        OpeningBalanceService openingBalance,
+        ProductPurchaseService purchases,
+        IConfiguration configuration,
         ILogger<PurchasingController> logger)
     {
+        _openingBalance = openingBalance;
+        _purchases = purchases;
+        _configuration = configuration;
         _analysis = analysis;
         _catalogImport = catalogImport;
         _detailImport = detailImport;
@@ -49,9 +58,10 @@ public class PurchasingController : ControllerBase
         [FromQuery] decimal? bulkPrice,
         [FromQuery] decimal? bulkSellThroughPercent,
         [FromQuery] decimal? sellingCostPercent,
+        [FromQuery] decimal? priceRealizationPercent,
         CancellationToken cancellationToken)
     {
-        var overrides = new OpeningValueOverrides(bulkThreshold, bulkPrice, bulkSellThroughPercent, sellingCostPercent);
+        var overrides = new OpeningValueOverrides(bulkThreshold, bulkPrice, bulkSellThroughPercent, sellingCostPercent, priceRealizationPercent);
         var analysis = await _analysis.AnalyzeAsync(code, overrides, cancellationToken);
         return analysis == null
             ? NotFound(ApiResponse<object>.ErrorResult($"Espansione {code} non presente nel catalogo MTGJSON"))
@@ -80,6 +90,49 @@ public class PurchasingController : ControllerBase
         catch (InvalidOperationException ex)
         {
             return Conflict(ApiResponse<object>.ErrorResult(ex.Message));
+        }
+    }
+
+    /// <summary>Bilancio reale di ogni apertura, ricostruito dai tag delle inserzioni.</summary>
+    [HttpGet("openings")]
+    public async Task<IActionResult> GetOpenings(CancellationToken cancellationToken)
+    {
+        var threshold = _configuration.GetValue("Purchasing:BulkThreshold", 0.25m);
+        var openings = await _openingBalance.GetAsync(threshold, cancellationToken);
+        return Ok(ApiResponse<List<OpeningBalance>>.SuccessResult(openings));
+    }
+
+    [HttpGet("purchases")]
+    public async Task<IActionResult> GetPurchases(CancellationToken cancellationToken)
+    {
+        var purchases = await _purchases.ListAsync(cancellationToken);
+        return Ok(ApiResponse<List<ProductPurchaseDto>>.SuccessResult(purchases));
+    }
+
+    [HttpPost("purchases")]
+    public Task<IActionResult> CreatePurchase([FromBody] ProductPurchaseInput input, CancellationToken cancellationToken) =>
+        SavePurchaseAsync(null, input, cancellationToken);
+
+    [HttpPut("purchases/{id:int}")]
+    public Task<IActionResult> UpdatePurchase(int id, [FromBody] ProductPurchaseInput input, CancellationToken cancellationToken) =>
+        SavePurchaseAsync(id, input, cancellationToken);
+
+    [HttpDelete("purchases/{id:int}")]
+    public async Task<IActionResult> DeletePurchase(int id, CancellationToken cancellationToken) =>
+        await _purchases.DeleteAsync(id, cancellationToken)
+            ? Ok(ApiResponse<object>.SuccessResult(new { id }))
+            : NotFound(ApiResponse<object>.ErrorResult($"Acquisto {id} inesistente"));
+
+    private async Task<IActionResult> SavePurchaseAsync(int? id, ProductPurchaseInput input, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var saved = await _purchases.SaveAsync(id, input, cancellationToken);
+            return Ok(ApiResponse<ProductPurchaseDto>.SuccessResult(saved));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ApiResponse<object>.ErrorResult(ex.Message));
         }
     }
 

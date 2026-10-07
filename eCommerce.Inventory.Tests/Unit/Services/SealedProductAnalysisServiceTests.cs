@@ -142,7 +142,7 @@ public class SealedProductAnalysisServiceTests
         await _db.SaveChangesAsync();
 
         var service = new SealedProductAnalysisService(_db, Mock.Of<ICardTraderApiService>(),
-            new BulkSellThroughService(_db), new ConfigurationBuilder().Build(),
+            new BulkSellThroughService(_db), new PriceRealizationService(_db), new ConfigurationBuilder().Build(),
             NullLogger<SealedProductAnalysisService>.Instance);
         var analysis = (await service.AnalyzeAsync("trk"))!;
 

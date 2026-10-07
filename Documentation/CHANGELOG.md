@@ -9,6 +9,33 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-07] Feature — Taratura sulle vendite reali, bilancio delle aperture e registro acquisti (Fase 5 analisi acquisti)
+
+#### Problema
+
+Il valore atteso usava il trend Cardmarket così com'è e diceva "tieni sigillato" per tutti i box
+recenti, mentre le aperture più vecchie dell'utente erano in attivo. Mancava il confronto con la
+resa reale, e non c'era un posto dove registrare gli acquisti.
+
+#### Soluzione Implementata
+
+- `PriceRealizationService`: sulle carte da 1 € in su l'utente incassa circa il 120% del trend CM
+  (vendite degli ultimi 30 giorni); il fattore si applica al valore atteso CM sopra la soglia del bulk,
+  modificabile dalla pagina
+- `OpeningBalanceService`: bilancio reale per tag (costo, venduto, in vendita, utile, curva di incasso
+  a 30/60/90/180 giorni), con le modifiche contate solo per le copie aggiunte
+- Registro acquisti (`ProductPurchase`) con la previsione del modello salvata all'apertura
+- Pagina "Acquisti" a schede: Analisi uscita, Aperture, Registro acquisti
+
+#### Note Tecniche
+
+- Migration `AddProductPurchases`: una tabella nuova
+- Trovato che il report di redditività esistente (`ExpansionsROI`) conta due volte il costo delle
+  modifiche fatte dalla maschera: annotato in ROADMAP, non corretto in questa voce
+- Provato su una copia ripristinata del backup (poi cancellata): il test sui dati veri ha fatto
+  emergere sia il difetto delle modifiche sia i tag scritti in modi diversi (con o senza `#`)
+- **Pubblicato e verificato il 2026-10-07**; precaricati nel registro i box Star Trek già acquistati
+
 ### [2026-10-07] Feature — Valore atteso dell'apertura e decisione apri / tieni sigillato (Fase 2 analisi acquisti)
 
 #### Problema

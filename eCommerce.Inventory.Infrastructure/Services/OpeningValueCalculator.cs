@@ -44,7 +44,10 @@ public class OpeningValueCalculator
 
     public static string DeckKey(string setCode, string name) => $"{setCode.ToUpperInvariant()}:{name}";
 
-    /// <summary>Valore realizzabile di una copia: il bulk vale il suo prezzo per la quota venduta.</summary>
+    /// <summary>
+    /// Valore realizzabile di una copia: il bulk vale il suo prezzo per la quota venduta, le altre il
+    /// prezzo corretto da <see cref="OpeningValueSettings.PriceFactor"/>.
+    /// </summary>
     public decimal? CardValue(Guid uuid, bool foil)
     {
         if (_cardValueCache.TryGetValue((uuid, foil), out var cached)) return cached;
@@ -54,7 +57,7 @@ public class OpeningValueCalculator
         {
             null => null,
             _ when price < _settings.BulkThreshold => _settings.BulkPrice * _settings.BulkSellThrough,
-            _ => price
+            _ => price * _settings.PriceFactor
         };
 
         _cardValueCache[(uuid, foil)] = value;
@@ -193,11 +196,16 @@ public class OpeningValueCalculator
     }
 }
 
+/// <param name="PriceFactor">
+/// Rapporto fra quanto si incassa davvero e il prezzo usato (vedi <see cref="PriceRealizationService"/>);
+/// 1 = nessuna correzione. Non tocca il bulk, che ha le sue regole.
+/// </param>
 public record OpeningValueSettings(
     decimal BulkThreshold,
     decimal BulkPrice,
     decimal BulkSellThrough,
-    decimal SellingCostPercent)
+    decimal SellingCostPercent,
+    decimal PriceFactor = 1m)
 {
     public decimal Net(decimal gross) => gross * (1 - SellingCostPercent / 100m);
 }

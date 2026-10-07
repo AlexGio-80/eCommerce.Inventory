@@ -13,6 +13,9 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatInputModule } from '@angular/material/input';
+import { MatTabsModule } from '@angular/material/tabs';
+import { OpeningsTabComponent } from '../components/openings-tab.component';
+import { PurchasesTabComponent } from '../components/purchases-tab.component';
 import {
   OpeningValueParams, PackValue, PurchasingService, SealedProductAnalysis, SealedSetAnalysis, SealedSetOption
 } from '../services/purchasing.service';
@@ -28,9 +31,11 @@ import {
   imports: [
     CommonModule, FormsModule, AgGridAngular, MatCardModule, MatButtonModule, MatFormFieldModule,
     MatSelectModule, MatProgressSpinnerModule, MatSnackBarModule, MatIconModule, MatTooltipModule,
-    MatSlideToggleModule, MatInputModule
+    MatSlideToggleModule, MatInputModule, MatTabsModule, OpeningsTabComponent, PurchasesTabComponent
   ],
   template: `
+    <mat-tab-group class="tabs" [(selectedIndex)]="tabIndex" animationDuration="0ms">
+    <mat-tab label="Analisi uscita">
     <div class="purchasing-container">
       <mat-card class="header-card">
         <mat-card-content>
@@ -111,8 +116,12 @@ import {
                 <mat-label>Costi vendita %</mat-label>
                 <input matInput type="number" step="1" [(ngModel)]="params.sellingCostPercent">
               </mat-form-field>
+              <mat-form-field appearance="outline" class="num" [matTooltip]="priceRealizationTooltip()">
+                <mat-label>Prezzo realizzato %</mat-label>
+                <input matInput type="number" step="1" [(ngModel)]="params.priceRealizationPercent">
+              </mat-form-field>
               <button mat-stroked-button (click)="loadAnalysis()">Ricalcola</button>
-              <button mat-button (click)="resetParams()" matTooltip="Torna a configurazione e quota di bulk misurata">Predefiniti</button>
+              <button mat-button (click)="resetParams()" matTooltip="Torna a configurazione e valori misurati sulle vendite">Predefiniti</button>
             </div>
 
             <div class="pack-values" *ngIf="a.packValues.length">
@@ -165,9 +174,26 @@ import {
         </mat-card-content>
       </mat-card>
     </div>
+    </mat-tab>
+
+    <mat-tab label="Aperture">
+      <ng-template matTabContent>
+        <app-openings-tab></app-openings-tab>
+      </ng-template>
+    </mat-tab>
+
+    <mat-tab label="Registro acquisti">
+      <app-purchases-tab [products]="analysis()?.products ?? []" [setCode]="selectedCode()"
+        [setName]="analysis()?.name ?? null" [prefillProductId]="prefillProductId()"></app-purchases-tab>
+    </mat-tab>
+    </mat-tab-group>
   `,
   styles: [`
-    .purchasing-container { display: flex; flex-direction: column; gap: 12px; height: 100%; padding: 16px; box-sizing: border-box; }
+    :host { display: block; height: 100%; }
+    .tabs { height: 100%; padding: 0 16px; box-sizing: border-box; }
+    .tabs ::ng-deep .mat-mdc-tab-body-wrapper { flex: 1; }
+    .tabs ::ng-deep .mat-mdc-tab-body-content { height: 100%; }
+    .purchasing-container { display: flex; flex-direction: column; gap: 12px; height: 100%; padding: 16px 0; box-sizing: border-box; }
     .header-card { flex: 0 0 auto; }
     .toolbar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
     .set-select { width: 420px; }
@@ -185,6 +211,7 @@ import {
     :host ::ng-deep .delta-good { color: #2e7d32; font-weight: 600; }
     :host ::ng-deep .delta-bad { color: #c62828; font-weight: 600; }
     :host ::ng-deep .ct-link { color: #3f51b5; text-decoration: none; }
+    :host ::ng-deep .register-btn { background: none; border: none; cursor: pointer; color: #3f51b5; }
     :host ::ng-deep .decision-open { color: #2e7d32; font-weight: 600; }
     :host ::ng-deep .decision-keep { color: #455a64; }
     :host ::ng-deep .decision-warn { color: #ef6c00; }
@@ -213,6 +240,16 @@ export class PurchasingPageComponent implements OnInit {
   isRefreshingCt = signal(false);
   isImportingCatalog = signal(false);
   isImportingDetails = signal(false);
+  tabIndex = 0;
+  prefillProductId = signal<number | null>(null);
+
+  priceRealizationTooltip = computed(() => {
+    const st = this.analysis()?.settings;
+    if (!st) return '';
+    return st.priceRealizationMeasured
+      ? `Incassato sulle tue vendite degli ultimi 30 giorni rispetto al trend Cardmarket (carte da 1 € in su, ${st.priceRealizationSampleCopies} copie): ${st.measuredPriceRealizationPercent}%. Si applica alle carte sopra soglia nel valore atteso CM.`
+      : 'Troppe poche vendite recenti per misurarlo: nessuna correzione (100%)';
+  });
   openPack = signal<string | null>(null);
 
   /** Parametri del valore atteso; vuoti = configurazione e quota di bulk misurata. */
@@ -310,6 +347,11 @@ export class PurchasingPageComponent implements OnInit {
       }
     },
     {
+      headerName: '', width: 60, sortable: false, filter: false, pinned: 'right',
+      cellRenderer: () => `<button class="register-btn" title="Registra un acquisto di questo prodotto"><i class="material-icons" style="font-size:18px">add_shopping_cart</i></button>`,
+      onCellClicked: p => { if (p.data) this.registerPurchase(p.data); }
+    },
+    {
       headerName: 'CT', width: 70, sortable: false, filter: false,
       cellRenderer: (p: { data?: SealedProductAnalysis }) => p.data?.cardTraderBlueprintId
         ? `<a class="ct-link" target="_blank" rel="noopener" title="Vedi su Card Trader"
@@ -332,6 +374,15 @@ export class PurchasingPageComponent implements OnInit {
     return parts.join(' · ');
   }
 
+  /** Dalla tabella di analisi al registro acquisti, con il prodotto già scelto. */
+  registerPurchase(product: SealedProductAnalysis) {
+    this.prefillProductId.set(null);
+    setTimeout(() => {
+      this.prefillProductId.set(product.id);
+      this.tabIndex = 2;
+    });
+  }
+
   togglePack(packKey: string) {
     this.openPack.set(this.openPack() === packKey ? null : packKey);
   }
@@ -348,7 +399,8 @@ export class PurchasingPageComponent implements OnInit {
       bulkThreshold: st.bulkThreshold,
       bulkPrice: st.bulkPrice,
       bulkSellThroughPercent: st.bulkSellThroughPercent,
-      sellingCostPercent: st.sellingCostPercent
+      sellingCostPercent: st.sellingCostPercent,
+      priceRealizationPercent: st.priceRealizationPercent
     };
   }
 

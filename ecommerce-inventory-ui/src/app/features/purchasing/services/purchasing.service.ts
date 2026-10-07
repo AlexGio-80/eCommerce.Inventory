@@ -84,6 +84,11 @@ export interface OpeningValueSettings {
     bulkSellThroughMeasured: boolean;
     bulkSellThroughExpansions: BulkSellThroughExpansion[];
     measuredCardTraderFeePercent?: number;
+    /** Fattore "prezzo realizzato" applicato (incassato / trend CM), in percentuale. */
+    priceRealizationPercent: number;
+    measuredPriceRealizationPercent: number;
+    priceRealizationMeasured: boolean;
+    priceRealizationSampleCopies: number;
 }
 
 export interface SheetValue {
@@ -122,6 +127,53 @@ export interface OpeningValueParams {
     bulkPrice?: number | null;
     bulkSellThroughPercent?: number | null;
     sellingCostPercent?: number | null;
+    priceRealizationPercent?: number | null;
+}
+
+/** Bilancio reale di un'apertura, ricostruito dal tag delle inserzioni. */
+export interface OpeningBalance {
+    tag: string;
+    expansion: string;
+    expansionReleaseDate?: string;
+    openedAtRelease: boolean;
+    firstUpload: string;
+    ageDays: number;
+    copies: number;
+    cost: number;
+    soldCopies: number;
+    grossRevenue: number;
+    netRevenue: number;
+    stockCopies: number;
+    stockListingValue: number;
+    stockBulkCopies: number;
+    profitSoFar: number;
+    profitSoFarPercent?: number;
+    revenueCurve: { days: number; netRevenue: number }[];
+    registeredCost?: number;
+    predictedNet?: number;
+}
+
+export interface ProductPurchaseInput {
+    sealedProductId: number;
+    quantity: number;
+    unitPrice: number;
+    store?: string | null;
+    seller?: string | null;
+    purchasedAt?: string | null;
+    openedAt?: string | null;
+    tag?: string | null;
+    notes?: string | null;
+}
+
+export interface ProductPurchase extends ProductPurchaseInput {
+    id: number;
+    productName: string;
+    setCode: string;
+    totalPrice: number;
+    predictedOpenValueNet?: number;
+    predictionCoverage?: number;
+    predictedAt?: string;
+    predictedTotalNet?: number;
 }
 
 export interface SetDetailImportResult {
@@ -187,6 +239,27 @@ export class PurchasingService {
     refreshCardTraderPrices(code: string): Observable<CardTraderSealedRefreshResult> {
         return this.http.post<ApiResponse<CardTraderSealedRefreshResult>>(`${this.apiUrl}/sets/${code}/cardtrader-prices`, {})
             .pipe(map(response => response.data!));
+    }
+
+    getOpenings(): Observable<OpeningBalance[]> {
+        return this.http.get<ApiResponse<OpeningBalance[]>>(`${this.apiUrl}/openings`)
+            .pipe(map(response => response.data ?? []));
+    }
+
+    getPurchases(): Observable<ProductPurchase[]> {
+        return this.http.get<ApiResponse<ProductPurchase[]>>(`${this.apiUrl}/purchases`)
+            .pipe(map(response => response.data ?? []));
+    }
+
+    savePurchase(input: ProductPurchaseInput, id?: number): Observable<ProductPurchase> {
+        const request = id
+            ? this.http.put<ApiResponse<ProductPurchase>>(`${this.apiUrl}/purchases/${id}`, input)
+            : this.http.post<ApiResponse<ProductPurchase>>(`${this.apiUrl}/purchases`, input);
+        return request.pipe(map(response => response.data!));
+    }
+
+    deletePurchase(id: number): Observable<unknown> {
+        return this.http.delete<ApiResponse<unknown>>(`${this.apiUrl}/purchases/${id}`);
     }
 
     importCatalog(): Observable<SealedCatalogImportResult> {

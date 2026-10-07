@@ -262,6 +262,57 @@ Le credenziali SMTP le imposta l'utente nella configurazione di produzione.
 - Tetto su **quanti box**: quante carte di un'espansione si riescono davvero a vendere in N settimane.
 - Report per Tag raggruppato per prefisso espansione.
 
+**Cosa è emerso dai dati (2026-10-07, su una copia ripristinata del backup):**
+- **Prezzo realizzato**: sulle carte da 1 € in su, negli ultimi 30 giorni l'utente ha incassato il
+  **120% del trend Cardmarket** del momento (+29% fra 1 e 3 €, +16-17% sopra i 3 €). Il confronto
+  con vendite più vecchie gonfierebbe il rapporto, perché il trend delle singole cala dopo l'uscita.
+  Sotto 1 € l'abbinamento automatico CT↔CM (`CardMarketIds[0]`) è rumoroso e le carte sono comunque
+  governate dalle regole del bulk.
+- **Le modifiche fatte dalla maschera sono contate due volte**: in una modifica (`IsUpdate`) la quantità
+  è il nuovo totale dell'inserzione (`PendingListingsController` imposta `localItem.Quantity =
+  pending.Quantity`), non le copie aggiunte. Per Marvel 458 modifiche portano 7.576 copie e 2.576 €
+  di costo, ma le copie davvero aggiunte sono 1.228 (417 €). Il bilancio della Fase 5 conta solo le
+  copie aggiunte; **il report di redditività esistente (vista `ExpansionsROI`) ha lo stesso difetto**
+  e sovrastima i costi (Marvel 3.674 € invece di circa 2.040 €), vedi ROADMAP.
+
+**Decisioni prese con l'utente (2026-10-07):**
+- Il fattore "prezzo realizzato" si applica **in automatico** al valore atteso su prezzi Cardmarket
+  (carte sopra la soglia del bulk), misurato e modificabile dalla pagina. Non si applica ai prezzi
+  Card Trader, che sono già il mercato su cui si vende.
+- Gli acquisti già fatti per Star Trek si **precaricano** nel registro (i box di cui l'utente
+  ha indicato quantità e prezzo; gli altri prodotti li completa l'utente). Scrittura
+  diretta sul database di produzione dopo la pubblicazione, con conferma: non in una migration, perché
+  il repository è pubblico e conterrebbe i prezzi d'acquisto.
+- "Quanti box": per ora la curva di incasso per apertura; una regola automatica si ricava quando ci
+  saranno aperture registrate con la previsione.
+
+**Implementazione (2026-10-07):**
+- `PriceRealizationService`: incassato / trend CM sulle vendite degli ultimi 30 giorni, carte con trend
+  ≥ 1 €; con meno di 100 € di trend venduto si usa 1. Nuovo parametro `PriceFactor` in
+  `OpeningValueSettings`, applicato solo sopra soglia.
+- `OpeningBalanceService`: bilancio per tag (normalizzato: `#` e maiuscole non contano), copie e costo
+  dai caricamenti contando delle modifiche solo le copie aggiunte (quantità precedente dallo storico
+  prezzi o dal caricamento precedente), vendite solo da un giorno prima del primo caricamento (il
+  recupero dei tag ha attribuito alcuni tag a ordini di anni prima), incasso netto con la commissione
+  misurata, curva a 30/60/90/180 giorni, indicazione "aperta all'uscita" (primo caricamento entro 45
+  giorni dall'uscita). Esclusi i tag sotto 20 copie o 50 € (lotti di vecchie collezioni).
+- `ProductPurchase` + `ProductPurchaseService`: registro acquisti, con la previsione del modello
+  salvata alla registrazione e ricalcolata quando si segna l'apertura; vuota se i dati non bastano.
+  Migration `AddProductPurchases`.
+- Pagina "Acquisti" a schede: **Analisi uscita** (con il parametro "Prezzo realizzato %" e il
+  pulsante per registrare un acquisto dalla riga), **Aperture** (bilancio), **Registro acquisti**
+  (con tag proposto nel formato `CODICE_TIPO_AAAAMMGG`).
+- **Provato su SQL Server** su una copia ripristinata del backup del 07/10 (poi cancellata): fattore
+  120,2% su 246 copie; The Hobbit con il fattore: Collector Box "Apri" (575,58 € netti aprendo contro
+  499,25 € rivendendola chiusa), Play Box ancora "Tieni sigillato" (−27,2%); Lorwyn Eclipsed: Commander
+  Deck e Theme Deck "Apri". Bilancio: The Hobbit 1.926 € di costo, 822 € incassati in 58 giorni;
+  Marvel 2.040 € di costo, 1.483 € incassati in 102 giorni.
+- **Pubblicata e verificata il 2026-10-07.** Precaricati nel registro, con scrittura diretta in
+  produzione autorizzata dall'utente: i box Star Trek Play e Collector già
+  acquistati, data d'acquisto 07/10/2026, senza
+  previsione (composizione delle buste non ancora pubblicata: si calcolerà all'apertura). Commander
+  Deck Set e Scene Box Set da aggiungere dall'utente, prezzi non noti.
+
 ### Secret Lair — capitolo a parte, da discutere (annotato 2026-10-07)
 
 L'utente compra regolarmente anche **Secret Lair**, ma non su Cardmarket: direttamente dal sito
