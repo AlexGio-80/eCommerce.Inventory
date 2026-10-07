@@ -4,6 +4,7 @@ using eCommerce.Inventory.Infrastructure.ExternalServices.MtgJson;
 using eCommerce.Inventory.Infrastructure.Persistence;
 using eCommerce.Inventory.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace eCommerce.Inventory.Tests.Unit.Services;
@@ -141,6 +142,7 @@ public class SealedProductAnalysisServiceTests
         await _db.SaveChangesAsync();
 
         var service = new SealedProductAnalysisService(_db, Mock.Of<ICardTraderApiService>(),
+            new BulkSellThroughService(_db), new ConfigurationBuilder().Build(),
             NullLogger<SealedProductAnalysisService>.Instance);
         var analysis = (await service.AnalyzeAsync("trk"))!;
 
@@ -186,6 +188,13 @@ public class SealedProductAnalysisServiceTests
         mapped[1].Count.Should().Be(12);
         mapped[1].ChildUuid.Should().Be(PlayPack);
     }
+
+    [Theory]
+    [InlineData(85.08, 164.50, true)]   // Scene Box Case da 4 box abbinato allo Scene Box Set da 2
+    [InlineData(93.62, 561.72, true)]   // Gift Bundle Case abbinato al Gift Bundle singolo
+    [InlineData(140.35, 177.00, false)] // Play Box contro 30 buste sciolte: normale sconto del box
+    public void IsPriceMismatch_FlagsProductsPricedFarFromWhatTheyContain(double product, double components, bool expected) =>
+        SealedProductAnalysisService.IsPriceMismatch((decimal)product, (decimal)components).Should().Be(expected);
 
     [Theory]
     [InlineData("TRK:play", "TRK", "Play")]

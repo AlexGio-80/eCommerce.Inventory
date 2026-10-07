@@ -246,6 +246,8 @@ builder.Services.AddHttpClient<eCommerce.Inventory.Infrastructure.ExternalServic
 });
 builder.Services.AddScoped<SealedCatalogImportService>();
 builder.Services.AddScoped<SealedProductAnalysisService>();
+builder.Services.AddScoped<MtgjsonSetDetailImportService>();
+builder.Services.AddScoped<BulkSellThroughService>();
 builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJobs.CardmarketImportWorker>();
 
 // Register Scryfall API Client

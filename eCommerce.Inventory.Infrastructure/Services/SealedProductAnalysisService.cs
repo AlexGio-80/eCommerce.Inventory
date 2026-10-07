@@ -3,6 +3,7 @@ using eCommerce.Inventory.Application.Interfaces;
 using eCommerce.Inventory.Domain.Entities;
 using eCommerce.Inventory.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace eCommerce.Inventory.Infrastructure.Services;
@@ -24,15 +25,21 @@ public class SealedProductAnalysisService
 
     private readonly ApplicationDbContext _db;
     private readonly ICardTraderApiService _cardTrader;
+    private readonly BulkSellThroughService _bulkSellThrough;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<SealedProductAnalysisService> _logger;
 
     public SealedProductAnalysisService(
         ApplicationDbContext db,
         ICardTraderApiService cardTrader,
+        BulkSellThroughService bulkSellThrough,
+        IConfiguration configuration,
         ILogger<SealedProductAnalysisService> logger)
     {
         _db = db;
         _cardTrader = cardTrader;
+        _bulkSellThrough = bulkSellThrough;
+        _configuration = configuration;
         _logger = logger;
     }
 
@@ -65,7 +72,10 @@ public class SealedProductAnalysisService
             .ToList();
     }
 
-    public async Task<SealedSetAnalysis?> AnalyzeAsync(string setCode, CancellationToken cancellationToken = default)
+    public async Task<SealedSetAnalysis?> AnalyzeAsync(
+        string setCode,
+        OpeningValueOverrides? overrides = null,
+        CancellationToken cancellationToken = default)
     {
         setCode = setCode.ToUpperInvariant();
         var sets = await _db.MtgjsonSets.AsNoTracking().ToListAsync(cancellationToken);
@@ -92,8 +102,12 @@ public class SealedProductAnalysisService
 
         var references = ComputeReferences(rows.Select(r => (r.Product.Name, r.Composition, r.Price?.Trend)));
 
+        var settings = await ResolveSettingsAsync(overrides, cancellationToken);
+        var opening = await BuildCalculatorsAsync(rows.Select(r => r.Composition).ToList(), groupCodes, settings.Values, cancellationToken);
+
         var productDtos = rows
-            .Select(r => BuildProductDto(r.Product, r.Composition, r.Price, references, setCode))
+            .Select(r => BuildProductDto(r.Product, r.Composition, r.Price, references, setCode, opening, settings.Values,
+                ComponentsTrend(r.Product, catalog, prices)))
             .OrderBy(d => CategoryOrder(d.Category))
             .ThenBy(d => d.Name)
             .ToList();
@@ -103,18 +117,190 @@ public class SealedProductAnalysisService
             .OrderBy(r => r.Label)
             .ToList();
 
+        var packKeys = rows.SelectMany(r => r.Composition.Packs.Keys).Distinct().OrderBy(k => k).ToList();
+        var packValues = packKeys
+            .Select(key => BuildPackValueDto(key, setCode, opening, settings.Values))
+            .Where(p => p != null)
+            .Select(p => p!)
+            .ToList();
+
+        var groupSets = sets.Where(s => groupCodes.Contains(s.Code)).ToList();
+
         return new SealedSetAnalysis(
             main.Code, main.Name, main.ReleaseDate,
-            sets.Where(s => groupCodes.Contains(s.Code) && s.Code != main.Code).Select(s => s.Name).ToList(),
+            groupSets.Where(s => s.Code != main.Code).Select(s => s.Name).ToList(),
             prices.Values.Select(p => (DateOnly?)p.Date).DefaultIfEmpty(null).Max(),
             products.Select(p => (DateTime?)p.LastImportedAt).DefaultIfEmpty(null).Max(),
             referenceDtos,
-            productDtos);
+            productDtos,
+            groupSets.Any(s => s.DetailImportedAt == null) ? null : groupSets.Min(s => s.DetailImportedAt),
+            groupSets.Any(s => s.HasBoosterData),
+            settings.Dto,
+            packValues);
+    }
+
+    /// <summary>Parametri del valore atteso: quelli passati dalla pagina, altrimenti configurazione e dati misurati.</summary>
+    private async Task<(OpeningValueSettings Values, OpeningValueSettingsDto Dto)> ResolveSettingsAsync(
+        OpeningValueOverrides? overrides, CancellationToken cancellationToken)
+    {
+        var threshold = overrides?.BulkThreshold ?? _configuration.GetValue("Purchasing:BulkThreshold", 0.25m);
+        var bulkPrice = overrides?.BulkPrice ?? _configuration.GetValue("Purchasing:BulkPrice", 0.05m);
+        var costPercent = overrides?.SellingCostPercent ?? _configuration.GetValue("Purchasing:SellingCostPercent", 15m);
+
+        var measured = await _bulkSellThrough.MeasureAsync(threshold, cancellationToken);
+        var sellThrough = overrides?.BulkSellThroughPercent is { } percent ? percent / 100m : measured.Share;
+
+        // Commissione reale di Card Trader dagli ordini: solo informativa, accanto al costo scelto.
+        var fees = await _db.Orders.AsNoTracking()
+            .Where(o => o.PaidAt != null)
+            .GroupBy(o => 1)
+            .Select(g => new { Fee = g.Sum(o => o.SellerFee), Subtotal = g.Sum(o => o.SellerSubtotal) })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var values = new OpeningValueSettings(threshold, bulkPrice, sellThrough, costPercent);
+        var dto = new OpeningValueSettingsDto(
+            threshold, bulkPrice, Math.Round(sellThrough * 100m, 1), costPercent,
+            Math.Round(measured.Share * 100m, 1), measured.Measured,
+            measured.Expansions.Select(e => new BulkSellThroughDto(e.Name, e.ReleaseDate, e.Sold, e.InStock, Math.Round(e.Share * 100m, 1))).ToList(),
+            fees is { Subtotal: > 0 } ? Math.Round(fees.Fee / fees.Subtotal * 100m, 2) : null);
+
+        return (values, dto);
     }
 
     /// <summary>
-    /// Aggiorna il prezzo Card Trader dei prodotti di un'uscita: una chiamata al marketplace per
-    /// ciascuna espansione Card Trader coinvolta (in genere due: l'espansione e il suo Commander).
+    /// Carica composizione delle buste, mazzi, carte e prezzi che servono all'uscita e prepara i due
+    /// calcolatori, uno sui prezzi Cardmarket e uno su quelli Card Trader.
+    /// </summary>
+    private async Task<OpeningCalculators> BuildCalculatorsAsync(
+        List<PackComposition> compositions, HashSet<string> groupCodes, OpeningValueSettings settings,
+        CancellationToken cancellationToken)
+    {
+        var packSets = compositions.SelectMany(c => c.Packs.Keys).Select(k => k.Split(':')[0]).Distinct().ToList();
+        var deckSets = compositions.SelectMany(c => c.Decks.Keys).Select(k => k.Split(':')[0]).Distinct().ToList();
+
+        var configs = (await _db.BoosterConfigs.AsNoTracking().Include(c => c.Slots)
+                .Where(c => packSets.Contains(c.SetCode)).ToListAsync(cancellationToken))
+            .GroupBy(c => $"{c.SetCode}:{c.BoosterType}")
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var sheets = (await _db.BoosterSheets.AsNoTracking().Include(s => s.Cards)
+                .Where(s => packSets.Contains(s.SetCode)).ToListAsync(cancellationToken))
+            .ToDictionary(s => ($"{s.SetCode}:{s.BoosterType}", s.Name));
+
+        var decks = (await _db.MtgjsonDecks.AsNoTracking().Include(d => d.Cards)
+                .Where(d => deckSets.Contains(d.SetCode)).ToListAsync(cancellationToken))
+            .GroupBy(d => OpeningValueCalculator.DeckKey(d.SetCode, d.Name))
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var cardUuids = sheets.Values.SelectMany(s => s.Cards.Select(c => c.CardUuid))
+            .Concat(decks.Values.SelectMany(d => d.Cards.Select(c => c.CardUuid)))
+            .Concat(compositions.SelectMany(c => c.Cards.Keys.Select(k => k.Uuid)))
+            .Distinct()
+            .ToList();
+
+        var cards = await _db.MtgjsonCards.AsNoTracking()
+            .Where(c => cardUuids.Contains(c.Uuid))
+            .ToDictionaryAsync(c => c.Uuid, cancellationToken);
+
+        var cmIds = cards.Values.Where(c => c.CardmarketId.HasValue).Select(c => c.CardmarketId!.Value).Distinct().ToList();
+        var cmPrices = await _db.CardmarketLatestPrices.AsNoTracking()
+            .Where(p => cmIds.Contains(p.IdProduct))
+            .ToDictionaryAsync(p => p.IdProduct, cancellationToken);
+
+        var scryfallIds = cards.Values.Where(c => c.ScryfallId != null).Select(c => c.ScryfallId!).Distinct().ToList();
+        var blueprintByScryfall = (await _db.Blueprints.AsNoTracking()
+                .Where(b => b.ScryfallId != null && scryfallIds.Contains(b.ScryfallId))
+                .Select(b => new { b.ScryfallId, b.CardTraderId })
+                .ToListAsync(cancellationToken))
+            .GroupBy(b => b.ScryfallId!)
+            .ToDictionary(g => g.Key, g => g.First().CardTraderId);
+        var blueprintIds = blueprintByScryfall.Values.Distinct().ToList();
+        var ctPrices = await _db.CardTraderCardPrices.AsNoTracking()
+            .Where(p => blueprintIds.Contains(p.BlueprintId))
+            .ToDictionaryAsync(p => (p.BlueprintId, p.IsFoil), cancellationToken);
+
+        decimal? CmPrice(Guid uuid, bool foil)
+        {
+            if (!cards.TryGetValue(uuid, out var card) || card.CardmarketId is not { } id) return null;
+            if (!cmPrices.TryGetValue(id, out var price)) return null;
+            return foil ? price.TrendFoil is > 0 ? price.TrendFoil : null : price.Trend is > 0 ? price.Trend : null;
+        }
+
+        decimal? CtPrice(Guid uuid, bool foil)
+        {
+            if (!cards.TryGetValue(uuid, out var card) || card.ScryfallId == null) return null;
+            if (!blueprintByScryfall.TryGetValue(card.ScryfallId, out var blueprintId)) return null;
+            return ctPrices.TryGetValue((blueprintId, foil), out var price) ? price.Price : null;
+        }
+
+        return new OpeningCalculators(
+            new OpeningValueCalculator(CmPrice, settings, configs, sheets, decks),
+            new OpeningValueCalculator(CtPrice, settings, configs, sheets, decks),
+            cards,
+            ctPrices.Count > 0 ? ctPrices.Values.Max(p => p.UpdatedAt) : null);
+    }
+
+    /// <summary>
+    /// Somma dei trend Cardmarket dei prodotti sigillati contenuti direttamente (es. i 6 bundle di un
+    /// case). Null se il prodotto contiene anche altro, se non ne contiene o se uno di loro non ha prezzo.
+    /// </summary>
+    private static decimal? ComponentsTrend(
+        SealedProduct product, IReadOnlyDictionary<Guid, SealedProduct> catalog, IReadOnlyDictionary<int, CardmarketPriceSnapshot> prices)
+    {
+        // Solo per i prodotti fatti di altri sigillati (più eventuali extra): una Scene Box ha anche un
+        // mazzo, e confrontarla con le sole buste la farebbe sembrare abbinata male.
+        if (product.Contents.Any(c => c.Kind is not (SealedContentKind.Sealed or SealedContentKind.Other))) return null;
+
+        var children = product.Contents.Where(c => c.Kind == SealedContentKind.Sealed).ToList();
+        if (children.Count == 0) return null;
+
+        decimal sum = 0;
+        foreach (var child in children)
+        {
+            if (child.ChildUuid is not { } uuid || !catalog.TryGetValue(uuid, out var childProduct)
+                || childProduct.CardmarketId is not { } cmId || !prices.TryGetValue(cmId, out var price) || price.Trend is not > 0)
+                return null;
+            sum += child.Count * price.Trend.Value;
+        }
+
+        return sum;
+    }
+
+    /// <summary>
+    /// MTGJSON a volte abbina a un case l'id Cardmarket del prodotto singolo o di una confezione
+    /// diversa (es. lo Scene Box Case da 4 box abbinato allo "Scene Box Set" da 2): il prezzo letto
+    /// non è quello del prodotto, e la decisione sarebbe sbagliata. Si riconosce perché è lontano
+    /// dalla somma dei prezzi di ciò che contiene.
+    /// </summary>
+    public static bool IsPriceMismatch(decimal? productTrend, decimal? componentsTrend) =>
+        productTrend is > 0 && componentsTrend is > 0
+        && (productTrend < componentsTrend * 0.6m || productTrend > componentsTrend * 1.6m);
+
+    private static PackValueDto? BuildPackValueDto(string packKey, string mainSetCode, OpeningCalculators opening, OpeningValueSettings settings)
+    {
+        var cm = opening.Cardmarket.Pack(packKey);
+        if (cm == null) return null;
+        var ct = opening.CardTrader.Pack(packKey);
+
+        return new PackValueDto(
+            packKey, PackLabel(packKey, mainSetCode),
+            Math.Round(cm.Value, 2), Math.Round(settings.Net(cm.Value), 2), Math.Round(cm.PricedShare * 100m, 1),
+            ct is { PricedShare: > 0 } ? Math.Round(ct.Value, 2) : null,
+            ct is { PricedShare: > 0 } ? Math.Round(settings.Net(ct.Value), 2) : null,
+            ct is null ? 0 : Math.Round(ct.PricedShare * 100m, 1),
+            cm.Sheets.Select(s => new SheetValueDto(s.Name, Math.Round(s.SlotsPerPack, 2), Math.Round(s.ValuePerSlot, 2), Math.Round(s.PricedShare * 100m, 1))).ToList(),
+            cm.TopCards.Select(c =>
+            {
+                opening.Cards.TryGetValue(c.Uuid, out var card);
+                return new TopCardDto(card?.Name ?? c.Uuid.ToString(), card?.SetCode, card?.Number, c.Foil,
+                    Math.Round(c.Value, 2), Math.Round(c.ProbabilityPerPack * 100m, 3), Math.Round(c.ProbabilityPerPack * c.Value, 2));
+            }).ToList());
+    }
+
+    /// <summary>
+    /// Aggiorna i prezzi Card Trader di un'uscita: sigillati e singole (queste ultime per il valore
+    /// atteso). Una chiamata al marketplace per ciascuna espansione Card Trader coinvolta: l'espansione,
+    /// il suo Commander, le varianti "Collectors" e simili, in genere fra due e sei.
     /// </summary>
     public async Task<CardTraderSealedRefreshResult> RefreshCardTraderPricesAsync(string setCode, CancellationToken cancellationToken = default)
     {
@@ -134,10 +320,23 @@ public class SealedProductAnalysisService
             .Select(b => new { b.CardTraderId, ExpansionCtId = b.Expansion.CardTraderId })
             .ToDictionaryAsync(b => b.CardTraderId, b => b.ExpansionCtId, cancellationToken);
 
+        // Singole dell'uscita (carte dei suoi set e dei suoi mazzi), ritrovate su Card Trader per id Scryfall.
+        var deckCardUuids = _db.MtgjsonDecks.Where(d => groupCodes.Contains(d.SetCode)).SelectMany(d => d.Cards.Select(c => c.CardUuid));
+        var scryfallIds = await _db.MtgjsonCards.AsNoTracking()
+            .Where(c => c.ScryfallId != null && (groupCodes.Contains(c.SetCode) || deckCardUuids.Contains(c.Uuid)))
+            .Select(c => c.ScryfallId!)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        var cardBlueprints = await _db.Blueprints.AsNoTracking()
+            .Where(b => b.ScryfallId != null && scryfallIds.Contains(b.ScryfallId))
+            .Select(b => new { b.CardTraderId, ExpansionCtId = b.Expansion.CardTraderId })
+            .ToListAsync(cancellationToken);
+        var cardBlueprintIds = cardBlueprints.Select(b => b.CardTraderId).ToHashSet();
+
         var offers = new List<CardTraderMarketplaceProductDto>();
         var calls = 0;
 
-        foreach (var expansionId in expansionByBlueprint.Values.Distinct())
+        foreach (var expansionId in expansionByBlueprint.Values.Concat(cardBlueprints.Select(b => b.ExpansionCtId)).Distinct())
         {
             offers.AddRange(await _cardTrader.GetMarketplaceProductsByExpansionAsync(expansionId, cancellationToken));
             calls++;
@@ -166,13 +365,53 @@ public class SealedProductAnalysisService
             if (productOffers is { Count: > 0 }) withOffers++;
         }
 
+        var cardsPriced = await SaveCardPricesAsync(offers, cardBlueprintIds, now, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
-            "Prezzi Card Trader dei sigillati di {Set}: {WithOffers}/{Products} prodotti con offerte, {Calls} chiamate",
-            setCode, withOffers, products.Count, calls);
+            "Prezzi Card Trader di {Set}: {WithOffers}/{Products} sigillati con offerte, {Cards} prezzi di singole, {Calls} chiamate",
+            setCode, withOffers, products.Count, cardsPriced, calls);
 
-        return new CardTraderSealedRefreshResult(products.Count, withOffers, calls);
+        return new CardTraderSealedRefreshResult(products.Count, withOffers, calls, cardsPriced);
+    }
+
+    /// <summary>
+    /// Prezzo di una singola su Card Trader: media delle tre offerte più basse in inglese e Near Mint,
+    /// separatamente per foil e non foil. Il minimo da solo dipende troppo da un venditore isolato.
+    /// </summary>
+    private async Task<int> SaveCardPricesAsync(
+        List<CardTraderMarketplaceProductDto> offers, HashSet<int> blueprintIds, DateTime now, CancellationToken cancellationToken)
+    {
+        var groups = offers
+            .Where(o => blueprintIds.Contains(o.BlueprintId) && o.PriceCents > 0 && o.Quantity > 0 && !o.OnVacation)
+            .Where(o => IsEnglish(o.Properties.Language))
+            .Where(o => string.Equals(o.Properties.Condition, "Near Mint", StringComparison.OrdinalIgnoreCase))
+            .GroupBy(o => (o.BlueprintId, o.Properties.IsFoil))
+            .ToList();
+
+        var ids = blueprintIds.ToList();
+        var existing = await _db.CardTraderCardPrices
+            .Where(p => ids.Contains(p.BlueprintId))
+            .ToDictionaryAsync(p => (p.BlueprintId, p.IsFoil), cancellationToken);
+
+        foreach (var group in groups)
+        {
+            var cheapest = group.Select(o => o.PriceCents).OrderBy(c => c).Take(3).ToList();
+            if (!existing.Remove(group.Key, out var price))
+            {
+                price = new CardTraderCardPrice { BlueprintId = group.Key.BlueprintId, IsFoil = group.Key.IsFoil };
+                _db.CardTraderCardPrices.Add(price);
+            }
+
+            price.Price = Math.Round((decimal)cheapest.Average() / 100m, 2);
+            price.OfferCount = group.Count();
+            price.UpdatedAt = now;
+        }
+
+        // Le carte rimaste senza offerte perdono il prezzo vecchio: meglio "senza prezzo" che un dato stantio.
+        _db.CardTraderCardPrices.RemoveRange(existing.Values);
+
+        return groups.Count;
     }
 
     /// <summary>Il set e i suoi figli diretti (es. TRK e TRC).</summary>
@@ -239,11 +478,17 @@ public class SealedProductAnalysisService
                     // MTGJSON registra le terre dei bundle come mazzo ("... Bundle Land Pack"): sono
                     // extra come le terre base, e trattarle da mazzo escluderebbe i bundle dal confronto.
                     if (IsLandPack(content.Name)) result.HasExtras = true;
-                    else result.HasDeck = true;
+                    else
+                    {
+                        result.HasDeck = true;
+                        if (content.Name != null)
+                            result.AddDeck(OpeningValueCalculator.DeckKey(content.SetCode ?? product.SetCode, content.Name), 1);
+                    }
                     break;
 
                 case SealedContentKind.Card:
                     result.HasCards = true;
+                    if (content.ChildUuid is { } cardUuid) result.AddCard(cardUuid, content.Foil == true, 1);
                     break;
 
                 case SealedContentKind.Other:
@@ -288,8 +533,13 @@ public class SealedProductAnalysisService
         PackComposition composition,
         CardmarketPriceSnapshot? price,
         IReadOnlyDictionary<string, PackReference> references,
-        string mainSetCode)
+        string mainSetCode,
+        OpeningCalculators opening,
+        OpeningValueSettings settings,
+        decimal? componentsTrend)
     {
+        var priceMismatch = IsPriceMismatch(price?.Trend, componentsTrend);
+
         var packs = composition.Packs
             .Select(kv => new PackCountDto(kv.Key, PackLabel(kv.Key, mainSetCode), kv.Value))
             .OrderByDescending(p => p.Count)
@@ -307,9 +557,31 @@ public class SealedProductAnalysisService
 
         // Lo scarto ha senso solo se il prodotto è fatto di buste (più eventuali extra): con un mazzo
         // o carte specifiche dentro, il confronto con le sole buste direbbe che è carissimo.
-        decimal? deltaPercent = packValue is > 0 && price?.Trend is > 0 && composition.IsPurePacks
+        decimal? deltaPercent = packValue is > 0 && price?.Trend is > 0 && composition.IsPurePacks && !priceMismatch
             ? Math.Round((price.Trend.Value - packValue.Value) / packValue.Value * 100m, 1)
             : null;
+
+        // Valore atteso dell'apertura, al netto dei costi di vendita. Senza nulla da valutare (nessuna
+        // busta con composizione nota, nessun mazzo trovato) resta vuoto invece di dire zero.
+        var hasValuable = composition.Packs.Count > 0 || composition.Decks.Count > 0 || composition.Cards.Count > 0;
+        var cmValue = hasValuable ? opening.Cardmarket.Product(composition) : null;
+        var ctValue = hasValuable ? opening.CardTrader.Product(composition) : null;
+        decimal? openCm = cmValue is { Coverage: > 0 } ? Math.Round(settings.Net(cmValue.Gross), 2) : null;
+        decimal? openCt = ctValue is { Coverage: > 0 } ? Math.Round(settings.Net(ctValue.Gross), 2) : null;
+
+        // Decisione su Cardmarket, dove si compra: aprire conviene se il ricavato netto dalle singole
+        // supera quello della rivendita del sigillato (che paga anch'essa i costi di vendita).
+        decimal? sealedNet = price?.Trend is > 0 ? Math.Round(settings.Net(price.Trend.Value), 2) : null;
+        decimal? openingRoi = openCm is not null && price?.Trend is > 0
+            ? Math.Round((openCm.Value - price.Trend.Value) / price.Trend.Value * 100m, 1)
+            : null;
+        // Con una busta senza composizione o un mazzo non trovato il valore è sottostimato: meglio
+        // nessuna decisione che un "tieni sigillato" dovuto ai dati mancanti.
+        string? decision = sealedNet is null || cmValue is null ? null
+            : priceMismatch ? "Prezzo CM dubbio"
+            : cmValue.MissingPacks.Count > 0 || cmValue.MissingDecks.Count > 0 || cmValue.Coverage < 0.9m ? "Dati incompleti"
+            : openCm > sealedNet ? "Apri" : "Tieni sigillato";
+        if (priceMismatch) openingRoi = null;
 
         return new SealedProductAnalysisDto(
             product.Id, product.Name, product.Category, product.Subtype, product.SetCode,
@@ -320,7 +592,12 @@ public class SealedProductAnalysisService
             product.CardmarketId, product.CardTraderBlueprintId,
             price?.Trend, price?.Low, price?.Date,
             product.CtMinPrice, product.CtOfferCount, product.CtPriceUpdatedAt,
-            pricePerPack, packValue, deltaPercent);
+            pricePerPack, packValue, deltaPercent,
+            openCm, cmValue is null ? null : Math.Round(cmValue.Coverage * 100m, 1),
+            openCt, ctValue is null ? null : Math.Round(ctValue.Coverage * 100m, 1),
+            sealedNet, openingRoi, decision, priceMismatch, componentsTrend,
+            (cmValue?.MissingPacks ?? new()).Select(k => PackLabel(k, mainSetCode)).ToList(),
+            cmValue?.MissingDecks ?? new());
     }
 
     private static string DescribeContents(SealedProduct product, PackComposition composition, List<PackCountDto> packs)
@@ -381,6 +658,13 @@ public class SealedProductAnalysisService
 public class PackComposition
 {
     public Dictionary<string, int> Packs { get; } = new();
+
+    /// <summary>Mazzi a contenuto fisso per chiave "SET:nome" (vedi <see cref="OpeningValueCalculator.DeckKey"/>).</summary>
+    public Dictionary<string, int> Decks { get; } = new();
+
+    /// <summary>Carte specifiche contenute nel prodotto.</summary>
+    public Dictionary<(Guid Uuid, bool Foil), int> Cards { get; } = new();
+
     public bool HasDeck { get; set; }
     public bool HasCards { get; set; }
     public bool HasExtras { get; set; }
@@ -392,9 +676,17 @@ public class PackComposition
     public void AddPacks(string packKey, int count) =>
         Packs[packKey] = Packs.GetValueOrDefault(packKey) + count;
 
+    public void AddDeck(string deckKey, int count) =>
+        Decks[deckKey] = Decks.GetValueOrDefault(deckKey) + count;
+
+    public void AddCard(Guid uuid, bool foil, int count) =>
+        Cards[(uuid, foil)] = Cards.GetValueOrDefault((uuid, foil)) + count;
+
     public void Merge(PackComposition child, int times)
     {
         foreach (var (key, count) in child.Packs) AddPacks(key, count * times);
+        foreach (var (key, count) in child.Decks) AddDeck(key, count * times);
+        foreach (var (key, count) in child.Cards) AddCard(key.Uuid, key.Foil, count * times);
         HasDeck |= child.HasDeck;
         HasCards |= child.HasCards;
         HasExtras |= child.HasExtras;
@@ -433,7 +725,18 @@ public record SealedProductAnalysisDto(
     DateTime? CtPriceUpdatedAt,
     decimal? PricePerPack,
     decimal? PackValue,
-    decimal? DeltaPercent);
+    decimal? DeltaPercent,
+    decimal? OpenValueCm,
+    decimal? CoverageCm,
+    decimal? OpenValueCt,
+    decimal? CoverageCt,
+    decimal? SealedNetCm,
+    decimal? OpeningRoiPercent,
+    string? Decision,
+    bool PriceMismatch,
+    decimal? ComponentsTrend,
+    List<string> MissingPacks,
+    List<string> MissingDecks);
 
 public record SealedSetAnalysis(
     string Code,
@@ -443,6 +746,55 @@ public record SealedSetAnalysis(
     DateOnly? CardmarketPriceDate,
     DateTime? CatalogImportedAt,
     List<PackReferenceDto> References,
-    List<SealedProductAnalysisDto> Products);
+    List<SealedProductAnalysisDto> Products,
+    DateTime? DetailImportedAt,
+    bool HasBoosterData,
+    OpeningValueSettingsDto Settings,
+    List<PackValueDto> PackValues);
 
-public record CardTraderSealedRefreshResult(int Products, int ProductsWithOffers, int ApiCalls);
+/// <summary>Parametri del valore atteso modificabili dalla pagina; null = configurazione o dato misurato.</summary>
+public record OpeningValueOverrides(
+    decimal? BulkThreshold,
+    decimal? BulkPrice,
+    decimal? BulkSellThroughPercent,
+    decimal? SellingCostPercent);
+
+public record OpeningValueSettingsDto(
+    decimal BulkThreshold,
+    decimal BulkPrice,
+    decimal BulkSellThroughPercent,
+    decimal SellingCostPercent,
+    decimal MeasuredBulkSellThroughPercent,
+    bool BulkSellThroughMeasured,
+    List<BulkSellThroughDto> BulkSellThroughExpansions,
+    decimal? MeasuredCardTraderFeePercent);
+
+public record BulkSellThroughDto(string Name, DateTime ReleaseDate, int Sold, int InStock, decimal SharePercent);
+
+/// <param name="ValueCm">Valore atteso lordo di una busta su prezzi Cardmarket.</param>
+/// <param name="NetCm">Lo stesso al netto dei costi di vendita.</param>
+public record PackValueDto(
+    string PackKey,
+    string Label,
+    decimal ValueCm,
+    decimal NetCm,
+    decimal CoverageCm,
+    decimal? ValueCt,
+    decimal? NetCt,
+    decimal CoverageCt,
+    List<SheetValueDto> Sheets,
+    List<TopCardDto> TopCards);
+
+public record SheetValueDto(string Name, decimal SlotsPerPack, decimal ValuePerSlot, decimal CoveragePercent);
+
+/// <param name="ProbabilityPercent">Probabilità di trovarla in una busta, in percentuale.</param>
+/// <param name="ExpectedValue">Contributo al valore atteso della busta.</param>
+public record TopCardDto(string Name, string? SetCode, string? Number, bool Foil, decimal Value, decimal ProbabilityPercent, decimal ExpectedValue);
+
+public record OpeningCalculators(
+    OpeningValueCalculator Cardmarket,
+    OpeningValueCalculator CardTrader,
+    IReadOnlyDictionary<Guid, MtgjsonCard> Cards,
+    DateTime? CardTraderPricesUpdatedAt);
+
+public record CardTraderSealedRefreshResult(int Products, int ProductsWithOffers, int ApiCalls, int CardPrices);

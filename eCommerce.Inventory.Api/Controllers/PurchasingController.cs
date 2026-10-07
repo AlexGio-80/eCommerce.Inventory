@@ -16,15 +16,18 @@ public class PurchasingController : ControllerBase
 {
     private readonly SealedProductAnalysisService _analysis;
     private readonly SealedCatalogImportService _catalogImport;
+    private readonly MtgjsonSetDetailImportService _detailImport;
     private readonly ILogger<PurchasingController> _logger;
 
     public PurchasingController(
         SealedProductAnalysisService analysis,
         SealedCatalogImportService catalogImport,
+        MtgjsonSetDetailImportService detailImport,
         ILogger<PurchasingController> logger)
     {
         _analysis = analysis;
         _catalogImport = catalogImport;
+        _detailImport = detailImport;
         _logger = logger;
     }
 
@@ -35,10 +38,21 @@ public class PurchasingController : ControllerBase
         return Ok(ApiResponse<List<SealedSetOption>>.SuccessResult(sets));
     }
 
+    /// <summary>
+    /// Analisi di un'uscita. I parametri del valore atteso sono facoltativi: senza, valgono la
+    /// configurazione (<c>Purchasing:*</c>) e la quota di bulk venduto misurata sulle vendite.
+    /// </summary>
     [HttpGet("sets/{code}/analysis")]
-    public async Task<IActionResult> GetAnalysis(string code, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetAnalysis(
+        string code,
+        [FromQuery] decimal? bulkThreshold,
+        [FromQuery] decimal? bulkPrice,
+        [FromQuery] decimal? bulkSellThroughPercent,
+        [FromQuery] decimal? sellingCostPercent,
+        CancellationToken cancellationToken)
     {
-        var analysis = await _analysis.AnalyzeAsync(code, cancellationToken);
+        var overrides = new OpeningValueOverrides(bulkThreshold, bulkPrice, bulkSellThroughPercent, sellingCostPercent);
+        var analysis = await _analysis.AnalyzeAsync(code, overrides, cancellationToken);
         return analysis == null
             ? NotFound(ApiResponse<object>.ErrorResult($"Espansione {code} non presente nel catalogo MTGJSON"))
             : Ok(ApiResponse<SealedSetAnalysis>.SuccessResult(analysis));
@@ -51,6 +65,22 @@ public class PurchasingController : ControllerBase
         _logger.LogInformation("Aggiornamento prezzi Card Trader dei sigillati di {Set} lanciato dall'interfaccia", code);
         var result = await _analysis.RefreshCardTraderPricesAsync(code, cancellationToken);
         return Ok(ApiResponse<CardTraderSealedRefreshResult>.SuccessResult(result));
+    }
+
+    /// <summary>Scarica da MTGJSON carte, composizione delle buste e mazzi dei set dell'uscita.</summary>
+    [HttpPost("sets/{code}/details/import")]
+    public async Task<IActionResult> ImportDetails(string code, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogInformation("Import dati delle buste MTGJSON di {Set} lanciato dall'interfaccia", code);
+            var result = await _detailImport.ImportGroupAsync(code, cancellationToken);
+            return Ok(ApiResponse<SetDetailImportResult>.SuccessResult(result));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(ApiResponse<object>.ErrorResult(ex.Message));
+        }
     }
 
     [HttpPost("catalog/import")]

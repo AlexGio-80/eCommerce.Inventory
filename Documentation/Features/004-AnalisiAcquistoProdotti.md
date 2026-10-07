@@ -162,7 +162,7 @@ Collector Box, anche se il box sigillato si rivende meglio.
   Primi risultati: Star Trek — Draft Night +6,9% rispetto alle sue buste, Bundle +31,5%, buste
   sciolte +22/26% rispetto ai box; Reality Fracture — Draft Night −5,0%.
 - **Pubblicata e verificata il 2026-10-07**: catalogo importato in produzione al primo avvio (4.161 prodotti), pagina "Acquisti" funzionante.
-- **Ancora da verificare**: il pulsante "Prezzi Card Trader" non è ancora stato usato in produzione (nessun prodotto con `CtPriceUpdatedAt` al 07/10).
+- **Prezzi Card Trader verificati il 2026-10-07** su The Hobbit: 18/20 sigillati con offerte, 2 chiamate, valori coerenti con Cardmarket (Play Box 138,36 € contro 147,81 € di trend).
 
 **Criteri di accettazione:**
 - [x] Per un'espansione si vedono tutti i suoi prodotti sigillati con contenuto, prezzo CM (trend + low), prezzo CT e costo per busta equivalente
@@ -185,10 +185,61 @@ Collector Box, anche se il box sigillato si rivende meglio.
 Sostituisce il ROI Box% di oggi (valore medio × numero di carte, `ExpansionsController`), che non
 pesa le rarità e conta il bulk come se si vendesse tutto al valore medio.
 
+**Decisioni prese con l'utente (2026-10-07):**
+- Prezzo delle singole: **Cardmarket e Card Trader affiancati** (due colonne), per vedere quanto
+  differiscono prima di sceglierne uno.
+- **Bulk venduto ricavato dalle vendite reali**, non stimato: copie vendute a ≤ soglia contro copie in
+  vendita a ≤ soglia, solo sulle espansioni aperte all'uscita (prima carta in vendita fra 15 giorni
+  prima e 45 dopo l'uscita). Al 07/10 circa il 35% (The Hobbit 50%, Lorwyn Eclipsed 40%, Avatar 37%,
+  TMNT 35%, Strixhaven 30%, Reality Fracture 26%, Marvel 25%); le espansioni vecchie comprate come
+  collezioni stanno fra il 4% e il 15% e sono escluse.
+- **Costi di vendita 15%**. La commissione reale di Card Trader, misurata su 2.973 ordini, è il 5,56%:
+  il resto è spedizione, imballaggio e lavoro. Mostrata accanto al parametro.
+
+**Implementazione (2026-10-07):**
+- **Dati MTGJSON per uscita** (`MtgjsonSetDetailImportService`): carte (con `mcmId` e `scryfallId`),
+  composizione delle buste (configurazioni con pesi, fogli di stampa con le carte e i pesi) e mazzi,
+  dai file dei singoli set dell'uscita più quelli da cui provengono i mazzi. Ogni giorno per le uscite
+  fra 60 giorni fa e 120 giorni da oggi (finché manca la composizione delle buste, poi settimanale), e
+  a richiesta ("Scarica dati delle buste"). Le carte di una Collector Booster dello Hobbit stanno in
+  gran parte nel set figlio "The Hobbit Eternal": per questo si caricano tutti i set dell'uscita.
+- **Ultimo prezzo Cardmarket di tutti i prodotti** (`CardmarketLatestPrices`, ~128.000 righe), dallo
+  stesso import giornaliero: serve per le espansioni le cui singole non sono nello storico. Si scrive
+  solo ciò che cambia. Alla prima pubblicazione si riempie anche se il listino del giorno è già importato.
+- **Prezzi Card Trader delle singole** con lo stesso pulsante "Prezzi Card Trader": media delle tre
+  offerte più basse in inglese e Near Mint, separatamente foil e non foil. Carte collegate ai
+  blueprint tramite id Scryfall.
+- **Calcolo** (`OpeningValueCalculator`): per una busta, Σ configurazioni (probabilità) × Σ slot ×
+  valore medio del foglio (Σ probabilità × prezzo); per mazzi e carte fisse la somma dei prezzi. Sotto
+  soglia una carta vale prezzo bulk × quota venduta. Carte senza prezzo abbassano la **copertura**
+  invece di contare zero in silenzio.
+- **Decisione** su Cardmarket: "Apri" se il valore atteso netto supera il ricavato netto della rivendita
+  del sigillato, altrimenti "Tieni sigillato". **"Dati incompleti"** se manca la composizione di una
+  busta o un mazzo, o la copertura è sotto il 90%. **"Prezzo CM dubbio"** se il trend di un prodotto
+  fatto solo di altri sigillati è fuori dal 60-160% della somma dei loro prezzi: MTGJSON a volte
+  abbina al case l'id Cardmarket del prodotto sbagliato (Scene Box Case da 4 box sullo "Scene Box Set"
+  da 2; Gift Bundle Case sul Gift Bundle singolo).
+- **Pagina**: parametri modificabili (soglia, prezzo e quota del bulk, costi), riquadro per tipo di
+  busta con valore netto CM/CT e, al clic, il dettaglio per foglio e le dieci carte che pesano di più;
+  colonne Apri (CM), Apri (CT), Sigillato netto, Resa apertura, Decisione.
+- **Provato su SQL Server** con un database a parte (poi cancellato), su dati veri. The Hobbit: Play
+  2,90 € lordi a busta (rara/mitica 1,91 €), Collector 45,35 €, Box Topper 19,45 €, copertura 100%;
+  Play Box −38,8% aprendo, Collector Box −18,4%, Scene Box "Treasures of Smaug" +25,2%. Reality
+  Fracture: Commander Deck +19,9%, box tutti in perdita. Star Trek: "Dati incompleti" su tutto, come
+  atteso (composizione non ancora pubblicata).
+
+**Pubblicata e verificata il 2026-10-07**: al primo avvio l'import Cardmarket ha caricato i 128.085 ultimi prezzi ("già nello storico: caricati solo gli ultimi prezzi") e l'aggiornamento giornaliero ha scaricato i dati delle buste di 4 uscite (Reality Fracture, The Hobbit, Mystery Booster Commander, The Zeta Set; Star Trek senza composizione, come atteso); i prezzi Card Trader delle singole si sono caricati (783 prezzi).
+
+**Da tenere presente:** ai prezzi di oggi il modello dice "tieni sigillato" per tutti i box delle
+ultime uscite, mentre le aperture più vecchie dell'utente sono in attivo (Strixhaven +242 €, Lorwyn
+Eclipsed +375 €, TMNT +58 € nella vista `ExpansionsROI`, che non conta nemmeno le carte ancora in
+vendita). È proprio la taratura della Fase 5: probabilmente l'utente compra sotto il trend e vende
+sopra, e il trend CM delle singole subito dopo l'uscita non è il prezzo a cui vende nel tempo.
+
 **Criteri di accettazione:**
-- [ ] Valore atteso per prodotto, con dettaglio per slot/rarità che spiega da dove viene il numero
-- [ ] Indicazione "apri / tieni chiuso" con margine
-- [ ] Se manca la composizione delle buste (es. espansione in preordine), lo si dice esplicitamente invece di stimare in silenzio
+- [x] Valore atteso per prodotto, con dettaglio per slot/rarità che spiega da dove viene il numero
+- [x] Indicazione "apri / tieni chiuso" con margine
+- [x] Se manca la composizione delle buste (es. espansione in preordine), lo si dice esplicitamente invece di stimare in silenzio
 
 ### Fase 3 — Opportunità su espansioni già uscite
 

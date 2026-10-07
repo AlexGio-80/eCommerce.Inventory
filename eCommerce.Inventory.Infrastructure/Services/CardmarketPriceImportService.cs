@@ -127,7 +127,11 @@ public class CardmarketPriceImportService
     {
         log.SourceLastModified = await _client.GetPriceGuideLastModifiedAsync(cancellationToken);
 
-        if (!force && log.SourceLastModified is not null)
+        // Tabella degli ultimi prezzi ancora vuota (prima pubblicazione che la introduce): il listino
+        // va riletto anche se lo storico del giorno c'è già, altrimenti resterebbe vuota fino a domani.
+        var latestMissing = !await _db.CardmarketLatestPrices.AnyAsync(cancellationToken);
+
+        if (!force && !latestMissing && log.SourceLastModified is not null)
         {
             var lastImported = await _db.CardmarketImportLogs
                 .Where(l => l.Outcome == CardmarketImportOutcome.Succeeded)
@@ -152,6 +156,15 @@ public class CardmarketPriceImportService
 
         if (await _db.CardmarketPriceSnapshots.AnyAsync(s => s.Date == snapshotDate, cancellationToken))
         {
+            if (latestMissing)
+            {
+                await UpsertLatestPricesAsync(priceGuide.PriceGuides, snapshotDate, cancellationToken);
+                await _db.SaveChangesAsync(cancellationToken);
+                log.Outcome = CardmarketImportOutcome.Succeeded;
+                log.Message = $"Listino del {snapshotDate:dd/MM/yyyy} già nello storico: caricati solo gli ultimi prezzi";
+                return;
+            }
+
             log.Outcome = CardmarketImportOutcome.Skipped;
             log.Message = $"Listino del {snapshotDate:dd/MM/yyyy} già importato";
             return;
@@ -178,6 +191,8 @@ public class CardmarketPriceImportService
             log.SinglesTracked = trackedSingles.Count;
             log.SinglesSnapshotsWritten = await AddChangedSingleSnapshotsAsync(
                 trackedSingles, prices, snapshotDate, cancellationToken);
+
+            await UpsertLatestPricesAsync(prices.Values, snapshotDate, cancellationToken);
 
             _db.ChangeTracker.DetectChanges();
             await _db.SaveChangesAsync(cancellationToken);
@@ -300,6 +315,40 @@ public class CardmarketPriceImportService
         }
 
         return written;
+    }
+
+    /// <summary>
+    /// Ultimo prezzo di ogni prodotto del listino, senza storico (circa 128.000 righe aggiornate sul
+    /// posto). Serve al valore atteso delle espansioni le cui singole non sono seguite nello storico.
+    /// <see cref="CardmarketLatestPrice.Date"/> è il giorno dell'ultima variazione.
+    /// </summary>
+    private async Task UpsertLatestPricesAsync(
+        IEnumerable<CardmarketPriceGuideEntry> prices, DateOnly date, CancellationToken cancellationToken)
+    {
+        var existing = await _db.CardmarketLatestPrices.ToDictionaryAsync(p => p.IdProduct, cancellationToken);
+
+        foreach (var price in prices)
+        {
+            if (!existing.TryGetValue(price.IdProduct, out var latest))
+            {
+                latest = new CardmarketLatestPrice { IdProduct = price.IdProduct };
+                _db.CardmarketLatestPrices.Add(latest);
+                existing[price.IdProduct] = latest;
+            }
+            else if (latest.Trend == price.Trend && latest.Low == price.Low
+                     && latest.TrendFoil == price.TrendFoil && latest.LowFoil == price.LowFoil)
+            {
+                // Si scrive solo ciò che cambia: riscrivere ogni giorno 128.000 righe per la sola data
+                // sarebbe il grosso del tempo dell'import.
+                continue;
+            }
+
+            latest.Date = date;
+            latest.Trend = price.Trend;
+            latest.Low = price.Low;
+            latest.TrendFoil = price.TrendFoil;
+            latest.LowFoil = price.LowFoil;
+        }
     }
 
     /// <summary>

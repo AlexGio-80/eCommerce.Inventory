@@ -9,6 +9,35 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-07] Feature — Valore atteso dell'apertura e decisione apri / tieni sigillato (Fase 2 analisi acquisti)
+
+#### Problema
+
+La pagina "Acquisti" diceva quale formato costa meno a parità di buste, ma non se conviene aprire:
+il ROI Box% della pagina Espansioni moltiplica il valore medio per il numero di carte, senza pesare
+le rarità né il bulk che non si vende, e Commander e Scene Box restavano senza alcuna valutazione.
+
+#### Soluzione Implementata
+
+- Import da MTGJSON, per uscita, di carte, composizione delle buste e mazzi (ogni giorno per le uscite
+  recenti e in arrivo, e a richiesta)
+- Ultimo prezzo Cardmarket di tutti i ~128.000 prodotti del listino, dallo stesso import giornaliero
+- Prezzi Card Trader delle singole (media delle tre offerte più basse EN NM) con il pulsante esistente
+- `OpeningValueCalculator`: valore atteso per busta e per prodotto, con bulk valutato alla quota
+  realmente venduta (`BulkSellThroughService`, ~35% sulle aperture all'uscita) e costi di vendita 15%
+- Decisione "Apri" / "Tieni sigillato" con controlli "Dati incompleti" e "Prezzo CM dubbio"
+- Pagina: parametri modificabili, riquadri per tipo di busta con dettaglio per foglio e carte top
+
+#### Note Tecniche
+
+- Migration `AddOpeningValueData`: 9 tabelle nuove, 2 colonne su `MtgjsonSets`
+- Le carte MTGJSON si aggiornano invece di sostituirle: cancellare e riaggiungere lo stesso uuid nello
+  stesso salvataggio non è ammesso da EF
+- Provato su SQL Server con un database a parte e dati veri; la prova ha trovato l'abbinamento
+  sbagliato dei case su MTGJSON, da cui il controllo "Prezzo CM dubbio"
+- **Pubblicato e verificato il 2026-10-07**: 128.085 ultimi prezzi CM caricati al primo avvio, dati
+  delle buste di 4 uscite scaricati dall'aggiornamento giornaliero, 783 prezzi CT di singole
+
 ### [2026-10-07] Feature — Pagina "Acquisti": convenienza fra i formati di un'uscita (Fase 1 analisi acquisti)
 
 #### Problema

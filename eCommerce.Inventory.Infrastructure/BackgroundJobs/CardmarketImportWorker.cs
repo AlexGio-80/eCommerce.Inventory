@@ -96,6 +96,11 @@ public class CardmarketImportWorker : BackgroundService
             using var scope = _scopeFactory.CreateScope();
             var catalog = scope.ServiceProvider.GetRequiredService<SealedCatalogImportService>();
             await catalog.ImportAsync(stoppingToken);
+
+            // Composizione delle buste delle uscite recenti e in arrivo: per quelle in preordine
+            // compare su MTGJSON intorno all'uscita, e così arriva senza doverla chiedere a mano.
+            var details = scope.ServiceProvider.GetRequiredService<MtgjsonSetDetailImportService>();
+            await details.ImportRecentAsync(stoppingToken);
         }
         catch (OperationCanceledException)
         {
@@ -103,7 +108,7 @@ public class CardmarketImportWorker : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Import del catalogo sigillati MTGJSON fallito");
+            _logger.LogError(ex, "Import del catalogo sigillati o dei dati delle buste MTGJSON fallito");
         }
     }
 

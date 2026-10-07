@@ -16,6 +16,15 @@ public class MtgjsonSet
     public DateOnly? ReleaseDate { get; set; }
 
     public DateTime LastImportedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// Ultimo import di carte, composizione delle buste e mazzi (file del singolo set). Null se mai
+    /// importati: senza, il valore atteso dell'apertura non si può calcolare.
+    /// </summary>
+    public DateTime? DetailImportedAt { get; set; }
+
+    /// <summary>True se MTGJSON riporta la composizione delle buste (arriva intorno all'uscita).</summary>
+    public bool HasBoosterData { get; set; }
 }
 
 /// <summary>

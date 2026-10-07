@@ -12,3 +12,9 @@ body {
     margin: 0;
     font-family: Roboto, "Helvetica Neue", sans-serif;
 }
+/* Tooltip su più righe (es. elenco delle espansioni da cui è misurato il bulk venduto) */
+.multiline-tooltip .mdc-tooltip__surface {
+  white-space: pre-line;
+  max-width: 420px !important;
+  text-align: left;
+}

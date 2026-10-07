@@ -52,6 +52,83 @@ export interface SealedProductAnalysis {
     pricePerPack?: number;
     packValue?: number;
     deltaPercent?: number;
+    /** Valore atteso dell'apertura al netto dei costi, su prezzi Cardmarket. */
+    openValueCm?: number;
+    coverageCm?: number;
+    openValueCt?: number;
+    coverageCt?: number;
+    /** Ricavato netto rivendendo il sigillato al trend CM. */
+    sealedNetCm?: number;
+    openingRoiPercent?: number;
+    decision?: 'Apri' | 'Tieni sigillato' | 'Dati incompleti' | 'Prezzo CM dubbio';
+    priceMismatch: boolean;
+    componentsTrend?: number;
+    missingPacks: string[];
+    missingDecks: string[];
+}
+
+export interface BulkSellThroughExpansion {
+    name: string;
+    releaseDate: string;
+    sold: number;
+    inStock: number;
+    sharePercent: number;
+}
+
+export interface OpeningValueSettings {
+    bulkThreshold: number;
+    bulkPrice: number;
+    bulkSellThroughPercent: number;
+    sellingCostPercent: number;
+    measuredBulkSellThroughPercent: number;
+    bulkSellThroughMeasured: boolean;
+    bulkSellThroughExpansions: BulkSellThroughExpansion[];
+    measuredCardTraderFeePercent?: number;
+}
+
+export interface SheetValue {
+    name: string;
+    slotsPerPack: number;
+    valuePerSlot: number;
+    coveragePercent: number;
+}
+
+export interface TopCard {
+    name: string;
+    setCode?: string;
+    number?: string;
+    foil: boolean;
+    value: number;
+    probabilityPercent: number;
+    expectedValue: number;
+}
+
+/** Valore atteso di un tipo di busta, con il dettaglio di da dove viene. */
+export interface PackValue {
+    packKey: string;
+    label: string;
+    valueCm: number;
+    netCm: number;
+    coverageCm: number;
+    valueCt?: number;
+    netCt?: number;
+    coverageCt: number;
+    sheets: SheetValue[];
+    topCards: TopCard[];
+}
+
+export interface OpeningValueParams {
+    bulkThreshold?: number | null;
+    bulkPrice?: number | null;
+    bulkSellThroughPercent?: number | null;
+    sellingCostPercent?: number | null;
+}
+
+export interface SetDetailImportResult {
+    sets: number;
+    cards: number;
+    boosterTypes: number;
+    decks: number;
 }
 
 export interface SealedSetAnalysis {
@@ -63,12 +140,17 @@ export interface SealedSetAnalysis {
     catalogImportedAt?: string;
     references: PackReference[];
     products: SealedProductAnalysis[];
+    detailImportedAt?: string;
+    hasBoosterData: boolean;
+    settings: OpeningValueSettings;
+    packValues: PackValue[];
 }
 
 export interface CardTraderSealedRefreshResult {
     products: number;
     productsWithOffers: number;
     apiCalls: number;
+    cardPrices: number;
 }
 
 export interface SealedCatalogImportResult {
@@ -88,8 +170,17 @@ export class PurchasingService {
             .pipe(map(response => response.data ?? []));
     }
 
-    getAnalysis(code: string): Observable<SealedSetAnalysis> {
-        return this.http.get<ApiResponse<SealedSetAnalysis>>(`${this.apiUrl}/sets/${code}/analysis`)
+    getAnalysis(code: string, params: OpeningValueParams = {}): Observable<SealedSetAnalysis> {
+        const query: Record<string, string> = {};
+        for (const [key, value] of Object.entries(params)) {
+            if (value != null) query[key] = String(value);
+        }
+        return this.http.get<ApiResponse<SealedSetAnalysis>>(`${this.apiUrl}/sets/${code}/analysis`, { params: query })
+            .pipe(map(response => response.data!));
+    }
+
+    importDetails(code: string): Observable<SetDetailImportResult> {
+        return this.http.post<ApiResponse<SetDetailImportResult>>(`${this.apiUrl}/sets/${code}/details/import`, {})
             .pipe(map(response => response.data!));
     }
 

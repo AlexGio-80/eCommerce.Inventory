@@ -33,6 +33,15 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<MtgjsonSet> MtgjsonSets { get; set; }
     public DbSet<SealedProduct> SealedProducts { get; set; }
     public DbSet<SealedProductContent> SealedProductContents { get; set; }
+    public DbSet<MtgjsonCard> MtgjsonCards { get; set; }
+    public DbSet<BoosterConfig> BoosterConfigs { get; set; }
+    public DbSet<BoosterConfigSlot> BoosterConfigSlots { get; set; }
+    public DbSet<BoosterSheet> BoosterSheets { get; set; }
+    public DbSet<BoosterSheetCard> BoosterSheetCards { get; set; }
+    public DbSet<MtgjsonDeck> MtgjsonDecks { get; set; }
+    public DbSet<MtgjsonDeckCard> MtgjsonDeckCards { get; set; }
+    public DbSet<CardmarketLatestPrice> CardmarketLatestPrices { get; set; }
+    public DbSet<CardTraderCardPrice> CardTraderCardPrices { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -367,6 +376,64 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(c => c.Name).HasMaxLength(500);
             entity.Property(c => c.SetCode).HasMaxLength(20);
             entity.Property(c => c.PackCode).HasMaxLength(200);
+        });
+
+        modelBuilder.Entity<MtgjsonCard>(entity =>
+        {
+            entity.HasKey(c => c.Uuid);
+            entity.Property(c => c.SetCode).HasMaxLength(20);
+            entity.Property(c => c.Name).HasMaxLength(300);
+            entity.Property(c => c.Number).HasMaxLength(20);
+            entity.Property(c => c.Rarity).HasMaxLength(20);
+            entity.Property(c => c.ScryfallId).HasMaxLength(50);
+            entity.HasIndex(c => c.SetCode).HasDatabaseName("IX_MtgjsonCard_SetCode");
+        });
+
+        modelBuilder.Entity<BoosterConfig>(entity =>
+        {
+            entity.Property(c => c.SetCode).HasMaxLength(20);
+            entity.Property(c => c.BoosterType).HasMaxLength(200);
+            entity.HasIndex(c => new { c.SetCode, c.BoosterType }).HasDatabaseName("IX_BoosterConfig_Set_Type");
+            entity.HasMany(c => c.Slots).WithOne(s => s.BoosterConfig).HasForeignKey(s => s.BoosterConfigId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<BoosterConfigSlot>(entity =>
+        {
+            entity.Property(s => s.SheetName).HasMaxLength(200);
+        });
+
+        modelBuilder.Entity<BoosterSheet>(entity =>
+        {
+            entity.Property(s => s.SetCode).HasMaxLength(20);
+            entity.Property(s => s.BoosterType).HasMaxLength(200);
+            entity.Property(s => s.Name).HasMaxLength(200);
+            entity.HasIndex(s => new { s.SetCode, s.BoosterType }).HasDatabaseName("IX_BoosterSheet_Set_Type");
+            entity.HasMany(s => s.Cards).WithOne(c => c.BoosterSheet).HasForeignKey(c => c.BoosterSheetId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<MtgjsonDeck>(entity =>
+        {
+            entity.Property(d => d.SetCode).HasMaxLength(20);
+            entity.Property(d => d.Name).HasMaxLength(300);
+            entity.HasIndex(d => d.SetCode).HasDatabaseName("IX_MtgjsonDeck_SetCode");
+            entity.HasMany(d => d.Cards).WithOne(c => c.MtgjsonDeck).HasForeignKey(c => c.MtgjsonDeckId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CardmarketLatestPrice>(entity =>
+        {
+            entity.HasKey(p => p.IdProduct);
+            entity.Property(p => p.IdProduct).ValueGeneratedNever();
+            foreach (var property in new[] { "Trend", "Low", "TrendFoil", "LowFoil" })
+                entity.Property<decimal?>(property).HasPrecision(18, 2);
+        });
+
+        modelBuilder.Entity<CardTraderCardPrice>(entity =>
+        {
+            entity.HasKey(p => new { p.BlueprintId, p.IsFoil });
+            entity.Property(p => p.Price).HasPrecision(18, 2);
         });
     }
 }
