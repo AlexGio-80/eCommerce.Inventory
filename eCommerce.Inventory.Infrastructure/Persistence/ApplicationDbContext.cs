@@ -27,6 +27,9 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<PriceChangeLog> PriceChangeLogs { get; set; }
     public DbSet<PricingRunLog> PricingRunLogs { get; set; }
     public DbSet<PriceHistoryEntry> PriceHistoryEntries { get; set; }
+    public DbSet<CardmarketProduct> CardmarketProducts { get; set; }
+    public DbSet<CardmarketPriceSnapshot> CardmarketPriceSnapshots { get; set; }
+    public DbSet<CardmarketImportLog> CardmarketImportLogs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -293,6 +296,38 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             // Per i grafici aggregati sulla carta, quando interessano tutte le sue versioni.
             entity.HasIndex(h => new { h.BlueprintId, h.RecordedAt })
                 .HasDatabaseName("IX_PriceHistory_Blueprint_RecordedAt");
+        });
+
+        modelBuilder.Entity<CardmarketProduct>(entity =>
+        {
+            // La chiave è l'id di Cardmarket: un id nostro non servirebbe a niente e costringerebbe
+            // a una ricerca in più a ogni riga del listino.
+            entity.HasKey(p => p.IdProduct);
+            entity.Property(p => p.IdProduct).ValueGeneratedNever();
+            entity.Property(p => p.Name).HasMaxLength(300);
+            entity.Property(p => p.CategoryName).HasMaxLength(100);
+
+            entity.HasIndex(p => p.IdExpansion).HasDatabaseName("IX_CardmarketProduct_IdExpansion");
+        });
+
+        modelBuilder.Entity<CardmarketPriceSnapshot>(entity =>
+        {
+            // Una riga per prodotto e giorno di listino: reimportare lo stesso listino non può
+            // duplicare la serie.
+            entity.HasKey(s => new { s.IdProduct, s.Date });
+
+            foreach (var property in new[] { "Avg", "Low", "Trend", "Avg1", "Avg7", "Avg30", "AvgFoil", "LowFoil", "TrendFoil" })
+            {
+                entity.Property<decimal?>(property).HasPrecision(18, 2);
+            }
+
+            entity.HasIndex(s => s.Date).HasDatabaseName("IX_CardmarketPriceSnapshot_Date");
+        });
+
+        modelBuilder.Entity<CardmarketImportLog>(entity =>
+        {
+            entity.Property(l => l.Message).HasMaxLength(2000);
+            entity.HasIndex(l => l.StartedAt).HasDatabaseName("IX_CardmarketImportLog_StartedAt");
         });
     }
 }

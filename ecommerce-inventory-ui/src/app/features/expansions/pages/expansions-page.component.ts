@@ -1,8 +1,8 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AgGridAngular } from 'ag-grid-angular';
 import { ColDef, GridApi, GridReadyEvent } from 'ag-grid-community';
-import { ExpansionsService, Expansion, SyncBlueprintsResponse } from '../services/expansions.service';
+import { ExpansionsService, Expansion, SyncBlueprintsResponse, CardmarketImportLog } from '../services/expansions.service';
 import { GridStateService } from '../../../core/services/grid-state.service';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -223,6 +223,14 @@ import { FormsModule } from '@angular/forms';
                 <mat-spinner *ngIf="isSyncingSealedPrices()" diameter="18"></mat-spinner>
                 <mat-icon *ngIf="!isSyncingSealedPrices()">inventory_2</mat-icon>
                 Sync Box Prices
+              </button>
+              <button mat-button (click)="runCardmarketImport()" [disabled]="isImportingCardmarket()"
+                [matTooltip]="cardmarketImportTooltip()">
+                <mat-spinner *ngIf="isImportingCardmarket()" diameter="18"></mat-spinner>
+                <mat-icon *ngIf="!isImportingCardmarket()" [style.color]="cardmarketImportFailed() ? '#d32f2f' : null">
+                  {{ cardmarketImportFailed() ? 'error' : 'price_change' }}
+                </mat-icon>
+                Listino Cardmarket
               </button>
             </div>
             
@@ -580,6 +588,19 @@ export class ExpansionsPageComponent implements OnInit {
   isAnalyzing = signal(false);
   isAnalyzingAll = signal(false);
   isSyncingSealedPrices = signal(false);
+  isImportingCardmarket = signal(false);
+  lastCardmarketImport = signal<CardmarketImportLog | null>(null);
+
+  /** Un giorno senza import è storico perso: il fallimento deve saltare all'occhio. */
+  cardmarketImportFailed = computed(() => this.lastCardmarketImport()?.outcome === 'Failed');
+
+  cardmarketImportTooltip = computed(() => {
+    const log = this.lastCardmarketImport();
+    if (!log) return 'Storico prezzi Cardmarket: nessun import ancora eseguito. Clic per importare ora';
+    const when = new Date(log.startedAt).toLocaleString('it-IT');
+    const outcome = { Succeeded: 'riuscito', Skipped: 'nulla da importare', Failed: 'FALLITO', Running: 'in corso' }[log.outcome];
+    return `Ultimo import ${when}: ${outcome}. ${log.message ?? ''} Clic per importare ora`;
+  });
 
   // Box calculator
   boxPacksPerBox: number | null = null;
@@ -726,6 +747,35 @@ export class ExpansionsPageComponent implements OnInit {
 
   ngOnInit() {
     this.loadExpansions();
+    this.loadLastCardmarketImport();
+  }
+
+  loadLastCardmarketImport() {
+    this.expansionsService.getLastCardmarketImport().subscribe({
+      next: (log) => this.lastCardmarketImport.set(log),
+      error: (error) => console.error('Error loading Cardmarket import status:', error)
+    });
+  }
+
+  runCardmarketImport() {
+    this.isImportingCardmarket.set(true);
+    this.expansionsService.runCardmarketImport().subscribe({
+      next: (log) => {
+        this.isImportingCardmarket.set(false);
+        this.lastCardmarketImport.set(log);
+        const text = log.outcome === 'Succeeded'
+          ? `Listino Cardmarket importato: ${log.sealedSnapshotsWritten} sigillati, ${log.singlesSnapshotsWritten} singole variate`
+          : log.outcome === 'Skipped'
+            ? `Listino Cardmarket: ${log.message}`
+            : `Import listino Cardmarket fallito: ${log.message}`;
+        this.snackBar.open(text, 'Chiudi', { duration: 10000 });
+      },
+      error: (error) => {
+        this.isImportingCardmarket.set(false);
+        this.snackBar.open(`Errore import listino Cardmarket: ${error.error?.message || error.message}`, 'Chiudi', { duration: 10000 });
+        this.loadLastCardmarketImport();
+      }
+    });
   }
 
   onGridReady(params: GridReadyEvent) {

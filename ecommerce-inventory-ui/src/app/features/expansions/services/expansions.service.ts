@@ -5,6 +5,22 @@ import { map } from 'rxjs/operators';
 import { environment } from '../../../../environments/environment';
 import { ApiResponse } from '../../../core/models/api-response';
 
+/** Esito di un import del listino prezzi pubblico di Cardmarket (storico per l'analisi acquisti). */
+export interface CardmarketImportLog {
+    id: number;
+    trigger: string;
+    outcome: 'Running' | 'Succeeded' | 'Skipped' | 'Failed';
+    startedAt: string;
+    completedAt?: string;
+    sourceCreatedAt?: string;
+    sealedProducts: number;
+    sealedSnapshotsWritten: number;
+    singlesTracked: number;
+    singlesSnapshotsWritten: number;
+    newProducts: number;
+    message?: string;
+}
+
 export interface Expansion {
     id: number;
     cardTraderId: number;
@@ -90,5 +106,15 @@ export class ExpansionsService {
 
     syncSealedPrices(): Observable<any> {
         return this.http.post<ApiResponse<any>>(`${this.apiUrl}/sync-sealed-prices`, {});
+    }
+
+    getLastCardmarketImport(): Observable<CardmarketImportLog | null> {
+        return this.http.get<ApiResponse<CardmarketImportLog[]>>(`${environment.apiUrl}/api/cardmarket/import/logs?take=1`)
+            .pipe(map(response => response.data?.[0] ?? null));
+    }
+
+    runCardmarketImport(): Observable<CardmarketImportLog> {
+        return this.http.post<ApiResponse<CardmarketImportLog>>(`${environment.apiUrl}/api/cardmarket/import`, {})
+            .pipe(map(response => response.data!));
     }
 }

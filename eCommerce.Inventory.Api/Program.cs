@@ -230,6 +230,16 @@ builder.Services.AddHostedService<BackupService>();
 // Register Grading Service
 builder.Services.AddHttpClient<IGradingService, XimilarGradingService>();
 
+// Listino prezzi pubblico di Cardmarket: import giornaliero nello storico (CardmarketImport:Enabled)
+builder.Services.AddHttpClient<eCommerce.Inventory.Infrastructure.ExternalServices.Cardmarket.ICardmarketDownloadClient,
+    eCommerce.Inventory.Infrastructure.ExternalServices.Cardmarket.CardmarketDownloadClient>(client =>
+{
+    client.BaseAddress = new Uri("https://downloads.s3.cardmarket.com/productCatalog/");
+    client.Timeout = TimeSpan.FromMinutes(5);
+});
+builder.Services.AddScoped<CardmarketPriceImportService>();
+builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJobs.CardmarketImportWorker>();
+
 // Register Scryfall API Client
 builder.Services.AddHttpClient<IScryfallApiClient, ScryfallApiClient>(client =>
 {

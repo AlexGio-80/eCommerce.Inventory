@@ -9,6 +9,66 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-07] Feature — Import giornaliero del listino Cardmarket (Fase 0 analisi acquisti)
+
+#### Problema
+
+Né Card Trader né Cardmarket danno lo storico dei prezzi: l'andamento di un box dal preordine
+in poi, che serve a decidere quando comprare, esiste solo se lo salviamo noi giorno per giorno.
+Star Trek è in preordine fino al 13/11/2026 e ogni giorno senza import è un punto della serie
+perso per sempre.
+
+#### Soluzione Implementata
+
+- `CardmarketImportWorker` scarica i file pubblici di Cardmarket (listino prezzi e catalogo) all'avvio
+  del servizio e ogni giorno a `CardmarketImport:RunTime` (07:00); attivo solo dove
+  `CardmarketImport:Enabled` è `true` (in produzione sì, nella configurazione base no)
+- `CardmarketPriceImportService` salva **tutti i sigillati ogni giorno** e **le singole solo quando
+  cambiano**, limitate alle espansioni comparse nel catalogo Cardmarket negli ultimi 12 mesi
+  (`CardmarketImport:SinglesTrackingMonths`). Esito di ogni import in `CardmarketImportLogs`
+- Endpoint `POST /api/cardmarket/import`, `GET /api/cardmarket/import/logs`,
+  `GET /api/cardmarket/products/{idProduct}/prices`
+- Pulsante "Listino Cardmarket" nella pagina Espansioni: tooltip con l'esito dell'ultimo import,
+  icona rossa se è fallito, clic per importare subito
+
+#### Note Tecniche
+
+- Migration `20261007100424_AddCardmarketPriceHistory`: tre tabelle nuove, nessuna modifica alle esistenti
+- Nessuna chiamata a Card Trader: non consuma il limite di 20 richieste al minuto
+- Il `createdAt` del listino ha il fuso senza i due punti (`+0200`), che `System.Text.Json` non
+  accetta come `DateTimeOffset`: resta stringa nel DTO e si converte a parte
+- Il giorno della serie è quello del listino nel suo fuso, non quello dell'import; un giorno già
+  presente non viene mai riscritto
+- Singole seguite per data di comparsa dell'espansione nel catalogo CM: le espansioni "Collectors"
+  di Card Trader non hanno `ReleaseDate`
+- Provato su SQL Server con un database a parte (poi cancellato): primo import 9 s, 5.099 sigillati e
+  7.514 singole. **Non provato in Development**: `appsettings.Development.json` punta al database di
+  produzione
+- **Pubblicato e verificato il 2026-10-07**: primo import in produzione riuscito (5.099 sigillati,
+  7.514 singole). Comprende già i circa 890 prodotti Secret Lair del catalogo Cardmarket
+
+### [2026-10-07] Analisi — Progettata la feature "Analisi acquisto prodotti sigillati"
+
+#### Problema
+
+Alle uscite delle espansioni la scelta di cosa comprare (formato, quantità, momento, aprire o tenere
+sigillato) è fatta a mano, con conteggi di contenuto presi da un'IA generica e un confronto per
+"costo a carta" che mette sullo stesso piano carte di Play Booster e di Collector Booster. Il ROI
+Box% della pagina Espansioni (valore medio × numero di carte) non pesa le rarità e conta il bulk
+come se si vendesse tutto al valore medio.
+
+#### Soluzione
+
+Solo progettazione, nessun codice: `Documentation/Features/004-AnalisiAcquistoProdotti.md`, in sei
+fasi. Verificate le fonti dati: listino e catalogo pubblici giornalieri di Cardmarket (contengono
+già i sigillati Star Trek in preordine), abbinamento CT↔CM già presente in `Blueprint.CardMarketIds`
+(anche per i sigillati), contenuto dei prodotti e composizione delle buste da MTGJSON.
+
+#### Note Tecniche
+
+- L'API Cardmarket non accetta nuove richieste: la doppia vendita CT + CM è in backlog, bloccata
+- Per Star Trek MTGJSON ha già il contenuto dei prodotti ma non ancora la composizione delle buste
+
 ### [2026-09-26] Feature — Soglia in euro sotto la quale il guardrail percentuale non scatta
 
 #### Problema

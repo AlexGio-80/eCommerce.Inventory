@@ -6,6 +6,7 @@
 
 ## In Corso
 
+- [ ] **Analisi acquisto prodotti sigillati (progettata il 2026-10-07)** — progetto in `Documentation/Features/004-AnalisiAcquistoProdotti.md`, analisi manuale di partenza dell'utente in `Features/004-ProductBuying.md`. **Fase 0 pubblicata e verificata il 2026-10-07**: import giornaliero del listino Cardmarket (all'avvio + ogni giorno alle 07:00), primo import riuscito con 5.099 sigillati e 7.514 singole. Da vedere nei prossimi giorni che la serie dei prodotti Star Trek cresca di una riga al giorno (registro in `CardmarketImportLogs`). Prossimo passo: Fase 1. Le fasi sono elencate in Da Fare
 - [ ] **Soglia in euro per il guardrail (2026-09-26), pubblicata; campo verificato in interfaccia, effetto da vedere nelle notturne**: nuovo campo "Variazione libera" (default 0,10 €, in produzione impostato a 0,15 €) nella sezione Guardrail; sotto quella cifra i limiti percentuali non scattano. Sblocca 195 carte di bulk ferme al −50% dopo il fix del sovrapprezzo. Da verificare: nelle notturne successive le carte di bulk con esito `BlockedByGuardrail` devono sparire, salvo ribassi oltre 0,10 €
 - [ ] **Rivalutare "N-esima più bassa" contro percentile** dopo una settimana col fix: il passaggio a "N-esima" era stato fatto per recuperare le vendite del bulk, che il fix risolve alla radice. Cambiare una cosa alla volta per poter misurare
 
@@ -82,6 +83,21 @@
 
 ## Da Fare
 
+### Analisi acquisto prodotti sigillati — fasi (dettaglio in `Documentation/Features/004-AnalisiAcquistoProdotti.md`)
+
+Si compra su Cardmarket (solo in inglese), si vende su Card Trader. Fonti: listino e catalogo pubblici
+giornalieri di Cardmarket (l'API CM non accetta nuove richieste), abbinamento CT↔CM già in
+`Blueprint.CardMarketIds`, contenuto dei prodotti e composizione delle buste da MTGJSON.
+
+- [x] **Fase 0 — Import giornaliero del listino Cardmarket** — pubblicata e verificata il 2026-10-07: sigillati tutti i giorni, singole solo a variazione e solo per le espansioni comparse su Cardmarket negli ultimi 12 mesi. Nessuna chiamata a Card Trader
+- [ ] **Fase 1 — Contenuto dei prodotti e convenienza fra formati**: prodotti sigillati e contenuto da MTGJSON, costo per busta equivalente (Play / Collector) su CM (trend, low accanto) e CT
+- [ ] **Fase 2 — Valore atteso dell'apertura e "aprire o tenere sigillato"**: somma delle singole per i prodotti a contenuto fisso, probabilità per slot per le buste; bulk e token al prezzo reale pesato per quanto se ne vende; sostituisce il ROI Box% di oggi
+- [ ] **Fase 3 — Opportunità su espansioni già uscite**: classifica dei prodotti per valore atteso / prezzo d'acquisto, con andamento
+- [ ] **Fase 4 — Avvisi**: regole valutate dopo ogni import, notifica nell'app + email (SMTP, solo in uscita)
+- [ ] **Fase 5 — Resa reale delle aperture e quanti box**: registro acquisti, resa dai Tag `CODICE_TIPO_AAAAMMGG`, fattore di correzione, tetto sul numero di box, report per Tag raggruppato per prefisso
+- [ ] **Secret Lair — capitolo a parte, da discutere quando l'utente vorrà**: comprati dal sito Wizards al drop (circa ogni due settimane), margine di solito molto buono. Lo storico di rivendita su Cardmarket si accumula già con la Fase 0 (~890 prodotti). Dettaglio nel documento della feature
+- [ ] **Da fare subito dall'utente, senza codice**: alle prossime aperture usare il Tag `CODICE_TIPO_AAAAMMGG` (es. `TRK_PB_20261115`) al posto del tag fisso per espansione
+
 ### Sicurezza — i quattro punti del 2026-08-27 sono chiusi
 
 Tutti erano **preesistenti**, non introdotti dal lavoro sull'autopricer. Codice risolto e messo in produzione il 2026-08-29, password di `admin` cambiata e utente `testuser` eliminato lo stesso giorno. Dettaglio nel CHANGELOG.
@@ -119,6 +135,7 @@ mai stato raggiungibile dall'esterno, per due motivi distinti — indagine e fix
 - [ ] **Monitoring Fase 2** — backend di raccolta per trace e metriche (oggi OpenTelemetry usa il Console exporter, quindi niente storico). Da valutare: Prometheus + Grafana in locale, oppure Application Insights
 - [ ] **Installare Redis** per riattivare il caching dei dati statici Card Trader (codice già pronto, oggi `Enabled: false` perché il server non è installato)
 - [ ] CI/CD pipeline (GitHub Actions)
+- [ ] **Vendita su due canali, Card Trader + Cardmarket** — bloccata: l'API Cardmarket non accetta nuove richieste (verificato il 2026-10-07) e l'utente non ha credenziali precedenti. Anche con l'API, la parte delicata è scalare la disponibilità sull'altro canale a ogni vendita: la sincronizzazione offerta dal sito Card Trader ha già prodotto doppie vendite
 
 ---
 
