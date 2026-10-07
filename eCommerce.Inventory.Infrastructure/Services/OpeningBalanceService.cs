@@ -25,31 +25,30 @@ public class OpeningBalanceService
     private const decimal MinCost = 50m;
 
     private readonly ApplicationDbContext _db;
+    private readonly PurchaseCostService _costs;
 
-    public OpeningBalanceService(ApplicationDbContext db)
+    public OpeningBalanceService(ApplicationDbContext db, PurchaseCostService costs)
     {
         _db = db;
+        _costs = costs;
     }
 
     public async Task<List<OpeningBalance>> GetAsync(decimal bulkThreshold, CancellationToken cancellationToken = default)
     {
-        var uploads = await _db.PendingListings.AsNoTracking()
-            .Where(pl => pl.Tag != null && pl.Tag != "")
-            .Select(pl => new UploadRow(pl.Id, pl.Tag!, pl.Quantity, pl.PurchasePrice, pl.CreatedAt, pl.IsUpdate,
-                pl.CardTraderProductId, pl.Blueprint.Expansion.Name, pl.Blueprint.Expansion.ReleaseDate))
-            .ToListAsync(cancellationToken);
-
-        var addedCopies = await AddedCopiesAsync(uploads, cancellationToken);
+        // Copie e costo contano solo le copie davvero aggiunte (vedi PurchaseCostService).
+        var uploads = (await _costs.GetRowsAsync(null, cancellationToken))
+            .Where(u => !string.IsNullOrEmpty(u.Tag))
+            .ToList();
 
         var openings = uploads
-            .GroupBy(u => NormalizeTag(u.Tag))
+            .GroupBy(u => NormalizeTag(u.Tag!))
             .Select(g => new
             {
                 Key = g.Key,
-                Tag = g.First().Tag,
+                Tag = g.First().Tag!,
                 FirstUpload = g.Min(u => u.CreatedAt),
-                Copies = g.Sum(u => addedCopies[u.Id]),
-                Cost = g.Sum(u => u.PurchasePrice * addedCopies[u.Id]),
+                Copies = g.Sum(u => u.AddedCopies),
+                Cost = g.Sum(u => u.Cost),
                 Expansion = g.GroupBy(u => u.ExpansionName).OrderByDescending(e => e.Count()).First().Key,
                 ReleaseDate = g.GroupBy(u => u.ExpansionName).OrderByDescending(e => e.Count()).First().First().ReleaseDate
             })
@@ -124,55 +123,6 @@ public class OpeningBalanceService
             .OrderByDescending(b => b.FirstUpload)
             .ToList();
     }
-
-    /// <summary>
-    /// Copie davvero aggiunte da ogni caricamento. Una modifica fatta dalla maschera (<c>IsUpdate</c>)
-    /// porta la nuova quantità totale dell'inserzione, non le copie aggiunte: contarla per intero
-    /// riconterebbe tutte le copie già presenti, con il loro costo. La quantità precedente si prende
-    /// dallo storico prezzi (che registra anche la quantità) o, prima che esistesse, dal caricamento
-    /// precedente della stessa inserzione. Con vendite avvenute nel frattempo la stima è leggermente
-    /// per difetto; senza nessun dato precedente la modifica si conta per intero.
-    /// </summary>
-    private async Task<Dictionary<int, int>> AddedCopiesAsync(List<UploadRow> uploads, CancellationToken cancellationToken)
-    {
-        var result = uploads.ToDictionary(u => u.Id, u => u.Quantity);
-        var updates = uploads.Where(u => u.IsUpdate && u.CardTraderProductId.HasValue).ToList();
-        if (updates.Count == 0) return result;
-
-        var productIds = updates.Select(u => u.CardTraderProductId!.Value).Distinct().ToList();
-
-        var history = (await _db.PriceHistoryEntries.AsNoTracking()
-                .Where(h => productIds.Contains(h.CardTraderProductId))
-                .Select(h => new { h.CardTraderProductId, h.RecordedAt, h.Quantity })
-                .ToListAsync(cancellationToken))
-            .GroupBy(h => h.CardTraderProductId)
-            .ToDictionary(g => g.Key, g => g.OrderBy(h => h.RecordedAt).ToList());
-
-        var previousUploads = (await _db.PendingListings.AsNoTracking()
-                .Where(pl => pl.CardTraderProductId != null && productIds.Contains(pl.CardTraderProductId.Value))
-                .Select(pl => new { pl.Id, ProductId = pl.CardTraderProductId!.Value, pl.CreatedAt, pl.Quantity })
-                .ToListAsync(cancellationToken))
-            .GroupBy(pl => pl.ProductId)
-            .ToDictionary(g => g.Key, g => g.OrderBy(pl => pl.CreatedAt).ToList());
-
-        foreach (var update in updates)
-        {
-            var productId = update.CardTraderProductId!.Value;
-            int? before = history.TryGetValue(productId, out var points)
-                ? points.LastOrDefault(h => h.RecordedAt < update.CreatedAt)?.Quantity
-                : null;
-            before ??= previousUploads.TryGetValue(productId, out var rows)
-                ? rows.LastOrDefault(r => r.CreatedAt < update.CreatedAt && r.Id != update.Id)?.Quantity
-                : null;
-
-            result[update.Id] = before is { } previous ? Math.Max(0, update.Quantity - previous) : update.Quantity;
-        }
-
-        return result;
-    }
-
-    private record UploadRow(int Id, string Tag, int Quantity, decimal PurchasePrice, DateTime CreatedAt,
-        bool IsUpdate, int? CardTraderProductId, string ExpansionName, DateTime? ReleaseDate);
 
     /// <summary>"#TRK_PB_20261115" e "trk_pb_20261115" sono lo stesso tag.</summary>
     public static string NormalizeTag(string tag) => tag.Trim().Replace("#", "").ToUpperInvariant();

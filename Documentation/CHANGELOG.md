@@ -9,6 +9,41 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-07] Fix — Il report di redditività contava due volte il costo delle modifiche dalla maschera
+
+#### Problema
+
+In una modifica fatta dalla maschera "Nuovo Prodotto" (`PendingListing.IsUpdate`) la quantità è il
+nuovo totale dell'inserzione, non le copie aggiunte. La vista `ExpansionsROI` e il report per Tag
+sommavano `PurchasePrice × Quantity` di tutte le righe, quindi ogni modifica ricontava tutte le copie
+già presenti con il loro costo. Marvel Super Heroes risultava costata 3.674 € (ROI −74%) invece di
+1.587 € (ROI −39%); The Hobbit 2.179 € invece di 1.781 €. Nel report per Tag anche la quantità e il
+valore rimanenti erano moltiplicati: un'inserzione modificata due volte ha tre caricamenti con lo
+stesso id Card Trader, e il join ne contava la giacenza tre volte.
+
+#### Soluzione Implementata
+
+- `PurchaseCostService`: costo per caricamento contando solo le copie davvero aggiunte. Il primo
+  caricamento di un'inserzione conta per intero (anche se è una modifica: inserzione nata direttamente
+  su Card Trader); una modifica successiva conta la differenza con la quantità precedente, dallo storico
+  prezzi o dal caricamento precedente. È la regola già usata dal bilancio delle aperture, ora unica.
+- Pagina Espansioni (elenco e dettaglio), redditività per espansione, per Tag e Tag → espansione usano
+  il servizio; dalla vista `ExpansionsROI` si legge solo il venduto
+- Report per Tag: la giacenza rimanente conta ogni inserzione una volta sola
+
+#### Note Tecniche
+
+- Dalla mappatura EF di `ExpansionROI` sono state tolte `TotaleAcquistato` e `Differenza`, così nessun
+  codice può riprendere il valore sbagliato; la vista nel database non è stata toccata (era stata
+  creata a mano). Migration `AlignExpansionRoiMapping` vuota: allinea solo lo snapshot
+- I confronti per nome di espansione e per tag ignorano le maiuscole come SQL Server: l'espansione
+  "Shadows Over Innistrad" e gli ordini "Shadows over Innistrad" altrimenti non si abbinavano (trovato
+  dalla prova sui dati veri, dove il suo costo risultava zero)
+- Le espansioni con costo ma senza vendite, prima assenti dal report, ora compaiono (7 al 07/10)
+- Provato su una copia ripristinata del backup (poi cancellata): costo totale da 53.275 € a 50.630 €;
+  per tag #MSH_OLD 2.040 €, #HOB_OLD 1.926 €, #ECL_20260205 912 €
+- **Pubblicato e verificato il 2026-10-07**
+
 ### [2026-10-07] Feature — Regole di avviso generiche per gruppi di prodotti
 
 #### Problema

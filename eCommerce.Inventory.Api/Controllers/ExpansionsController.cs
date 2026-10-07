@@ -20,6 +20,7 @@ public class ExpansionsController : ControllerBase
     private readonly CardTraderSyncOrchestrator _syncOrchestrator;
     private readonly ICardTraderApiService _cardTraderApiService;
     private readonly IExpansionAnalyticsService _expansionAnalyticsService;
+    private readonly eCommerce.Inventory.Infrastructure.Services.PurchaseCostService _purchaseCosts;
     private readonly ILogger<ExpansionsController> _logger;
 
     public ExpansionsController(
@@ -27,8 +28,10 @@ public class ExpansionsController : ControllerBase
         CardTraderSyncOrchestrator syncOrchestrator,
         ICardTraderApiService cardTraderApiService,
         IExpansionAnalyticsService expansionAnalyticsService,
+        eCommerce.Inventory.Infrastructure.Services.PurchaseCostService purchaseCosts,
         ILogger<ExpansionsController> logger)
     {
+        _purchaseCosts = purchaseCosts;
         _dbContext = dbContext;
         _syncOrchestrator = syncOrchestrator;
         _cardTraderApiService = cardTraderApiService;
@@ -81,13 +84,9 @@ public class ExpansionsController : ControllerBase
                                   AvgValueRare = e.AvgValueRare,
                                   AvgValueMythic = e.AvgValueMythic,
 
-                                  // Financials from ROI View - roi can be null from LEFT JOIN, properties handle nulls
+                                  // Venduto dalla vista (roi può essere null per il LEFT JOIN); costo, utile e
+                                  // ROI si completano sotto con il costo corretto
                                   TotalSales = roi.TotaleVenduto ?? 0m,
-                                  TotalProfit = roi.Differenza ?? 0m,
-                                  TotalAmountSpent = roi.TotaleAcquistato ?? 0m,
-                                  RoiPercentage = (roi.TotaleAcquistato ?? 0m) > 0
-                                      ? ((roi.Differenza ?? 0m) / (roi.TotaleAcquistato ?? 0m)) * 100
-                                      : 0m,
                                   ReleaseDate = e.ReleaseDate,
                                   IconSvgUri = e.IconSvgUri,
                                   PacksPerBox = e.PacksPerBox,
@@ -99,6 +98,13 @@ public class ExpansionsController : ControllerBase
                               };
 
         var expansions = await expansionsQuery.ToListAsync(cancellationToken);
+
+        // Costo dalle sole copie davvero aggiunte: la vista contava due volte le modifiche dalla maschera.
+        var costs = await _purchaseCosts.CostByExpansionAsync(cancellationToken);
+        foreach (var dto in expansions)
+        {
+            ApplyCost(dto, costs.GetValueOrDefault(dto.Name));
+        }
 
         return Ok(Models.ApiResponse<List<ExpansionDto>>.SuccessResult(expansions));
     }
@@ -145,27 +151,10 @@ public class ExpansionsController : ControllerBase
         {
             var roi = await _dbContext.Set<Domain.Entities.ExpansionROI>()
                 .FirstOrDefaultAsync(r => r.ExpansionName == expansion.Name, cancellationToken);
+            var costs = await _purchaseCosts.CostByExpansionAsync(cancellationToken);
 
-            if (roi != null)
-            {
-                decimal sales = roi.TotaleVenduto ?? 0m;
-                decimal profit = roi.Differenza ?? 0m;
-                decimal spent = roi.TotaleAcquistato ?? 0m;
-
-                dto.TotalSales = sales;
-                dto.TotalProfit = profit;
-                dto.TotalAmountSpent = spent;
-
-                // Calculate ROI %: (Profit / Cost) * 100
-                if (spent > 0)
-                {
-                    dto.RoiPercentage = (profit / spent) * 100m;
-                }
-                else
-                {
-                    dto.RoiPercentage = 0m;
-                }
-            }
+            dto.TotalSales = roi?.TotaleVenduto ?? 0m;
+            ApplyCost(dto, costs.GetValueOrDefault(expansion.Name));
         }
         catch (Exception ex)
         {
@@ -174,6 +163,14 @@ public class ExpansionsController : ControllerBase
         }
 
         return Ok(Models.ApiResponse<ExpansionDto>.SuccessResult(dto));
+    }
+
+    /// <summary>Costo, utile e ROI % dell'espansione a partire dal venduto già valorizzato.</summary>
+    private static void ApplyCost(ExpansionDto dto, decimal cost)
+    {
+        dto.TotalAmountSpent = cost;
+        dto.TotalProfit = (dto.TotalSales ?? 0m) - cost;
+        dto.RoiPercentage = cost > 0 ? dto.TotalProfit / cost * 100m : 0m;
     }
 
     [HttpPost("{id}/sync-blueprints")]

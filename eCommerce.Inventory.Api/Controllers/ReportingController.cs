@@ -16,13 +16,16 @@ namespace eCommerce.Inventory.Api.Controllers;
 public class ReportingController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly eCommerce.Inventory.Infrastructure.Services.PurchaseCostService _purchaseCosts;
     private readonly ILogger<ReportingController> _logger;
 
     public ReportingController(
         ApplicationDbContext context,
-        ILogger<ReportingController> logger)
+        ILogger<ReportingController> logger,
+        eCommerce.Inventory.Infrastructure.Services.PurchaseCostService purchaseCosts)
     {
         _context = context;
+        _purchaseCosts = purchaseCosts;
         _logger = logger;
     }
 
@@ -618,21 +621,30 @@ public class ReportingController : ControllerBase
                 query = query.Where(x => x.ExpansionName.Contains(filter));
             }
 
-            var roiData = await query
-                .OrderByDescending(x => (x.TotaleAcquistato ?? 0) > 0 ? (x.Differenza ?? 0) / (x.TotaleAcquistato ?? 0) : 0)
-                .Take(limit)
-                .ToListAsync();
+            // Dalla vista solo il venduto; il costo conta le sole copie davvero aggiunte (la vista
+            // contava due volte le modifiche fatte dalla maschera). L'ordinamento per ROI si fa quindi
+            // in memoria, sulle poche centinaia di espansioni con vendite.
+            var sales = await query.ToListAsync();
+            var costs = await _purchaseCosts.CostByExpansionAsync();
 
-            var result = roiData.Select(x => new ExpansionProfitabilityDto
-            {
-                ExpansionName = x.ExpansionName,
-                Differenza = x.Differenza ?? 0,
-                TotaleVenduto = x.TotaleVenduto ?? 0,
-                TotaleAcquistato = x.TotaleAcquistato ?? 0,
-                PercentualeDifferenza = (x.TotaleAcquistato ?? 0) > 0
-                    ? ((x.Differenza ?? 0) / (x.TotaleAcquistato ?? 0)) * 100
-                    : 0
-            }).ToList();
+            var result = sales
+                .Select(x =>
+                {
+                    var venduto = x.TotaleVenduto ?? 0;
+                    var acquistato = costs.GetValueOrDefault(x.ExpansionName);
+                    var differenza = venduto - acquistato;
+                    return new ExpansionProfitabilityDto
+                    {
+                        ExpansionName = x.ExpansionName,
+                        Differenza = differenza,
+                        TotaleVenduto = venduto,
+                        TotaleAcquistato = acquistato,
+                        PercentualeDifferenza = acquistato > 0 ? differenza / acquistato * 100 : 0
+                    };
+                })
+                .OrderByDescending(x => x.PercentualeDifferenza)
+                .Take(limit)
+                .ToList();
 
             return Ok(ApiResponse<List<ExpansionProfitabilityDto>>.SuccessResult(result));
         }
@@ -720,21 +732,20 @@ public class ReportingController : ControllerBase
 
             var tags = vendutoPerTag.Select(x => x.Tag).ToList();
 
-            // TotaleAcquistato = totale investimento: SUM(Quantity * PurchasePrice) da PendingListings per tag
-            // Equivalente SQL: SELECT Tag, SUM(Quantity * PurchasePrice) FROM PendingListings WHERE Tag IN (...) GROUP BY Tag
-            var acquistatoLookup = await _context.PendingListings
-                .AsNoTracking()
-                .Where(pl => pl.Tag != null && tags.Contains(pl.Tag))
-                .GroupBy(pl => pl.Tag!)
-                .Select(g => new { Tag = g.Key, TotaleAcquistato = g.Sum(pl => pl.Quantity * pl.PurchasePrice) })
-                .ToDictionaryAsync(x => x.Tag, x => x.TotaleAcquistato);
+            // TotaleAcquistato = totale investimento per tag, contando delle modifiche fatte dalla maschera
+            // solo le copie aggiunte: la loro quantità è il nuovo totale dell'inserzione.
+            var acquistatoLookup = await _purchaseCosts.CostByTagAsync();
 
             // Rimanente in inventario per tag: PendingListings è la source of truth del Tag;
             // InventoryItem.Tag spesso è NULL perché viene popolato solo al momento della sync prodotti.
             // Join via CardTraderProductId garantisce il collegamento corretto.
+            // Una coppia (tag, inserzione) una volta sola: un'inserzione modificata ha più caricamenti
+            // con lo stesso CardTraderProductId, e il join diretto ne contava la giacenza più volte.
             var rimanentePerTag = await _context.PendingListings
                 .AsNoTracking()
                 .Where(pl => pl.Tag != null && tags.Contains(pl.Tag!) && pl.CardTraderProductId != null)
+                .Select(pl => new { pl.Tag, pl.CardTraderProductId })
+                .Distinct()
                 .Join(
                     _context.InventoryItems.AsNoTracking().Where(ii => ii.CardTraderProductId != null),
                     pl => pl.CardTraderProductId,
@@ -814,18 +825,10 @@ public class ReportingController : ControllerBase
             // TotaleAcquistato per espansione: SUM(Quantity * PurchasePrice) da PendingListings JOIN Blueprints JOIN Expansions
             // Usa join espliciti (non navigation properties) per includere tutti i record con Tag valido,
             // anche se Blueprint/Expansion hanno dati incompleti. Coerente con la query 'rimanentePerExpansion'.
-            var acquistatoPerExpansion = await (
-                from pl in _context.PendingListings.AsNoTracking()
-                join bp in _context.Blueprints.AsNoTracking() on pl.BlueprintId equals bp.Id
-                join ex in _context.Expansions.AsNoTracking() on bp.ExpansionId equals ex.Id
-                where pl.Tag == tag
-                group new { ex.Name, pl.Quantity, pl.PurchasePrice } by ex.Name into g
-                select new
-                {
-                    ExpansionName = g.Key,
-                    TotaleAcquistato = g.Sum(x => x.Quantity * x.PurchasePrice)
-                }
-            ).ToDictionaryAsync(x => x.ExpansionName, x => x.TotaleAcquistato);
+            // Contando delle modifiche fatte dalla maschera solo le copie aggiunte (vedi PurchaseCostService).
+            var acquistatoPerExpansion = (await _purchaseCosts.GetRowsAsync(tag))
+                .GroupBy(r => r.ExpansionName, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.Sum(r => r.Cost), StringComparer.OrdinalIgnoreCase);
 
             // Rimanente per espansione: PendingListings → InventoryItems via CardTraderProductId,
             // poi join Blueprints → Expansions per il nome dell'espansione.

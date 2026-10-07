@@ -249,6 +249,7 @@ builder.Services.AddScoped<SealedProductAnalysisService>();
 builder.Services.AddScoped<MtgjsonSetDetailImportService>();
 builder.Services.AddScoped<BulkSellThroughService>();
 builder.Services.AddScoped<PriceRealizationService>();
+builder.Services.AddScoped<PurchaseCostService>();
 builder.Services.AddScoped<OpeningBalanceService>();
 builder.Services.AddScoped<ProductPurchaseService>();
 builder.Services.AddScoped<SealedOpportunityService>();

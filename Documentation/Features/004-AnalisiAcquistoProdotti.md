@@ -345,7 +345,8 @@ premere "Email di prova" nella scheda Avvisi.
   pending.Quantity`), non le copie aggiunte. Per Marvel 458 modifiche portano 7.576 copie e 2.576 €
   di costo, ma le copie davvero aggiunte sono 1.228 (417 €). Il bilancio della Fase 5 conta solo le
   copie aggiunte; **il report di redditività esistente (vista `ExpansionsROI`) ha lo stesso difetto**
-  e sovrastima i costi (Marvel 3.674 € invece di circa 2.040 €), vedi ROADMAP.
+  e sovrastima i costi (Marvel 3.674 € invece di circa 2.040 €). **Corretto il 2026-10-07**: il costo viene da
+  `PurchaseCostService`, unico per report e bilancio aperture (vedi CHANGELOG).
 
 **Decisioni prese con l'utente (2026-10-07):**
 - Il fattore "prezzo realizzato" si applica **in automatico** al valore atteso su prezzi Cardmarket

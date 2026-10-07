@@ -101,7 +101,7 @@ public class OpeningCalibrationTests
         _db.InventoryItems.Add(new InventoryItem { BlueprintId = 1, Quantity = 20, ListingPrice = 0.05m, Tag = "#ECL_20260205", Condition = "NM", Language = "English", Location = "" });
         await _db.SaveChangesAsync();
 
-        var balance = (await new OpeningBalanceService(_db).GetAsync(0.25m)).Single();
+        var balance = (await new OpeningBalanceService(_db, new PurchaseCostService(_db)).GetAsync(0.25m)).Single();
 
         balance.Copies.Should().Be(40);
         balance.Cost.Should().Be(80m);
@@ -130,7 +130,7 @@ public class OpeningCalibrationTests
         _db.PriceHistoryEntries.Add(new PriceHistoryEntry { BlueprintId = 1, CardTraderProductId = 555, Quantity = 120, Price = 0.05m, RecordedAt = opened.AddDays(39) });
         await _db.SaveChangesAsync();
 
-        var balance = (await new OpeningBalanceService(_db).GetAsync(0.25m)).Single();
+        var balance = (await new OpeningBalanceService(_db, new PurchaseCostService(_db)).GetAsync(0.25m)).Single();
 
         balance.Copies.Should().Be(160, "100 iniziali + 30 + 30, non 100 + 130 + 150");
         balance.Cost.Should().Be(160m);
