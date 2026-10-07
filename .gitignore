@@ -381,3 +381,5 @@ secrets.json
 eCommerce.Inventory/
 # Documento di lavoro dell'utente con i suoi acquisti (prezzi, venditori): resta solo in locale, il repository è pubblico
 Features/004-ProductBuying.md
+# Rapporti della revisione settimanale degli avvisi: contengono acquisti, prezzi e venditori dell'utente
+Revisioni-avvisi/

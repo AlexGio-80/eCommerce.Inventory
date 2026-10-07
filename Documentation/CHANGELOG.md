@@ -9,6 +9,66 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-07] Feature — Salvataggio automatico delle colonne in tutte le griglie
+
+#### Problema
+
+Le griglie della pagina Acquisti e della pagina Prezzi non ricordavano niente: spostamenti, larghezze e
+ordinamento si perdevano a ogni ricarica. Espansioni e Giochi salvavano ordine e ordinamento ma non la
+larghezza, con un messaggio a ogni spostamento; Inventario e Ordini perdevano le larghezze salvate
+perché all'apertura le colonne venivano sempre adattate alla finestra.
+
+#### Soluzione Implementata
+
+- Direttiva `appGridState` (`shared/directives/grid-state.directive.ts`): su `<ag-grid-angular
+  appGridState="id">` salva ordine, larghezza, visibilità, blocco e ordinamento a ogni modifica e li
+  ripristina all'apertura (localStorage, stessa chiave di `GridStateService`)
+- Applicata alle griglie di Acquisti (6), Prezzi (3), Espansioni e Giochi; queste ultime due tengono il
+  loro menu "Save Configuration" / "Reset to Defaults" e la configurazione già salvata
+- Inventario, Ordini e Articoli da preparare restano a **salvataggio manuale** (scelta dell'utente);
+  Inventario e Ordini adattano le colonne alla finestra solo se non c'è una configurazione salvata
+- I report avevano già un salvataggio automatico equivalente: invariati
+
+#### Note Tecniche
+
+- Si salvano solo le modifiche fatte dall'utente (sorgenti `uiColumnMoved`, `uiColumnResized`,
+  `uiColumnSorted`, menu): adattamento alla finestra, `applyColumnState` e chiamate API non
+  sovrascrivono la configurazione. Gli spostamenti e i ridimensionamenti si salvano a fine gesto
+  (`finished`)
+- Il salvataggio conserva filtri e ricerca eventualmente salvati dalla pagina
+- **Pubblicato e verificato il 2026-10-07**
+
+### [2026-10-07] Feature — Filtro "Resa massima %" nella classifica delle opportunità
+
+#### Problema
+
+In cima alla classifica comparivano rese assurde (da +10.000% fino a +42 milioni %): prodotti vecchi
+come Alpha e Unlimited Starter Deck o i Salvat 2011 hanno su Cardmarket un prezzo di riempimento di
+0,02 €, che non corrisponde a nessuna offerta reale.
+
+#### Soluzione Implementata
+
+- Nuovo filtro "Resa massima %" nella scheda Opportunità, predefinito 300 (vuoto = nessun limite); il
+  piano d'acquisto parte dall'elenco già filtrato
+- Le tre regole di avviso predefinite riguardano solo i box: non scattavano su questi prodotti
+
+#### Note Tecniche
+
+- Solo interfaccia: la classifica salvata resta completa
+- **Pubblicato e verificato il 2026-10-07**
+
+### [2026-10-07] Operativo — Email degli avvisi attiva e revisione settimanale delle regole
+
+- Email degli avvisi configurata dall'utente in `appsettings.Production.json` (Gmail, password per le
+  app): "Email di prova" arrivata
+- Attività programmata di Claude (app desktop, ogni lunedì alle 08:00, dopo l'import delle 07:00): in
+  sola lettura sul database controlla salute dei dati, avvisi della settimana, classifica e acquisti, e
+  scrive un rapporto con regole da rivedere e nuove regole proposte in `Revisioni-avvisi/AAAA-MM-GG.md`
+  (escluso da git: contiene acquisti e prezzi). **Le regole le crea l'utente**, o Claude dopo il suo ok
+- Caso annotato, nessuna modifica: il registro acquisti usa i nomi MTGJSON ("Foundations Commander
+  Decks Set of 5" per "Commander: Foundations: Deck Set" di Cardmarket) e mostra solo i prodotti
+  dell'uscita aperta; i mazzi Commander stanno nell'uscita principale
+
 ### [2026-10-07] Feature — Piano d'acquisto su Card Trader raggruppato per venditore
 
 #### Problema

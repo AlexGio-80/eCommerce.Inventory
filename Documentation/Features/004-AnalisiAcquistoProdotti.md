@@ -263,7 +263,8 @@ per tipo di prodotto ed età dell'espansione, con l'andamento del prezzo dalla F
   che serve per "quando comprare". L'analisi in serie carica catalogo e parametri una volta sola
   (`AnalyzeManyAsync`).
 - Scheda **"Opportunità"** nella pagina Acquisti: filtri per decisione (predefinito: solo "Apri"), tipo
-  di prodotto, resa minima e copertura minima (predefinita 90%), clic su una riga per l'analisi completa
+  di prodotto, resa minima, resa massima (predefinita 300%: oltre sono quasi sempre prezzi Cardmarket
+  di riempimento a 0,02 € su prodotti vecchi non più in vendita) e copertura minima (predefinita 90%), clic su una riga per l'analisi completa
   dell'uscita, pulsante per ricalcolare subito.
 - **Provato su SQL Server** su una copia ripristinata del backup (poi cancellata): lotto di 20 uscite in
   33 s con 200 MB di memoria (23.775 carte, 60.014 carte nei fogli, 410 mazzi), classifica in 4 s
@@ -341,7 +342,12 @@ venditore più prodotti convenienti per risparmiare sulla spedizione.
 - Spedizione esclusa dai conti: Card Trader la calcola al carrello.
 - **Pubblicato e verificato il 2026-10-07.**
 
-**Configurare l'email (da fare dall'utente):** in `appsettings.Production.json`, sezione `Email` (già
+**Evoluzione delle regole:** le tre regole predefinite sono un punto di partenza. Ogni lunedì alle
+08:00 un'attività programmata di Claude (app desktop) legge in sola lettura avvisi, classifica e
+acquisti e scrive in `Revisioni-avvisi/` (locale, escluso da git) un rapporto con le regole da rivedere
+e quelle nuove proposte; si aggiungono solo dopo l'ok dell'utente.
+
+**Email configurata e verificata il 2026-10-07.** Per riconfigurarla: in `appsettings.Production.json`, sezione `Email` (già
 presente, vuota e disattivata): `UserName` e `From` = indirizzo Gmail, `Password` = una **password
 per le app** creata su myaccount.google.com/apppasswords (richiede la verifica in due passaggi; non è
 la password dell'account), `To` = dove ricevere gli avvisi, `Enabled` = true. Poi pubblicare e
