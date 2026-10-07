@@ -21,6 +21,7 @@ public class PurchasingController : ControllerBase
     private readonly ProductPurchaseService _purchases;
     private readonly SealedOpportunityService _opportunities;
     private readonly AlertService _alerts;
+    private readonly PurchasePlanService _plans;
     private readonly IConfiguration _configuration;
     private readonly ILogger<PurchasingController> _logger;
 
@@ -32,9 +33,11 @@ public class PurchasingController : ControllerBase
         ProductPurchaseService purchases,
         SealedOpportunityService opportunities,
         AlertService alerts,
+        PurchasePlanService plans,
         IConfiguration configuration,
         ILogger<PurchasingController> logger)
     {
+        _plans = plans;
         _alerts = alerts;
         _opportunities = opportunities;
         _openingBalance = openingBalance;
@@ -129,6 +132,26 @@ public class PurchasingController : ControllerBase
         catch (InvalidOperationException ex)
         {
             return Conflict(ApiResponse<object>.ErrorResult(ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// Piano d'acquisto su Card Trader per i prodotti indicati (di solito quelli filtrati nella
+    /// classifica delle opportunità): offerte raggruppate per venditore e carrello Card Trader Zero.
+    /// Una chiamata a Card Trader per prodotto, quindi qualche decina di secondi.
+    /// </summary>
+    [HttpPost("purchase-plan")]
+    public async Task<IActionResult> BuildPurchasePlan([FromBody] List<int> sealedProductIds, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogInformation("Piano d'acquisto Card Trader richiesto per {Count} prodotti", sealedProductIds.Count);
+            var plan = await _plans.BuildAsync(sealedProductIds, cancellationToken);
+            return Ok(ApiResponse<PurchasePlan>.SuccessResult(plan));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ApiResponse<object>.ErrorResult(ex.Message));
         }
     }
 

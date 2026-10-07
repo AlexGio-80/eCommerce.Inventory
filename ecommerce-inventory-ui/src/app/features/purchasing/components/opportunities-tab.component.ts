@@ -11,7 +11,8 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { Opportunity, OpportunityList, PurchasingService } from '../services/purchasing.service';
+import { Opportunity, OpportunityList, PurchasePlan, PurchasingService } from '../services/purchasing.service';
+import { PurchasePlanPanelComponent } from './purchase-plan-panel.component';
 
 /**
  * Classifica delle opportunità sui sigillati di tutte le uscite (Fase 3): valore atteso dell'apertura
@@ -21,7 +22,7 @@ import { Opportunity, OpportunityList, PurchasingService } from '../services/pur
   selector: 'app-opportunities-tab',
   standalone: true,
   imports: [CommonModule, FormsModule, AgGridAngular, MatButtonModule, MatIconModule, MatFormFieldModule,
-    MatInputModule, MatSelectModule, MatTooltipModule, MatProgressSpinnerModule, MatSnackBarModule],
+    MatInputModule, MatSelectModule, MatTooltipModule, MatProgressSpinnerModule, MatSnackBarModule, PurchasePlanPanelComponent],
   template: `
     <div class="tab-container">
       <div class="toolbar">
@@ -52,6 +53,11 @@ import { Opportunity, OpportunityList, PurchasingService } from '../services/pur
           calcolata il {{ (l.computedAt | date:'dd/MM/yyyy HH:mm') || '—' }} su {{ setCount() }} uscite
         </span>
         <span class="spacer"></span>
+        <button mat-raised-button color="primary" (click)="buildPlan()" [disabled]="isPlanning() || visible().length === 0"
+          [matTooltip]="'Cerca su Card Trader le offerte dei ' + visible().length + ' prodotti filtrati e le raggruppa per venditore (al massimo 40; circa 3 secondi a prodotto)'">
+          <mat-spinner *ngIf="isPlanning()" diameter="18"></mat-spinner>
+          <mat-icon *ngIf="!isPlanning()">shopping_cart</mat-icon> Piano d'acquisto ({{ visible().length }})
+        </button>
         <button mat-stroked-button (click)="compute()" [disabled]="isComputing()"
           matTooltip="Ricalcola adesso la classifica di oggi (gira comunque da sola ogni mattina)">
           <mat-spinner *ngIf="isComputing()" diameter="18"></mat-spinner>
@@ -63,6 +69,7 @@ import { Opportunity, OpportunityList, PurchasingService } from '../services/pur
         Per mazzi e prodotti a contenuto fisso il valore atteso presuppone di vendere tutte le carte, comprese
         quelle fra 0,25 e 1 € che si vendono lentamente: la resa reale arriva più tardi. Clic su una riga per l'analisi completa dell'uscita.
       </div>
+      <app-purchase-plan-panel *ngIf="plan() as p" [plan]="p" (close)="plan.set(null)"></app-purchase-plan-panel>
       <div class="grid-wrapper">
         <div class="loading" *ngIf="isLoading()"><mat-spinner diameter="32"></mat-spinner></div>
         <ag-grid-angular class="ag-theme-material" [rowData]="visible()" [columnDefs]="columnDefs"
@@ -98,6 +105,8 @@ export class OpportunitiesTabComponent implements OnInit {
   minCoverage = signal<number | null>(90);
   isLoading = signal(false);
   isComputing = signal(false);
+  isPlanning = signal(false);
+  plan = signal<PurchasePlan | null>(null);
 
   categories = computed(() =>
     [...new Set((this.list()?.items ?? []).map(i => i.category).filter((c): c is string => !!c))].sort());
@@ -160,6 +169,23 @@ export class OpportunitiesTabComponent implements OnInit {
       error: err => {
         this.isLoading.set(false);
         this.snackBar.open(`Errore nella classifica: ${err.error?.message || err.message}`, 'Chiudi', { duration: 8000 });
+      }
+    });
+  }
+
+  /** Piano d'acquisto su Card Trader per i prodotti filtrati in questo momento. */
+  buildPlan() {
+    const ids = this.visible().map(i => i.sealedProductId);
+    if (ids.length > 40) {
+      this.snackBar.open(`Sono ${ids.length} prodotti: restringi i filtri (al massimo 40, una chiamata a Card Trader ciascuno)`, 'Chiudi', { duration: 6000 });
+      return;
+    }
+    this.isPlanning.set(true);
+    this.purchasing.buildPurchasePlan(ids).subscribe({
+      next: plan => { this.isPlanning.set(false); this.plan.set(plan); },
+      error: err => {
+        this.isPlanning.set(false);
+        this.snackBar.open(`Errore nel piano d'acquisto: ${err.error?.message || err.message}`, 'Chiudi', { duration: 8000 });
       }
     });
   }

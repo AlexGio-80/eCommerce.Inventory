@@ -182,6 +182,53 @@ export interface OpportunityList {
     items: Opportunity[];
 }
 
+export interface PlanOffer {
+    productId: number;
+    productName: string;
+    setCode: string;
+    sellerId: number;
+    sellerName: string;
+    sellerCountry?: string;
+    ctZero: boolean;
+    price: number;
+    available: number;
+    openValueNet: number;
+    roiPercent: number;
+}
+
+export interface PlanProduct {
+    productId: number;
+    name: string;
+    setCode?: string;
+    openValueNet?: number;
+    cmTrend?: number;
+    offerCount: number;
+    cheapestPrice?: number;
+    cheapestSeller?: string;
+    cardTraderBlueprintId?: number;
+    note?: string;
+}
+
+export interface PlanSeller {
+    sellerId: number;
+    sellerName: string;
+    country?: string;
+    ctZero: boolean;
+    productCount: number;
+    total: number;
+    openValueNet: number;
+    margin: number;
+    items: PlanOffer[];
+}
+
+/** Piano d'acquisto su Card Trader: venditori con più prodotti convenienti e carrello CT Zero. */
+export interface PurchasePlan {
+    computedAt: string;
+    products: PlanProduct[];
+    sellers: PlanSeller[];
+    ctZero: { productCount: number; total: number; openValueNet: number; margin: number; items: PlanOffer[] };
+}
+
 export type AlertRuleType = 'PriceBelow' | 'PriceDrop' | 'OpeningOpportunity' | 'PriceAtLow';
 
 export interface AlertRuleInput {
@@ -333,6 +380,10 @@ export class PurchasingService {
 
     computeOpportunities(): Observable<unknown> {
         return this.http.post<ApiResponse<unknown>>(`${this.apiUrl}/opportunities/compute`, {});
+    }
+
+    buildPurchasePlan(sealedProductIds: number[]): Observable<PurchasePlan> {
+        return this.http.post<ApiResponse<PurchasePlan>>(`${this.apiUrl}/purchase-plan`, sealedProductIds).pipe(map(r => r.data!));
     }
 
     getAlertRules(): Observable<AlertRule[]> {
