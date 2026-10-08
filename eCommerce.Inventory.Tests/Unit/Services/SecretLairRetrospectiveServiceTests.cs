@@ -159,6 +159,22 @@ public class SecretLairRetrospectiveServiceTests : IDisposable
         drop.GrossRevenue.Should().Be(15m);
     }
 
+    [Theory]
+    [InlineData("Secret Lair Drop Goblin and Squabblin Foil", "Goblin & Squabblin' Foil Edition")]
+    [InlineData("Secret Lair Drop Secret Lair x Marvel Earth's Mightiest Pets", "Secret Lair x Marvel: Earth's Mightiest Pets")]
+    [InlineData("Secret Lair Drop Masters of the Universe By the Power of Grayskull", "Secret Lair x Masters of the Universe™: By the Power of Grayskull!")]
+    public void Il_nome_MTGJSON_e_quello_del_negozio_si_abbinano(string mtgjson, string wizards)
+    {
+        SecretLairRetrospectiveService.NormalizeDropName(mtgjson).Should().Be(SecretLairRetrospectiveService.NormalizeDropName(wizards));
+    }
+
+    [Fact]
+    public void La_versione_foil_del_negozio_non_si_abbina_al_drop_normale()
+    {
+        SecretLairRetrospectiveService.NormalizeDropName("Secret Lair Drop Goblin and Squabblin")
+            .Should().NotBe(SecretLairRetrospectiveService.NormalizeDropName("Goblin & Squabblin' Foil Edition"));
+    }
+
     [Fact]
     public async Task La_versione_foil_non_si_confonde_con_quella_normale()
     {

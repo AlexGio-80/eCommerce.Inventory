@@ -85,6 +85,24 @@ public class AlertService
         }
     }
 
+    /// <summary>
+    /// Avviso che non nasce da una regola (es. un drop nuovo nel negozio Secret Lair): campanella e,
+    /// se richiesta, email.
+    /// </summary>
+    public async Task NotifyAsync(string title, string message, bool sendEmail, CancellationToken cancellationToken = default)
+    {
+        var notification = new AlertNotification
+        {
+            Title = Truncate(title, 300),
+            Message = Truncate(message, 2000),
+            EmailRequested = sendEmail
+        };
+        _db.AlertNotifications.Add(notification);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        if (sendEmail) await SendDigestAsync(new List<AlertNotification> { notification }, cancellationToken);
+    }
+
     private static AlertNotification BuildNotification(AlertRule rule, List<Match> fresh)
     {
         var ordered = fresh.OrderByDescending(m => m.SortKey).ToList();

@@ -9,6 +9,41 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-08] Feature — Secret Lair, Fase 2: monitoraggio del negozio Wizards
+
+#### Problema
+
+I drop Secret Lair si comprano dal negozio Wizards nella finestra del drop: per non perderli serviva
+guardare il sito a mano, e i prodotti esauriti o tolti sparivano senza lasciare traccia.
+
+#### Soluzione Implementata
+
+- Lettura del negozio alle 8, 14 e 20 (`SecretLairMonitorWorker`, `SecretLair:Monitor:*`, attivo solo in
+  produzione); all'avvio solo se l'ultima lettura riuscita ha più di 4 ore
+- Per ogni prodotto: superdrop, titolo, foil, prezzo, stato (disponibile, preordine, in arrivo, esaurito,
+  tolto dal negozio), scorte, limite per cliente, date di vendita e di uscita, carte contenute (nome vero e
+  nome stampato), date di comparsa, esaurimento e rimozione. Registro di ogni lettura con l'esito
+- **Avviso per ogni superdrop nuovo**, nella campanella e via email, con prezzi, versioni e carte; dalla
+  campanella si apre la scheda Secret Lair. La prima lettura registra il catalogo senza avvisi
+- Scheda Secret Lair: selettore "Drop comprati" / "Negozio Wizards"; vista del negozio con filtro per stato,
+  pulsante "Leggi ora" ed esito delle letture; link al negozio anche nella retrospettiva, per i drop il cui
+  nome corrisponde a un prodotto visto dal monitoraggio
+- Endpoint `GET /api/purchasing/secret-lair/shop` e `POST /api/purchasing/secret-lair/shop/refresh`
+- Migration `AddSecretLairShop` (tabelle `SecretLairShopProducts`, `SecretLairShopCards`, `SecretLairShopRuns`);
+  dipendenza nuova **AngleSharp** per leggere l'HTML delle pagine prodotto
+
+#### Note Tecniche
+
+- **Il catalogo non è nell'HTML**: la pagina lo disegna nel browser leggendolo dall'interfaccia di ricerca di
+  Scalefast (`storesearch.eu.scalefast.com/StoreSearch`, 50 prodotti a richiesta, ~6 richieste per giro).
+  Non è documentata e può cambiare senza preavviso (scelta dell'utente, 08/10): se cambia la lettura risulta
+  "fallita" nel registro, con il motivo, invece di sembrare un negozio senza novità
+- Le carte sono invece nell'HTML della pagina prodotto (`#collapseLong li`): si leggono solo per i prodotti che
+  non le hanno, al più 30 per giro con 2 s di pausa, prima quelli in vendita. Al primo avvio il catalogo
+  (258 prodotti l'08/10) si completa in circa tre giorni
+- Le scorte del negozio arrivano al massimo a 10: "10" vuol dire "10 o più"
+- Il negozio raggruppa i drop per superdrop (categoria): gli avvisi sono uno per superdrop
+
 ### [2026-10-08] Feature — Secret Lair, Fase 1: retrospettiva per drop
 
 #### Problema

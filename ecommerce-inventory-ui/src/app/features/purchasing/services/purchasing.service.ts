@@ -154,6 +154,8 @@ export interface SecretLairDropRow {
     cardmarketId?: number;
     cardmarketName?: string;
     cardTraderBlueprintId?: number;
+    /** Pagina del drop nel negozio Wizards, se il monitoraggio l'ha visto. */
+    wizardsUrl?: string;
     distinctCards: number;
     cardsListed: number;
     copies: number;
@@ -192,6 +194,51 @@ export interface SecretLairRetrospective {
     looseGrossRevenue: number;
     matchedRevenuePercent?: number;
     standardPrices: Record<string, number>;
+}
+
+export interface SecretLairShopCard {
+    quantity: number;
+    cardName: string;
+    displayName?: string;
+}
+
+/** Prodotto visto nel negozio Secret Lair di Wizards. */
+export interface SecretLairShopProduct {
+    wizardsProductId: string;
+    title: string;
+    dropName?: string;
+    isFoil: boolean;
+    price: number;
+    stock?: number;
+    isPreorder: boolean;
+    limitPerCustomer?: number;
+    releaseDate?: string;
+    saleStart?: string;
+    saleEnd?: string;
+    firstSeenAt: string;
+    lastSeenAt: string;
+    soldOutAt?: string;
+    removedAt?: string;
+    status: 'Disponibile' | 'Preordine' | 'In arrivo' | 'Esaurito' | 'Tolto dal negozio';
+    contentsKnown: boolean;
+    cards: SecretLairShopCard[];
+    url: string;
+}
+
+export interface SecretLairShopRun {
+    startedAt: string;
+    completedAt?: string;
+    outcome: 'Running' | 'Succeeded' | 'Failed';
+    products: number;
+    newProducts: number;
+    contentsFetched: number;
+    message?: string;
+}
+
+export interface SecretLairShopView {
+    products: SecretLairShopProduct[];
+    runs: SecretLairShopRun[];
+    monitorEnabled: boolean;
 }
 
 /** Bilancio reale di un'apertura, ricostruito dal tag delle inserzioni. */
@@ -436,6 +483,17 @@ export class PurchasingService {
 
     getSecretLairDrops(): Observable<SecretLairRetrospective> {
         return this.http.get<ApiResponse<SecretLairRetrospective>>(`${this.apiUrl}/secret-lair/drops`)
+            .pipe(map(response => response.data!));
+    }
+
+    getSecretLairShop(): Observable<SecretLairShopView> {
+        return this.http.get<ApiResponse<SecretLairShopView>>(`${this.apiUrl}/secret-lair/shop`)
+            .pipe(map(response => response.data!));
+    }
+
+    refreshSecretLairShop(): Observable<{ products: number; newProducts: number; contentsFetched: number; message: string }> {
+        return this.http.post<ApiResponse<{ products: number; newProducts: number; contentsFetched: number; message: string }>>(
+            `${this.apiUrl}/secret-lair/shop/refresh`, {})
             .pipe(map(response => response.data!));
     }
 

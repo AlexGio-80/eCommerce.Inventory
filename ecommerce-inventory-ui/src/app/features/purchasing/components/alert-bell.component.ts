@@ -71,7 +71,10 @@ export class AlertBellComponent implements OnInit, OnDestroy {
 
   open(notification: AlertNotification) {
     if (!notification.readAt) this.purchasing.markNotificationsRead(notification.id).subscribe({ next: () => this.load() });
-    this.router.navigate(['/layout/purchasing'], { queryParams: notification.setCode ? { set: notification.setCode } : {} });
+    // Gli avvisi dei drop Secret Lair non riguardano un'uscita: si apre la scheda Secret Lair.
+    const queryParams = notification.setCode ? { set: notification.setCode }
+      : notification.title.startsWith('Nuovo drop Secret Lair') ? { tab: 'secretlair' } : {};
+    this.router.navigate(['/layout/purchasing'], { queryParams });
   }
 
   openAll() {

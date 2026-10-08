@@ -459,8 +459,11 @@ conviene", più che "quando comprare".
    registrato: le carte dei drop incompleti sono singole arrivate con lotti o scambi (utente, 08/10) e
    stanno in un riepilogo a parte. Copie = minimo di copie fra le carte del drop. Primo risultato: 86 drop,
    resa con le copie in vendita +91% (normali +102%, foil +34%)
-2. **Monitoraggio del sito Wizards** — due-tre letture al giorno della pagina "Shop all" e delle sole
-   pagine prodotto nuove o cambiate. Si registrano prodotto, prezzo, foil, stato, carte, data di
+2. **Monitoraggio del sito Wizards** (pubblicato e verificato il 2026-10-08) — letture alle 8, 14 e 20.
+   Il catalogo non è nell'HTML della pagina "Shop all" (lo disegna il browser): si legge dall'interfaccia
+   `StoreSearch` di Scalefast che usa la pagina stessa, non documentata (scelta dell'utente); dà anche scorte
+   (fino a 10), date di vendita e superdrop. Le carte si leggono dall'HTML delle sole pagine prodotto che
+   non le hanno ancora (al più 30 per giro). Si registrano prodotto, prezzo, foil, stato, carte, data di
    comparsa e di esaurimento. Avviso (campanella ed email) per ogni drop nuovo. Se la lettura non
    riesce (coda Queue-it), si salta il giro. Da qui anche il **link al sito Wizards** nella scheda: il
    negozio mostra solo i drop in vendita, l'id Wizards non è in MTGJSON e la ricerca del sito è vietata

@@ -82,6 +82,13 @@ public class SecretLairRetrospectiveService
         var cmValues = await CardmarketValuePerCopyAsync(dropCards, cancellationToken);
         var cardsByDrop = dropCards.GroupBy(c => c.DropId).ToDictionary(g => g.Key, g => g.ToList());
 
+        // Prodotto del negozio Wizards con lo stesso nome, per il link: il negozio conosce solo i drop
+        // visti dal monitoraggio (Fase 2), quindi i più vecchi non ce l'hanno.
+        var shopByName = (await _db.SecretLairShopProducts.AsNoTracking()
+                .Select(p => new { p.Title, p.WizardsProductId, p.FirstSeenAt }).ToListAsync(cancellationToken))
+            .GroupBy(p => NormalizeDropName(p.Title))
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(p => p.FirstSeenAt).First().WizardsProductId);
+
         // Nome su Cardmarket, per il link di ricerca: quello MTGJSON spesso è diverso.
         var cmIds = drops.Where(d => d.CardmarketId.HasValue).Select(d => d.CardmarketId!.Value).ToList();
         var cmNames = await _db.CardmarketProducts.AsNoTracking()
@@ -135,6 +142,7 @@ public class SecretLairRetrospectiveService
                 drop.Id, drop.Name, type, drop.CardmarketId,
                 drop.CardmarketId is { } cmId ? cmNames.GetValueOrDefault(cmId) : null,
                 drop.CardTraderBlueprintId,
+                shopByName.TryGetValue(NormalizeDropName(drop.Name), out var wizardsId) ? $"https://secretlair.wizards.com/eu/product/{wizardsId}" : null,
                 cards.Count, cardsListed,
                 copies, registered.Count > 0, Math.Round(unitPrice, 2), Math.Round(cost, 2),
                 dropSales.Sum(s => s.Quantity), Math.Round(gross, 2), Math.Round(net, 2),
@@ -222,6 +230,31 @@ public class SecretLairRetrospectiveService
             }), 2));
     }
 
+    /// <summary>
+    /// Nome del drop confrontabile fra MTGJSON ("Secret Lair Drop Goblin and Squabblin Foil") e il negozio
+    /// ("Goblin & Squabblin' Foil Edition"): minuscole, senza prefissi, "Edition", simboli e punteggiatura.
+    /// </summary>
+    public static string NormalizeDropName(string name)
+    {
+        var n = name.ToLowerInvariant().Replace("&", " and ").Replace("™", "").Replace("®", "");
+        // MTGJSON ha anche nomi come "Secret Lair Drop Secret Lair x Jurassic World ...": i prefissi si
+        // tolgono finché ce ne sono.
+        var trimmed = true;
+        while (trimmed)
+        {
+            trimmed = false;
+            foreach (var prefix in new[] { "secret lair drop ", "secret lair x ", "secret lair " })
+            {
+                if (!n.StartsWith(prefix)) continue;
+                n = n[prefix.Length..];
+                trimmed = true;
+            }
+        }
+        n = System.Text.RegularExpressions.Regex.Replace(n, @"[^a-z0-9 ]", " ");
+        n = System.Text.RegularExpressions.Regex.Replace(n, @"\bedition\b", " ");
+        return System.Text.RegularExpressions.Regex.Replace(n, @"\s+", " ").Trim();
+    }
+
     private async Task<decimal> MeasureFeeShareAsync(CancellationToken cancellationToken)
     {
         var fees = await _db.Orders.AsNoTracking()
@@ -283,6 +316,7 @@ public record SecretLairDropRow(
     int? CardmarketId,
     string? CardmarketName,
     int? CardTraderBlueprintId,
+    string? WizardsUrl,
     int DistinctCards,
     int CardsListed,
     int Copies,

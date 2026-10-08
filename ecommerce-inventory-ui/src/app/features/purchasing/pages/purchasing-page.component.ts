@@ -519,6 +519,7 @@ export class PurchasingPageComponent implements OnInit {
         this.tabIndex = 0;
       }
       if (params.get('tab') === 'avvisi') this.tabIndex = 4;
+      if (params.get('tab') === 'secretlair') this.tabIndex = 5;
     });
     this.loadSets();
   }

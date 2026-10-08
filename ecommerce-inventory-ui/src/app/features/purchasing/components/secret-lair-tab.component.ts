@@ -13,6 +13,8 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { PurchasingService, SecretLairDropRow, SecretLairRetrospective } from '../services/purchasing.service';
 import { GridStateDirective } from '../../../shared/directives/grid-state.directive';
 import { GridCellCopyDirective } from '../../../shared/directives/grid-cell-copy.directive';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { SecretLairShopComponent } from './secret-lair-shop.component';
 
 /**
  * Retrospettiva dei drop Secret Lair comprati interi e venduti a singole: spesa, incassato, valore
@@ -22,9 +24,17 @@ import { GridCellCopyDirective } from '../../../shared/directives/grid-cell-copy
   selector: 'app-secret-lair-tab',
   standalone: true,
   imports: [GridStateDirective, GridCellCopyDirective, CommonModule, FormsModule, AgGridAngular, MatButtonModule, MatIconModule,
-    MatFormFieldModule, MatSelectModule, MatProgressSpinnerModule, MatSnackBarModule, MatTooltipModule],
+    MatFormFieldModule, MatSelectModule, MatProgressSpinnerModule, MatSnackBarModule, MatTooltipModule, MatButtonToggleModule, SecretLairShopComponent],
   template: `
     <div class="tab-container">
+      <mat-button-toggle-group [value]="mode()" (change)="mode.set($event.value)" class="mode">
+        <mat-button-toggle value="drops">Drop comprati</mat-button-toggle>
+        <mat-button-toggle value="shop">Negozio Wizards</mat-button-toggle>
+      </mat-button-toggle-group>
+
+      <app-secret-lair-shop *ngIf="mode() === 'shop'" class="shop"></app-secret-lair-shop>
+
+      <ng-container *ngIf="mode() === 'drops'">
       <div class="toolbar">
         <mat-form-field appearance="outline" class="type">
           <mat-label>Tipo</mat-label>
@@ -58,12 +68,15 @@ import { GridCellCopyDirective } from '../../../shared/directives/grid-cell-copy
         <ag-grid-angular appGridState="purchasing-secret-lair-grid" class="ag-theme-material" [rowData]="visible()" [columnDefs]="columnDefs"
           [defaultColDef]="defaultColDef" style="width: 100%; height: 100%;"></ag-grid-angular>
       </div>
+      </ng-container>
     </div>
   `,
   styles: [`
     .tab-container { display: flex; flex-direction: column; gap: 8px; height: 100%; padding: 12px 0; box-sizing: border-box; }
     .toolbar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
     .type { width: 160px; }
+    .mode { align-self: flex-start; }
+    .shop { flex: 1; min-height: 0; }
     .spacer { flex: 1; }
     .muted { color: #757575; font-size: 12px; max-width: 900px; }
     .summary { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -86,6 +99,7 @@ export class SecretLairTabComponent implements OnInit {
 
   data = signal<SecretLairRetrospective | null>(null);
   type = signal('');
+  mode = signal<'drops' | 'shop'>('drops');
   isLoading = signal(false);
 
   visible = computed(() => (this.data()?.drops ?? []).filter(d => !this.type() || d.type === this.type()));
@@ -137,6 +151,13 @@ export class SecretLairTabComponent implements OnInit {
       cellClass: this.signClass, headerTooltip: 'Solo incassato netto − spesa, senza le copie in vendita' },
     { headerName: 'Valore CM / copia', field: 'cardmarketValuePerCopy', width: 140, type: 'numericColumn', valueFormatter: this.euroCell,
       headerTooltip: 'Una copia del drop aperta, ai trend Cardmarket di oggi delle sue carte' },
+    {
+      headerName: 'Wizards', width: 90, sortable: false, filter: false,
+      headerTooltip: 'Pagina del drop nel negozio Wizards: solo per i drop visti dal monitoraggio',
+      cellRenderer: (p: { data?: SecretLairDropRow }) => p.data?.wizardsUrl
+        ? `<a class="sl-link" target="_blank" rel="noopener" title="Apri nel negozio Secret Lair" href="${p.data.wizardsUrl}">Negozio</a>`
+        : ''
+    },
     {
       headerName: 'CT', width: 70, sortable: false, filter: false,
       cellRenderer: (p: { data?: SecretLairDropRow }) => p.data?.cardTraderBlueprintId

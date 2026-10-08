@@ -252,6 +252,15 @@ builder.Services.AddScoped<PriceRealizationService>();
 builder.Services.AddScoped<PurchaseCostService>();
 builder.Services.AddScoped<OpeningBalanceService>();
 builder.Services.AddScoped<SecretLairRetrospectiveService>();
+// Negozio Secret Lair di Wizards: lettura agli orari configurati (SecretLair:Monitor:Enabled)
+builder.Services.AddHttpClient<eCommerce.Inventory.Infrastructure.ExternalServices.SecretLair.ISecretLairShopClient,
+    eCommerce.Inventory.Infrastructure.ExternalServices.SecretLair.SecretLairShopClient>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(60);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; eCommerce.Inventory; monitoraggio personale Secret Lair)");
+});
+builder.Services.AddScoped<SecretLairShopMonitorService>();
+builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJobs.SecretLairMonitorWorker>();
 builder.Services.AddScoped<ProductPurchaseService>();
 builder.Services.AddScoped<SealedOpportunityService>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();

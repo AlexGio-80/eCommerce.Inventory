@@ -19,6 +19,7 @@ public class PurchasingController : ControllerBase
     private readonly MtgjsonSetDetailImportService _detailImport;
     private readonly OpeningBalanceService _openingBalance;
     private readonly SecretLairRetrospectiveService _secretLair;
+    private readonly SecretLairShopMonitorService _secretLairShop;
     private readonly ProductPurchaseService _purchases;
     private readonly SealedOpportunityService _opportunities;
     private readonly AlertService _alerts;
@@ -32,6 +33,7 @@ public class PurchasingController : ControllerBase
         MtgjsonSetDetailImportService detailImport,
         OpeningBalanceService openingBalance,
         SecretLairRetrospectiveService secretLair,
+        SecretLairShopMonitorService secretLairShop,
         ProductPurchaseService purchases,
         SealedOpportunityService opportunities,
         AlertService alerts,
@@ -40,6 +42,7 @@ public class PurchasingController : ControllerBase
         ILogger<PurchasingController> logger)
     {
         _secretLair = secretLair;
+        _secretLairShop = secretLairShop;
         _plans = plans;
         _alerts = alerts;
         _opportunities = opportunities;
@@ -121,6 +124,31 @@ public class PurchasingController : ControllerBase
     {
         var retrospective = await _secretLair.GetAsync(cancellationToken);
         return Ok(ApiResponse<SecretLairRetrospective>.SuccessResult(retrospective));
+    }
+
+    /// <summary>Prodotti visti nel negozio Secret Lair di Wizards ed esito delle ultime letture.</summary>
+    [HttpGet("secret-lair/shop")]
+    public async Task<IActionResult> GetSecretLairShop(CancellationToken cancellationToken)
+    {
+        var view = await _secretLairShop.GetAsync(cancellationToken);
+        return Ok(ApiResponse<SecretLairShopView>.SuccessResult(view));
+    }
+
+    /// <summary>Legge subito il negozio Secret Lair (catalogo e carte dei prodotti nuovi).</summary>
+    [HttpPost("secret-lair/shop/refresh")]
+    public async Task<IActionResult> RefreshSecretLairShop(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var run = await _secretLairShop.RunAsync(cancellationToken);
+            return run.Outcome == eCommerce.Inventory.Domain.Entities.SecretLairShopRunOutcome.Succeeded
+                ? Ok(ApiResponse<object>.SuccessResult(new { run.Products, run.NewProducts, run.ContentsFetched, run.Message }))
+                : StatusCode(502, ApiResponse<object>.ErrorResult(run.Message ?? "Lettura del negozio fallita"));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(ApiResponse<object>.ErrorResult(ex.Message));
+        }
     }
 
     /// <summary>Ultima classifica delle opportunità sui sigillati di tutte le uscite.</summary>

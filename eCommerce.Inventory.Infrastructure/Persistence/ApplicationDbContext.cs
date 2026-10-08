@@ -47,6 +47,9 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<AlertRule> AlertRules { get; set; }
     public DbSet<AlertRuleMatch> AlertRuleMatches { get; set; }
     public DbSet<AlertNotification> AlertNotifications { get; set; }
+    public DbSet<SecretLairShopProduct> SecretLairShopProducts { get; set; }
+    public DbSet<SecretLairShopCard> SecretLairShopCards { get; set; }
+    public DbSet<SecretLairShopRun> SecretLairShopRuns { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -339,6 +342,29 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             }
 
             entity.HasIndex(s => s.Date).HasDatabaseName("IX_CardmarketPriceSnapshot_Date");
+        });
+
+        modelBuilder.Entity<SecretLairShopProduct>(entity =>
+        {
+            entity.HasIndex(p => p.WizardsProductId).IsUnique();
+            entity.Property(p => p.WizardsProductId).HasMaxLength(50);
+            entity.Property(p => p.RefId).HasMaxLength(50);
+            entity.Property(p => p.Title).HasMaxLength(300);
+            entity.Property(p => p.DropName).HasMaxLength(300);
+            entity.Property(p => p.Price).HasPrecision(9, 2);
+            entity.HasMany(p => p.Cards).WithOne(c => c.Product!).HasForeignKey(c => c.SecretLairShopProductId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SecretLairShopCard>(entity =>
+        {
+            entity.Property(c => c.CardName).HasMaxLength(200);
+            entity.Property(c => c.DisplayName).HasMaxLength(200);
+        });
+
+        modelBuilder.Entity<SecretLairShopRun>(entity =>
+        {
+            entity.Property(r => r.Message).HasMaxLength(2000);
+            entity.HasIndex(r => r.StartedAt);
         });
 
         modelBuilder.Entity<CardmarketImportLog>(entity =>
