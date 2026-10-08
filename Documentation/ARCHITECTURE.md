@@ -83,7 +83,7 @@ eCommerce.Inventory/
   - `IPriceRefreshQueue.cs`: Coda dei blueprint da riprezzare fuori dall'esecuzione notturna — vendite e nuove inserzioni. Chi accoda risponde subito, il consumo avviene in background
   - `IPricingRunCoordinator.cs`: Tiene **una sola** esecuzione dell'autopricer per volta e la porta avanti fuori dal ciclo di richiesta HTTP
 - **Pricing/** — logica di prezzo pura, senza dipendenze da rete o database
-  - `PricingEngine.cs`: Decide il prezzo di una carta date le offerte comparabili
+  - `PricingEngine.cs`: Decide il prezzo di una carta date le offerte comparabili. Le regole della stessa fascia sono una catena di ripiego (si passa alla successiva se il mercato non basta); le carte mai prezzate (`isNewListing`) hanno la fascia ricalcolata sul prezzo proposto e nessun guardrail
   - `PricingDecision.cs`: Esito della valutazione, con la motivazione
   - `PriceHistoryRecorder.cs`: Decide quali rilevazioni vale la pena registrare (serie a delta)
 - **Metrics/BusinessMetrics.cs**: Metriche Prometheus di dominio
@@ -149,6 +149,8 @@ eCommerce.Inventory/
   - `OpeningBalanceService.cs`, `ProductPurchaseService.cs`: bilancio delle aperture e registro acquisti
   - `AlertService.cs`, `EmailSender.cs` (`IEmailSender`/`SmtpEmailSender`): avvisi ed email di riepilogo
   - `PurchaseCostService.cs`: **unica fonte del costo d'acquisto** (pagina Espansioni, report di redditività, bilancio aperture)
+  - `SecretLairRetrospectiveService.cs`: bilancio dei drop Secret Lair comprati interi (carta → drop via MTGJSON, prezzo dal registro o standard)
+  - `SecretLairShopMonitorService.cs`: lettura del negozio Secret Lair di Wizards, prodotti, carte e avvisi sui drop nuovi; client in `ExternalServices/SecretLair/SecretLairShopClient.cs` (catalogo da StoreSearch di Scalefast, carte dall'HTML con AngleSharp)
 
 #### BackgroundJobs
 
@@ -161,6 +163,7 @@ eCommerce.Inventory/
 | `SealedProductPriceService` | One-shot all'avvio | `SyncSettings:PopulateSealedPricesOnStartup` |
 | `BackupService` | Giornaliero | `BackupSettings:Enabled` |
 | `CardmarketImportWorker` | All'avvio e ogni giorno (default 07:00): listino CM, catalogo e dati buste MTGJSON, classifica opportunità, avvisi | `CardmarketImport:Enabled`, `CardmarketImport:RunTime` |
+| `SecretLairMonitorWorker` | Alle 08:00, 14:00 e 20:00; all'avvio solo se l'ultima lettura riuscita ha più di 4 ore | `SecretLair:Monitor:Enabled`, `SecretLair:Monitor:RunTimes` |
 
 > `AutoPricingWorker` non esegue da sé: passa da `IPricingRunCoordinator` come l'esecuzione
 > manuale e l'applicazione dall'anteprima. Se una manuale è ancora in corso all'orario previsto,
@@ -460,7 +463,8 @@ PriceHistoryEntries               -- serie storica del prezzo esposto
 | `CardTraderCardPrices` | Prezzo CT delle singole (media delle 3 offerte EN NM più basse), a richiesta | |
 | `SealedOpportunities` | Classifica giornaliera del valore atteso | una riga per prodotto e giorno |
 | `ProductPurchases` | Registro acquisti con previsione | |
-| `AlertRules`, `AlertRuleMatches`, `AlertNotifications` | Regole, stato, avvisi emessi | |
+| `AlertRules`, `AlertRuleMatches`, `AlertNotifications` | Regole, stato, avvisi emessi (anche senza regola, es. drop Secret Lair nuovi) | |
+| `SecretLairShopProducts`, `SecretLairShopCards`, `SecretLairShopRuns` | Prodotti visti nel negozio Secret Lair (anche quelli tolti, con la data), carte contenute, esito di ogni lettura | qualche centinaio di prodotti |
 
 > `PriceChangeLogs.InventoryItemId` è **nullable con `ON DELETE SET NULL`**: la riga di registro deve sopravvivere alla carta, altrimenti la cancellazione delle carte vendute durante la sincronizzazione notturna porterebbe via lo storico proprio dei casi su cui conviene verificare se il prezzo proposto era corretto. `InventoryItemId IS NULL` identifica le valutazioni di carte non più a magazzino; la carta resta riconoscibile da `BlueprintId`.
 
@@ -589,6 +593,10 @@ L'architettura è progettata per aggiungere facilmente nuovi marketplace:
 | 2026-10-07 | Classifica delle opportunità calcolata ogni giorno e salvata | Centinaia di uscite: la pagina resta istantanea e lo storico del valore atteso dice quando comprare |
 | 2026-10-07 | Costo d'acquisto da un servizio unico in C#, non dalla vista | La regola delle copie aggiunte serve in quattro report e nel bilancio aperture: una sola implementazione evita versioni SQL e C# che divergono |
 | 2026-10-07 | Avvisi con stato: scattano quando la condizione diventa vera | Senza stato un "prezzo sotto soglia" vero per settimane manderebbe la stessa email ogni mattina |
+| 2026-10-08 | Regole di pricing a ripiego: le regole della stessa fascia si provano in ordine di priorità, e minimo di offerte e filtro Card Trader Zero possono stare sulla regola | Il minimo di offerte del profilo si controllava prima di scegliere la regola: un ripiego limitato alla posizione mancante non avrebbe aiutato i mercati sottili. Filtro venditori, scarto anomalie, minimo e posizione sono ora un passaggio unico ripetuto per ogni regola (`PrepareMarket`). Il ripiego scatta solo per mercato insufficiente, mai per guardrail o direzione |
+| 2026-10-08 | Carta "nuova" per l'autopricer = mai prezzata secondo lo storico (`PriceChangeLogs` senza `Applied`/`NoChangeNeeded`) | Il trigger dice solo da dove arriva la valutazione: se il riprezzo dopo la pubblicazione salta, la notturna deve trattarla ancora da nuova. Sulle carte nuove la fascia si ricalcola sul prezzo proposto e guardrail e direzione non si applicano |
+| 2026-10-08 | Valore atteso con costo fisso per carta e quota venduta per fascia di prezzo | Il costo per carta riportato al lordo (`CostPerCard / (1 − costi %)`) pesa al netto esattamente quanto configurato; le quote per fascia si misurano sulle stesse aperture all'uscita del bulk |
+| 2026-10-08 | Negozio Secret Lair letto dall'interfaccia StoreSearch di Scalefast, non dall'HTML | Il catalogo non è nell'HTML (lo disegna il browser); StoreSearch è la fonte della pagina stessa, non documentata (scelta dell'utente). Una risposta di forma inattesa è un errore registrato, non un catalogo vuoto |
 | 2026-09-02 | «Applica» scavalca il dry-run del profilo, l'anteprima no | Sono due gesti diversi: l'applicazione riguarda carte appena esaminate una per una, ed è il modo di uscire dalla simulazione gradualmente senza attivare la scrittura sulla notturna. L'anteprima invece è lo strumento con cui si prova, e deve restare innocua per costruzione: `forceApply` non prevale mai su `forceDryRun` |
 
 ---
@@ -605,7 +613,9 @@ File/sezioni necessarie in `appsettings.json`:
   "SyncSettings": { "RunAnalyticsDuringSync": false },
   "BackupSettings": { "Enabled": true, "Schedule": "0 2 * * *", "RetentionDays": 3 },
   "CardmarketImport": { "Enabled": true, "RunTime": "07:00", "SinglesTrackingMonths": 12 },
-  "Purchasing": { "BulkThreshold": 0.25, "BulkPrice": 0.05, "SellingCostPercent": 15, "DetailImportBatchSize": 60 },
+  "Purchasing": { "BulkThreshold": 0.25, "BulkPrice": 0.05, "SellingCostPercent": 15, "CostPerCard": 0.15, "DetailImportBatchSize": 60,
+    "SecretLair": { "NormalPrice": 34.99, "FoilPrice": 44.99, "BundlePrice": 149, "CommanderPrice": 179 } },
+  "SecretLair": { "Monitor": { "Enabled": false, "RunTimes": [ "08:00", "14:00", "20:00" ], "ContentsPerRun": 30, "DelaySeconds": 2, "EmailNewDrops": true } },
   "Email": { "Enabled": false, "Host": "smtp.gmail.com", "Port": 587, "EnableSsl": true, "UserName": "", "Password": "***", "From": "", "To": "" },
   "Serilog": { ... }
 }
