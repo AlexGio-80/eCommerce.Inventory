@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { PlanOffer, PurchasePlan } from '../services/purchasing.service';
+import { PlanOffer, PlanProduct, PurchasePlan } from '../services/purchasing.service';
 
 /**
  * Piano d'acquisto su Card Trader: venditori che hanno più prodotti convenienti (un'unica
@@ -60,16 +60,19 @@ import { PlanOffer, PurchasePlan } from '../services/purchasing.service';
 
       <ng-template #items let-items let-showSeller="showSeller">
         <table>
-          <tr><th>Prodotto</th><th *ngIf="showSeller">Venditore</th><th>Prezzo</th><th>Disp.</th><th>Valore atteso</th><th>Resa</th><th></th></tr>
+          <tr><th>Prodotto</th><th *ngIf="showSeller">Venditore</th><th>Prezzo</th><th matTooltip="Trend Cardmarket dello stesso prodotto, per confronto">Trend CM</th><th>Disp.</th><th>Valore atteso</th><th>Resa</th><th></th></tr>
           <tr *ngFor="let o of items">
             <td>{{ o.productName }}</td>
             <td *ngIf="showSeller">{{ o.sellerName }} <span class="muted">{{ o.sellerCountry }}</span></td>
             <td>{{ euro(o.price) }}</td>
+            <td class="muted-cell">{{ euro(productOf(o)?.cmTrend) }}</td>
             <td>{{ o.available }}</td>
             <td>{{ euro(o.openValueNet) }}</td>
             <td class="good">+{{ o.roiPercent }}%</td>
             <td><a *ngIf="blueprintOf(o) as bp" [href]="'https://www.cardtrader.com/cards/' + bp" target="_blank" rel="noopener"
-                   matTooltip="Apri su Card Trader"><mat-icon class="link">open_in_new</mat-icon></a></td>
+                   matTooltip="Apri su Card Trader"><mat-icon class="link">open_in_new</mat-icon></a>
+                <a *ngIf="productOf(o)?.cardmarketName as cm" [href]="cardmarketSearch(cm)" target="_blank" rel="noopener"
+                   matTooltip="Cerca su Cardmarket"><span class="cm-link">CM</span></a></td>
           </tr>
         </table>
       </ng-template>
@@ -92,6 +95,8 @@ import { PlanOffer, PurchasePlan } from '../services/purchasing.service';
     table { border-collapse: collapse; font-size: 13px; }
     th, td { padding: 2px 10px 2px 0; text-align: left; }
     th { color: #757575; font-weight: 500; }
+    .muted-cell { color: #616161; }
+    .cm-link { font-size: 11px; font-weight: 600; color: #3f51b5; margin-left: 4px; vertical-align: middle; }
     .link { font-size: 16px; height: 16px; width: 16px; vertical-align: middle; color: #3f51b5; }
   `]
 })
@@ -117,6 +122,15 @@ export class PurchasePlanPanelComponent {
   }
 
   blueprintOf(offer: PlanOffer): number | undefined {
-    return this.blueprints[offer.productId] ?? this.plan.products.find(p => p.productId === offer.productId)?.cardTraderBlueprintId;
+    return this.blueprints[offer.productId] ?? this.productOf(offer)?.cardTraderBlueprintId;
+  }
+
+  productOf(offer: PlanOffer): PlanProduct | undefined {
+    return this.plan.products.find(p => p.productId === offer.productId);
+  }
+
+  /** Cardmarket non ha un indirizzo per id prodotto: si apre la ricerca col nome esatto. */
+  cardmarketSearch(name: string): string {
+    return 'https://www.cardmarket.com/en/Magic/Products/Search?searchString=' + encodeURIComponent(name);
   }
 }

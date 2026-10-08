@@ -6,6 +6,7 @@
 
 ## In Corso
 
+- [x] **Piano d'acquisto: colonna "Trend CM" e link "CM" accanto alle offerte Card Trader (2026-10-08)** — pubblicato e verificato il 2026-10-08: per confrontare l'offerta Card Trader con il prezzo dello stesso prodotto su Cardmarket
 - [x] **Fix Analisi uscita di Secret Lair (2026-10-08)** — pubblicato e verificato il 2026-10-08: le centinaia di schede del valore per busta (ogni drop è una "busta" per MTGJSON) nascondevano la griglia. Ora se ne vedono 10 con "Mostra tutte le buste", e la griglia ha un'altezza minima
 - [x] **Prezzi Card Trader automatici anche aprendo un'uscita dalla scheda Opportunità (2026-10-08)** — pubblicato e verificato il 2026-10-08: stessa regola degli avvisi (solo se mancano o hanno più di 6 ore)
 - [x] **Analisi uscita: prezzi Card Trader aggiornati in automatico arrivando da un avviso, e link a Cardmarket (2026-10-08)** — pubblicato e verificato dall'utente il 2026-10-08. Dalla campanella o dalla scheda Avvisi, se i prezzi Card Trader dell'uscita mancano o hanno più di 6 ore parte da solo "Prezzi Card Trader" (fra 2 e 6 chiamate). Nuova colonna "CM" accanto a "CT": apre la ricerca di Cardmarket col nome esatto del prodotto su Cardmarket (non esiste un indirizzo per id prodotto). La ricerca porta al prodotto giusto

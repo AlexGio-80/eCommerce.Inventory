@@ -208,6 +208,8 @@ export interface PlanProduct {
     cheapestPrice?: number;
     cheapestSeller?: string;
     cardTraderBlueprintId?: number;
+    /** Nome del prodotto su Cardmarket, per cercarlo sul sito e confrontarne il prezzo. */
+    cardmarketName?: string;
     note?: string;
 }
 

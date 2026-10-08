@@ -9,6 +9,24 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-08] Feature — Piano d'acquisto: trend e link Cardmarket accanto alle offerte Card Trader
+
+#### Problema
+
+Il piano d'acquisto mostrava solo le offerte Card Trader: per capire se lo stesso prodotto costasse
+meno su Cardmarket bisognava cercarlo a mano.
+
+#### Soluzione Implementata
+
+- Colonna "Trend CM" accanto al prezzo dell'offerta, in tutte le tabelle del piano
+- Link "CM" accanto a quello di Card Trader: apre la ricerca di Cardmarket col nome del prodotto su
+  Cardmarket, come nell'Analisi uscita
+- `PlanProduct.CardmarketName`, letto da `CardmarketProducts`
+
+#### Note Tecniche
+
+- Il confronto è col trend, non con un'offerta: il listino pubblico di Cardmarket non ha i venditori
+
 ### [2026-10-08] Fix — Analisi uscita di Secret Lair: la griglia non si vedeva
 
 #### Problema

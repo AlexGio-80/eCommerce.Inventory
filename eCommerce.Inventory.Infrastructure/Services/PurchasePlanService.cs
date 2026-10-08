@@ -49,6 +49,8 @@ public class PurchasePlanService
             .Select(p => new
             {
                 p.Id, p.Name, p.CardTraderBlueprintId,
+                // Per cercare il prodotto su Cardmarket e confrontarne il prezzo.
+                CardmarketName = _db.CardmarketProducts.Where(c => c.IdProduct == p.CardmarketId).Select(c => c.Name).FirstOrDefault(),
                 Opportunity = _db.SealedOpportunities
                     .Where(o => o.SealedProductId == p.Id && o.Date == lastDate)
                     .Select(o => new { o.OpenValueCm, o.CmTrend, o.MainSetCode })
@@ -66,7 +68,7 @@ public class PurchasePlanService
             {
                 productSummaries.Add(new PlanProduct(product.Id, product.Name, product.Opportunity?.MainSetCode, openValue,
                     product.Opportunity?.CmTrend, 0, null, null, CardTraderBlueprintId: product.CardTraderBlueprintId,
-                    Note: product.CardTraderBlueprintId == null ? "Nessun blueprint Card Trader abbinato" : "Nessun valore atteso"));
+                    CardmarketName: product.CardmarketName, Note: product.CardTraderBlueprintId == null ? "Nessun blueprint Card Trader abbinato" : "Nessun valore atteso"));
                 continue;
             }
 
@@ -84,6 +86,7 @@ public class PurchasePlanService
             var cheapest = valid.OrderBy(o => o.Price).FirstOrDefault();
             productSummaries.Add(new PlanProduct(product.Id, product.Name, product.Opportunity!.MainSetCode, openValue,
                 product.Opportunity.CmTrend, valid.Count, cheapest?.Price, cheapest?.SellerName, blueprintId,
+                product.CardmarketName,
                 valid.Count == 0 ? "Nessuna offerta in inglese su Card Trader" : null));
 
             // Nel piano entrano solo le offerte a cui aprire il prodotto conviene.
@@ -155,6 +158,7 @@ public record PlanProduct(
     decimal? CheapestPrice,
     string? CheapestSeller,
     int? CardTraderBlueprintId,
+    string? CardmarketName,
     string? Note);
 
 /// <param name="Margin">Valore atteso netto meno prezzo, per un'unità di ciascun prodotto.</param>
