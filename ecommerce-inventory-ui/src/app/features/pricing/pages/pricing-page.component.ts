@@ -3,6 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AgGridAngular } from 'ag-grid-angular';
+import { GridCellCopyDirective } from '../../../shared/directives/grid-cell-copy.directive';
 import { ColDef, GridApi, GridReadyEvent, ICellRendererParams } from 'ag-grid-community';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -29,7 +30,7 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
   selector: 'app-pricing-page',
   standalone: true,
   imports: [GridStateDirective, 
-    CommonModule, FormsModule, AgGridAngular,
+    CommonModule, FormsModule, AgGridAngular, GridCellCopyDirective,
     MatCardModule, MatButtonModule, MatFormFieldModule, MatInputModule,
     MatSelectModule, MatCheckboxModule, MatSlideToggleModule,
     MatProgressSpinnerModule, MatSnackBarModule, MatIconModule,

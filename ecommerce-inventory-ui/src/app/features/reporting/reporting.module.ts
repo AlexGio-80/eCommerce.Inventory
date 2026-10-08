@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { BaseChartDirective } from 'ng2-charts';
 import { AgGridModule } from 'ag-grid-angular';
+import { GridCellCopyDirective } from '../../shared/directives/grid-cell-copy.directive';
 import { Chart, registerables } from 'chart.js';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -22,7 +23,7 @@ import { InventoryAnalyticsComponent } from './pages/inventory-analytics/invento
         CommonModule,
         FormsModule,
         BaseChartDirective,
-        AgGridModule,
+        AgGridModule, GridCellCopyDirective,
         ReportingRoutingModule,
         MatFormFieldModule,
         MatInputModule,

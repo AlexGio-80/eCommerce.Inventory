@@ -1,6 +1,7 @@
 import { Component, OnInit, signal, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AgGridAngular } from 'ag-grid-angular';
+import { GridCellCopyDirective } from '../../../shared/directives/grid-cell-copy.directive';
 import { ColDef, ModuleRegistry, AllCommunityModule, GridApi, GridReadyEvent } from 'ag-grid-community';
 import { GamesService, Game } from '../services/games.service';
 import { GridStateService } from '../../../core/services/grid-state.service';
@@ -26,7 +27,7 @@ ModuleRegistry.registerModules([AllCommunityModule]);
     standalone: true,
     imports: [
         CommonModule,
-        AgGridAngular,
+        AgGridAngular, GridCellCopyDirective,
         GridStateDirective,
         MatCardModule,
         MatButtonModule,

@@ -2,6 +2,7 @@ import { Component, EventEmitter, Input, OnInit, Output, signal } from '@angular
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AgGridAngular } from 'ag-grid-angular';
+import { GridCellCopyDirective } from '../../../shared/directives/grid-cell-copy.directive';
 import { ColDef } from 'ag-grid-community';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -41,7 +42,7 @@ interface RuleForm {
 @Component({
   selector: 'app-alerts-tab',
   standalone: true,
-  imports: [GridStateDirective, CommonModule, FormsModule, AgGridAngular, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule,
+  imports: [GridStateDirective, CommonModule, FormsModule, AgGridAngular, GridCellCopyDirective, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule,
     MatSelectModule, MatCheckboxModule, MatTooltipModule, MatProgressSpinnerModule, MatSnackBarModule],
   template: `
     <div class="tab-container">

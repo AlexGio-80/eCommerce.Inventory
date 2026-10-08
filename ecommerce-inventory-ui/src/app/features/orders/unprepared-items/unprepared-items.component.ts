@@ -13,6 +13,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatNativeDateModule } from '@angular/material/core';
 import { FormsModule } from '@angular/forms';
 import { AgGridAngular } from 'ag-grid-angular';
+import { GridCellCopyDirective } from '../../../shared/directives/grid-cell-copy.directive';
 import { ColDef, GridApi, GridReadyEvent } from 'ag-grid-community';
 
 import { CardTraderApiService } from '../../../core/services/cardtrader-api.service';
@@ -41,7 +42,7 @@ import { FoilCellRendererComponent } from '../../../shared/components/foil-cell-
         MatFormFieldModule,
         MatNativeDateModule,
         FormsModule,
-        AgGridAngular
+        AgGridAngular, GridCellCopyDirective
     ],
     templateUrl: './unprepared-items.component.html',
     styleUrls: ['./unprepared-items.component.css']

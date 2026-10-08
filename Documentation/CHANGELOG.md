@@ -9,6 +9,30 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-08] Feature — Copia del valore di una cella con doppio clic
+
+#### Problema
+
+Per copiare un Tag o il nome di un prodotto da una griglia bisognava aprirne la modifica: le celle
+di AG Grid non permettono di selezionare il testo.
+
+#### Soluzione Implementata
+
+- Direttiva `GridCellCopyDirective` (`shared/directives/grid-cell-copy.directive.ts`): doppio clic su
+  una cella e il valore va negli appunti così come appare a schermo (formattazione della colonna
+  compresa), con un avviso "Copiato: …" in basso
+- Selettore `ag-grid-angular`: si aggancia da sola a ogni griglia del componente che la importa.
+  Importata in tutti i componenti con griglie e nel modulo dei report
+
+#### Note Tecniche
+
+- `navigator.clipboard` esiste solo nelle origini sicure (https o localhost): su
+  `http://inventory.local` non c'è, quindi si ripiega su `document.execCommand('copy')` da una
+  casella di testo nascosta
+- Le celle senza valore o con valori non testuali (oggetti) vengono ignorate; le celle modificabili
+  (`editable`) anche, perché lì il doppio clic apre la modifica. Oggi nessuna griglia ne ha
+- Una griglia nuova ha la copia solo se il suo componente importa la direttiva
+
 ### [2026-10-07] Feature — Salvataggio automatico delle colonne in tutte le griglie
 
 #### Problema

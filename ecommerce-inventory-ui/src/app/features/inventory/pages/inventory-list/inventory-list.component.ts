@@ -8,6 +8,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { AgGridAngular } from 'ag-grid-angular';
+import { GridCellCopyDirective } from '../../../../shared/directives/grid-cell-copy.directive';
 import { ColDef, GridApi, GridReadyEvent, IDatasource, IGetRowsParams } from 'ag-grid-community';
 import { CardTraderApiService } from '../../../../core/services/cardtrader-api.service';
 import { GridStateService } from '../../../../core/services/grid-state.service';
@@ -30,7 +31,7 @@ import { LanguageCellRendererComponent } from '../../../../shared/components/lan
     MatProgressSpinnerModule,
     MatCheckboxModule,
     MatTooltipModule,
-    AgGridAngular
+    AgGridAngular, GridCellCopyDirective
   ],
   templateUrl: './inventory-list.component.html',
   styleUrls: ['./inventory-list.component.scss']

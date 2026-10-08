@@ -1,6 +1,7 @@
 import { Component, OnInit, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AgGridAngular } from 'ag-grid-angular';
+import { GridCellCopyDirective } from '../../../shared/directives/grid-cell-copy.directive';
 import { ColDef, GridApi, GridReadyEvent } from 'ag-grid-community';
 import { ExpansionsService, Expansion, SyncBlueprintsResponse, CardmarketImportLog } from '../services/expansions.service';
 import { GridStateService } from '../../../core/services/grid-state.service';
@@ -23,7 +24,7 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
   standalone: true,
   imports: [
     CommonModule,
-    AgGridAngular,
+    AgGridAngular, GridCellCopyDirective,
     GridStateDirective,
     MatCardModule,
     MatButtonModule,

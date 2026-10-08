@@ -13,6 +13,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { AgGridAngular } from 'ag-grid-angular';
+import { GridCellCopyDirective } from '../../../shared/directives/grid-cell-copy.directive';
 import { ColDef, GridApi, GridReadyEvent, ColumnState, SortModelItem } from 'ag-grid-community';
 import { CardTraderApiService } from '../../../core/services/cardtrader-api.service';
 import { GridStateService } from '../../../core/services/grid-state.service';
@@ -38,7 +39,7 @@ import { OrderStatusMonitorComponent } from '../components/order-status-monitor/
         MatDividerModule,
         MatSelectModule,
         MatDialogModule,
-        AgGridAngular,
+        AgGridAngular, GridCellCopyDirective,
         OrderStatusMonitorComponent
     ],
     templateUrl: './orders-list.component.html',

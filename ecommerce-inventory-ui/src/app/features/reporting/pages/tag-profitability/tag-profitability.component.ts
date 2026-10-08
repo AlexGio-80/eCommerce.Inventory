@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AgGridAngular } from 'ag-grid-angular';
+import { GridCellCopyDirective } from '../../../../shared/directives/grid-cell-copy.directive';
 import { ReportingService } from '../../../../core/services/reporting.service';
 import { TagProfitability, TagExpansionProfitability } from '../../../../core/models/reporting.models';
 import { firstValueFrom } from 'rxjs';
@@ -12,7 +13,7 @@ import { GridStateService } from '../../../../core/services/grid-state.service';
     templateUrl: './tag-profitability.component.html',
     styleUrls: ['./tag-profitability.component.css'],
     standalone: true,
-    imports: [CommonModule, AgGridAngular]
+    imports: [CommonModule, AgGridAngular, GridCellCopyDirective]
 })
 export class TagProfitabilityComponent implements OnInit {
     tags: TagProfitability[] = [];

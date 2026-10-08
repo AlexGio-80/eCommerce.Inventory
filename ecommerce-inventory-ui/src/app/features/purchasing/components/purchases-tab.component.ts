@@ -2,6 +2,7 @@ import { Component, Input, OnChanges, OnInit, SimpleChanges, signal } from '@ang
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AgGridAngular } from 'ag-grid-angular';
+import { GridCellCopyDirective } from '../../../shared/directives/grid-cell-copy.directive';
 import { ColDef, ValueFormatterParams } from 'ag-grid-community';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -35,7 +36,7 @@ interface PurchaseForm {
 @Component({
   selector: 'app-purchases-tab',
   standalone: true,
-  imports: [GridStateDirective, CommonModule, FormsModule, AgGridAngular, MatButtonModule, MatIconModule, MatFormFieldModule,
+  imports: [GridStateDirective, CommonModule, FormsModule, AgGridAngular, GridCellCopyDirective, MatButtonModule, MatIconModule, MatFormFieldModule,
     MatInputModule, MatSelectModule, MatTooltipModule, MatSnackBarModule],
   template: `
     <div class="tab-container">

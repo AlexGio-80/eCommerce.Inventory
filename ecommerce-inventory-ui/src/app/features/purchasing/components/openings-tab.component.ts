@@ -2,6 +2,7 @@ import { Component, OnInit, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AgGridAngular } from 'ag-grid-angular';
+import { GridCellCopyDirective } from '../../../shared/directives/grid-cell-copy.directive';
 import { CellClassParams, ColDef, ValueFormatterParams } from 'ag-grid-community';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -18,7 +19,7 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
 @Component({
   selector: 'app-openings-tab',
   standalone: true,
-  imports: [GridStateDirective, CommonModule, FormsModule, AgGridAngular, MatButtonModule, MatIconModule, MatSlideToggleModule,
+  imports: [GridStateDirective, CommonModule, FormsModule, AgGridAngular, GridCellCopyDirective, MatButtonModule, MatIconModule, MatSlideToggleModule,
     MatProgressSpinnerModule, MatSnackBarModule],
   template: `
     <div class="tab-container">

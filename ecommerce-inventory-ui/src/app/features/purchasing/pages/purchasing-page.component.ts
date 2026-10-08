@@ -4,6 +4,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AgGridAngular } from 'ag-grid-angular';
+import { GridCellCopyDirective } from '../../../shared/directives/grid-cell-copy.directive';
 import { ColDef, ValueFormatterParams, CellClassParams } from 'ag-grid-community';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -34,7 +35,7 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
   selector: 'app-purchasing-page',
   standalone: true,
   imports: [GridStateDirective, 
-    CommonModule, FormsModule, AgGridAngular, MatCardModule, MatButtonModule, MatFormFieldModule,
+    CommonModule, FormsModule, AgGridAngular, GridCellCopyDirective, MatCardModule, MatButtonModule, MatFormFieldModule,
     MatSelectModule, MatProgressSpinnerModule, MatSnackBarModule, MatIconModule, MatTooltipModule,
     MatSlideToggleModule, MatInputModule, MatTabsModule, OpeningsTabComponent, OpportunitiesTabComponent, PurchasesTabComponent, AlertsTabComponent
   ],
