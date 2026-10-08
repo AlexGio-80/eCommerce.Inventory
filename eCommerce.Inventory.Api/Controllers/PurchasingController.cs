@@ -18,6 +18,7 @@ public class PurchasingController : ControllerBase
     private readonly SealedCatalogImportService _catalogImport;
     private readonly MtgjsonSetDetailImportService _detailImport;
     private readonly OpeningBalanceService _openingBalance;
+    private readonly SecretLairRetrospectiveService _secretLair;
     private readonly ProductPurchaseService _purchases;
     private readonly SealedOpportunityService _opportunities;
     private readonly AlertService _alerts;
@@ -30,6 +31,7 @@ public class PurchasingController : ControllerBase
         SealedCatalogImportService catalogImport,
         MtgjsonSetDetailImportService detailImport,
         OpeningBalanceService openingBalance,
+        SecretLairRetrospectiveService secretLair,
         ProductPurchaseService purchases,
         SealedOpportunityService opportunities,
         AlertService alerts,
@@ -37,6 +39,7 @@ public class PurchasingController : ControllerBase
         IConfiguration configuration,
         ILogger<PurchasingController> logger)
     {
+        _secretLair = secretLair;
         _plans = plans;
         _alerts = alerts;
         _opportunities = opportunities;
@@ -110,6 +113,14 @@ public class PurchasingController : ControllerBase
         var threshold = _configuration.GetValue("Purchasing:BulkThreshold", 0.25m);
         var openings = await _openingBalance.GetAsync(threshold, cancellationToken);
         return Ok(ApiResponse<List<OpeningBalance>>.SuccessResult(openings));
+    }
+
+    /// <summary>Bilancio dei drop Secret Lair comprati e venduti a singole.</summary>
+    [HttpGet("secret-lair/drops")]
+    public async Task<IActionResult> GetSecretLairDrops(CancellationToken cancellationToken)
+    {
+        var retrospective = await _secretLair.GetAsync(cancellationToken);
+        return Ok(ApiResponse<SecretLairRetrospective>.SuccessResult(retrospective));
     }
 
     /// <summary>Ultima classifica delle opportunità sui sigillati di tutte le uscite.</summary>

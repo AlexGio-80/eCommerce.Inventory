@@ -18,6 +18,7 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatInputModule } from '@angular/material/input';
 import { MatTabsModule } from '@angular/material/tabs';
 import { OpeningsTabComponent } from '../components/openings-tab.component';
+import { SecretLairTabComponent } from '../components/secret-lair-tab.component';
 import { OpportunitiesTabComponent } from '../components/opportunities-tab.component';
 import { AlertsTabComponent } from '../components/alerts-tab.component';
 import { PurchasesTabComponent } from '../components/purchases-tab.component';
@@ -37,7 +38,7 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
   imports: [GridStateDirective, 
     CommonModule, FormsModule, AgGridAngular, GridCellCopyDirective, MatCardModule, MatButtonModule, MatFormFieldModule,
     MatSelectModule, MatProgressSpinnerModule, MatSnackBarModule, MatIconModule, MatTooltipModule,
-    MatSlideToggleModule, MatInputModule, MatTabsModule, OpeningsTabComponent, OpportunitiesTabComponent, PurchasesTabComponent, AlertsTabComponent
+    MatSlideToggleModule, MatInputModule, MatTabsModule, OpeningsTabComponent, SecretLairTabComponent, OpportunitiesTabComponent, PurchasesTabComponent, AlertsTabComponent
   ],
   template: `
     <mat-tab-group class="tabs" [(selectedIndex)]="tabIndex" animationDuration="0ms">
@@ -211,6 +212,12 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
       <ng-template matTabContent>
         <app-alerts-tab [products]="analysis()?.products ?? []" [setCode]="selectedCode()" [setName]="analysis()?.name ?? null"
           (openRelease)="openRelease($event)"></app-alerts-tab>
+      </ng-template>
+    </mat-tab>
+
+    <mat-tab label="Secret Lair">
+      <ng-template matTabContent>
+        <app-secret-lair-tab></app-secret-lair-tab>
       </ng-template>
     </mat-tab>
     </mat-tab-group>

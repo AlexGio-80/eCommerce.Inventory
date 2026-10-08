@@ -12,7 +12,7 @@
 **Priorità:** Alta
 **Stato (2026-10-07):** tutte le fasi (0-5) in produzione e verificate, più il piano d'acquisto su Card
 Trader e le regole di avviso generiche. Restano da fare dall'utente: configurare l'email degli avvisi e
-completare il registro acquisti (vedi ROADMAP). Secret Lair: capitolo a parte, da discutere.
+completare il registro acquisti (vedi ROADMAP). Secret Lair: progettato il 2026-10-08 in tre fasi (vedi sezione Secret Lair).
 
 Quando esce un'espansione, e anche sulle espansioni già uscite, l'utente deve decidere **cosa
 comprare** (quale formato: Play Box, Collector Box, Draft Night, bundle, Commander, Scene Box...),
@@ -414,13 +414,63 @@ premere "Email di prova" nella scheda Avvisi.
   previsione (composizione delle buste non ancora pubblicata: si calcolerà all'apertura). Commander
   Deck Set e Scene Box Set da aggiungere dall'utente, prezzi non noti.
 
-### Secret Lair — capitolo a parte, da discutere (annotato 2026-10-07)
+### Secret Lair (progettato il 2026-10-08)
 
 L'utente compra regolarmente anche **Secret Lair**, ma non su Cardmarket: direttamente dal sito
-Wizards (`https://secretlair.wizards.com/eu/`) al momento del drop, più o meno ogni due settimane,
-perché il margine di solito è molto buono. Il caso è diverso dagli altri prodotti: il prezzo
+Wizards (`https://secretlair.wizards.com/eu/shopall`) al momento del drop, più o meno ogni due
+settimane, perché il margine di solito è molto buono. Li vende **sempre aperti, a singole**. Il prezzo
 d'acquisto è il listino Wizards e la finestra è quella del drop, quindi la domanda è "quale drop
-conviene", più che "quando comprare". Da progettare a parte su richiesta dell'utente.
+conviene", più che "quando comprare".
+
+**Dati di partenza (verificati l'08/10/2026):**
+
+- Vendite Secret Lair dal novembre 2025: circa 400 copie negli ordini pagati (gli ordini `hub_pending`
+  di Card Trader Zero sembrano duplicati, vedi ROADMAP); in vendita 618 copie. Tutte con il tag
+  `#SLD_OLD`: il bilancio per drop non si legge dal tag
+- Catalogo MTGJSON: 915 prodotti Secret Lair, 807 con il contenuto (carte o mazzi), 383 con un trend
+  Cardmarket da sigillato. Tipi: drop normale (~415), drop foil (~363, compresi "Rainbow Foil"),
+  bundle dei superdrop (123), mazzi Commander (9)
+- Abbinamento carta venduta → drop passando da carte e mazzi MTGJSON (id Scryfall del blueprint):
+  **circa il 90% dell'incasso**, 135 drop. Solo dalle carte, senza i mazzi, l'8%: in
+  MTGJSON la maggior parte dei drop è descritta come mazzo
+- Sito Wizards: catalogo e pagine prodotto in HTML, senza interfaccia dati. La pagina "Shop all" ha
+  id prodotto, nome, prezzo, foil, stato (preordine, scorte basse, disponibile); la pagina del prodotto
+  ha **l'elenco delle carte già prima dell'uscita** (nome reale della carta), data di spedizione e
+  limite per cliente. `robots.txt` non vieta queste pagine. Il sito usa Queue-it nei momenti di picco
+
+**Decisioni (utente, 08/10/2026):**
+
+| Decisione | Scelta |
+|-----------|--------|
+| Prezzo pagato per la retrospettiva | Standard per tipo, correggibile drop per drop dal registro acquisti: **34,99 €** drop normale, **44,99 €** foil, **149 €** bundle, **179 €** mazzo Commander |
+| Vendita | Sempre aperti, a singole: si confronta con l'incassato dalle singole, il sigillato non conta |
+| Tag dei prossimi drop | Uno per drop, `#SLD_<codice>_AAAAMMGG`, proposto dal registro acquisti |
+| Monitoraggio del sito Wizards | Sì, per suggerire i drop da comprare |
+
+**Fasi:**
+
+1. **Retrospettiva per drop** (pubblicata e verificata il 2026-10-08) — scheda "Secret Lair" della pagina Acquisti. Per ogni drop venduto o in
+   vendita: tipo, copie (dalle carte caricate: il massimo di copie fra le carte del drop), prezzo
+   unitario (registro acquisti, altrimenti standard), spesa, incassato e valore in vendita al netto
+   della commissione Card Trader misurata, resa, quota già rientrata, valore di oggi delle singole su
+   Cardmarket. Riepilogo per tipo. Le carte si abbinano al drop per id Scryfall e foil, passando da
+   carte e mazzi MTGJSON; i bundle non si abbinano (le carte vanno ai drop che contengono). Per i drop
+   con tag dedicato vale il tag. **Drop comprato intero** = tutte le carte caricate (almeno 3 diverse) o
+   registrato: le carte dei drop incompleti sono singole arrivate con lotti o scambi (utente, 08/10) e
+   stanno in un riepilogo a parte. Copie = minimo di copie fra le carte del drop. Primo risultato: 86 drop,
+   resa con le copie in vendita +91% (normali +102%, foil +34%)
+2. **Monitoraggio del sito Wizards** — due-tre letture al giorno della pagina "Shop all" e delle sole
+   pagine prodotto nuove o cambiate. Si registrano prodotto, prezzo, foil, stato, carte, data di
+   comparsa e di esaurimento. Avviso (campanella ed email) per ogni drop nuovo. Se la lettura non
+   riesce (coda Queue-it), si salta il giro. Da qui anche il **link al sito Wizards** nella scheda: il
+   negozio mostra solo i drop in vendita, l'id Wizards non è in MTGJSON e la ricerca del sito è vietata
+   da `robots.txt`, quindi il link c'è solo per i drop visti dal monitoraggio
+3. **Valutazione del drop prima dell'acquisto** — per ogni carta del drop, il prezzo delle stampe già
+   esistenti (Cardmarket e Card Trader) per il sovrapprezzo Secret Lair misurato sui drop passati
+   (versione Secret Lair contro stampa più economica, separato foil / non foil), con quota venduta e
+   costi: confronto con il prezzo Wizards e suggerimento "Compra" / "Lascia" nella scheda e negli
+   avvisi. Le carte mai stampate prima usano la media dei drop simili e sono segnalate come stima
+   debole. Dopo l'uscita i prezzi reali sostituiscono la stima e si misura quanto ci aveva preso
 
 Già disponibile: l'import della Fase 0 salva ogni giorno anche i circa 890 prodotti Secret Lair del
 catalogo Cardmarket (categoria "MtG Set"), quindi lo storico di rivendita dei drop si accumula da

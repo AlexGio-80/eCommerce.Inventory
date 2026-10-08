@@ -9,6 +9,38 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-08] Feature — Secret Lair, Fase 1: retrospettiva per drop
+
+#### Problema
+
+I Secret Lair si comprano dal sito Wizards e si vendono a singole, ma tutte le carte avevano lo stesso
+tag (`#SLD_OLD`): non si poteva sapere quali drop avessero reso e quali no, né quali tipi di drop
+convenga comprare.
+
+#### Soluzione Implementata
+
+- Scheda **"Secret Lair"** nella pagina Acquisti: per ogni drop comprato intero spesa, copie, incassato
+  netto, quota rientrata, copie e valore in vendita, resa, valore di oggi delle singole su Cardmarket,
+  link al prodotto su Card Trader (dove il blueprint è abbinato: 410 drop su 921) e di ricerca su Cardmarket. Riepilogo per tipo (normale, foil, bundle, Commander), cliccabile come
+  filtro
+- Le carte si riconducono al drop per id Scryfall e foil, passando da carte e **mazzi** MTGJSON (in
+  MTGJSON la maggior parte dei drop è un mazzo); le carte col tag di un drop registrato vanno a quel drop
+- **Drop comprato intero** = tutte le carte caricate (almeno 3 diverse), oppure registrato nel registro
+  acquisti. Gli altri sono singole sciolte arrivate con lotti o scambi (utente, 08/10): riepilogo a parte
+- Copie stimate come il minimo di copie fra le carte del drop; prezzo dal registro acquisti, altrimenti
+  standard per tipo (`Purchasing:SecretLair:*`: 34,99 / 44,99 / 149 / 179 €)
+- Registro acquisti: per i prodotti Secret Lair il tag proposto è `#SLD_<iniziali del drop>[F]_AAAAMMGG`
+- Endpoint `GET /api/purchasing/secret-lair/drops` (`SecretLairRetrospectiveService`)
+
+#### Note Tecniche
+
+- Misurato l'08/10/2026: 86 drop comprati interi (116 copie), resa con le copie in vendita +91%;
+  drop normali +102%, foil +34%
+- Si contano solo gli ordini pagati (`PaidAt`), come negli altri report della pagina. Gli ordini
+  `hub_pending` di "Ct connect" (Card Trader Zero, senza data di pagamento) sembrano duplicati di quelli
+  pagati (97% delle righe ha una gemella identica): verifica aperta a parte
+- I mazzi Commander Secret Lair non si caricano mai interi (100 carte): compaiono solo se registrati
+
 ### [2026-10-08] Feature — Valore atteso: costo per carta, quota venduta per fascia, prodotti non giocabili
 
 #### Problema

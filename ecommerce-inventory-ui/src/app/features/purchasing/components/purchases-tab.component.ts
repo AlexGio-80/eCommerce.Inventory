@@ -192,11 +192,30 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
       this.snackBar.open('Scegli prima il prodotto', 'Chiudi', { duration: 3000 });
       return;
     }
+    const date = (this.form.openedAt || new Date().toISOString().slice(0, 10)).replace(/-/g, '');
+    if (product.subtype?.startsWith('secret_lair')) {
+      this.form.tag = `#SLD_${this.secretLairCode(product.name)}_${date}`;
+      return;
+    }
     const type = product.subtype === 'play' ? 'PB'
       : product.subtype === 'collector' ? 'CB'
       : (product.subtype || product.category || 'X').slice(0, 3).toUpperCase();
-    const date = (this.form.openedAt || new Date().toISOString().slice(0, 10)).replace(/-/g, '');
     this.form.tag = `#${product.setCode}_${type}_${date}`;
+  }
+
+  /**
+   * Codice breve di un drop Secret Lair: iniziali delle parole del nome (al massimo 5), più F se
+   * foil. "Secret Lair x Marvel Earth's Mightiest Pets Foil Edition" → MEMPF. Un tag per drop tiene
+   * separato il bilancio di ciascuno nella scheda Secret Lair.
+   */
+  private secretLairCode(name: string): string {
+    const foil = /\b(foil|etched)\b/i.test(name);
+    const words = name
+      .replace(/^Secret Lair( Drop)?( x)?\s*/i, '')
+      .replace(/\b(Foil|Rainbow|Etched|Edition|Bundle)\b/gi, '')
+      .split(/[^A-Za-z0-9]+/)
+      .filter(w => w.length > 1 && !/^(the|of|and|an|in|to)$/i.test(w));
+    return (words.slice(0, 5).map(w => w[0].toUpperCase()).join('') || 'SL') + (foil ? 'F' : '');
   }
 
   save() {

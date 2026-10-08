@@ -146,6 +146,54 @@ export interface OpeningValueParams {
     costPerCard?: number | null;
 }
 
+/** Un drop Secret Lair comprato intero, con spesa, incassato e resa. */
+export interface SecretLairDropRow {
+    sealedProductId: number;
+    name: string;
+    type: 'Normale' | 'Foil' | 'Bundle' | 'Commander';
+    cardmarketId?: number;
+    cardmarketName?: string;
+    cardTraderBlueprintId?: number;
+    distinctCards: number;
+    cardsListed: number;
+    copies: number;
+    /** True se copie e prezzo vengono dal registro acquisti, false se stimati. */
+    registeredPurchase: boolean;
+    unitPrice: number;
+    cost: number;
+    soldCopies: number;
+    grossRevenue: number;
+    netRevenue: number;
+    stockCopies: number;
+    stockListingValue: number;
+    profitSoFar: number;
+    profitWithStock: number;
+    returnPercent?: number;
+    recoveredPercent?: number;
+    cardmarketValuePerCopy: number;
+    firstSeen: string;
+}
+
+export interface SecretLairTypeSummary {
+    type: string;
+    drops: number;
+    copies: number;
+    cost: number;
+    netRevenue: number;
+    profitWithStock: number;
+    returnPercent?: number;
+}
+
+export interface SecretLairRetrospective {
+    drops: SecretLairDropRow[];
+    summary: SecretLairTypeSummary[];
+    cardTraderFeePercent: number;
+    looseSoldCopies: number;
+    looseGrossRevenue: number;
+    matchedRevenuePercent?: number;
+    standardPrices: Record<string, number>;
+}
+
 /** Bilancio reale di un'apertura, ricostruito dal tag delle inserzioni. */
 export interface OpeningBalance {
     tag: string;
@@ -383,6 +431,11 @@ export class PurchasingService {
 
     refreshCardTraderPrices(code: string): Observable<CardTraderSealedRefreshResult> {
         return this.http.post<ApiResponse<CardTraderSealedRefreshResult>>(`${this.apiUrl}/sets/${code}/cardtrader-prices`, {})
+            .pipe(map(response => response.data!));
+    }
+
+    getSecretLairDrops(): Observable<SecretLairRetrospective> {
+        return this.http.get<ApiResponse<SecretLairRetrospective>>(`${this.apiUrl}/secret-lair/drops`)
             .pipe(map(response => response.data!));
     }
 

@@ -251,6 +251,7 @@ builder.Services.AddScoped<BulkSellThroughService>();
 builder.Services.AddScoped<PriceRealizationService>();
 builder.Services.AddScoped<PurchaseCostService>();
 builder.Services.AddScoped<OpeningBalanceService>();
+builder.Services.AddScoped<SecretLairRetrospectiveService>();
 builder.Services.AddScoped<ProductPurchaseService>();
 builder.Services.AddScoped<SealedOpportunityService>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
