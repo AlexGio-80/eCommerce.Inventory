@@ -113,6 +113,26 @@ mat-card {
   background: #fff;
 }
 
+.rules-table input.narrow {
+  min-width: 56px;
+  width: 64px;
+}
+
+.rules-table tr.fallback-row td {
+  background: #f5f7ff;
+}
+
+.rules-table td.nowrap {
+  white-space: nowrap;
+}
+
+.fallback-label {
+  display: block;
+  font-size: 11px;
+  color: #3f51b5;
+  margin-bottom: 2px;
+}
+
 .rules-table input:focus,
 .rules-table select:focus {
   outline: none;

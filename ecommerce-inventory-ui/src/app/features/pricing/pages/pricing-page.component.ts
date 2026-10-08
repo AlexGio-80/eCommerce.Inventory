@@ -262,21 +262,34 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
             <mat-card>
               <mat-card-header>
                 <mat-card-title>Regole per fascia di prezzo</mat-card-title>
-                <mat-card-subtitle>La fascia si applica al prezzo attuale della tua carta</mat-card-subtitle>
+                <mat-card-subtitle>
+                  La fascia si applica al prezzo attuale della tua carta. Più regole sulla stessa fascia
+                  sono una catena: si prova quella con priorità più bassa e, se il mercato non basta
+                  (meno offerte del minimo, o meno della posizione richiesta), il ripiego successivo.
+                  Un blocco del guardrail non fa passare al ripiego.
+                </mat-card-subtitle>
               </mat-card-header>
               <mat-card-content>
                 <table class="rules-table">
                   <thead>
                     <tr>
-                      <th>Da €</th><th>A €</th><th>Riferimento</th><th>Posizione</th><th>Percentile</th>
+                      <th>Da €</th><th>A €</th>
+                      <th matTooltip="Sulla stessa fascia si prova prima il numero più basso">Priorità</th>
+                      <th>Riferimento</th><th>Posizione</th><th>Percentile</th>
                       <th>Scostamento €</th><th>Scostamento %</th>
+                      <th matTooltip="Vuoto = quello del profilo (Guardrail → Offerte comparabili minime)">Min offerte</th>
+                      <th matTooltip="Venditori presi a riferimento da questa regola">Venditori</th>
                       <th>Può alzare</th><th>Può abbassare</th><th></th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr *ngFor="let r of p.rules; let i = index">
-                      <td><input type="number" step="0.01" [(ngModel)]="r.fromPrice" [ngModelOptions]="{standalone: true}"></td>
+                    <tr *ngFor="let r of p.rules; let i = index" [class.fallback-row]="isFallback(r, p.rules)">
+                      <td>
+                        <span class="fallback-label" *ngIf="isFallback(r, p.rules)">ripiego</span>
+                        <input type="number" step="0.01" [(ngModel)]="r.fromPrice" [ngModelOptions]="{standalone: true}">
+                      </td>
                       <td><input type="number" step="0.01" [(ngModel)]="r.toPrice" [ngModelOptions]="{standalone: true}"></td>
+                      <td><input type="number" step="1" class="narrow" [(ngModel)]="r.priority" [ngModelOptions]="{standalone: true}"></td>
                       <td>
                         <select [(ngModel)]="r.referenceMode" [ngModelOptions]="{standalone: true}">
                           <option value="NthLowestOffer">N-esima più bassa</option>
@@ -293,9 +306,22 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
                                  [disabled]="r.referenceMode !== 'PercentileOffer'"></td>
                       <td><input type="number" step="0.01" [(ngModel)]="r.adjustmentAmount" [ngModelOptions]="{standalone: true}"></td>
                       <td><input type="number" step="0.1" [(ngModel)]="r.adjustmentPercent" [ngModelOptions]="{standalone: true}"></td>
+                      <td><input type="number" step="1" min="1" class="narrow" placeholder="profilo"
+                                 [(ngModel)]="r.minComparableOffers" [ngModelOptions]="{standalone: true}"></td>
+                      <td>
+                        <select [(ngModel)]="r.onlyCtZeroSellers" [ngModelOptions]="{standalone: true}">
+                          <option [ngValue]="null">Come il profilo</option>
+                          <option [ngValue]="true">Solo Card Trader Zero</option>
+                          <option [ngValue]="false">Tutti</option>
+                        </select>
+                      </td>
                       <td class="center"><mat-checkbox [(ngModel)]="r.canIncrease" [ngModelOptions]="{standalone: true}"></mat-checkbox></td>
                       <td class="center"><mat-checkbox [(ngModel)]="r.canDecrease" [ngModelOptions]="{standalone: true}"></mat-checkbox></td>
-                      <td class="center">
+                      <td class="center nowrap">
+                        <button mat-icon-button (click)="addFallback(r)"
+                                matTooltip="Aggiungi un ripiego per questa fascia: tutti i venditori, minimo 2 offerte">
+                          <mat-icon>subdirectory_arrow_right</mat-icon>
+                        </button>
                         <button mat-icon-button color="warn" (click)="removeRule(i)" matTooltip="Elimina regola">
                           <mat-icon>delete</mat-icon>
                         </button>
@@ -1033,6 +1059,32 @@ export class PricingPageComponent implements OnInit {
       canIncrease: true, canDecrease: true, priority: p.rules.length, isActive: true
     });
     this.profile.set({ ...p });
+  }
+
+  /**
+   * Ripiego per la fascia della regola: stessa impostazione, ma su tutti i venditori e con un
+   * mercato minimo di 2 offerte, provato dopo le regole già presenti sulla fascia.
+   */
+  addFallback(rule: PricingRule): void {
+    const p = this.profile();
+    if (!p) return;
+
+    const sameBand = p.rules.filter(r => r.fromPrice === rule.fromPrice && r.toPrice === rule.toPrice);
+    const copy: PricingRule = {
+      ...rule,
+      id: undefined,
+      priority: Math.max(...sameBand.map(r => r.priority)) + 1,
+      minComparableOffers: 2,
+      onlyCtZeroSellers: false
+    };
+    p.rules.splice(p.rules.indexOf(sameBand[sameBand.length - 1]) + 1, 0, copy);
+    this.profile.set({ ...p });
+  }
+
+  /** Regola che si usa solo se quelle con priorità più bassa sulla stessa fascia non hanno mercato. */
+  isFallback(rule: PricingRule, rules: PricingRule[]): boolean {
+    return rules.some(r => r !== rule && r.isActive && r.fromPrice === rule.fromPrice && r.toPrice === rule.toPrice
+      && r.priority < rule.priority);
   }
 
   removeRule(index: number): void {

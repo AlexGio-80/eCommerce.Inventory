@@ -6,6 +6,8 @@
 
 ## In Corso
 
+- [x] **Autopricer: carte appena caricate al prezzo di mercato (2026-10-08)** — pubblicato e verificato dall'utente il 2026-10-08. Una carta mai prezzata dall'autopricer ha la fascia ricalcolata sul prezzo proposto e nessun guardrail. Verifica: dopo un caricamento dalla maschera, nella scheda Esecuzioni (origine "Nuova inserzione") le carte nuove devono risultare applicate con la motivazione "Inserzione nuova", non più `BlockedByGuardrail`
+- [ ] **Autopricer: regole a ripiego (2026-10-08)** — pubblicate e configurate l'08/10 (ripiego su tutti i venditori, min 2 fino a 25 €, min 3 sopra); resta da verificare sulle notturne. Più regole sulla stessa fascia diventano una catena; ogni regola può avere minimo di offerte e venditori propri. Da configurare dalla scheda Regole un ripiego per fascia (pulsante ↳ sulla riga). Verifica: nelle notturne successive le carte con esito "poche offerte" devono scendere dalle ~300 per notte del 6-8/10, e nello Storico devono comparire valutazioni con "Regola di ripiego"
 - [x] **Piano d'acquisto: colonna "Trend CM" e link "CM" accanto alle offerte Card Trader (2026-10-08)** — pubblicato e verificato il 2026-10-08: per confrontare l'offerta Card Trader con il prezzo dello stesso prodotto su Cardmarket
 - [x] **Fix Analisi uscita di Secret Lair (2026-10-08)** — pubblicato e verificato il 2026-10-08: le centinaia di schede del valore per busta (ogni drop è una "busta" per MTGJSON) nascondevano la griglia. Ora se ne vedono 10 con "Mostra tutte le buste", e la griglia ha un'altezza minima
 - [x] **Prezzi Card Trader automatici anche aprendo un'uscita dalla scheda Opportunità (2026-10-08)** — pubblicato e verificato il 2026-10-08: stessa regola degli avvisi (solo se mancano o hanno più di 6 ore)

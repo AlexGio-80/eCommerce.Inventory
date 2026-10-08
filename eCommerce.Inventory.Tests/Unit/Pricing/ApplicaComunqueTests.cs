@@ -100,6 +100,13 @@ public class ApplicaComunqueTests
             IsFoil = false,
             Location = ""
         });
+        // Carta già prezzata dall'autopricer in passato: senza storico conterebbe come
+        // inserzione nuova, che il guardrail non lo ha affatto.
+        context.PriceChangeLogs.Add(new PriceChangeLog
+        {
+            InventoryItemId = 1, BlueprintId = 10, OldPrice = 21m, ProposedPrice = 20m,
+            Outcome = PricingOutcome.Applied, Trigger = PricingTrigger.Scheduled, Reason = "notturna precedente"
+        });
         await context.SaveChangesAsync();
 
         var api = new Mock<ICardTraderApiService>();

@@ -63,6 +63,8 @@ public class PricingProfileSaveTests
           "canIncrease": true,
           "canDecrease": true,
           "priority": 0,
+          "minComparableOffers": null,
+          "onlyCtZeroSellers": null,
           "isActive": true
         },
         {
@@ -77,6 +79,21 @@ public class PricingProfileSaveTests
           "canIncrease": true,
           "canDecrease": true,
           "priority": 1,
+          "isActive": true
+        },
+        {
+          "fromPrice": 1.01,
+          "toPrice": 25,
+          "referenceMode": "NthLowestOffer",
+          "position": 2,
+          "percentile": 20,
+          "adjustmentAmount": 0,
+          "adjustmentPercent": 0,
+          "canIncrease": true,
+          "canDecrease": true,
+          "priority": 2,
+          "minComparableOffers": 2,
+          "onlyCtZeroSellers": false,
           "isActive": true
         }
       ]
@@ -150,14 +167,21 @@ public class PricingProfileSaveTests
         var rules = await context.PricingRules
             .AsNoTracking()
             .Where(r => r.PricingProfileId == profileId)
-            .OrderBy(r => r.FromPrice)
+            .OrderBy(r => r.FromPrice).ThenBy(r => r.Priority)
             .ToListAsync();
 
-        rules.Should().HaveCount(2, "le regole inviate sostituiscono integralmente quelle a database");
+        rules.Should().HaveCount(3, "le regole inviate sostituiscono integralmente quelle a database");
         rules[0].ReferenceMode.Should().Be(PriceReferenceMode.PercentileOffer);
         rules[0].Percentile.Should().Be(15m);
         rules[1].ReferenceMode.Should().Be(PriceReferenceMode.NthLowestOffer);
         rules[1].Position.Should().Be(3);
+
+        // Regola di ripiego sulla stessa fascia: minimo e venditori propri, la principale eredita dal profilo.
+        rules[0].MinComparableOffers.Should().BeNull();
+        rules[0].OnlyCtZeroSellers.Should().BeNull();
+        rules[2].Priority.Should().Be(2);
+        rules[2].MinComparableOffers.Should().Be(2);
+        rules[2].OnlyCtZeroSellers.Should().BeFalse();
     }
 
     /// <summary>

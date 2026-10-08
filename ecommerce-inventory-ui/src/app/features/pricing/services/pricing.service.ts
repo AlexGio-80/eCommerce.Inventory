@@ -25,7 +25,12 @@ export interface PricingRule {
     adjustmentPercent: number;
     canIncrease: boolean;
     canDecrease: boolean;
+    /** Sulla stessa fascia si prova prima la più bassa: le altre sono ripieghi. */
     priority: number;
+    /** Offerte comparabili minime per questa regola; null = quelle del profilo. */
+    minComparableOffers?: number | null;
+    /** Solo venditori Card Trader Zero; null = come il profilo. */
+    onlyCtZeroSellers?: boolean | null;
     isActive: boolean;
 }
 

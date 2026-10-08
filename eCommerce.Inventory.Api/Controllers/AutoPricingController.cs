@@ -105,6 +105,8 @@ public class AutoPricingController : ControllerBase
                     CanIncrease = r.CanIncrease,
                     CanDecrease = r.CanDecrease,
                     Priority = r.Priority,
+                    MinComparableOffers = r.MinComparableOffers,
+                    OnlyCtZeroSellers = r.OnlyCtZeroSellers,
                     IsActive = r.IsActive
                 });
             }
@@ -588,7 +590,8 @@ public class AutoPricingController : ControllerBase
         p.MatchCondition,
         p.MatchLanguage,
         p.MatchFoil,
-        Rules = p.Rules.OrderBy(r => r.FromPrice).Select(r => new
+        // Per fascia e, dentro la fascia, nell'ordine della catena: la principale e poi i ripieghi.
+        Rules = p.Rules.OrderBy(r => r.FromPrice).ThenBy(r => r.Priority).ThenBy(r => r.Id).Select(r => new
         {
             r.Id,
             r.FromPrice,
@@ -601,6 +604,8 @@ public class AutoPricingController : ControllerBase
             r.CanIncrease,
             r.CanDecrease,
             r.Priority,
+            r.MinComparableOffers,
+            r.OnlyCtZeroSellers,
             r.IsActive
         })
     };
@@ -680,5 +685,12 @@ public class RuleRequest
     public bool CanIncrease { get; set; } = true;
     public bool CanDecrease { get; set; } = true;
     public int Priority { get; set; }
+
+    /// <summary>Null = quelle del profilo.</summary>
+    public int? MinComparableOffers { get; set; }
+
+    /// <summary>Null = come il profilo.</summary>
+    public bool? OnlyCtZeroSellers { get; set; }
+
     public bool IsActive { get; set; } = true;
 }

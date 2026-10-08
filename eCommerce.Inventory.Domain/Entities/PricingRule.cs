@@ -31,8 +31,9 @@ public enum PriceReferenceMode
 }
 
 /// <summary>
-/// Regola di pricing valida per una fascia di prezzo. Le fasce non devono sovrapporsi;
-/// se lo fanno, vince quella con Priority più bassa.
+/// Regola di pricing valida per una fascia di prezzo. Più regole sulla stessa fascia formano
+/// una catena di ripiego: si prova quella con Priority più bassa e, se il mercato non basta
+/// (poche offerte comparabili, o meno della posizione richiesta), la successiva.
 /// </summary>
 public class PricingRule
 {
@@ -75,8 +76,20 @@ public class PricingRule
     /// <summary>Se false, la regola non può mai abbassare il prezzo corrente.</summary>
     public bool CanDecrease { get; set; } = true;
 
-    /// <summary>A parità di fascia applicabile vince il valore più basso.</summary>
+    /// <summary>A parità di fascia si prova prima il valore più basso; le altre sono ripieghi.</summary>
     public int Priority { get; set; }
+
+    /// <summary>
+    /// Offerte comparabili minime per questa regola. Null = quelle del profilo. Serve ai ripieghi:
+    /// la regola principale chiede un mercato profondo, il ripiego si accontenta di meno.
+    /// </summary>
+    public int? MinComparableOffers { get; set; }
+
+    /// <summary>
+    /// Solo venditori Card Trader Zero come riferimento. Null = come il profilo. Un ripiego può
+    /// allargare ai venditori normali quando quelli Card Trader Zero sono troppo pochi.
+    /// </summary>
+    public bool? OnlyCtZeroSellers { get; set; }
 
     public bool IsActive { get; set; } = true;
 }

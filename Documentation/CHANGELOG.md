@@ -9,6 +9,77 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-08] Fix — Autopricer: le carte appena caricate restavano al prezzo di caricamento
+
+#### Problema
+
+Dalla maschera le carte si caricano a un prezzo alto di proposito, aspettando che l'autopricer le
+porti al mercato. Ma il motore trattava quel prezzo come un prezzo reale:
+
+- **il guardrail bloccava il riallineamento**: negli ultimi 30 giorni 1.147 valutazioni su ~2.200 fatte
+  subito dopo la pubblicazione sono finite `BlockedByGuardrail`, 1.112 con un prezzo proposto sotto la
+  metà di quello di caricamento (es. una carta caricata a 5,90 € che ne valeva 0,05)
+- **la fascia di regole si sceglieva sul prezzo di caricamento**: una terra base caricata a 5 € prendeva
+  la regola delle carte da 1–25 € invece di quella del bulk
+
+#### Soluzione Implementata
+
+- È **nuova** una carta a cui l'autopricer non ha mai scritto né confermato un prezzo (nessun esito
+  `Applied` o `NoChangeNeeded` nello storico). Lo dice lo storico e non il trigger: se il riprezzo
+  subito dopo la pubblicazione salta (riavvio, mercato sottile), la carta resta nuova anche per la notturna
+- Sulle carte nuove: se il prezzo proposto cade in un'altra fascia, il calcolo si rifà una volta con le
+  regole di quella fascia; guardrail e direzione della regola non si applicano
+- Le modifiche dalla maschera restano come prima: carte già prezzate, guardrail normale
+- La motivazione nello Storico lo dichiara: "Inserzione nuova, guardrail non applicato" e, se la fascia è
+  cambiata, su quale prezzo è stata scelta
+
+#### Note Tecniche
+
+- `PricingEngine.Evaluate` riceve `isNewListing`; `AutoPricingService` lo calcola per carta dallo storico
+  (`PriceChangeLogs`), con una query per blueprint
+- Se la fascia del prezzo stimato non ha mercato a sufficienza, resta il primo calcolo: è comunque un
+  prezzo di mercato, migliore di quello di caricamento
+- Effetto alla prima notturna dopo la pubblicazione (misurato l'08/10): 186 carte di bulk caricate il 07/10,
+  ferme dal guardrail, scendono al mercato (circa 200 € di listino in meno); 395 carte mai prezzate per
+  mercato insufficiente lo saranno senza guardrail, grazie anche ai ripieghi
+
+### [2026-10-08] Feature — Autopricer: regole a ripiego
+
+#### Problema
+
+Il 2026-10-05 il profilo è passato a minimo 4 offerte comparabili, solo venditori Card Trader Zero
+(scelta voluta: non fidarsi dei mercati sottili). Da allora ogni notte ~300 carte venivano scartate
+per "poche offerte" e restavano al prezzo vecchio: 483 carte distinte, 3.277 € di listino, comprese
+quelle di valore, che stanno proprio sui mercati con pochi venditori. Per una carta scattava una
+sola regola: una seconda regola sulla stessa fascia non veniva mai provata, e la priorità non si
+vedeva né si modificava dalla maschera.
+
+#### Soluzione Implementata
+
+- Più regole sulla stessa fascia sono una **catena**: si prova quella con priorità più bassa e, se il
+  mercato non basta, la successiva. "Non basta" vuol dire: nessuna offerta dopo i filtri, meno offerte
+  del minimo, o meno della posizione richiesta. Un blocco del guardrail o della direzione **non** fa
+  passare al ripiego
+- Ogni regola può avere un proprio **minimo di offerte** e un proprio filtro **venditori** (Come il
+  profilo / Solo Card Trader Zero / Tutti); vuoti = quelli del profilo
+- Scheda Regole: colonne Priorità, Min offerte e Venditori; etichetta "ripiego" sulle regole
+  secondarie; pulsante per aggiungere a una fascia un ripiego su tutti i venditori con minimo 2
+- La motivazione registrata dice quale ripiego è stato usato e perché i precedenti non bastavano;
+  se nessuna regola basta, elenca il motivo di ciascuna
+- Migration `AddPricingRuleFallbackOverrides`: `PricingRules.MinComparableOffers` e
+  `PricingRules.OnlyCtZeroSellers`, entrambe nullable
+
+#### Note Tecniche
+
+- Il minimo di offerte del profilo veniva controllato **prima** di scegliere la regola: un ripiego
+  limitato alla posizione mancante non avrebbe salvato nessuna delle 483 carte. Ora filtro sui
+  venditori, scarto delle anomalie, minimo e posizione sono un passaggio unico ripetuto per ogni
+  regola della catena (`PricingEngine.PrepareMarket`)
+- Le regole esistenti non si sovrappongono e hanno i campi nuovi vuoti: il comportamento resta
+  identico finché non si aggiunge un ripiego
+- La fascia si sceglie ancora sul prezzo attuale della carta (resta aperto il caso delle carte appena
+  caricate a un prezzo alto)
+
 ### [2026-10-08] Feature — Piano d'acquisto: trend e link Cardmarket accanto alle offerte Card Trader
 
 #### Problema

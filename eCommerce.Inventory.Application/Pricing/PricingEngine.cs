@@ -42,12 +42,19 @@ public class PricingEngine
     /// esplicito su una carta già vista bloccata nello storico: il guardrail resta attivo per
     /// tutte le altre, qui si accetta consapevolmente lo scarto più ampio.
     /// </param>
+    /// <param name="isNewListing">
+    /// Carta a cui l'autopricer non ha mai scritto né confermato un prezzo. Il suo prezzo è quello
+    /// di caricamento, spesso alto di proposito: non dice nulla sul valore della carta. Quindi la
+    /// fascia si ricalcola sul prezzo proposto, e guardrail e direzione non si applicano: non c'è
+    /// un prezzo di mercato da proteggere.
+    /// </param>
     public PricingDecision Evaluate(
         InventoryItem item,
         IReadOnlyList<CardTraderMarketplaceProductDto> offers,
         PricingProfile profile,
         int myUserId,
-        bool bypassGuardrail = false)
+        bool bypassGuardrail = false,
+        bool isNewListing = false)
     {
         var currentPrice = item.ListingPrice;
 
@@ -73,97 +80,44 @@ public class PricingEngine
         var candidates = offers.Where(o => o.User?.Id != myUserId).ToList();
 
         // 2. Solo offerte realmente confrontabili con la mia carta.
-        candidates = FilterComparable(candidates, item, profile);
+        var comparable = FilterComparable(candidates, item, profile);
 
-        // 3. Filtri sul tipo di venditore.
-        candidates = FilterSellers(candidates, profile);
+        // 3. La regola si sceglie sulla fascia del prezzo CORRENTE della mia carta. Più regole
+        //    sulla stessa fascia sono una catena: se il mercato non basta per la prima (filtri
+        //    sui venditori, minimo di offerte, posizione richiesta) si prova la successiva.
+        var pick = PickRule(comparable, profile, currentPrice);
+        if (pick.Skip != null) return pick.Skip;
 
-        if (candidates.Count == 0)
+        // 4-5. Prezzo proposto con la regola scelta.
+        var price = ProposePrice(pick, profile, marketFee);
+
+        // Sulla carta nuova il prezzo corrente è quello di caricamento, e la fascia scelta su
+        // di esso è casuale: una terra base caricata a 5 € pescherebbe la regola delle carte da
+        // 1-25 €. Se il prezzo proposto cade in un'altra fascia si rifà il calcolo con quella.
+        // Una sola volta: il secondo prezzo nasce già dalla regola giusta per il suo valore.
+        string? newListingNote = null;
+        if (isNewListing && (price.Proposed < pick.Rule!.FromPrice || price.Proposed > pick.Rule.ToPrice))
         {
-            return PricingDecision.Skip(
-                PricingOutcome.InsufficientOffers,
-                currentPrice,
-                "Nessuna offerta comparabile dopo i filtri su comparabilità e venditori");
+            var repick = PickRule(comparable, profile, price.Proposed);
+            if (repick.Skip == null)
+            {
+                newListingNote =
+                    $"Inserzione nuova: fascia scelta sul prezzo di mercato stimato ({price.Proposed:0.00} €) " +
+                    $"invece che su quello di caricamento ({currentPrice:0.00} €).";
+                pick = repick;
+                price = ProposePrice(pick, profile, marketFee);
+            }
         }
 
-        // 4. Scarto delle offerte anomale, in due passaggi complementari.
-        //    Prima un filtro di rapporto sulla mediana, che è grossolano ma funziona a qualunque
-        //    numero di offerte: intercetta i prezzi di comodo messi altissimi per non sbagliare
-        //    e quelli irrealistici dei venditori alle prime armi. Poi lo scarto statistico con
-        //    la MAD, più fine ma affidabile solo con qualche punto a disposizione.
-        var outliersRejected = 0;
-
-        if (profile.MaxMedianRatio >= 1m && candidates.Count >= 2)
-        {
-            var beforeCount = candidates.Count;
-            candidates = RejectByMedianRatio(candidates, profile.MaxMedianRatio);
-            outliersRejected += beforeCount - candidates.Count;
-        }
-
-        if (profile.EnableOutlierRejection && candidates.Count >= profile.MinOffersForOutlierRejection)
-        {
-            var beforeCount = candidates.Count;
-            candidates = RejectOutliers(candidates, profile.OutlierMadThreshold);
-            outliersRejected += beforeCount - candidates.Count;
-        }
-
-        if (candidates.Count < profile.MinComparableOffers)
-        {
-            return PricingDecision.Skip(
-                PricingOutcome.InsufficientOffers,
-                currentPrice,
-                $"Solo {candidates.Count} offerte comparabili, il minimo richiesto è {profile.MinComparableOffers}",
-                candidates.Count,
-                outliersRejected);
-        }
-
-        // 5. La regola si sceglie sulla fascia del prezzo CORRENTE della mia carta.
-        var rule = SelectRule(profile, currentPrice);
-        if (rule == null)
-        {
-            return PricingDecision.Skip(
-                PricingOutcome.NoMatchingRule,
-                currentPrice,
-                $"Nessuna regola attiva copre il prezzo corrente di {currentPrice:0.00} €",
-                candidates.Count,
-                outliersRejected);
-        }
-
-        // 6. Mercato troppo sottile per la posizione richiesta.
-        var sortedPrices = candidates.Select(o => o.PriceCents / 100m).OrderBy(p => p).ToList();
-
-        if (profile.SkipWhenFewerOffersThanPosition &&
-            IsPositional(rule.ReferenceMode) &&
-            sortedPrices.Count < rule.Position)
-        {
-            return PricingDecision.Skip(
-                PricingOutcome.InsufficientOffers,
-                currentPrice,
-                $"La regola chiede la posizione {rule.Position} ma le offerte comparabili sono {sortedPrices.Count}: " +
-                "posizionarsi qui significherebbe allinearsi all'offerta più cara del mercato",
-                sortedPrices.Count,
-                outliersRejected);
-        }
-
-        // 7. Prezzo di riferimento e scostamenti, in termini di vetrina.
-        //    Le regole descrivono una posizione fra i venditori, quindi vanno applicate ai
-        //    prezzi che l'acquirente vede; il risultato viene poi riportato al prezzo venditore,
-        //    che è l'unico valore che si può scrivere su Card Trader.
-        var reference = ResolveReferencePrice(sortedPrices, rule);
-
-        var proposedMarket = reference + rule.AdjustmentAmount;
-        if (rule.AdjustmentPercent != 0)
-        {
-            proposedMarket += proposedMarket * (rule.AdjustmentPercent / 100m);
-        }
-
-        var proposed = Math.Round(proposedMarket - marketFee, 2, MidpointRounding.AwayFromZero);
-
-        // 8. Il prezzo minimo non è mai valicabile.
-        if (proposed < profile.MinPrice)
-        {
-            proposed = profile.MinPrice;
-        }
+        var rule = pick.Rule!;
+        var chosen = pick.Market!;
+        var failures = pick.Failures;
+        var outliersRejected = chosen.OutliersRejected;
+        var sortedPrices = chosen.SortedPrices;
+        candidates = chosen.Offers;
+        var reference = price.Reference;
+        var proposedMarket = price.ProposedMarket;
+        var proposed = price.Proposed;
 
         var decision = new PricingDecision
         {
@@ -181,6 +135,17 @@ public class PricingEngine
             currentPrice, myMarketPrice, marketFee, feeDerived, reference, proposedMarket,
             sortedPrices, rule, candidates.Count, outliersRejected);
 
+        if (failures.Count > 0)
+        {
+            context = $"Regola di ripiego {failures.Count} (priorità {rule.Priority}), perché: " +
+                      string.Join(" ", failures.Select(f => f.Failure!.TrimEnd('.') + ".")) + " " + context;
+        }
+
+        if (newListingNote != null)
+        {
+            context = newListingNote + " " + context;
+        }
+
         if (proposed == currentPrice)
         {
             decision.Outcome = PricingOutcome.NoChangeNeeded;
@@ -188,7 +153,16 @@ public class PricingEngine
             return decision;
         }
 
-        // 9. Direzione consentita dalla regola.
+        // Carta nuova: il prezzo di caricamento non è un prezzo di mercato da proteggere, quindi
+        // né la direzione né il guardrail hanno senso. Si scrive il prezzo di mercato e basta.
+        if (isNewListing)
+        {
+            decision.Outcome = profile.DryRun ? PricingOutcome.SimulatedDryRun : PricingOutcome.Applied;
+            decision.Reason = $"Inserzione nuova, guardrail non applicato: {currentPrice:0.00} € → {proposed:0.00} €. {context}";
+            return decision;
+        }
+
+        // 6. Direzione consentita dalla regola.
         if (proposed > currentPrice && !rule.CanIncrease)
         {
             decision.Outcome = PricingOutcome.BlockedByDirection;
@@ -203,7 +177,7 @@ public class PricingEngine
             return decision;
         }
 
-        // 10. Guardrail, asimmetrico per direzione: le due non hanno lo stesso costo se sbagliate.
+        // 7. Guardrail, asimmetrico per direzione: le due non hanno lo stesso costo se sbagliate.
         var guardrailBypassed = false;
 
         // Sotto la soglia in euro le percentuali non dicono nulla di utile: sul bulk qualunque
@@ -362,7 +336,8 @@ public class PricingEngine
 
     private static List<CardTraderMarketplaceProductDto> FilterSellers(
         List<CardTraderMarketplaceProductDto> offers,
-        PricingProfile profile)
+        PricingProfile profile,
+        bool onlyCtZero)
     {
         var allowedCountries = ParseCountries(profile.CountryCodesCsv);
 
@@ -373,7 +348,7 @@ public class PricingEngine
 
             if (profile.ExcludeVacationSellers && o.OnVacation) return false;
 
-            if (profile.IncludeOnlyCtZeroSellers && !u.CanSellViaHub) return false;
+            if (onlyCtZero && !u.CanSellViaHub) return false;
 
             var isPro = string.Equals(u.UserType, "pro", StringComparison.OrdinalIgnoreCase);
             if (isPro && !profile.IncludeProSellers) return false;
@@ -465,13 +440,171 @@ public class PricingEngine
     private static bool IsPositional(PriceReferenceMode mode)
         => mode is PriceReferenceMode.NthLowestOffer or PriceReferenceMode.AverageOfLowestN;
 
-    private static PricingRule? SelectRule(PricingProfile profile, decimal currentPrice)
+    /// <summary>
+    /// Prima regola della catena della fascia di <paramref name="price"/> che ha mercato a sufficienza.
+    /// Se nessuna lo ha, <see cref="RulePick.Skip"/> contiene già la decisione da restituire.
+    /// </summary>
+    private static RulePick PickRule(List<CardTraderMarketplaceProductDto> comparable, PricingProfile profile, decimal price)
+    {
+        var rules = SelectRules(profile, price);
+        if (rules.Count == 0)
+        {
+            // Senza regole conta comunque prima il mercato: un mercato vuoto è un'informazione
+            // più utile di "nessuna regola".
+            var market = PrepareMarket(comparable, profile, null);
+            if (market.Failure != null)
+            {
+                return RulePick.Skipped(PricingDecision.Skip(
+                    PricingOutcome.InsufficientOffers, price, market.Failure,
+                    market.ComparableCount, market.OutliersRejected));
+            }
+
+            return RulePick.Skipped(PricingDecision.Skip(
+                PricingOutcome.NoMatchingRule,
+                price,
+                $"Nessuna regola attiva copre il prezzo corrente di {price:0.00} €",
+                market.ComparableCount,
+                market.OutliersRejected));
+        }
+
+        var failures = new List<MarketView>();
+        foreach (var rule in rules)
+        {
+            var market = PrepareMarket(comparable, profile, rule);
+            if (market.Failure == null) return new RulePick(rule, market, failures, null);
+            failures.Add(market);
+        }
+
+        var last = failures[^1];
+        var reason = failures.Count == 1
+            ? last.Failure!
+            : string.Join(" ", failures.Select((f, i) =>
+                $"{(i == 0 ? "Regola principale" : $"Ripiego {i}")}: {f.Failure}."));
+
+        return RulePick.Skipped(PricingDecision.Skip(
+            PricingOutcome.InsufficientOffers, price, reason, last.ComparableCount, last.OutliersRejected));
+    }
+
+    /// <summary>
+    /// Prezzo di riferimento e scostamenti, in termini di vetrina. Le regole descrivono una
+    /// posizione fra i venditori, quindi vanno applicate ai prezzi che l'acquirente vede; il
+    /// risultato viene poi riportato al prezzo venditore, che è l'unico valore che si può scrivere
+    /// su Card Trader. Il prezzo minimo non è mai valicabile.
+    /// </summary>
+    private static PriceProposal ProposePrice(RulePick pick, PricingProfile profile, decimal marketFee)
+    {
+        var rule = pick.Rule!;
+        var reference = ResolveReferencePrice(pick.Market!.SortedPrices, rule);
+
+        var proposedMarket = reference + rule.AdjustmentAmount;
+        if (rule.AdjustmentPercent != 0)
+        {
+            proposedMarket += proposedMarket * (rule.AdjustmentPercent / 100m);
+        }
+
+        var proposed = Math.Round(proposedMarket - marketFee, 2, MidpointRounding.AwayFromZero);
+        if (proposed < profile.MinPrice)
+        {
+            proposed = profile.MinPrice;
+        }
+
+        return new PriceProposal(reference, proposedMarket, proposed);
+    }
+
+    /// <param name="Skip">Decisione già presa quando nessuna regola ha mercato; altrimenti null.</param>
+    private sealed record RulePick(PricingRule? Rule, MarketView? Market, List<MarketView> Failures, PricingDecision? Skip)
+    {
+        public static RulePick Skipped(PricingDecision decision) => new(null, null, new List<MarketView>(), decision);
+    }
+
+    private sealed record PriceProposal(decimal Reference, decimal ProposedMarket, decimal Proposed);
+
+    /// <summary>Regole attive della fascia, nell'ordine in cui provarle: la principale e poi i ripieghi.</summary>
+    private static List<PricingRule> SelectRules(PricingProfile profile, decimal currentPrice)
     {
         return profile.Rules
             .Where(r => r.IsActive && currentPrice >= r.FromPrice && currentPrice <= r.ToPrice)
             .OrderBy(r => r.Priority)
             .ThenBy(r => r.Id)
-            .FirstOrDefault();
+            .ToList();
+    }
+
+    /// <summary>
+    /// Le offerte su cui lavora una regola: filtro sui venditori, scarto delle anomalie, minimo di
+    /// offerte e posizione richiesta. <see cref="MarketView.Failure"/> dice perché il mercato non
+    /// basta, e in una catena fa passare alla regola successiva.
+    /// </summary>
+    /// <param name="rule">Null quando nessuna regola copre la fascia: valgono le impostazioni del profilo.</param>
+    private static MarketView PrepareMarket(
+        List<CardTraderMarketplaceProductDto> comparable, PricingProfile profile, PricingRule? rule)
+    {
+        var onlyCtZero = rule?.OnlyCtZeroSellers ?? profile.IncludeOnlyCtZeroSellers;
+        var minOffers = rule?.MinComparableOffers ?? profile.MinComparableOffers;
+        var ctZeroNote = onlyCtZero ? " (solo venditori Card Trader Zero)" : "";
+
+        var offers = FilterSellers(comparable, profile, onlyCtZero);
+        if (offers.Count == 0)
+        {
+            return MarketView.Fail(
+                "Nessuna offerta comparabile dopo i filtri su comparabilità e venditori" + ctZeroNote, 0, 0);
+        }
+
+        // Scarto delle offerte anomale, in due passaggi complementari.
+        // Prima un filtro di rapporto sulla mediana, che è grossolano ma funziona a qualunque
+        // numero di offerte: intercetta i prezzi di comodo messi altissimi per non sbagliare
+        // e quelli irrealistici dei venditori alle prime armi. Poi lo scarto statistico con
+        // la MAD, più fine ma affidabile solo con qualche punto a disposizione.
+        var outliersRejected = 0;
+
+        if (profile.MaxMedianRatio >= 1m && offers.Count >= 2)
+        {
+            var beforeCount = offers.Count;
+            offers = RejectByMedianRatio(offers, profile.MaxMedianRatio);
+            outliersRejected += beforeCount - offers.Count;
+        }
+
+        if (profile.EnableOutlierRejection && offers.Count >= profile.MinOffersForOutlierRejection)
+        {
+            var beforeCount = offers.Count;
+            offers = RejectOutliers(offers, profile.OutlierMadThreshold);
+            outliersRejected += beforeCount - offers.Count;
+        }
+
+        if (offers.Count < minOffers)
+        {
+            return MarketView.Fail(
+                $"Solo {offers.Count} offerte comparabili, il minimo richiesto è {minOffers}{ctZeroNote}",
+                offers.Count, outliersRejected);
+        }
+
+        var sortedPrices = offers.Select(o => o.PriceCents / 100m).OrderBy(p => p).ToList();
+
+        // Mercato troppo sottile per la posizione richiesta.
+        if (rule != null &&
+            profile.SkipWhenFewerOffersThanPosition &&
+            IsPositional(rule.ReferenceMode) &&
+            sortedPrices.Count < rule.Position)
+        {
+            return MarketView.Fail(
+                $"La regola chiede la posizione {rule.Position} ma le offerte comparabili sono {sortedPrices.Count}: " +
+                "posizionarsi qui significherebbe allinearsi all'offerta più cara del mercato",
+                sortedPrices.Count, outliersRejected);
+        }
+
+        return new MarketView(offers, sortedPrices, offers.Count, outliersRejected, null);
+    }
+
+    /// <param name="ComparableCount">Offerte rimaste dopo filtri e scarti, anche quando il mercato non basta.</param>
+    /// <param name="Failure">Perché il mercato non basta per la regola; null se basta.</param>
+    private sealed record MarketView(
+        List<CardTraderMarketplaceProductDto> Offers,
+        List<decimal> SortedPrices,
+        int ComparableCount,
+        int OutliersRejected,
+        string? Failure)
+    {
+        public static MarketView Fail(string reason, int comparableCount, int outliersRejected) =>
+            new(new List<CardTraderMarketplaceProductDto>(), new List<decimal>(), comparableCount, outliersRejected, reason);
     }
 
     private static decimal ResolveReferencePrice(List<decimal> sortedPrices, PricingRule rule)

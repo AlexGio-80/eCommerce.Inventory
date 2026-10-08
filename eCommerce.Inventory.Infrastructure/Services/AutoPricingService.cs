@@ -306,9 +306,23 @@ public class AutoPricingService
         var offers = (await _cardTraderApi.GetMarketplaceProductsAsync(blueprint.CardTraderId, cancellationToken))
             .ToList();
 
+        // Carte a cui l'autopricer non ha mai scritto né confermato un prezzo: il loro prezzo è
+        // ancora quello di caricamento. Lo dice lo storico e non il trigger, così una carta resta
+        // "nuova" anche se il riprezzo subito dopo la pubblicazione è saltato (riavvio, mercato
+        // sottile) e ci arriva la notturna.
+        var itemIds = items.Select(i => i.Id).ToList();
+        var pricedItemIds = (await _context.PriceChangeLogs
+                .Where(l => l.InventoryItemId != null && itemIds.Contains(l.InventoryItemId.Value)
+                            && (l.Outcome == PricingOutcome.Applied || l.Outcome == PricingOutcome.NoChangeNeeded))
+                .Select(l => l.InventoryItemId!.Value)
+                .Distinct()
+                .ToListAsync(cancellationToken))
+            .ToHashSet();
+
         foreach (var item in items)
         {
-            var decision = _engine.Evaluate(item, offers, profile, _myUserId, bypassGuardrail);
+            var decision = _engine.Evaluate(item, offers, profile, _myUserId, bypassGuardrail,
+                isNewListing: !pricedItemIds.Contains(item.Id));
 
             // Il motore decide in base al profilo; qui si tiene conto anche di come la
             // modalità è stata forzata dal chiamante, in entrambi i versi.
