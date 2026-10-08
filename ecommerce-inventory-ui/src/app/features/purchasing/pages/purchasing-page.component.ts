@@ -130,8 +130,8 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
               <button mat-button (click)="resetParams()" matTooltip="Torna a configurazione e valori misurati sulle vendite">Predefiniti</button>
             </div>
 
-            <div class="pack-values" *ngIf="a.packValues.length">
-              <div class="pack-value" *ngFor="let pv of a.packValues" (click)="togglePack(pv.packKey)"
+            <div class="pack-values" *ngIf="a.packValues.length" [class.expanded]="showAllPacks()">
+              <div class="pack-value" *ngFor="let pv of visiblePackValues()" (click)="togglePack(pv.packKey)"
                 [class.open]="openPack() === pv.packKey">
                 <div class="pack-title">{{ pv.label }}</div>
                 <div>netto <strong>{{ formatEuro(pv.netCm) }}</strong> <span class="muted">CM</span>
@@ -140,6 +140,10 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
                 <div class="muted small">lordo {{ formatEuro(pv.valueCm) }} · copertura {{ pv.coverageCm }}%</div>
               </div>
             </div>
+            <!-- Secret Lair: ogni drop è un tipo di busta per MTGJSON, e centinaia di schede nasconderebbero la griglia. -->
+            <button mat-button *ngIf="a.packValues.length > packPreviewCount" (click)="showAllPacks.set(!showAllPacks())">
+              {{ showAllPacks() ? 'Mostra meno buste' : 'Mostra tutte le buste (' + a.packValues.length + ')' }}
+            </button>
 
             <div class="pack-detail" *ngIf="selectedPackValue() as pv">
               <div class="detail-col">
@@ -184,7 +188,7 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
 
     <mat-tab label="Opportunità">
       <ng-template matTabContent>
-        <app-opportunities-tab (openRelease)="openReleaseFromOpportunities($event)"></app-opportunities-tab>
+        <app-opportunities-tab (openRelease)="openRelease($event)"></app-opportunities-tab>
       </ng-template>
     </mat-tab>
 
@@ -202,7 +206,7 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
     <mat-tab label="Avvisi">
       <ng-template matTabContent>
         <app-alerts-tab [products]="analysis()?.products ?? []" [setCode]="selectedCode()" [setName]="analysis()?.name ?? null"
-          (openRelease)="openReleaseFromAlert($event)"></app-alerts-tab>
+          (openRelease)="openRelease($event)"></app-alerts-tab>
       </ng-template>
     </mat-tab>
     </mat-tab-group>
@@ -222,7 +226,7 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
     .reference { background: #e8eaf6; border-radius: 12px; padding: 2px 10px; }
     .muted { color: #757575; }
     .hint { font-size: 12px; }
-    .grid-card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .grid-card { flex: 1; min-height: 400px; display: flex; flex-direction: column; }
     .grid-card mat-card-content { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative; }
     ag-grid-angular { flex: 1; min-height: 0; }
     .loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 2; background: rgba(255,255,255,0.6); }
@@ -239,6 +243,7 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
     .settings .num { width: 130px; }
     .settings ::ng-deep .mat-mdc-form-field-subscript-wrapper { display: none; }
     .pack-values { display: flex; gap: 10px; flex-wrap: wrap; }
+    .pack-values.expanded { max-height: 220px; overflow-y: auto; }
     .pack-value { border: 1px solid #c5cae9; border-radius: 6px; padding: 6px 10px; cursor: pointer; min-width: 170px; }
     .pack-value.open { background: #e8eaf6; border-color: #3f51b5; }
     .pack-title { font-weight: 600; }
@@ -270,6 +275,12 @@ export class PurchasingPageComponent implements OnInit {
       : 'Troppe poche vendite recenti per misurarlo: nessuna correzione (100%)';
   });
   openPack = signal<string | null>(null);
+  readonly packPreviewCount = 10;
+  showAllPacks = signal(false);
+  visiblePackValues = computed(() => {
+    const packs = this.analysis()?.packValues ?? [];
+    return this.showAllPacks() ? packs : packs.slice(0, this.packPreviewCount);
+  });
 
   /** Parametri del valore atteso; vuoti = configurazione e quota di bulk misurata. */
   params: OpeningValueParams = {};
@@ -407,17 +418,12 @@ export class PurchasingPageComponent implements OnInit {
   }
 
   /** Dalla classifica delle opportunità all'analisi completa dell'uscita. */
-  openReleaseFromOpportunities(code: string | undefined) {
-    if (!code) return;
-    this.selectSet(code);
-    this.tabIndex = 0;
-  }
-
-  /** Da un avviso si va a decidere un acquisto: servono anche i prezzi Card Trader aggiornati. */
-  openReleaseFromAlert(code: string | undefined) {
+  /** Da un avviso o dalle opportunità si va a decidere un acquisto: servono anche i prezzi Card Trader aggiornati. */
+  openRelease(code: string | undefined) {
     if (!code) return;
     this.refreshCtAfterLoad = true;
-    this.openReleaseFromOpportunities(code);
+    this.selectSet(code);
+    this.tabIndex = 0;
   }
 
   /**
@@ -512,6 +518,7 @@ export class PurchasingPageComponent implements OnInit {
   selectSet(code: string) {
     this.selectedCode.set(code);
     this.openPack.set(null);
+    this.showAllPacks.set(false);
     this.loadAnalysis();
   }
 

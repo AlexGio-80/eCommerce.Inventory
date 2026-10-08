@@ -9,6 +9,39 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-08] Fix — Analisi uscita di Secret Lair: la griglia non si vedeva
+
+#### Problema
+
+Aprendo l'uscita Secret Lair (SLD), dalle Opportunità o dal menu, la pagina mostrava solo schede del
+valore per busta, centinaia, e la griglia dei prodotti non compariva mai: niente valori né link per
+ordinare.
+
+#### Soluzione Implementata
+
+- Le schede del valore per busta si fermano a 10, con il pulsante "Mostra tutte le buste (N)"; aperte
+  stanno in un riquadro alto al massimo 220 px, con lo scorrimento
+- La griglia ha un'altezza minima di 400 px: se la parte sopra cresce scorre la pagina, la griglia non
+  si schiaccia più fino a sparire
+
+#### Note Tecniche
+
+- MTGJSON descrive ogni drop di Secret Lair come un tipo di busta a sé (`BoosterConfigs`), quindi
+  l'uscita SLD ha centinaia di "buste". Il calcolo resta invariato: è cambiata solo la visualizzazione
+
+### [2026-10-08] Feature — Prezzi Card Trader automatici anche dalle Opportunità
+
+#### Problema
+
+L'aggiornamento automatico dei prezzi Card Trader partiva solo aprendo un'uscita da un avviso; dalla
+scheda Opportunità si arrivava all'Analisi uscita con "Min CT (EN)" e "Apri (CT)" spesso vuoti.
+
+#### Soluzione Implementata
+
+- Anche aprendo un'uscita dalla scheda Opportunità parte "Prezzi Card Trader", con la stessa regola:
+  solo se i prezzi mancano o hanno più di 6 ore
+- I due percorsi (avvisi e opportunità) passano ora da un unico metodo `openRelease`
+
 ### [2026-10-08] Feature — Prezzi Card Trader automatici dagli avvisi e link a Cardmarket nell'Analisi uscita
 
 #### Problema
@@ -32,8 +65,8 @@ Cardmarket, dove si compra.
   regole del sito. La ricerca col nome esatto è più stabile. Si usa il nome Cardmarket e non quello
   MTGJSON, che a volte è diverso ("Collector Booster Pack" contro "Collector Booster")
 - L'aggiornamento automatico fa una chiamata per espansione Card Trader coinvolta (in genere fra 2 e
-  6) e passa dal limite condiviso di 20 al minuto. Dalla scheda Opportunità non parte: lì si scorre la
-  classifica
+  6) e passa dal limite condiviso di 20 al minuto. Dalla scheda Opportunità inizialmente non partiva;
+  aggiunto lo stesso giorno su richiesta (voce sopra)
 
 ### [2026-10-08] Feature — Copia del valore di una cella con doppio clic
 
