@@ -45,24 +45,37 @@ public class OpeningValueCalculator
     public static string DeckKey(string setCode, string name) => $"{setCode.ToUpperInvariant()}:{name}";
 
     /// <summary>
-    /// Valore realizzabile di una copia: il bulk vale il suo prezzo per la quota venduta, le altre il
-    /// prezzo corretto da <see cref="OpeningValueSettings.PriceFactor"/>.
+    /// Valore realizzabile di una copia: il bulk vale il suo prezzo per la quota venduta. Le altre
+    /// valgono il prezzo corretto da <see cref="OpeningValueSettings.PriceFactor"/>, meno il costo
+    /// fisso per carta, per la quota che se ne vende in quella fascia di prezzo. Mai meno del bulk.
     /// </summary>
     public decimal? CardValue(Guid uuid, bool foil)
     {
         if (_cardValueCache.TryGetValue((uuid, foil), out var cached)) return cached;
 
         var price = _priceOf(uuid, foil);
+        var bulkValue = _settings.BulkPrice * _settings.BulkSellThrough;
         decimal? value = price switch
         {
             null => null,
-            _ when price < _settings.BulkThreshold => _settings.BulkPrice * _settings.BulkSellThrough,
-            _ => price * _settings.PriceFactor
+            _ when price < _settings.BulkThreshold => bulkValue,
+            _ => Math.Max(bulkValue,
+                _settings.SellThroughAt(price.Value) * (price.Value * _settings.PriceFactor - CostPerCardGross()))
         };
 
         _cardValueCache[(uuid, foil)] = value;
         return value;
     }
+
+    /// <summary>
+    /// Il valore si somma al lordo e i costi di vendita in percentuale si tolgono alla fine
+    /// (<see cref="OpeningValueSettings.Net"/>): il costo per carta va riportato al lordo, perché al
+    /// netto pesi esattamente quanto configurato.
+    /// </summary>
+    private decimal CostPerCardGross() =>
+        _settings.SellingCostPercent < 100m
+            ? _settings.CostPerCard / (1 - _settings.SellingCostPercent / 100m)
+            : _settings.CostPerCard;
 
     /// <summary>Valore atteso di una busta, o null se MTGJSON non ne riporta la composizione.</summary>
     public PackValue? Pack(string packKey)
@@ -200,15 +213,33 @@ public class OpeningValueCalculator
 /// Rapporto fra quanto si incassa davvero e il prezzo usato (vedi <see cref="PriceRealizationService"/>);
 /// 1 = nessuna correzione. Non tocca il bulk, che ha le sue regole.
 /// </param>
+/// <param name="CostPerCard">
+/// Costo fisso in euro per ogni copia venduta sopra la soglia del bulk: tempo per caricarla,
+/// bustina, spedizione. Pesa sui prodotti fatti di tante carte da pochi euro, come i mazzi.
+/// </param>
+/// <param name="SellThroughBands">
+/// Quota venduta per fascia di prezzo sopra la soglia del bulk (vedi <see cref="BulkSellThroughService"/>).
+/// Null o vuota = si presume di vendere tutto.
+/// </param>
 public record OpeningValueSettings(
     decimal BulkThreshold,
     decimal BulkPrice,
     decimal BulkSellThrough,
     decimal SellingCostPercent,
-    decimal PriceFactor = 1m)
+    decimal PriceFactor = 1m,
+    decimal CostPerCard = 0m,
+    IReadOnlyList<SellThroughBand>? SellThroughBands = null)
 {
     public decimal Net(decimal gross) => gross * (1 - SellingCostPercent / 100m);
+
+    /// <summary>Quota venduta delle carte a questo prezzo; 1 se non misurata.</summary>
+    public decimal SellThroughAt(decimal price) =>
+        SellThroughBands?.LastOrDefault(b => price >= b.FromPrice)?.Share ?? 1m;
 }
+
+/// <param name="FromPrice">Estremo inferiore della fascia; vale fino all'inizio della successiva.</param>
+/// <param name="Share">Quota venduta (0-1).</param>
+public record SellThroughBand(decimal FromPrice, decimal Share);
 
 /// <param name="Value">Valore atteso lordo della busta.</param>
 /// <param name="PricedShare">Quota degli slot coperta da prezzi (1 = tutto prezzato).</param>

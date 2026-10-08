@@ -55,7 +55,10 @@ public class SealedOpportunityServiceTests
     private SealedOpportunityService CreateService()
     {
         var analysis = new SealedProductAnalysisService(_db, Mock.Of<ICardTraderApiService>(), new BulkSellThroughService(_db),
-            new PriceRealizationService(_db), new ConfigurationBuilder().Build(), NullLogger<SealedProductAnalysisService>.Instance);
+            new PriceRealizationService(_db),
+            // Senza costo per carta: i valori attesi del test sono calcolati sui soli prezzi.
+            new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Purchasing:CostPerCard"] = "0" }).Build(),
+            NullLogger<SealedProductAnalysisService>.Instance);
         return new SealedOpportunityService(_db, analysis, NullLogger<SealedOpportunityService>.Instance);
     }
 

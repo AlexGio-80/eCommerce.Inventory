@@ -62,7 +62,7 @@ export interface SealedProductAnalysis {
     /** Ricavato netto rivendendo il sigillato al trend CM. */
     sealedNetCm?: number;
     openingRoiPercent?: number;
-    decision?: 'Apri' | 'Tieni sigillato' | 'Dati incompleti' | 'Prezzo CM dubbio';
+    decision?: 'Apri' | 'Tieni sigillato' | 'Dati incompleti' | 'Prezzo CM dubbio' | 'Non giocabili';
     priceMismatch: boolean;
     componentsTrend?: number;
     missingPacks: string[];
@@ -91,6 +91,19 @@ export interface OpeningValueSettings {
     measuredPriceRealizationPercent: number;
     priceRealizationMeasured: boolean;
     priceRealizationSampleCopies: number;
+    /** Costo fisso in euro per ogni copia venduta sopra la soglia del bulk. */
+    costPerCard: number;
+    /** Quota venduta per fascia di prezzo sopra la soglia del bulk. */
+    sellThroughBands: SellThroughBand[];
+}
+
+export interface SellThroughBand {
+    from: number;
+    to?: number;
+    sold: number;
+    inStock: number;
+    sharePercent: number;
+    measured: boolean;
 }
 
 export interface SheetValue {
@@ -130,6 +143,7 @@ export interface OpeningValueParams {
     bulkSellThroughPercent?: number | null;
     sellingCostPercent?: number | null;
     priceRealizationPercent?: number | null;
+    costPerCard?: number | null;
 }
 
 /** Bilancio reale di un'apertura, ricostruito dal tag delle inserzioni. */

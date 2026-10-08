@@ -55,7 +55,7 @@ public class BulkSellThroughService
             {
                 var s = stock[e.Id];
                 var soldQty = sold.GetValueOrDefault(e.Id);
-                return new BulkSellThroughExpansion(e.Name, e.ReleaseDate, soldQty, s.Quantity, s.FirstAdded);
+                return new BulkSellThroughExpansion(e.Name, e.ReleaseDate, soldQty, s.Quantity, s.FirstAdded, e.Id);
             })
             .Where(x => x.FirstListed >= x.ReleaseDate.AddDays(-15) && x.FirstListed <= x.ReleaseDate.AddDays(45))
             .Where(x => x.Sold + x.InStock >= MinCopies)
@@ -70,13 +70,60 @@ public class BulkSellThroughService
             total > 0,
             opened);
     }
+
+    /// <summary>Estremi inferiori delle fasce sopra la soglia del bulk.</summary>
+    public static readonly decimal[] BandStarts = { 1m, 3m, 10m };
+
+    /// <summary>Sotto questo numero di copie una fascia dice poco: si presume di vendere tutto.</summary>
+    private const int MinBandCopies = 100;
+
+    /// <summary>
+    /// Quota venduta per fascia di prezzo sopra la soglia del bulk, sulle stesse aperture all'uscita
+    /// del bulk. Al 08/10/2026: 74% fra 0,25 e 1 €, 94% fra 1 e 3 €, 98% sopra.
+    ///
+    /// Stessa approssimazione del bulk: le vendite si contano al prezzo di vendita, la giacenza al
+    /// prezzo di oggi. Le fasce poi si applicano al trend Cardmarket, non al prezzo Card Trader.
+    /// </summary>
+    public async Task<List<SellThroughBandMeasure>> MeasureBandsAsync(
+        decimal threshold, BulkSellThrough bulk, CancellationToken cancellationToken = default)
+    {
+        var starts = new[] { threshold }.Concat(BandStarts.Where(s => s > threshold)).ToList();
+        var ids = bulk.Expansions.Select(e => e.ExpansionId).ToList();
+
+        var soldRows = await _db.OrderItems.AsNoTracking()
+            .Where(oi => oi.Price > threshold && oi.Blueprint != null && ids.Contains(oi.Blueprint.ExpansionId))
+            .Select(oi => new { oi.Price, oi.Quantity })
+            .ToListAsync(cancellationToken);
+
+        var stockRows = await _db.InventoryItems.AsNoTracking()
+            .Where(i => i.ListingPrice > threshold && ids.Contains(i.Blueprint.ExpansionId))
+            .Select(i => new { Price = i.ListingPrice, i.Quantity })
+            .ToListAsync(cancellationToken);
+
+        int BandOf(decimal price) => starts.FindLastIndex(s => price >= s);
+
+        return starts.Select((from, index) =>
+        {
+            var sold = soldRows.Where(r => BandOf(r.Price) == index).Sum(r => r.Quantity);
+            var inStock = stockRows.Where(r => BandOf(r.Price) == index).Sum(r => r.Quantity);
+            var measured = sold + inStock >= MinBandCopies;
+            var to = index + 1 < starts.Count ? starts[index + 1] : (decimal?)null;
+            return new SellThroughBandMeasure(from, to, sold, inStock,
+                measured ? Math.Round((decimal)sold / (sold + inStock), 3) : 1m, measured);
+        }).ToList();
+    }
 }
+
+/// <param name="To">Estremo superiore escluso; null = nessun limite.</param>
+/// <param name="Share">Quota venduta (0-1); 1 se il campione è troppo piccolo.</param>
+public record SellThroughBandMeasure(decimal From, decimal? To, int Sold, int InStock, decimal Share, bool Measured);
 
 /// <param name="Share">Quota venduta (0-1).</param>
 /// <param name="Measured">False se non c'erano dati e si usa il valore di ripiego.</param>
+/// <param name="Expansions">Le aperture all'uscita su cui si è misurato.</param>
 public record BulkSellThrough(decimal Share, bool Measured, List<BulkSellThroughExpansion> Expansions);
 
-public record BulkSellThroughExpansion(string Name, DateTime ReleaseDate, int Sold, int InStock, DateTime FirstListed)
+public record BulkSellThroughExpansion(string Name, DateTime ReleaseDate, int Sold, int InStock, DateTime FirstListed, int ExpansionId = 0)
 {
     public decimal Share => Sold + InStock > 0 ? Math.Round((decimal)Sold / (Sold + InStock), 3) : 0;
 }

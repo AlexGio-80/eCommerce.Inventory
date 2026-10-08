@@ -152,7 +152,8 @@ public class SealedProductAnalysisService
         var productDtos = rows
             .Select(r => BuildProductDto(r.Product, r.Composition, r.Price, references, setCode, opening, settings.Values,
                 ComponentsTrend(r.Product, catalog, prices),
-                r.Product.CardmarketId is { } cmId ? cmNames.GetValueOrDefault(cmId) : null))
+                r.Product.CardmarketId is { } cmId ? cmNames.GetValueOrDefault(cmId) : null,
+                IsNotPlayable(r.Product.SetCode, sets)))
             .OrderBy(d => CategoryOrder(d.Category))
             .ThenBy(d => d.Name)
             .ToList();
@@ -191,9 +192,11 @@ public class SealedProductAnalysisService
         var threshold = overrides?.BulkThreshold ?? _configuration.GetValue("Purchasing:BulkThreshold", 0.25m);
         var bulkPrice = overrides?.BulkPrice ?? _configuration.GetValue("Purchasing:BulkPrice", 0.05m);
         var costPercent = overrides?.SellingCostPercent ?? _configuration.GetValue("Purchasing:SellingCostPercent", 15m);
+        var costPerCard = overrides?.CostPerCard ?? _configuration.GetValue("Purchasing:CostPerCard", 0.15m);
 
         var measured = await _bulkSellThrough.MeasureAsync(threshold, cancellationToken);
         var sellThrough = overrides?.BulkSellThroughPercent is { } percent ? percent / 100m : measured.Share;
+        var bands = await _bulkSellThrough.MeasureBandsAsync(threshold, measured, cancellationToken);
 
         var realization = await _priceRealization.MeasureAsync(cancellationToken);
         var priceFactor = overrides?.PriceRealizationPercent is { } factorPercent ? factorPercent / 100m : realization.Factor;
@@ -205,13 +208,16 @@ public class SealedProductAnalysisService
             .Select(g => new { Fee = g.Sum(o => o.SellerFee), Subtotal = g.Sum(o => o.SellerSubtotal) })
             .FirstOrDefaultAsync(cancellationToken);
 
-        var values = new OpeningValueSettings(threshold, bulkPrice, sellThrough, costPercent, priceFactor);
+        var values = new OpeningValueSettings(threshold, bulkPrice, sellThrough, costPercent, priceFactor, costPerCard,
+            bands.Select(b => new SellThroughBand(b.From, b.Share)).ToList());
         var dto = new OpeningValueSettingsDto(
             threshold, bulkPrice, Math.Round(sellThrough * 100m, 1), costPercent,
             Math.Round(measured.Share * 100m, 1), measured.Measured,
             measured.Expansions.Select(e => new BulkSellThroughDto(e.Name, e.ReleaseDate, e.Sold, e.InStock, Math.Round(e.Share * 100m, 1))).ToList(),
             fees is { Subtotal: > 0 } ? Math.Round(fees.Fee / fees.Subtotal * 100m, 2) : null,
-            Math.Round(priceFactor * 100m, 1), Math.Round(realization.Factor * 100m, 1), realization.Measured, realization.Copies);
+            Math.Round(priceFactor * 100m, 1), Math.Round(realization.Factor * 100m, 1), realization.Measured, realization.Copies,
+            costPerCard,
+            bands.Select(b => new SellThroughBandDto(b.From, b.To, b.Sold, b.InStock, Math.Round(b.Share * 100m, 1), b.Measured)).ToList());
 
         return (values, dto);
     }
@@ -578,6 +584,13 @@ public class SealedProductAnalysisService
         return references;
     }
 
+    /// <summary>
+    /// Uscite che MTGJSON classifica come <c>memorabilia</c>: World Championship Deck, Pro Tour
+    /// Collector Set, Collectors' Edition, 30th Anniversary Edition. Carte non giocabili a torneo.
+    /// </summary>
+    private static bool IsNotPlayable(string setCode, IEnumerable<MtgjsonSet> sets) =>
+        string.Equals(sets.FirstOrDefault(s => s.Code == setCode)?.Type, "memorabilia", StringComparison.OrdinalIgnoreCase);
+
     private static SealedProductAnalysisDto BuildProductDto(
         SealedProduct product,
         PackComposition composition,
@@ -587,7 +600,8 @@ public class SealedProductAnalysisService
         OpeningCalculators opening,
         OpeningValueSettings settings,
         decimal? componentsTrend,
-        string? cardmarketName)
+        string? cardmarketName,
+        bool notPlayable)
     {
         var priceMismatch = IsPriceMismatch(price?.Trend, componentsTrend);
 
@@ -628,7 +642,11 @@ public class SealedProductAnalysisService
             : null;
         // Con una busta senza composizione o un mazzo non trovato il valore è sottostimato: meglio
         // nessuna decisione che un "tieni sigillato" dovuto ai dati mancanti.
+        // Carte dal bordo dorato o non ammesse a torneo (World Championship Deck, Pro Tour Collector
+        // Set, Collectors' Edition): nessuna vendita conferma che il trend CM di quelle singole si
+        // incassi davvero, e su pochi scambi il trend è poco affidabile.
         string? decision = sealedNet is null || cmValue is null ? null
+            : notPlayable ? "Non giocabili"
             : priceMismatch ? "Prezzo CM dubbio"
             : cmValue.MissingPacks.Count > 0 || cmValue.MissingDecks.Count > 0 || cmValue.Coverage < 0.9m ? "Dati incompleti"
             : openCm > sealedNet ? "Apri" : "Tieni sigillato";
@@ -810,7 +828,8 @@ public record OpeningValueOverrides(
     decimal? BulkPrice,
     decimal? BulkSellThroughPercent,
     decimal? SellingCostPercent,
-    decimal? PriceRealizationPercent = null);
+    decimal? PriceRealizationPercent = null,
+    decimal? CostPerCard = null);
 
 public record OpeningValueSettingsDto(
     decimal BulkThreshold,
@@ -824,7 +843,12 @@ public record OpeningValueSettingsDto(
     decimal PriceRealizationPercent,
     decimal MeasuredPriceRealizationPercent,
     bool PriceRealizationMeasured,
-    int PriceRealizationSampleCopies);
+    int PriceRealizationSampleCopies,
+    decimal CostPerCard,
+    List<SellThroughBandDto> SellThroughBands);
+
+/// <param name="SharePercent">Quota venduta; 100 se il campione è troppo piccolo (<paramref name="Measured"/> falso).</param>
+public record SellThroughBandDto(decimal From, decimal? To, int Sold, int InStock, decimal SharePercent, bool Measured);
 
 public record BulkSellThroughDto(string Name, DateTime ReleaseDate, int Sold, int InStock, decimal SharePercent);
 

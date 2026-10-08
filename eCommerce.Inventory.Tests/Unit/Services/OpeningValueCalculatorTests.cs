@@ -166,4 +166,67 @@ public class OpeningValueCalculatorTests
         result.Expansions.Should().ContainSingle(e => e.Name == "The Hobbit", "le espansioni vecchie si comprano come collezioni");
         result.Share.Should().Be(0.4m, "400 venduti su 1.000, la rara a 3 € non è bulk");
     }
+
+    [Fact]
+    public void CostPerCard_AndBandSellThrough_LowerCardsAboveBulk()
+    {
+        // Costi di vendita al 20%: il costo per carta si riporta al lordo (0,16 / 0,8 = 0,20) così
+        // che al netto pesi esattamente 0,16 €.
+        var settings = new OpeningValueSettings(0.25m, 0.05m, 0.40m, SellingCostPercent: 20m,
+            CostPerCard: 0.16m,
+            SellThroughBands: new[] { new SellThroughBand(0.25m, 0.75m), new SellThroughBand(1m, 0.9m), new SellThroughBand(3m, 1m) });
+
+        var calculator = Calculator(settings);
+
+        calculator.CardValue(Rare, false).Should().Be(1.62m, "(2 − 0,20) × 90% venduto fra 1 e 3 €");
+        calculator.CardValue(Mythic, false).Should().Be(9.80m, "10 − 0,20, sopra i 3 € si vende tutto");
+        calculator.CardValue(Common, false).Should().Be(0.02m, "il bulk non cambia");
+        settings.Net(calculator.CardValue(Mythic, false)!.Value).Should().Be(7.84m, "10 × 0,8 − 0,16");
+    }
+
+    [Fact]
+    public void CostPerCard_NeverMakesACardWorthLessThanBulk()
+    {
+        var settings = new OpeningValueSettings(0.25m, 0.05m, 0.40m, SellingCostPercent: 0m, CostPerCard: 5m);
+
+        Calculator(settings).CardValue(Rare, false).Should().Be(0.02m, "una carta da 2 € si può sempre vendere come bulk");
+    }
+
+    [Fact]
+    public async Task SellThroughBands_AreMeasuredOnTheSameOpeningsAsBulk()
+    {
+        using var db = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+
+        var release = new DateTime(2026, 8, 14);
+        db.Expansions.AddRange(
+            new Expansion { Id = 1, Name = "The Hobbit", Code = "hob", ReleaseDate = release },
+            new Expansion { Id = 2, Name = "Khans of Tarkir", Code = "ktk", ReleaseDate = new DateTime(2014, 9, 26) });
+        db.Blueprints.AddRange(
+            new Blueprint { Id = 10, ExpansionId = 1, Name = "Nuova", Version = "" },
+            new Blueprint { Id = 20, ExpansionId = 2, Name = "Vecchia", Version = "" });
+        db.InventoryItems.AddRange(
+            new InventoryItem { BlueprintId = 10, Quantity = 600, ListingPrice = 0.05m, DateAdded = release.AddDays(2), Condition = "NM", Language = "English", Location = "" },
+            new InventoryItem { BlueprintId = 10, Quantity = 40, ListingPrice = 0.50m, DateAdded = release.AddDays(2), Condition = "NM", Language = "English", Location = "" },
+            new InventoryItem { BlueprintId = 10, Quantity = 5, ListingPrice = 2m, DateAdded = release.AddDays(2), Condition = "NM", Language = "English", Location = "" },
+            new InventoryItem { BlueprintId = 20, Quantity = 900, ListingPrice = 0.50m, DateAdded = new DateTime(2025, 11, 21), Condition = "NM", Language = "English", Location = "" });
+        db.Orders.Add(new Order { Id = 1, Code = "A" });
+        db.OrderItems.AddRange(
+            new OrderItem { OrderId = 1, BlueprintId = 10, Quantity = 400, Price = 0.05m, Name = "bulk" },
+            new OrderItem { OrderId = 1, BlueprintId = 10, Quantity = 120, Price = 0.60m, Name = "non comune" },
+            new OrderItem { OrderId = 1, BlueprintId = 10, Quantity = 95, Price = 1.50m, Name = "rara" },
+            new OrderItem { OrderId = 1, BlueprintId = 10, Quantity = 10, Price = 20m, Name = "mitica" },
+            new OrderItem { OrderId = 1, BlueprintId = 20, Quantity = 100, Price = 0.60m, Name = "vecchia" });
+        await db.SaveChangesAsync();
+
+        var service = new BulkSellThroughService(db);
+        var bulk = await service.MeasureAsync(0.25m);
+        var bands = await service.MeasureBandsAsync(0.25m, bulk);
+
+        bands.Select(b => b.From).Should().Equal(0.25m, 1m, 3m, 10m);
+        bands[0].Share.Should().Be(0.75m, "120 vendute su 160, l'espansione vecchia non conta");
+        bands[1].Share.Should().Be(0.95m, "95 vendute su 100");
+        bands[3].Measured.Should().BeFalse("10 copie sono troppo poche");
+        bands[3].Share.Should().Be(1m);
+    }
 }

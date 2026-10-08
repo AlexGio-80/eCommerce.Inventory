@@ -9,6 +9,42 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-08] Feature — Valore atteso: costo per carta, quota venduta per fascia, prodotti non giocabili
+
+#### Problema
+
+In cima alla classifica delle opportunità c'erano mazzi Commander, World Championship Deck e set di
+mazzi Collector. L'analisi sulle vendite reali (08/10) non ha trovato un errore specifico sui mazzi:
+
+- quota venduta sulle aperture all'uscita: 36% fino a 0,25 €, **74% fra 0,25 e 1 €**, 94% fra 1 e 3 €,
+  98% sopra. Il modello presumeva il 100% sopra la soglia del bulk
+- prezzo realizzato sulle carte Commander vendute: ~1,2 volte il trend CM, come le altre (84 copie)
+- su Card Trader le carte dei mazzi stanno a 1,3–1,4 volte il trend CM, come quelle delle buste
+
+Il modello però non vedeva il lavoro per carta (un mazzo sono 100 carte da caricare, quasi tutte da
+pochi euro), e trattava come normali le carte dal bordo dorato, senza vendite che ne confermino il trend.
+
+#### Soluzione Implementata
+
+- **Costo per carta** (`Purchasing:CostPerCard`, predefinito 0,15 €, modificabile dalla pagina): si
+  toglie per ogni copia venduta sopra la soglia del bulk. Una carta non vale mai meno del bulk
+- **Quota venduta per fascia** (0,25–1, 1–3, 3–10, oltre 10 €), misurata sulle stesse aperture all'uscita
+  del bulk: si applica a tutte le carte sopra il bulk, di buste e mazzi. Sotto 100 copie una fascia
+  vale 100%. Visibile nel suggerimento del campo "Costo per carta €"
+- Decisione **"Non giocabili"** per i prodotti delle uscite che MTGJSON classifica `memorabilia`
+  (World Championship Deck 1997–2004, Pro Tour Collector Set, Collectors' Edition, 30th Anniversary):
+  escono dal filtro "Solo Apri" e dagli avvisi di apertura conveniente
+
+#### Note Tecniche
+
+- Il costo per carta si riporta al lordo (`CostPerCard / (1 − costi %)`) perché i costi in percentuale
+  si tolgono alla fine: così al netto pesa esattamente quanto configurato
+- Le fasce si misurano sui prezzi di vendita e di giacenza Card Trader e si applicano al trend Cardmarket:
+  approssimazione dichiarata, come per il bulk
+- Effetto stimato su un mazzo Commander (Cabaretti Cacophony, 43 €): valore atteso netto da ~119 € a
+  ~104 €. **I mazzi restano convenienti**: il valore delle singole è reale. Escono dalla classifica i
+  prodotti non giocabili
+
 ### [2026-10-08] Fix — Autopricer: le carte appena caricate restavano al prezzo di caricamento
 
 #### Problema

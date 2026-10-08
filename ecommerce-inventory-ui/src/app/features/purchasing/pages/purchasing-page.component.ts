@@ -122,6 +122,10 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
                 <mat-label>Costi vendita %</mat-label>
                 <input matInput type="number" step="1" [(ngModel)]="params.sellingCostPercent">
               </mat-form-field>
+              <mat-form-field appearance="outline" class="num" [matTooltip]="costPerCardTooltip()" matTooltipClass="multiline-tooltip">
+                <mat-label>Costo per carta €</mat-label>
+                <input matInput type="number" step="0.01" min="0" [(ngModel)]="params.costPerCard">
+              </mat-form-field>
               <mat-form-field appearance="outline" class="num" [matTooltip]="priceRealizationTooltip()">
                 <mat-label>Prezzo realizzato %</mat-label>
                 <input matInput type="number" step="1" [(ngModel)]="params.priceRealizationPercent">
@@ -267,6 +271,18 @@ export class PurchasingPageComponent implements OnInit {
   tabIndex = 0;
   prefillProductId = signal<number | null>(null);
 
+  costPerCardTooltip = computed(() => {
+    const st = this.analysis()?.settings;
+    if (!st) return '';
+    const bands = st.sellThroughBands.map(b =>
+      `${this.formatEuro(b.from)}–${b.to != null ? this.formatEuro(b.to) : 'oltre'}: ${b.sharePercent}% venduto` +
+      (b.measured ? ` (${b.sold}/${b.sold + b.inStock})` : ' (campione piccolo: 100%)'));
+    return 'Costo fisso per ogni copia venduta sopra la soglia del bulk: tempo, bustina, spedizione. ' +
+      'Pesa sui prodotti fatti di tante carte da pochi euro, come i mazzi.\n\n' +
+      'Le carte sopra il bulk valgono anche per la quota che se ne vende, misurata sulle tue aperture all\'uscita:\n' +
+      bands.join('\n');
+  });
+
   priceRealizationTooltip = computed(() => {
     const st = this.analysis()?.settings;
     if (!st) return '';
@@ -360,6 +376,7 @@ export class PurchasingPageComponent implements OnInit {
       tooltipValueGetter: p => {
         const d = p.data;
         if (!d) return '';
+        if (d.decision === 'Non giocabili') return 'Carte non giocabili a torneo (bordo dorato, World Championship, Collectors\' Edition): nessuna vendita conferma che il trend CM di quelle singole si incassi davvero';
         if (d.decision === 'Prezzo CM dubbio') return `Il trend CM (${this.formatEuro(d.cmTrend)}) è lontano dalla somma di ciò che contiene (${this.formatEuro(d.componentsTrend)}): probabile abbinamento sbagliato su MTGJSON`;
         if (d.decision === 'Dati incompleti') return this.coverageTooltip(d, 'cm');
         if (d.decision) return `Aprendo ${this.formatEuro(d.openValueCm)} netti, rivendendolo chiuso ${this.formatEuro(d.sealedNetCm)} netti`;
@@ -462,7 +479,8 @@ export class PurchasingPageComponent implements OnInit {
       bulkPrice: st.bulkPrice,
       bulkSellThroughPercent: st.bulkSellThroughPercent,
       sellingCostPercent: st.sellingCostPercent,
-      priceRealizationPercent: st.priceRealizationPercent
+      priceRealizationPercent: st.priceRealizationPercent,
+      costPerCard: st.costPerCard
     };
   }
 
