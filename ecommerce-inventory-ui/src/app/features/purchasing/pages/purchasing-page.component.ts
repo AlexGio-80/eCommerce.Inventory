@@ -202,7 +202,7 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
     <mat-tab label="Avvisi">
       <ng-template matTabContent>
         <app-alerts-tab [products]="analysis()?.products ?? []" [setCode]="selectedCode()" [setName]="analysis()?.name ?? null"
-          (openRelease)="openReleaseFromOpportunities($event)"></app-alerts-tab>
+          (openRelease)="openReleaseFromAlert($event)"></app-alerts-tab>
       </ng-template>
     </mat-tab>
     </mat-tab-group>
@@ -376,10 +376,20 @@ export class PurchasingPageComponent implements OnInit {
         ? `<a class="ct-link" target="_blank" rel="noopener" title="Vedi su Card Trader"
              href="https://www.cardtrader.com/cards/${p.data.cardTraderBlueprintId}"><i class="material-icons" style="font-size:18px;vertical-align:middle">open_in_new</i></a>`
         : ''
+    },
+    {
+      // Cardmarket non ha un indirizzo per id prodotto: si apre la ricerca col nome esatto.
+      headerName: 'CM', width: 70, sortable: false, filter: false,
+      cellRenderer: (p: { data?: SealedProductAnalysis }) => p.data?.cardmarketName
+        ? `<a class="ct-link" target="_blank" rel="noopener" title="Cerca su Cardmarket"
+             href="https://www.cardmarket.com/en/Magic/Products/Search?searchString=${encodeURIComponent(p.data.cardmarketName)}"><i class="material-icons" style="font-size:18px;vertical-align:middle">open_in_new</i></a>`
+        : ''
     }
   ];
 
   defaultColDef: ColDef = { sortable: true, resizable: true, filter: true };
+
+  private refreshCtAfterLoad = false;
 
   private route = inject(ActivatedRoute);
   private destroyRef = inject(DestroyRef);
@@ -401,6 +411,23 @@ export class PurchasingPageComponent implements OnInit {
     if (!code) return;
     this.selectSet(code);
     this.tabIndex = 0;
+  }
+
+  /** Da un avviso si va a decidere un acquisto: servono anche i prezzi Card Trader aggiornati. */
+  openReleaseFromAlert(code: string | undefined) {
+    if (!code) return;
+    this.refreshCtAfterLoad = true;
+    this.openReleaseFromOpportunities(code);
+  }
+
+  /**
+   * I prezzi Card Trader non arrivano con l'import del mattino ma con "Prezzi Card Trader" (fra due e
+   * sei chiamate all'API): vecchi se mancano o hanno più di 6 ore su qualche prodotto venduto su CT.
+   */
+  private ctPricesStale(analysis: SealedSetAnalysis): boolean {
+    const limit = Date.now() - 6 * 60 * 60 * 1000;
+    return analysis.products.some(p => p.cardTraderBlueprintId
+      && (!p.ctPriceUpdatedAt || new Date(p.ctPriceUpdatedAt).getTime() < limit));
   }
 
   /** Dalla tabella di analisi al registro acquisti, con il prodotto già scelto. */
@@ -455,6 +482,8 @@ export class PurchasingPageComponent implements OnInit {
     this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
       const set = params.get('set');
       if (set) {
+        // ?set= arriva dalla campanella degli avvisi.
+        this.refreshCtAfterLoad = true;
         this.selectSet(set.toUpperCase());
         this.tabIndex = 0;
       }
@@ -491,7 +520,15 @@ export class PurchasingPageComponent implements OnInit {
     if (!code) return;
     this.isLoading.set(true);
     this.purchasing.getAnalysis(code, this.params).subscribe({
-      next: analysis => { this.analysis.set(analysis); this.syncParams(analysis); this.isLoading.set(false); },
+      next: analysis => {
+        this.analysis.set(analysis);
+        this.syncParams(analysis);
+        this.isLoading.set(false);
+        if (this.refreshCtAfterLoad) {
+          this.refreshCtAfterLoad = false;
+          if (this.ctPricesStale(analysis) && !this.isRefreshingCt()) this.refreshCardTraderPrices();
+        }
+      },
       error: err => {
         this.isLoading.set(false);
         this.snackBar.open(`Errore nell'analisi: ${err.error?.message || err.message}`, 'Chiudi', { duration: 8000 });

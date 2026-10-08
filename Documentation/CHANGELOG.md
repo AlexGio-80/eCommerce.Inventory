@@ -9,6 +9,32 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-08] Feature — Prezzi Card Trader automatici dagli avvisi e link a Cardmarket nell'Analisi uscita
+
+#### Problema
+
+Aprendo un'uscita dal link di un avviso, la colonna "Min CT (EN)" e il valore "Apri (CT)" erano vuoti:
+i prezzi Card Trader non arrivano con l'import del mattino ma solo col pulsante "Prezzi Card Trader"
+(il 2026-10-08 c'erano per 20 sigillati su 4.161). Mancava inoltre un modo per aprire il prodotto su
+Cardmarket, dove si compra.
+
+#### Soluzione Implementata
+
+- Arrivando da un avviso (campanella o scheda Avvisi) l'aggiornamento dei prezzi Card Trader
+  dell'uscita parte da solo, se mancano o hanno più di 6 ore su qualche prodotto venduto su Card Trader
+- Colonna "CM" accanto a "CT" nella griglia dell'Analisi uscita: apre la ricerca di Cardmarket con il
+  nome del prodotto su Cardmarket
+- `SealedProductAnalysisDto.CardmarketName`, letto da `CardmarketProducts`
+
+#### Note Tecniche
+
+- Cardmarket non ha indirizzi per id prodotto: quelli diretti vogliono categoria e nome trasformati con
+  regole del sito. La ricerca col nome esatto è più stabile. Si usa il nome Cardmarket e non quello
+  MTGJSON, che a volte è diverso ("Collector Booster Pack" contro "Collector Booster")
+- L'aggiornamento automatico fa una chiamata per espansione Card Trader coinvolta (in genere fra 2 e
+  6) e passa dal limite condiviso di 20 al minuto. Dalla scheda Opportunità non parte: lì si scorre la
+  classifica
+
 ### [2026-10-08] Feature — Copia del valore di una cella con doppio clic
 
 #### Problema

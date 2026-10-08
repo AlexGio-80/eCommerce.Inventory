@@ -42,6 +42,8 @@ export interface SealedProductAnalysis {
     unresolved: boolean;
     isCase: boolean;
     cardmarketId?: number;
+    /** Nome del prodotto su Cardmarket, per cercarlo sul sito (quello MTGJSON a volte è diverso). */
+    cardmarketName?: string;
     cardTraderBlueprintId?: number;
     cmTrend?: number;
     cmLow?: number;

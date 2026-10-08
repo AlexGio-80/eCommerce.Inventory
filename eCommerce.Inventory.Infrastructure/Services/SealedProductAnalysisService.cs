@@ -129,9 +129,14 @@ public class SealedProductAnalysisService
         var catalog = context.Catalog;
 
         var products = catalog.Values.Where(p => groupCodes.Contains(p.SetCode)).ToList();
-        var prices = await LoadLatestCardmarketPricesAsync(
-            products.Where(p => p.CardmarketId.HasValue).Select(p => p.CardmarketId!.Value).ToList(),
-            cancellationToken);
+        var cmIds = products.Where(p => p.CardmarketId.HasValue).Select(p => p.CardmarketId!.Value).ToList();
+        var prices = await LoadLatestCardmarketPricesAsync(cmIds, cancellationToken);
+
+        // Nome del prodotto su Cardmarket, per cercarlo sul sito: quello MTGJSON a volte è diverso
+        // ("Collector Booster Pack" contro "Collector Booster").
+        var cmNames = await _db.CardmarketProducts.AsNoTracking()
+            .Where(p => cmIds.Contains(p.IdProduct))
+            .ToDictionaryAsync(p => p.IdProduct, p => p.Name, cancellationToken);
 
         var rows = products.Select(p =>
         {
@@ -146,7 +151,8 @@ public class SealedProductAnalysisService
 
         var productDtos = rows
             .Select(r => BuildProductDto(r.Product, r.Composition, r.Price, references, setCode, opening, settings.Values,
-                ComponentsTrend(r.Product, catalog, prices)))
+                ComponentsTrend(r.Product, catalog, prices),
+                r.Product.CardmarketId is { } cmId ? cmNames.GetValueOrDefault(cmId) : null))
             .OrderBy(d => CategoryOrder(d.Category))
             .ThenBy(d => d.Name)
             .ToList();
@@ -580,7 +586,8 @@ public class SealedProductAnalysisService
         string mainSetCode,
         OpeningCalculators opening,
         OpeningValueSettings settings,
-        decimal? componentsTrend)
+        decimal? componentsTrend,
+        string? cardmarketName)
     {
         var priceMismatch = IsPriceMismatch(price?.Trend, componentsTrend);
 
@@ -633,7 +640,7 @@ public class SealedProductAnalysisService
             packs, totalPacks,
             composition.HasDeck || composition.HasCards, composition.HasExtras, composition.Unresolved,
             IsCase(product.Category),
-            product.CardmarketId, product.CardTraderBlueprintId,
+            product.CardmarketId, cardmarketName, product.CardTraderBlueprintId,
             price?.Trend, price?.Low, price?.Date,
             product.CtMinPrice, product.CtOfferCount, product.CtPriceUpdatedAt,
             pricePerPack, packValue, deltaPercent,
@@ -760,6 +767,7 @@ public record SealedProductAnalysisDto(
     bool Unresolved,
     bool IsCase,
     int? CardmarketId,
+    string? CardmarketName,
     int? CardTraderBlueprintId,
     decimal? CmTrend,
     decimal? CmLow,
