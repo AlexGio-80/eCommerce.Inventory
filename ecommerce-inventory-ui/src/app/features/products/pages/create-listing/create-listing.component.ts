@@ -26,6 +26,7 @@ import { ProductsService } from '../../services/products.service';
 import { PendingListingsService, PendingListing, CreatePendingListingDto, BlueprintListingInfo } from '../../services/pending-listings.service';
 import { Blueprint, PriceHistorySeries, PriceHistoryResponse } from '../../../../core/models';
 import { GradingService, GradingResult } from '../../../../core/services/grading.service';
+import { PurchasingService } from '../../../purchasing/services/purchasing.service';
 
 // Registrato qui perché questo componente è standalone e caricato lazy: a differenza di
 // ReportingModule (che lo registra nel proprio costruttore), niente garantisce che quel
@@ -220,6 +221,14 @@ export class CreateListingComponent {
 
   private readonly STORAGE_KEY = 'listing_defaults';
   private formSubscription?: Subscription;
+  private tagSubscription?: Subscription;
+
+  /** Costi per carta del registro acquisti, per Tag normalizzato (un acquisto può condividere il Tag con altri). */
+  private purchaseCosts = new Map<string, { cost: number; product: string }[]>();
+  /** Ultimo prezzo d'acquisto messo dal registro: si può sostituire cambiando Tag, uno scritto a mano no. */
+  private autoFilledPrice: number | null = null;
+  /** Spiegazione sotto il prezzo d'acquisto, quando il Tag corrisponde a un acquisto del registro. */
+  purchaseCostInfo = signal<string | null>(null);
 
   conditions = ['Near Mint', 'Slightly Played', 'Moderately Played', 'Played', 'Poor'];
   languages = ['English', 'Italian', 'Japanese', 'French', 'German', 'Spanish', 'Chinese'];
@@ -237,7 +246,8 @@ export class CreateListingComponent {
     private pendingListingsService: PendingListingsService,
     private snackBar: MatSnackBar,
     private cardTraderService: CardTraderApiService,
-    private gradingService: GradingService
+    private gradingService: GradingService,
+    private purchasingService: PurchasingService
   ) {
     const defaults = this.loadDefaults();
     this.listingForm = this.fb.group({
@@ -256,6 +266,12 @@ export class CreateListingComponent {
 
   ngOnInit() {
     this.loadPendingListings();
+    this.loadPurchaseCosts();
+
+    this.tagSubscription = this.listingForm.get('tag')!.valueChanges.pipe(
+      debounceTime(300),
+      distinctUntilChanged()
+    ).subscribe(tag => this.applyPurchaseCost(tag));
 
     this.formSubscription = this.listingForm.valueChanges.pipe(
       debounceTime(500),
@@ -276,6 +292,62 @@ export class CreateListingComponent {
     if (this.formSubscription) {
       this.formSubscription.unsubscribe();
     }
+    this.tagSubscription?.unsubscribe();
+  }
+
+  private static normalizeTag(tag: string | null | undefined): string {
+    const t = (tag ?? '').trim().toUpperCase();
+    return !t ? '' : t.startsWith('#') ? t : `#${t}`;
+  }
+
+  /** Registro acquisti: Tag → costo per carta (scritto a mano o calcolato). Se non si carica, il form funziona lo stesso. */
+  private loadPurchaseCosts() {
+    this.purchasingService.getPurchases().subscribe({
+      next: purchases => {
+        this.purchaseCosts.clear();
+        for (const p of purchases) {
+          const key = CreateListingComponent.normalizeTag(p.tag);
+          if (!key || p.effectiveCostPerCard == null) continue;
+          const list = this.purchaseCosts.get(key) ?? [];
+          list.push({ cost: p.effectiveCostPerCard, product: p.productName });
+          this.purchaseCosts.set(key, list);
+        }
+        this.applyPurchaseCost(this.listingForm.get('tag')?.value);
+      },
+      error: () => this.purchaseCosts.clear()
+    });
+  }
+
+  /**
+   * Con il Tag di un acquisto del registro il prezzo d'acquisto si riempie col suo costo per carta.
+   * Mai su un prezzo scritto a mano (si sostituisce solo uno 0 o quello messo qui per un altro Tag),
+   * mai modificando un'inserzione esistente, e non se più acquisti con lo stesso Tag hanno costi diversi.
+   */
+  private applyPurchaseCost(tag: string | null | undefined) {
+    const matches = this.purchaseCosts.get(CreateListingComponent.normalizeTag(tag)) ?? [];
+    const costs = [...new Set(matches.map(m => m.cost))];
+    const control = this.listingForm.get('purchasePrice')!;
+    const current = Number(control.value) || 0;
+    const replaceable = current === 0 || (this.autoFilledPrice != null && current === this.autoFilledPrice);
+
+    if (matches.length === 0) {
+      // Il prezzo messo per il Tag di prima non vale per questo: meglio uno 0 evidente che un costo sbagliato.
+      if (this.editingId() == null && this.autoFilledPrice != null && current === this.autoFilledPrice) control.setValue(0);
+      this.autoFilledPrice = null;
+      this.purchaseCostInfo.set(null);
+      return;
+    }
+    if (costs.length > 1) {
+      this.purchaseCostInfo.set(`Più acquisti con questo Tag a costi diversi (${costs.map(c => c.toFixed(2)).join(' / ')}): scegli tu`);
+      return;
+    }
+    if (this.editingId() != null || !replaceable) {
+      this.purchaseCostInfo.set(current === costs[0] ? `Dal registro acquisti: ${matches[0].product}` : `Registro acquisti: ${costs[0].toFixed(2)} € per carta`);
+      return;
+    }
+    control.setValue(costs[0]);
+    this.autoFilledPrice = costs[0];
+    this.purchaseCostInfo.set(`Dal registro acquisti: ${matches[0].product}`);
   }
 
   private loadDefaults() {

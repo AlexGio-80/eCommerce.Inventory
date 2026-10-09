@@ -9,6 +9,15 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-09] Miglioria — Caricamento prodotti: prezzo d'acquisto dal Tag dell'acquisto
+
+- Nella maschera "Nuovo Prodotto", scrivendo o incollando il Tag di un acquisto del registro, il "Prezzo di
+  acquisto" si riempie col suo costo per carta; sotto il campo compare "Dal registro acquisti: <prodotto>"
+- Non sovrascrive mai un prezzo scritto a mano: riempie solo un campo a 0, o il valore che aveva messo lui per
+  un altro Tag (che torna a 0 se il nuovo Tag non è nel registro, per non lasciare un costo sbagliato)
+- Non tocca le inserzioni in modifica; con più acquisti dallo stesso Tag a costi diversi (es. `#FRA_OLD`) non
+  sceglie e lo dice sotto il campo. Tag confrontati senza maiuscole e con o senza `#`
+
 ### [2026-10-09] Feature — Registro acquisti: costo per carta
 
 #### Problema
