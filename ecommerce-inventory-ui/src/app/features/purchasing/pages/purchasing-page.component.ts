@@ -49,8 +49,15 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
           <div class="toolbar">
             <mat-form-field appearance="outline" class="set-select">
               <mat-label>Uscita</mat-label>
-              <mat-select [ngModel]="selectedCode()" (ngModelChange)="selectSet($event)">
-                <mat-option *ngFor="let s of sets()" [value]="s.code">
+              <mat-select [ngModel]="selectedCode()" (ngModelChange)="selectSet($event)"
+                (openedChange)="onSetSelectOpened($event, setSearch)">
+                <div style="position: sticky; top: 0; z-index: 1; background: white; padding: 8px 16px; border-bottom: 1px solid #e0e0e0;"
+                  (keydown)="$event.stopPropagation()">
+                  <input #setSearch type="text" placeholder="Cerca uscita (codice o nome)" autocomplete="off"
+                    style="width: 100%; border: none; outline: none; font: inherit; font-size: 14px;"
+                    [ngModel]="setFilter()" (ngModelChange)="setFilter.set($event)">
+                </div>
+                <mat-option *ngFor="let s of filteredSets()" [value]="s.code">
                   {{ s.code }} — {{ s.name }}<span *ngIf="s.releaseDate"> ({{ s.releaseDate | date:'dd/MM/yyyy' }})</span>
                 </mat-option>
               </mat-select>
@@ -268,6 +275,22 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
 })
 export class PurchasingPageComponent implements OnInit {
   sets = signal<SealedSetOption[]>([]);
+  setFilter = signal('');
+
+  /** Uscite che contengono il testo cercato nel codice, nel nome o nei set figli; quella scelta resta sempre, per l'etichetta. */
+  filteredSets = computed(() => {
+    const text = this.setFilter().trim().toLowerCase();
+    if (!text) return this.sets();
+    return this.sets().filter(s => s.code === this.selectedCode()
+      || s.code.toLowerCase().includes(text)
+      || s.name.toLowerCase().includes(text)
+      || s.childSets.some(c => c.toLowerCase().includes(text)));
+  });
+
+  onSetSelectOpened(opened: boolean, input: HTMLInputElement) {
+    if (opened) setTimeout(() => input.focus());
+    else this.setFilter.set('');
+  }
   selectedCode = signal<string | null>(null);
   analysis = signal<SealedSetAnalysis | null>(null);
   showCases = signal(false);

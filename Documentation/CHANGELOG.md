@@ -9,6 +9,12 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-09] Miglioria — Ricerca nella scelta dell'uscita (pagina Acquisti)
+
+- La tendina "Uscita" della scheda Analisi uscita ha un campo di ricerca in cima: filtra mentre si scrive,
+  "contiene" su codice, nome e set collegati, senza distinguere maiuscole e minuscole. L'uscita scelta resta
+  sempre in elenco (serve all'etichetta della combo); il filtro si azzera alla chiusura. Pubblicata e verificata
+
 ### [2026-10-09] Feature — Secret Lair, Fase 3: valutazione del drop prima dell'acquisto
 
 #### Problema
