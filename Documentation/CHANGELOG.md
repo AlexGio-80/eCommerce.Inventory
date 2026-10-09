@@ -9,6 +9,34 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-09] Feature — Registro acquisti: costo per carta
+
+#### Problema
+
+Le inserzioni di un acquisto si caricano in giorni diversi, e ogni volta il prezzo d'acquisto della singola
+carta (prezzo del prodotto diviso le carte contenute) andava ricalcolato o ritrovato.
+
+#### Soluzione Implementata
+
+- Colonna **"Costo/carta"** nel registro acquisti, accanto al Tag: scritto a mano se c'è, altrimenti calcolato
+  (in corsivo) come prezzo unitario / carte contenute in un'unità. Mostrato come `0.35`, senza simbolo e col
+  punto: il doppio clic lo copia pronto per il campo numerico "Prezzo di acquisto" del caricamento prodotti
+- Campo **"Costo per carta €"** nel form dell'acquisto: vuoto = calcolato (il valore calcolato è nel segnaposto
+  e nel tooltip), scritto = vale quello
+- Carte contenute dalla composizione MTGJSON: buste × carte per busta (media pesata delle configurazioni),
+  mazzi, carte singole. Al 09/10/2026: Play Box 420, Collector Box 180, mazzo Commander 100, set di 5 mazzi
+  500. Per le uscite senza composizione pubblicata (Star Trek) si contano le carte tipiche del tipo di busta
+  (Play 14, Collector 15) e il tooltip lo segnala; i prodotti di contenuto ignoto (mazzi Star Trek, Scene Box)
+  non hanno un calcolato e il costo si scrive a mano
+- Migration `AddPurchaseCostPerCard` (colonna `ProductPurchases.CostPerCard`)
+
+#### Note Tecniche
+
+- Il calcolo riproduce quello fatto finora a mano dall'utente (prezzo / buste × carte per busta), verificato
+  sugli acquisti registrati di Reality Fracture
+- `ProductPurchaseService.CardsPerUnitAsync` è riusabile per altri prodotti; il valore calcolato si arrotonda
+  al centesimo
+
 ### [2026-10-09] Feature — Articoli da preparare: l'ordine settimanale Card Trader Zero eredita la preparazione giornaliera
 
 #### Problema

@@ -456,9 +456,17 @@ export interface ProductPurchaseInput {
     openedAt?: string | null;
     tag?: string | null;
     notes?: string | null;
+    /** Costo per carta scritto a mano; null = calcolato. */
+    costPerCard?: number | null;
 }
 
 export interface ProductPurchase extends ProductPurchaseInput {
+    /** Prezzo unitario diviso le carte contenute in un'unità. */
+    calculatedCostPerCard?: number;
+    cardsPerUnit?: number;
+    cardsEstimated: boolean;
+    /** Da usare nelle inserzioni: scritto a mano, altrimenti calcolato. */
+    effectiveCostPerCard?: number;
     id: number;
     productName: string;
     setCode: string;

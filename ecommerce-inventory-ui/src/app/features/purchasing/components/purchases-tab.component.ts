@@ -27,6 +27,7 @@ interface PurchaseForm {
   openedAt: string;
   tag: string;
   notes: string;
+  costPerCard: number | null;
 }
 
 /**
@@ -81,6 +82,11 @@ interface PurchaseForm {
             <button mat-icon-button matSuffix (click)="suggestTag()" matTooltip="Proponi il tag CODICE_TIPO_AAAAMMGG">
               <mat-icon>auto_fix_high</mat-icon>
             </button>
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="small" [matTooltip]="costPerCardHint()">
+            <mat-label>Costo per carta €</mat-label>
+            <input matInput type="number" step="0.01" min="0" [(ngModel)]="form.costPerCard"
+              [placeholder]="editingCalculated != null ? editingCalculated.toFixed(2) : 'calcolato'">
           </mat-form-field>
           <mat-form-field appearance="outline" class="notes">
             <mat-label>Note</mat-label>
@@ -143,6 +149,19 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
     { headerName: 'Acquistato', field: 'purchasedAt', width: 115, valueFormatter: this.date },
     { headerName: 'Aperto', field: 'openedAt', width: 105, valueFormatter: this.date },
     { headerName: 'Tag', field: 'tag', width: 170 },
+    {
+      headerName: 'Costo/carta', field: 'effectiveCostPerCard', width: 115, type: 'numericColumn',
+      // Senza simbolo e con il punto: con il doppio clic si copia così com'è nel campo numerico
+      // "Prezzo di acquisto" del caricamento prodotti.
+      valueFormatter: p => p.value == null ? '' : Number(p.value).toFixed(2),
+      cellStyle: p => p.data && p.data.costPerCard == null ? { fontStyle: 'italic', color: '#616161' } : null,
+      headerTooltip: 'Costo di una carta, da mettere come prezzo di acquisto nelle inserzioni. Doppio clic per copiarlo',
+      tooltipValueGetter: p => !p.data ? '' : p.data.costPerCard != null
+        ? `Scritto a mano${p.data.calculatedCostPerCard != null ? ` (calcolato: ${p.data.calculatedCostPerCard.toFixed(2)})` : ''}`
+        : p.data.calculatedCostPerCard != null
+          ? `Calcolato: prezzo unitario / ${p.data.cardsPerUnit} carte${p.data.cardsEstimated ? ' (carte per busta tipiche: MTGJSON non ha ancora la composizione)' : ''}`
+          : "Contenuto del prodotto non noto: scrivilo a mano modificando l'acquisto"
+    },
     {
       headerName: 'Previsto netto/unità', field: 'predictedOpenValueNet', width: 160, type: 'numericColumn', valueFormatter: this.euro,
       tooltipValueGetter: p => p.data?.predictedAt
@@ -232,7 +251,8 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
       purchasedAt: this.form.purchasedAt || null,
       openedAt: this.form.openedAt || null,
       tag: this.form.tag || null,
-      notes: this.form.notes || null
+      notes: this.form.notes || null,
+      costPerCard: this.form.costPerCard || null
     };
     this.isSaving.set(true);
     this.purchasing.savePurchase(input, this.form.id).subscribe({
@@ -263,8 +283,11 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
       purchasedAt: purchase.purchasedAt ?? '',
       openedAt: purchase.openedAt ?? '',
       tag: purchase.tag ?? '',
-      notes: purchase.notes ?? ''
+      notes: purchase.notes ?? '',
+      costPerCard: purchase.costPerCard ?? null
     };
+    this.editingCalculated = purchase.calculatedCostPerCard ?? null;
+    this.editingCards = purchase.cardsPerUnit ?? null;
     if (!this.products.some(p => p.id === purchase.sealedProductId)) {
       // Il prodotto è di un'altra uscita: lo si aggiunge alla tendina per poterlo mostrare.
       this.products = [...this.products, { id: purchase.sealedProductId, name: purchase.productName, setCode: purchase.setCode } as SealedProductAnalysis];
@@ -281,9 +304,22 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
 
   reset() {
     this.form = this.emptyForm();
+    this.editingCalculated = null;
+    this.editingCards = null;
+  }
+
+  /** Costo per carta calcolato dell'acquisto in modifica (prezzo unitario / carte contenute). */
+  editingCalculated: number | null = null;
+  editingCards: number | null = null;
+
+  costPerCardHint(): string {
+    const base = 'Vuoto = calcolato dal prezzo unitario diviso le carte contenute nel prodotto';
+    return this.editingCalculated != null
+      ? `${base}: ${this.editingCalculated.toFixed(2)} € (${this.editingCards} carte)`
+      : base;
   }
 
   private emptyForm(): PurchaseForm {
-    return { sealedProductId: null, quantity: 1, unitPrice: null, store: 'Cardmarket', seller: '', purchasedAt: '', openedAt: '', tag: '', notes: '' };
+    return { sealedProductId: null, quantity: 1, unitPrice: null, store: 'Cardmarket', seller: '', purchasedAt: '', openedAt: '', tag: '', notes: '', costPerCard: null };
   }
 }

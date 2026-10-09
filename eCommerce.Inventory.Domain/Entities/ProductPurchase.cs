@@ -35,6 +35,13 @@ public class ProductPurchase
     public string? Notes { get; set; }
 
     /// <summary>
+    /// Costo di una carta, da mettere come prezzo d'acquisto nelle inserzioni di questo acquisto, se
+    /// scritto a mano. Null = si usa quello calcolato (prezzo / carte contenute, vedi
+    /// <c>ProductPurchaseService.CardsPerUnitAsync</c>).
+    /// </summary>
+    public decimal? CostPerCard { get; set; }
+
+    /// <summary>
     /// Valore atteso netto di un'unità aprendola (prezzi Cardmarket corretti), calcolato al momento
     /// dell'apertura o, se ancora chiusa, della registrazione. Null se i dati non bastavano (es.
     /// composizione delle buste non ancora pubblicata): si ricalcola all'apertura.

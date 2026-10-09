@@ -476,6 +476,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
         {
             entity.Property(p => p.UnitPrice).HasPrecision(18, 2);
             entity.Property(p => p.PredictedOpenValueNet).HasPrecision(18, 2);
+            entity.Property(p => p.CostPerCard).HasPrecision(9, 2);
             entity.Property(p => p.PredictionCoverage).HasPrecision(5, 1);
             entity.Property(p => p.Store).HasMaxLength(100);
             entity.Property(p => p.Seller).HasMaxLength(100);

@@ -28,7 +28,84 @@ public class ProductPurchaseService
             .ThenByDescending(p => p.Id)
             .ToListAsync(cancellationToken);
 
-        return purchases.Select(Map).ToList();
+        var cards = await CardsPerUnitAsync(purchases.Select(p => p.SealedProductId), cancellationToken);
+        return purchases.Select(p => Map(p, cards.GetValueOrDefault(p.SealedProductId))).ToList();
+    }
+
+    /// <summary>Tipi di busta più comuni, per le uscite di cui MTGJSON non ha ancora la composizione.</summary>
+    private static readonly Dictionary<string, int> TypicalCardsPerPack = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["play"] = 14, ["collector"] = 15, ["draft"] = 15, ["set"] = 12, ["jumpstart"] = 20, ["beginner"] = 20
+    };
+
+    /// <summary>
+    /// Carte contenute in un'unità di ciascun prodotto: buste (carte per busta dalla composizione
+    /// MTGJSON, media pesata delle configurazioni), mazzi e carte singole. Assente se il contenuto non
+    /// è noto per intero. Le buste senza composizione pubblicata contano le carte tipiche del loro tipo,
+    /// e il risultato è segnato come stima.
+    /// </summary>
+    public async Task<Dictionary<int, CardsPerUnit>> CardsPerUnitAsync(IEnumerable<int> productIds, CancellationToken cancellationToken = default)
+    {
+        var ids = productIds.Distinct().ToList();
+        var result = new Dictionary<int, CardsPerUnit>();
+        if (ids.Count == 0) return result;
+
+        var catalog = await _db.SealedProducts.AsNoTracking().Include(p => p.Contents)
+            .ToDictionaryAsync(p => p.Uuid, cancellationToken);
+        var compositions = catalog.Values.Where(p => ids.Contains(p.Id))
+            .ToDictionary(p => p.Id, p => SealedProductAnalysisService.Resolve(p, catalog));
+
+        var packSets = compositions.Values.SelectMany(c => c.Packs.Keys).Select(k => k.Split(':')[0]).Distinct().ToList();
+        var configs = await _db.BoosterConfigs.AsNoTracking().Include(c => c.Slots)
+            .Where(c => packSets.Contains(c.SetCode))
+            .ToListAsync(cancellationToken);
+        var cardsPerPack = configs
+            .GroupBy(c => $"{c.SetCode}:{c.BoosterType}".ToUpperInvariant())
+            .ToDictionary(g => g.Key, g =>
+            {
+                var total = g.First().TotalWeight;
+                return total > 0 ? g.Sum(c => (decimal)c.Weight * c.Slots.Sum(s => s.Count)) / total : 0m;
+            });
+
+        var deckSets = compositions.Values.SelectMany(c => c.Decks.Keys).Select(k => k.Split(':')[0]).Distinct().ToList();
+        var deckCards = (await _db.MtgjsonDecks.AsNoTracking()
+                .Where(d => deckSets.Contains(d.SetCode))
+                .Select(d => new { d.SetCode, d.Name, Cards = d.Cards.Sum(c => c.Count) })
+                .ToListAsync(cancellationToken))
+            .GroupBy(d => OpeningValueCalculator.DeckKey(d.SetCode, d.Name))
+            .ToDictionary(g => g.Key, g => g.First().Cards);
+
+        foreach (var (productId, composition) in compositions)
+        {
+            if (composition.Unresolved) continue;
+
+            decimal cards = 0;
+            var estimated = false;
+            var known = true;
+            foreach (var (packKey, count) in composition.Packs)
+            {
+                if (cardsPerPack.TryGetValue(packKey.ToUpperInvariant(), out var perPack) && perPack > 0)
+                {
+                    cards += count * perPack;
+                }
+                else if (TypicalCardsPerPack.TryGetValue(packKey.Split(':').Last(), out var typical))
+                {
+                    cards += count * typical;
+                    estimated = true;
+                }
+                else known = false;
+            }
+            foreach (var (deckKey, count) in composition.Decks)
+            {
+                if (deckCards.TryGetValue(deckKey, out var perDeck) && perDeck > 0) cards += count * perDeck;
+                else known = false;
+            }
+            cards += composition.Cards.Values.Sum();
+
+            if (known && cards > 0) result[productId] = new CardsPerUnit((int)Math.Round(cards), estimated);
+        }
+
+        return result;
     }
 
     /// <exception cref="ArgumentException">Prodotto inesistente o dati non validi.</exception>
@@ -68,6 +145,7 @@ public class ProductPurchaseService
         purchase.OpenedAt = input.OpenedAt;
         purchase.Tag = Trim(input.Tag, 100);
         purchase.Notes = Trim(input.Notes, 1000);
+        purchase.CostPerCard = input.CostPerCard is > 0 ? Math.Round(input.CostPerCard.Value, 2) : null;
 
         if (refreshPrediction)
         {
@@ -76,7 +154,8 @@ public class ProductPurchaseService
 
         await _db.SaveChangesAsync(cancellationToken);
         purchase.SealedProduct = product;
-        return Map(purchase);
+        var cards = await CardsPerUnitAsync(new[] { product.Id }, cancellationToken);
+        return Map(purchase, cards.GetValueOrDefault(product.Id));
     }
 
     public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default)
@@ -113,12 +192,23 @@ public class ProductPurchaseService
         return value.Length <= max ? value : value[..max];
     }
 
-    private static ProductPurchaseDto Map(ProductPurchase p) => new(
-        p.Id, p.SealedProductId, p.SealedProduct?.Name ?? string.Empty, p.SealedProduct?.SetCode ?? string.Empty,
-        p.Quantity, p.UnitPrice, Math.Round(p.Quantity * p.UnitPrice, 2),
-        p.Store, p.Seller, p.PurchasedAt, p.OpenedAt, p.Tag, p.Notes,
-        p.PredictedOpenValueNet, p.PredictionCoverage, p.PredictedAt,
-        p.PredictedOpenValueNet.HasValue ? Math.Round(p.Quantity * p.PredictedOpenValueNet.Value, 2) : null);
+    /// <summary>
+    /// Il costo per carta da usare è quello scritto a mano, altrimenti il prezzo di un'unità diviso le
+    /// carte che contiene: al 09/10/2026 è il modo in cui l'utente calcolava a mano il prezzo d'acquisto
+    /// delle inserzioni (es. Collector Box = prezzo / 12 buste × 15 carte).
+    /// </summary>
+    private static ProductPurchaseDto Map(ProductPurchase p, CardsPerUnit? cards)
+    {
+        decimal? calculated = cards is { Cards: > 0 } ? Math.Round(p.UnitPrice / cards.Cards, 2) : null;
+        return new ProductPurchaseDto(
+            p.Id, p.SealedProductId, p.SealedProduct?.Name ?? string.Empty, p.SealedProduct?.SetCode ?? string.Empty,
+            p.Quantity, p.UnitPrice, Math.Round(p.Quantity * p.UnitPrice, 2),
+            p.Store, p.Seller, p.PurchasedAt, p.OpenedAt, p.Tag, p.Notes,
+            p.PredictedOpenValueNet, p.PredictionCoverage, p.PredictedAt,
+            p.PredictedOpenValueNet.HasValue ? Math.Round(p.Quantity * p.PredictedOpenValueNet.Value, 2) : null,
+            p.CostPerCard, calculated, cards?.Cards, cards?.Estimated ?? false,
+            p.CostPerCard ?? calculated);
+    }
 }
 
 public record ProductPurchaseInput(
@@ -130,8 +220,16 @@ public record ProductPurchaseInput(
     DateOnly? PurchasedAt,
     DateOnly? OpenedAt,
     string? Tag,
-    string? Notes);
+    string? Notes,
+    decimal? CostPerCard = null);
 
+/// <param name="Cards">Carte contenute in un'unità del prodotto.</param>
+/// <param name="Estimated">True se alcune buste non hanno la composizione MTGJSON e contano le carte tipiche del tipo.</param>
+public record CardsPerUnit(int Cards, bool Estimated);
+
+/// <param name="CostPerCard">Costo per carta scritto a mano; null se si usa quello calcolato.</param>
+/// <param name="CalculatedCostPerCard">Prezzo di un'unità diviso le carte che contiene.</param>
+/// <param name="EffectiveCostPerCard">Quello da usare nelle inserzioni: scritto a mano, altrimenti calcolato.</param>
 public record ProductPurchaseDto(
     int Id,
     int SealedProductId,
@@ -149,4 +247,9 @@ public record ProductPurchaseDto(
     decimal? PredictedOpenValueNet,
     decimal? PredictionCoverage,
     DateTime? PredictedAt,
-    decimal? PredictedTotalNet);
+    decimal? PredictedTotalNet,
+    decimal? CostPerCard,
+    decimal? CalculatedCostPerCard,
+    int? CardsPerUnit,
+    bool CardsEstimated,
+    decimal? EffectiveCostPerCard);

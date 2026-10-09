@@ -162,4 +162,65 @@ public class OpeningCalibrationTests
         saved.PredictedOpenValueNet.Should().BeNull("senza la composizione delle buste la previsione sarebbe sottostimata");
         (await service.ListAsync()).Should().ContainSingle(p => p.ProductName == "Star Trek Play Booster Box");
     }
+
+    private ProductPurchaseService PurchaseService() => new(_db, new SealedProductAnalysisService(_db, Mock.Of<ICardTraderApiService>(),
+        new BulkSellThroughService(_db), new PriceRealizationService(_db), new ConfigurationBuilder().Build(),
+        NullLogger<SealedProductAnalysisService>.Instance));
+
+    /// <summary>Box da 2 buste; ogni busta ha 14 o 15 carte, metà e metà.</summary>
+    private SealedProduct SeedBox(string setCode, bool withBoosterData)
+    {
+        var pack = new SealedProduct
+        {
+            Uuid = Guid.NewGuid(), SetCode = setCode, Name = "Play Booster Pack", Category = "booster_pack",
+            Contents = { new SealedProductContent { Kind = SealedContentKind.Pack, PackCode = "play", SetCode = setCode } }
+        };
+        var box = new SealedProduct
+        {
+            Uuid = Guid.NewGuid(), SetCode = setCode, Name = "Play Booster Box", Category = "booster_box",
+            Contents = { new SealedProductContent { Kind = SealedContentKind.Sealed, ChildUuid = pack.Uuid, Count = 2 } }
+        };
+        _db.SealedProducts.AddRange(pack, box);
+        if (withBoosterData)
+        {
+            _db.BoosterConfigs.AddRange(
+                new BoosterConfig { SetCode = setCode, BoosterType = "play", Weight = 1, TotalWeight = 2, Slots = { new BoosterConfigSlot { SheetName = "common", Count = 14 } } },
+                new BoosterConfig { SetCode = setCode, BoosterType = "play", Weight = 1, TotalWeight = 2, Slots = { new BoosterConfigSlot { SheetName = "common", Count = 15 } } });
+        }
+        return box;
+    }
+
+    [Fact]
+    public async Task CostPerCard_IsThePriceDividedByTheCardsInTheProduct_UnlessWrittenByHand()
+    {
+        var box = SeedBox("AAA", withBoosterData: true);
+        await _db.SaveChangesAsync();
+        var service = PurchaseService();
+
+        var calculated = await service.SaveAsync(null, new ProductPurchaseInput(box.Id, 1, 29.00m, null, null, null, null, "#AAA_PB", null));
+
+        calculated.CardsPerUnit.Should().Be(29, "2 buste da 14,5 carte in media");
+        calculated.CalculatedCostPerCard.Should().Be(1.00m);
+        calculated.EffectiveCostPerCard.Should().Be(1.00m);
+        calculated.CostPerCard.Should().BeNull();
+
+        var byHand = await service.SaveAsync(calculated.Id, new ProductPurchaseInput(box.Id, 1, 29.00m, null, null, null, null, "#AAA_PB", null, 0.90m));
+
+        byHand.CostPerCard.Should().Be(0.90m);
+        byHand.CalculatedCostPerCard.Should().Be(1.00m, "il calcolato resta visibile accanto");
+        byHand.EffectiveCostPerCard.Should().Be(0.90m);
+    }
+
+    [Fact]
+    public async Task CostPerCard_UsesTypicalPacksWhenTheCompositionIsNotPublished()
+    {
+        var box = SeedBox("BBB", withBoosterData: false);
+        await _db.SaveChangesAsync();
+
+        var saved = await PurchaseService().SaveAsync(null, new ProductPurchaseInput(box.Id, 1, 28.00m, null, null, null, null, null, null));
+
+        saved.CardsPerUnit.Should().Be(28, "una Play Booster ha di solito 14 carte");
+        saved.CardsEstimated.Should().BeTrue();
+        saved.CalculatedCostPerCard.Should().Be(1.00m);
+    }
 }
