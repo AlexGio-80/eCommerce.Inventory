@@ -20,6 +20,7 @@ public class PurchasingController : ControllerBase
     private readonly OpeningBalanceService _openingBalance;
     private readonly SecretLairRetrospectiveService _secretLair;
     private readonly SecretLairShopMonitorService _secretLairShop;
+    private readonly SecretLairDropValuationService _secretLairValuation;
     private readonly ProductPurchaseService _purchases;
     private readonly SealedOpportunityService _opportunities;
     private readonly AlertService _alerts;
@@ -34,6 +35,7 @@ public class PurchasingController : ControllerBase
         OpeningBalanceService openingBalance,
         SecretLairRetrospectiveService secretLair,
         SecretLairShopMonitorService secretLairShop,
+        SecretLairDropValuationService secretLairValuation,
         ProductPurchaseService purchases,
         SealedOpportunityService opportunities,
         AlertService alerts,
@@ -43,6 +45,7 @@ public class PurchasingController : ControllerBase
     {
         _secretLair = secretLair;
         _secretLairShop = secretLairShop;
+        _secretLairValuation = secretLairValuation;
         _plans = plans;
         _alerts = alerts;
         _opportunities = opportunities;
@@ -132,6 +135,17 @@ public class PurchasingController : ControllerBase
     {
         var view = await _secretLairShop.GetAsync(cancellationToken);
         return Ok(ApiResponse<SecretLairShopView>.SuccessResult(view));
+    }
+
+    /// <summary>
+    /// Valutazione dei prodotti del negozio Secret Lair: valore stimato dalle stampe esistenti col
+    /// sovrapprezzo misurato sui drop passati, confronto col prezzo Wizards e suggerimento.
+    /// </summary>
+    [HttpGet("secret-lair/valuation")]
+    public async Task<IActionResult> GetSecretLairValuation(CancellationToken cancellationToken)
+    {
+        var valuation = await _secretLairValuation.GetAsync(cancellationToken);
+        return Ok(ApiResponse<SecretLairValuation>.SuccessResult(valuation));
     }
 
     /// <summary>Legge subito il negozio Secret Lair (catalogo e carte dei prodotti nuovi).</summary>

@@ -45,6 +45,15 @@ public class SecretLairShopProduct
     /// <summary>Quando è stata letta la pagina del prodotto con l'elenco delle carte.</summary>
     public DateTime? ContentsFetchedAt { get; set; }
 
+    /// <summary>
+    /// Valore netto stimato prima dell'uscita, quando le carte Secret Lair non hanno ancora prezzi
+    /// propri. Non si aggiorna più: dopo l'uscita si confronta con il valore ai prezzi reali.
+    /// </summary>
+    public decimal? EstimatedNetValue { get; set; }
+
+    /// <summary>Quando è stata congelata <see cref="EstimatedNetValue"/>.</summary>
+    public DateTime? EstimatedAt { get; set; }
+
     public ICollection<SecretLairShopCard> Cards { get; set; } = new List<SecretLairShopCard>();
 }
 

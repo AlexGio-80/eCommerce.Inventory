@@ -352,6 +352,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(p => p.Title).HasMaxLength(300);
             entity.Property(p => p.DropName).HasMaxLength(300);
             entity.Property(p => p.Price).HasPrecision(9, 2);
+            entity.Property(p => p.EstimatedNetValue).HasPrecision(9, 2);
             entity.HasMany(p => p.Cards).WithOne(c => c.Product!).HasForeignKey(c => c.SecretLairShopProductId).OnDelete(DeleteBehavior.Cascade);
         });
 

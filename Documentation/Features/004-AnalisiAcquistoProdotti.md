@@ -468,12 +468,19 @@ conviene", più che "quando comprare".
    riesce (coda Queue-it), si salta il giro. Da qui anche il **link al sito Wizards** nella scheda: il
    negozio mostra solo i drop in vendita, l'id Wizards non è in MTGJSON e la ricerca del sito è vietata
    da `robots.txt`, quindi il link c'è solo per i drop visti dal monitoraggio
-3. **Valutazione del drop prima dell'acquisto** — per ogni carta del drop, il prezzo delle stampe già
+3. **Valutazione del drop prima dell'acquisto** (pubblicata e verificata il 2026-10-09) — per ogni carta del drop, il prezzo delle stampe già
    esistenti (Cardmarket e Card Trader) per il sovrapprezzo Secret Lair misurato sui drop passati
    (versione Secret Lair contro stampa più economica, separato foil / non foil), con quota venduta e
    costi: confronto con il prezzo Wizards e suggerimento "Compra" / "Lascia" nella scheda e negli
    avvisi. Le carte mai stampate prima usano la media dei drop simili e sono segnalate come stima
-   debole. Dopo l'uscita i prezzi reali sostituiscono la stima e si misura quanto ci aveva preso
+   debole. Dopo l'uscita i prezzi reali sostituiscono la stima e si misura quanto ci aveva preso.
+   **Come è stata fatta**: il sovrapprezzo è una curva (mediane per decili di prezzo base, interpolate), non
+   un rapporto: al 09/10 una carta da pochi centesimi vale ~4,7 € in SL (6 € foil), una da 15 € ~24 €.
+   Su questa si applica il calcolo del valore atteso dei sigillati (prezzo realizzato, quota venduta per
+   fascia, costo per carta, costi 15%); "Compra" sopra il 30% di margine sul prezzo Wizards. I bundle valgono
+   i drop contenuti. Sui 701 drop passati lo scarto tipico è del 34% (sottostima del 9%): usare il prezzo
+   delle versioni SL precedenti della stessa carta non migliora. La stima prima dell'uscita si congela nel
+   prodotto (`EstimatedNetValue`)
 
 Già disponibile: l'import della Fase 0 salva ogni giorno anche i circa 890 prodotti Secret Lair del
 catalogo Cardmarket (categoria "MtG Set"), quindi lo storico di rivendita dei drop si accumula da

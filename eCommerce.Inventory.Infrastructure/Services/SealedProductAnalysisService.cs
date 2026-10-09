@@ -186,7 +186,7 @@ public class SealedProductAnalysisService
     }
 
     /// <summary>Parametri del valore atteso: quelli passati dalla pagina, altrimenti configurazione e dati misurati.</summary>
-    private async Task<(OpeningValueSettings Values, OpeningValueSettingsDto Dto)> ResolveSettingsAsync(
+    public async Task<(OpeningValueSettings Values, OpeningValueSettingsDto Dto)> ResolveSettingsAsync(
         OpeningValueOverrides? overrides, CancellationToken cancellationToken)
     {
         var threshold = overrides?.BulkThreshold ?? _configuration.GetValue("Purchasing:BulkThreshold", 0.25m);

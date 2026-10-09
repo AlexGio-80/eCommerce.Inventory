@@ -179,7 +179,7 @@ public class SecretLairRetrospectiveService
     }
 
     /// <summary>Le carte di ogni drop, da carte singole e mazzi MTGJSON, con id Scryfall e foil.</summary>
-    private async Task<List<DropCard>> LoadDropCardsAsync(List<SealedProduct> drops, CancellationToken cancellationToken)
+    internal async Task<List<DropCard>> LoadDropCardsAsync(List<SealedProduct> drops, CancellationToken cancellationToken)
     {
         var contents = drops.SelectMany(d => d.Contents.Select(c => (DropId: d.Id, Content: c))).ToList();
 
@@ -203,13 +203,13 @@ public class SecretLairRetrospectiveService
         var uuids = raw.Select(r => r.Uuid).Distinct().ToList();
         var cards = await _db.MtgjsonCards.AsNoTracking()
             .Where(c => uuids.Contains(c.Uuid))
-            .Select(c => new { c.Uuid, c.ScryfallId, c.CardmarketId })
+            .Select(c => new { c.Uuid, c.ScryfallId, c.CardmarketId, c.Name })
             .ToDictionaryAsync(c => c.Uuid, cancellationToken);
 
         return raw
             .Where(r => cards.TryGetValue(r.Uuid, out var c) && c.ScryfallId != null)
             .GroupBy(r => (r.DropId, cards[r.Uuid].ScryfallId!, r.Foil))
-            .Select(g => new DropCard(g.Key.DropId, g.Key.Item2, g.Key.Foil, g.Sum(r => r.Count), cards[g.First().Uuid].CardmarketId))
+            .Select(g => new DropCard(g.Key.DropId, g.Key.Item2, g.Key.Foil, g.Sum(r => r.Count), cards[g.First().Uuid].CardmarketId, cards[g.First().Uuid].Name))
             .ToList();
     }
 
@@ -283,9 +283,9 @@ public class SecretLairRetrospectiveService
         [SecretLairDropType.Commander] = _configuration.GetValue("Purchasing:SecretLair:CommanderPrice", 179m)
     };
 
-    private sealed record CardMovement(string? ScryfallId, bool IsFoil, string? Tag, int Quantity, decimal Price, DateTime Date);
+    internal sealed record CardMovement(string? ScryfallId, bool IsFoil, string? Tag, int Quantity, decimal Price, DateTime Date);
 
-    private sealed record DropCard(int DropId, string ScryfallId, bool Foil, int Count, int? CardmarketId)
+    internal sealed record DropCard(int DropId, string ScryfallId, bool Foil, int Count, int? CardmarketId, string Name)
     {
         public bool Matches(CardMovement m) => m.ScryfallId == ScryfallId && m.IsFoil == Foil;
     }

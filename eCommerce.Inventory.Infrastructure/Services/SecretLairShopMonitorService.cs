@@ -24,16 +24,19 @@ public class SecretLairShopMonitorService
     private readonly AlertService _alerts;
     private readonly IConfiguration _configuration;
     private readonly ILogger<SecretLairShopMonitorService> _logger;
+    private readonly ISecretLairDropValuation? _valuation;
 
     public SecretLairShopMonitorService(
         ApplicationDbContext db, ISecretLairShopClient client, AlertService alerts,
-        IConfiguration configuration, ILogger<SecretLairShopMonitorService> logger)
+        IConfiguration configuration, ILogger<SecretLairShopMonitorService> logger,
+        ISecretLairDropValuation? valuation = null)
     {
         _db = db;
         _client = client;
         _alerts = alerts;
         _configuration = configuration;
         _logger = logger;
+        _valuation = valuation;
     }
 
     /// <exception cref="InvalidOperationException">Una lettura è già in corso.</exception>
@@ -93,6 +96,7 @@ public class SecretLairShopMonitorService
             run.Products = catalog.Count;
             run.NewProducts = fresh.Count;
             run.ContentsFetched = await FetchContentsAsync(cancellationToken);
+            await FreezeEstimatesAsync(cancellationToken);
 
             if (!firstRun && fresh.Count > 0) await NotifyNewDropsAsync(fresh, cancellationToken);
 
@@ -168,6 +172,38 @@ public class SecretLairShopMonitorService
         return fetched;
     }
 
+    /// <summary>
+    /// Stima del valore dei prodotti che hanno le carte ma non ancora prezzi propri, congelata per il
+    /// confronto dopo l'uscita (Fase 3). Un errore qui non deve far fallire la lettura del negozio.
+    /// </summary>
+    private async Task FreezeEstimatesAsync(CancellationToken cancellationToken)
+    {
+        if (_valuation == null) return;
+        try
+        {
+            var frozen = await _valuation.FreezeEstimatesAsync(cancellationToken);
+            if (frozen > 0) _logger.LogInformation("Negozio Secret Lair: stima congelata per {Count} prodotti", frozen);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Stima dei prodotti Secret Lair non riuscita");
+        }
+    }
+
+    private async Task<Dictionary<int, SecretLairDropEstimate>> EstimatesAsync(List<int> ids, CancellationToken cancellationToken)
+    {
+        if (_valuation == null) return new();
+        try
+        {
+            return await _valuation.EvaluateProductsAsync(ids, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Stima dei drop Secret Lair nuovi non riuscita: avviso senza stima");
+            return new();
+        }
+    }
+
     /// <summary>Un avviso per drop: le edizioni normale e foil dello stesso drop vanno insieme.</summary>
     private async Task NotifyNewDropsAsync(List<SecretLairShopProduct> fresh, CancellationToken cancellationToken)
     {
@@ -176,6 +212,7 @@ public class SecretLairShopMonitorService
             .Where(c => ids.Contains(c.SecretLairShopProductId))
             .ToListAsync(cancellationToken);
         var sendEmail = _configuration.GetValue("SecretLair:Monitor:EmailNewDrops", true);
+        var estimates = await EstimatesAsync(ids, cancellationToken);
         var euro = CultureInfo.GetCultureInfo("it-IT");
 
         foreach (var drop in fresh.GroupBy(p => p.DropName ?? p.Title))
@@ -184,7 +221,8 @@ public class SecretLairShopMonitorService
                 .OrderBy(p => p.IsFoil)
                 .Select(p => $"• {p.Title} — {p.Price.ToString("C", euro)}" +
                              (p.IsPreorder ? " (preordine)" : "") +
-                             (p.LimitPerCustomer is { } limit ? $", max {limit} a cliente" : ""))
+                             (p.LimitPerCustomer is { } limit ? $", max {limit} a cliente" : "") +
+                             (estimates.TryGetValue(p.Id, out var estimate) ? $"\n  {SecretLairDropValuationService.Describe(estimate)}" : ""))
                 .ToList();
 
             var dropCards = cards.Where(c => drop.Any(p => p.Id == c.SecretLairShopProductId))

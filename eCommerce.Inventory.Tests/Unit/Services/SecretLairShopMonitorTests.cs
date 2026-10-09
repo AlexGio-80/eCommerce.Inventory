@@ -108,7 +108,7 @@ public class SecretLairShopMonitorTests : IDisposable
 
     public void Dispose() => _db.Dispose();
 
-    private SecretLairShopMonitorService Service()
+    private SecretLairShopMonitorService Service(ISecretLairDropValuation? valuation = null)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["SecretLair:Monitor:DelaySeconds"] = "0" })
@@ -116,7 +116,7 @@ public class SecretLairShopMonitorTests : IDisposable
         var email = new Mock<IEmailSender>();
         email.SetupGet(e => e.IsConfigured).Returns(false);
         var alerts = new AlertService(_db, email.Object, NullLogger<AlertService>.Instance);
-        return new SecretLairShopMonitorService(_db, _client.Object, alerts, configuration, NullLogger<SecretLairShopMonitorService>.Instance);
+        return new SecretLairShopMonitorService(_db, _client.Object, alerts, configuration, NullLogger<SecretLairShopMonitorService>.Instance, valuation);
     }
 
     private static SecretLairShopItem Item(string id, string drop, int? stock = 10, bool foil = false) =>
@@ -156,6 +156,44 @@ public class SecretLairShopMonitorTests : IDisposable
         var notification = (await _db.AlertNotifications.ToListAsync()).Should().ContainSingle().Subject;
         notification.Title.Should().Be("Nuovo drop Secret Lair: Superdrop B");
         notification.Message.Should().Contain("Prodotto 2").And.Contain("Prodotto 3").And.Contain("Carte: Sol Ring");
+    }
+
+    [Fact]
+    public async Task L_avviso_di_un_drop_nuovo_riporta_la_stima_e_la_lettura_congela_le_stime()
+    {
+        Catalog(Item("1", "Drop A"));
+        _client.Setup(c => c.GetContentsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<SecretLairShopCardLine> { new(1, "Sol Ring", null) });
+        var valuation = new Mock<ISecretLairDropValuation>();
+        valuation.Setup(v => v.EvaluateProductsAsync(It.IsAny<IReadOnlyCollection<int>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyCollection<int> ids, CancellationToken _) => ids.ToDictionary(id => id, _ =>
+                new SecretLairDropEstimate("x", 34.99m, "Compra", 60m, 51m, null, null, 45.8m, 0m, 0, null, null, null, new())));
+        await Service(valuation.Object).RunAsync();
+
+        Catalog(Item("1", "Drop A"), Item("2", "Superdrop B"));
+        await Service(valuation.Object).RunAsync();
+
+        var notification = (await _db.AlertNotifications.ToListAsync()).Should().ContainSingle().Subject;
+        notification.Message.Should().Contain("Stima: valore netto 51,00 € contro 34,99 € (+46%) → Compra");
+        valuation.Verify(v => v.FreezeEstimatesAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task Se_la_stima_non_riesce_l_avviso_parte_lo_stesso()
+    {
+        Catalog(Item("1", "Drop A"));
+        _client.Setup(c => c.GetContentsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<SecretLairShopCardLine>());
+        var valuation = new Mock<ISecretLairDropValuation>();
+        valuation.Setup(v => v.FreezeEstimatesAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("boom"));
+        valuation.Setup(v => v.EvaluateProductsAsync(It.IsAny<IReadOnlyCollection<int>>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("boom"));
+        await Service(valuation.Object).RunAsync();
+
+        Catalog(Item("1", "Drop A"), Item("2", "Superdrop B"));
+        var run = await Service(valuation.Object).RunAsync();
+
+        run.Outcome.Should().Be(SecretLairShopRunOutcome.Succeeded);
+        (await _db.AlertNotifications.CountAsync()).Should().Be(1);
     }
 
     [Fact]

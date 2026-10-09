@@ -9,6 +9,55 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-09] Feature — Secret Lair, Fase 3: valutazione del drop prima dell'acquisto
+
+#### Problema
+
+Il negozio Wizards elenca le carte di un drop prima dell'uscita, ma per sapere se conviene comprarlo
+bisognava cercare a mano il prezzo di ogni carta e indovinare quanto vale in versione Secret Lair.
+
+#### Soluzione Implementata
+
+- **Curva del sovrapprezzo Secret Lair** misurata sui drop passati (circa 3.500 carte): trend Cardmarket della
+  versione SL contro la stampa più economica già esistente, una curva per il non foil e una per il foil. Al
+  09/10/2026 una carta da pochi centesimi vale circa 4,74 € in versione SL (6,01 € foil), una da 6,80 € circa
+  12,50 €, una da 15,60 € circa 23,80 €
+- **Valutazione di ogni prodotto del negozio**: per ogni carta, stampa base × curva; poi lo stesso calcolo del
+  valore atteso dei sigillati (prezzo realizzato, quota venduta per fascia, costo per carta, costi di vendita) e
+  confronto col prezzo Wizards: **Compra** sopra il 30% di margine (`Purchasing:SecretLair:BuyMarginPercent`),
+  **Al limite** fra 0 e 30%, **Lascia** sotto. I bundle valgono i drop che contengono; le carte mai stampate
+  prima valgono il prezzo mediano delle carte SL esclusive (stima debole); le righe che non sono carte
+  ("1 rare or mythic rare card", "Non-foil reprints", gadget) non si stimano e sono contate a parte
+- **Dopo l'uscita i prezzi reali sostituiscono la stima**, quando le carte del drop su MTGJSON hanno un trend
+  Cardmarket. La stima fatta prima dell'uscita resta congelata nel prodotto (colonne "Stima prima dell'uscita"
+  e "Scarto stima"): è la verifica vera del modello
+- Vista "Negozio Wizards" della scheda Secret Lair: colonne Stima, Valore netto (dettaglio carta per carta nel
+  tooltip), Fonte, Margine, Non stimate, e una riga che spiega il modello con il suo errore sui drop passati
+- **Avviso del drop nuovo con la stima**: sotto ogni prodotto, valore netto, margine e suggerimento
+- Endpoint `GET /api/purchasing/secret-lair/valuation`; migration `AddSecretLairEstimates` (colonne
+  `EstimatedNetValue` e `EstimatedAt` su `SecretLairShopProducts`)
+
+#### Note Tecniche
+
+- **Precisione**: sui 701 drop passati con tutte le carte prezzate lo scarto tipico fra stima e prezzi reali
+  è del 34%, con una tendenza a sottostimare del 9%; il 38% dei drop è entro il 25%. Provato anche a usare il
+  prezzo delle versioni Secret Lair precedenti della stessa carta (pura o in media con la curva): nessun
+  miglioramento (34–36%). Lo scarto viene dal tema del drop, che dai prezzi delle carte non si vede
+- La curva è fatta di punti (mediane per decili di prezzo base) interpolati, non di un rapporto per fascia:
+  un rapporto fisso faceva salti ai confini (a 2 € la stima passava da 14 € a 5 €)
+- Stampa base: la più economica con trend ≥ 0,02 €, escluse le serie Secret Lair e i set MTGJSON di tipo
+  memorabilia, alchemy, funny, vanguard, token, minigame. Ricerca per nome intero e per faccia frontale;
+  "Foil …" e "Pool Party Foil …" davanti al nome si tolgono e rendono la carta foil; le terre al plurale
+  ("Swamps") si cercano al singolare
+- Un drop MTGJSON descritto da un mazzo assente o **vuoto** nel catalogo dei mazzi non ha prezzi reali (succede:
+  "Second Breakfast and Beyond" ha il mazzo pubblicato senza carte, e resterebbe solo la carta bonus). I prezzi
+  reali valgono solo se almeno il 90% delle carte ha un trend e le carte MTGJSON sono almeno il 90% di quelle
+  elencate dal negozio
+- La stima si congela a ogni lettura del negozio per i prodotti con le carte e senza prezzi reali; un errore
+  nella valutazione non fa fallire la lettura né l'avviso (che parte senza stima)
+- Verificato su una copia del backup del 09/10: 13 stime congelate alla prima lettura, Masters of the Universe
+  "By the Power of Grayskull!" stimato 49 € netti contro 34,99 € (Compra)
+
 ### [2026-10-08] Feature — Secret Lair, Fase 2: monitoraggio del negozio Wizards
 
 #### Problema

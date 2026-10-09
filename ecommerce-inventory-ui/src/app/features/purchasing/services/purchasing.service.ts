@@ -241,6 +241,59 @@ export interface SecretLairShopView {
     monitorEnabled: boolean;
 }
 
+/** Stima di una riga del prodotto: carta (dalla stampa base), carta senza stampe, drop di un bundle o riga non stimata. */
+export interface SecretLairCardEstimate {
+    quantity: number;
+    line: string;
+    foil: boolean;
+    kind: 'Carta' | 'Senza stampe' | 'Prodotto' | 'Non stimata';
+    basePrice?: number;
+    baseSet?: string;
+    estimatedPrice?: number;
+    realPrice?: number;
+    value?: number;
+}
+
+/** Valutazione di un prodotto del negozio Secret Lair (Fase 3). */
+export interface SecretLairDropEstimate {
+    wizardsProductId: string;
+    price: number;
+    verdict: 'Compra' | 'Al limite' | 'Lascia' | 'Non stimabile' | 'Carte da leggere';
+    estimatedTrend: number;
+    estimatedNetValue?: number;
+    realTrend?: number;
+    realNetValue?: number;
+    marginPercent?: number;
+    weakSharePercent: number;
+    unknownLines: number;
+    frozenNetValue?: number;
+    frozenAt?: string;
+    frozenErrorPercent?: number;
+    cards: SecretLairCardEstimate[];
+}
+
+export interface SecretLairCurvePoint {
+    basePrice: number;
+    secretLairPrice: number;
+    samples: number;
+}
+
+export interface SecretLairValuation {
+    model: {
+        normalCurve: SecretLairCurvePoint[];
+        foilCurve: SecretLairCurvePoint[];
+        noBaseNormalPrice: number;
+        noBaseFoilPrice: number;
+        normalSamples: number;
+        foilSamples: number;
+        noBaseSamples: number;
+        backtest: { drops: number; medianAbsoluteErrorPercent?: number; medianBiasPercent?: number; within25Percent?: number };
+        buyMarginPercent: number;
+        settings: OpeningValueSettings;
+    };
+    products: SecretLairDropEstimate[];
+}
+
 /** Bilancio reale di un'apertura, ricostruito dal tag delle inserzioni. */
 export interface OpeningBalance {
     tag: string;
@@ -488,6 +541,11 @@ export class PurchasingService {
 
     getSecretLairShop(): Observable<SecretLairShopView> {
         return this.http.get<ApiResponse<SecretLairShopView>>(`${this.apiUrl}/secret-lair/shop`)
+            .pipe(map(response => response.data!));
+    }
+
+    getSecretLairValuation(): Observable<SecretLairValuation> {
+        return this.http.get<ApiResponse<SecretLairValuation>>(`${this.apiUrl}/secret-lair/valuation`)
             .pipe(map(response => response.data!));
     }
 

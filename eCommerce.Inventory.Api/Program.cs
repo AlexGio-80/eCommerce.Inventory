@@ -259,6 +259,8 @@ builder.Services.AddHttpClient<eCommerce.Inventory.Infrastructure.ExternalServic
     client.Timeout = TimeSpan.FromSeconds(60);
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; eCommerce.Inventory; monitoraggio personale Secret Lair)");
 });
+builder.Services.AddScoped<SecretLairDropValuationService>();
+builder.Services.AddScoped<ISecretLairDropValuation>(sp => sp.GetRequiredService<SecretLairDropValuationService>());
 builder.Services.AddScoped<SecretLairShopMonitorService>();
 builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJobs.SecretLairMonitorWorker>();
 builder.Services.AddScoped<ProductPurchaseService>();

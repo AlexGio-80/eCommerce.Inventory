@@ -150,6 +150,7 @@ eCommerce.Inventory/
   - `AlertService.cs`, `EmailSender.cs` (`IEmailSender`/`SmtpEmailSender`): avvisi ed email di riepilogo
   - `PurchaseCostService.cs`: **unica fonte del costo d'acquisto** (pagina Espansioni, report di redditività, bilancio aperture)
   - `SecretLairRetrospectiveService.cs`: bilancio dei drop Secret Lair comprati interi (carta → drop via MTGJSON, prezzo dal registro o standard)
+  - `SecretLairDropValuationService.cs`: valutazione dei prodotti del negozio Secret Lair (Fase 3): stampa base × curva del sovrapprezzo SL (`SecretLairPremiumCurve.cs`, misurata sui drop passati), valore atteso con `OpeningValueCalculator`, giudizio, prezzi reali dopo l'uscita, stima congelata
   - `SecretLairShopMonitorService.cs`: lettura del negozio Secret Lair di Wizards, prodotti, carte e avvisi sui drop nuovi; client in `ExternalServices/SecretLair/SecretLairShopClient.cs` (catalogo da StoreSearch di Scalefast, carte dall'HTML con AngleSharp)
 
 #### BackgroundJobs
@@ -614,7 +615,7 @@ File/sezioni necessarie in `appsettings.json`:
   "BackupSettings": { "Enabled": true, "Schedule": "0 2 * * *", "RetentionDays": 3 },
   "CardmarketImport": { "Enabled": true, "RunTime": "07:00", "SinglesTrackingMonths": 12 },
   "Purchasing": { "BulkThreshold": 0.25, "BulkPrice": 0.05, "SellingCostPercent": 15, "CostPerCard": 0.15, "DetailImportBatchSize": 60,
-    "SecretLair": { "NormalPrice": 34.99, "FoilPrice": 44.99, "BundlePrice": 149, "CommanderPrice": 179 } },
+    "SecretLair": { "NormalPrice": 34.99, "FoilPrice": 44.99, "BundlePrice": 149, "CommanderPrice": 179, "BuyMarginPercent": 30 } },
   "SecretLair": { "Monitor": { "Enabled": false, "RunTimes": [ "08:00", "14:00", "20:00" ], "ContentsPerRun": 30, "DelaySeconds": 2, "EmailNewDrops": true } },
   "Email": { "Enabled": false, "Host": "smtp.gmail.com", "Port": 587, "EnableSsl": true, "UserName": "", "Password": "***", "From": "", "To": "" },
   "Serilog": { ... }
