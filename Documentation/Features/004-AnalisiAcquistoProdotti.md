@@ -482,6 +482,10 @@ conviene", più che "quando comprare".
    delle versioni SL precedenti della stessa carta non migliora. La stima prima dell'uscita si congela nel
    prodotto (`EstimatedNetValue`)
 
+> **Correzione del 09/10/2026**: la quota venduta del bulk (~35%) e quella per fascia contavano anche gli ordini
+> `hub_pending` di Card Trader Zero, doppioni degli ordini "Ct connect" pagati. Solo sugli ordini pagati il bulk
+> venduto è il 20,7% e la fascia 0,25–1 € il 65%; i valori citati sopra in questo documento sono quelli di prima.
+
 Già disponibile: l'import della Fase 0 salva ogni giorno anche i circa 890 prodotti Secret Lair del
 catalogo Cardmarket (categoria "MtG Set"), quindi lo storico di rivendita dei drop si accumula da
 subito.

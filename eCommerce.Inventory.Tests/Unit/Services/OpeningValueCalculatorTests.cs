@@ -152,7 +152,7 @@ public class OpeningValueCalculatorTests
         db.InventoryItems.AddRange(
             new InventoryItem { BlueprintId = 10, Quantity = 600, ListingPrice = 0.05m, DateAdded = release.AddDays(2), Condition = "NM", Language = "English", Location = "" },
             new InventoryItem { BlueprintId = 20, Quantity = 900, ListingPrice = 0.05m, DateAdded = new DateTime(2025, 11, 21), Condition = "NM", Language = "English", Location = "" });
-        var order = new Order { Id = 1, Code = "A" };
+        var order = new Order { Id = 1, Code = "A", PaidAt = new DateTime(2026, 6, 1) };
         db.Orders.Add(order);
         db.OrderItems.AddRange(
             new OrderItem { OrderId = 1, BlueprintId = 10, Quantity = 400, Price = 0.05m, Name = "x" },
@@ -210,7 +210,7 @@ public class OpeningValueCalculatorTests
             new InventoryItem { BlueprintId = 10, Quantity = 40, ListingPrice = 0.50m, DateAdded = release.AddDays(2), Condition = "NM", Language = "English", Location = "" },
             new InventoryItem { BlueprintId = 10, Quantity = 5, ListingPrice = 2m, DateAdded = release.AddDays(2), Condition = "NM", Language = "English", Location = "" },
             new InventoryItem { BlueprintId = 20, Quantity = 900, ListingPrice = 0.50m, DateAdded = new DateTime(2025, 11, 21), Condition = "NM", Language = "English", Location = "" });
-        db.Orders.Add(new Order { Id = 1, Code = "A" });
+        db.Orders.Add(new Order { Id = 1, Code = "A", PaidAt = new DateTime(2026, 6, 1) });
         db.OrderItems.AddRange(
             new OrderItem { OrderId = 1, BlueprintId = 10, Quantity = 400, Price = 0.05m, Name = "bulk" },
             new OrderItem { OrderId = 1, BlueprintId = 10, Quantity = 120, Price = 0.60m, Name = "non comune" },

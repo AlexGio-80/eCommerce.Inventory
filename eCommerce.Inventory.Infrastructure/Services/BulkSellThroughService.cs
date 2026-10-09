@@ -32,8 +32,10 @@ public class BulkSellThroughService
 
     public async Task<BulkSellThrough> MeasureAsync(decimal threshold, CancellationToken cancellationToken = default)
     {
+        // Solo ordini pagati: gli ordini "hub_pending" di Card Trader Zero sono i singoli acquisti che
+        // Card Trader poi raccoglie in un ordine "Ct connect" pagato, e contarli venderebbe due volte.
         var sold = await _db.OrderItems.AsNoTracking()
-            .Where(oi => oi.Price <= threshold && oi.Blueprint != null)
+            .Where(oi => oi.Price <= threshold && oi.Blueprint != null && oi.Order.PaidAt != null)
             .GroupBy(oi => oi.Blueprint!.ExpansionId)
             .Select(g => new { ExpansionId = g.Key, Quantity = g.Sum(oi => oi.Quantity) })
             .ToDictionaryAsync(x => x.ExpansionId, x => x.Quantity, cancellationToken);
@@ -79,7 +81,8 @@ public class BulkSellThroughService
 
     /// <summary>
     /// Quota venduta per fascia di prezzo sopra la soglia del bulk, sulle stesse aperture all'uscita
-    /// del bulk. Al 08/10/2026: 74% fra 0,25 e 1 €, 94% fra 1 e 3 €, 98% sopra.
+    /// del bulk. Al 09/10/2026, contando solo gli ordini pagati: 65% fra 0,25 e 1 €, 97-100% sopra
+    /// (prima del filtro, con i doppioni di Card Trader Zero: 78% e 95-98%).
     ///
     /// Stessa approssimazione del bulk: le vendite si contano al prezzo di vendita, la giacenza al
     /// prezzo di oggi. Le fasce poi si applicano al trend Cardmarket, non al prezzo Card Trader.
@@ -91,7 +94,7 @@ public class BulkSellThroughService
         var ids = bulk.Expansions.Select(e => e.ExpansionId).ToList();
 
         var soldRows = await _db.OrderItems.AsNoTracking()
-            .Where(oi => oi.Price > threshold && oi.Blueprint != null && ids.Contains(oi.Blueprint.ExpansionId))
+            .Where(oi => oi.Price > threshold && oi.Blueprint != null && oi.Order.PaidAt != null && ids.Contains(oi.Blueprint.ExpansionId))
             .Select(oi => new { oi.Price, oi.Quantity })
             .ToListAsync(cancellationToken);
 
