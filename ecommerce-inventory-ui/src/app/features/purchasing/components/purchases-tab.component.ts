@@ -1,4 +1,7 @@
-import { Component, Input, OnChanges, OnInit, SimpleChanges, signal } from '@angular/core';
+import { Component, DestroyRef, Input, OnChanges, OnInit, SimpleChanges, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Subject, debounceTime, distinctUntilChanged, of, switchMap, catchError } from 'rxjs';
+import { MatAutocompleteModule, MatAutocompleteSelectedEvent } from '@angular/material/autocomplete';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AgGridAngular } from 'ag-grid-angular';
@@ -12,7 +15,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import {
-  ProductPurchase, ProductPurchaseInput, PurchasingService, SealedProductAnalysis
+  CatalogProduct, ProductPurchase, ProductPurchaseInput, PurchasingService, SealedProductAnalysis
 } from '../services/purchasing.service';
 import { GridStateDirective } from '../../../shared/directives/grid-state.directive';
 
@@ -38,7 +41,7 @@ interface PurchaseForm {
   selector: 'app-purchases-tab',
   standalone: true,
   imports: [GridStateDirective, CommonModule, FormsModule, AgGridAngular, GridCellCopyDirective, MatButtonModule, MatIconModule, MatFormFieldModule,
-    MatInputModule, MatSelectModule, MatTooltipModule, MatSnackBarModule],
+    MatInputModule, MatSelectModule, MatTooltipModule, MatSnackBarModule, MatAutocompleteModule],
   template: `
     <div class="tab-container">
       <div class="form">
@@ -48,9 +51,14 @@ interface PurchaseForm {
         <div class="fields">
           <mat-form-field appearance="outline" class="product">
             <mat-label>Prodotto</mat-label>
-            <mat-select [(ngModel)]="form.sealedProductId">
-              <mat-option *ngFor="let p of products" [value]="p.id">{{ p.name }}</mat-option>
-            </mat-select>
+            <input matInput [ngModel]="productQuery" (ngModelChange)="onProductQuery($event)" [matAutocomplete]="productAuto"
+              placeholder="Cerca per nome Cardmarket, nome MTGJSON o set">
+            <mat-autocomplete #productAuto="matAutocomplete" (optionSelected)="selectProduct($event)" class="product-panel">
+              <mat-option *ngFor="let p of productOptions()" [value]="p">
+                <div class="option-main">{{ p.cardmarketName || p.name }}</div>
+                <div class="option-sub">{{ p.cardmarketName ? p.name + ' · ' : '' }}{{ p.setCode }}{{ p.setName ? ' — ' + p.setName : '' }}</div>
+              </mat-option>
+            </mat-autocomplete>
           </mat-form-field>
           <mat-form-field appearance="outline" class="small">
             <mat-label>Quantità</mat-label>
@@ -114,11 +122,14 @@ interface PurchaseForm {
     .form-title { font-weight: 600; margin-bottom: 6px; }
     .fields { display: flex; gap: 8px; flex-wrap: wrap; }
     .fields ::ng-deep .mat-mdc-form-field-subscript-wrapper { display: none; }
-    .product { width: 380px; } .small { width: 120px; } .medium { width: 170px; } .date { width: 160px; } .notes { width: 300px; }
+    .product { width: 460px; } .small { width: 120px; } .medium { width: 170px; } .date { width: 160px; } .notes { width: 300px; }
     .actions { display: flex; gap: 12px; align-items: center; margin-top: 8px; }
     .muted { color: #757575; font-size: 12px; font-weight: normal; }
     .grid-wrapper { flex: 1; min-height: 300px; }
     :host ::ng-deep .ag-theme-material { --ag-header-background-color: #3f51b5; --ag-header-foreground-color: white; }
+    ::ng-deep .product-panel .mat-mdc-option { line-height: 1.2; padding-top: 6px; padding-bottom: 6px; }
+    ::ng-deep .product-panel .option-main { font-size: 14px; }
+    ::ng-deep .product-panel .option-sub { font-size: 11px; color: #757575; }
     :host ::ng-deep .row-action { background: none; border: none; cursor: pointer; color: #3f51b5; padding: 0 4px; }
   `]
 })
@@ -131,6 +142,13 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
   @Input() prefillProductId: number | null = null;
 
   purchases = signal<ProductPurchase[]>([]);
+
+  /** Testo del campo prodotto e prodotto scelto: si cerca su tutto il catalogo, non solo nell'uscita aperta. */
+  productQuery = '';
+  selectedProduct: CatalogProduct | null = null;
+  productOptions = signal<CatalogProduct[]>([]);
+  private productSearch = new Subject<string>();
+  private destroyRef = inject(DestroyRef);
   isSaving = signal(false);
   form: PurchaseForm = this.emptyForm();
 
@@ -140,6 +158,7 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
 
   columnDefs: ColDef<ProductPurchase>[] = [
     { headerName: 'Prodotto', field: 'productName', pinned: 'left', width: 320 },
+    { headerName: 'Nome Cardmarket', field: 'cardmarketName', width: 300 },
     { headerName: 'Set', field: 'setCode', width: 80 },
     { headerName: 'Q.tà', field: 'quantity', width: 80, type: 'numericColumn' },
     { headerName: 'Prezzo', field: 'unitPrice', width: 105, type: 'numericColumn', valueFormatter: this.euro },
@@ -189,12 +208,53 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
 
   ngOnInit() {
     this.load();
+    // Campo vuoto: i prodotti dell'uscita aperta, come prima; altrimenti la ricerca sul catalogo.
+    this.productSearch.pipe(
+      debounceTime(250),
+      distinctUntilChanged(),
+      switchMap(q => q.trim().length < 2 ? of(null) : this.purchasing.searchCatalog(q).pipe(catchError(() => of([])))),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe(found => this.productOptions.set(found ?? this.releaseProducts()));
   }
 
   ngOnChanges(changes: SimpleChanges) {
+    if (changes['products'] && !this.productQuery) this.productOptions.set(this.releaseProducts());
     if (changes['prefillProductId'] && this.prefillProductId) {
       this.form = { ...this.emptyForm(), sealedProductId: this.prefillProductId };
+      const product = this.releaseProducts().find(p => p.id === this.prefillProductId);
+      if (product) this.setSelected(product);
     }
+  }
+
+  private releaseProducts(): CatalogProduct[] {
+    return this.products.map(p => ({
+      id: p.id, name: p.name, cardmarketName: p.cardmarketName, setCode: p.setCode, setName: this.setName ?? undefined,
+      category: p.category, subtype: p.subtype
+    }));
+  }
+
+  private static label(p: CatalogProduct): string {
+    return p.cardmarketName || p.name;
+  }
+
+  onProductQuery(value: string | CatalogProduct) {
+    if (typeof value !== 'string') return; // la scelta arriva da selectProduct
+    this.productQuery = value;
+    if (this.selectedProduct && value !== PurchasesTabComponent.label(this.selectedProduct)) {
+      this.selectedProduct = null;
+      this.form.sealedProductId = null;
+    }
+    this.productSearch.next(value);
+  }
+
+  selectProduct(event: MatAutocompleteSelectedEvent) {
+    this.setSelected(event.option.value as CatalogProduct);
+  }
+
+  private setSelected(product: CatalogProduct) {
+    this.selectedProduct = product;
+    this.form.sealedProductId = product.id;
+    this.productQuery = PurchasesTabComponent.label(product);
   }
 
   load() {
@@ -206,8 +266,8 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
 
   /** CODICE_TIPO_AAAAMMGG: tipo PB/CB per i box Play/Collector, altrimenti dalla categoria. */
   suggestTag() {
-    const product = this.products.find(p => p.id === this.form.sealedProductId);
-    if (!product) {
+    const product = this.selectedProduct;
+    if (!product || product.id !== this.form.sealedProductId) {
       this.snackBar.open('Scegli prima il prodotto', 'Chiudi', { duration: 3000 });
       return;
     }
@@ -239,6 +299,10 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
 
   save() {
     if (!this.form.sealedProductId || !this.form.quantity || this.form.unitPrice == null) {
+      if (this.productQuery && !this.form.sealedProductId) {
+        this.snackBar.open('Scegli il prodotto dall\'elenco dei suggerimenti', 'Chiudi', { duration: 4000 });
+        return;
+      }
       this.snackBar.open('Prodotto, quantità e prezzo sono obbligatori', 'Chiudi', { duration: 4000 });
       return;
     }
@@ -288,10 +352,10 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
     };
     this.editingCalculated = purchase.calculatedCostPerCard ?? null;
     this.editingCards = purchase.cardsPerUnit ?? null;
-    if (!this.products.some(p => p.id === purchase.sealedProductId)) {
-      // Il prodotto è di un'altra uscita: lo si aggiunge alla tendina per poterlo mostrare.
-      this.products = [...this.products, { id: purchase.sealedProductId, name: purchase.productName, setCode: purchase.setCode } as SealedProductAnalysis];
-    }
+    const known = this.releaseProducts().find(p => p.id === purchase.sealedProductId);
+    this.setSelected(known ?? {
+      id: purchase.sealedProductId, name: purchase.productName, cardmarketName: purchase.cardmarketName, setCode: purchase.setCode
+    });
   }
 
   remove(purchase: ProductPurchase) {
@@ -304,6 +368,9 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
 
   reset() {
     this.form = this.emptyForm();
+    this.selectedProduct = null;
+    this.productQuery = '';
+    this.productOptions.set(this.releaseProducts());
     this.editingCalculated = null;
     this.editingCards = null;
   }

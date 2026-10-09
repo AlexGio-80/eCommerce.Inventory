@@ -9,6 +9,30 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-09] Miglioria — Registro acquisti: ricerca su tutto il catalogo e nomi Cardmarket
+
+#### Problema
+
+Il campo "Prodotto" del registro acquisti era una tendina con i soli prodotti dell'uscita aperta in "Analisi
+uscita", e con i nomi MTGJSON, spesso diversi da quelli Cardmarket con cui si compra: "Commander: Foundations:
+Deck Set" su Cardmarket è "Foundations Commander Decks Set of 5" nel catalogo, e i mazzi Commander stanno
+nell'uscita principale.
+
+#### Soluzione Implementata
+
+- Campo di ricerca con suggerimenti al posto della tendina: dalla seconda lettera cerca su **tutto il catalogo**
+  (4.161 prodotti); ogni parola deve comparire nel nome Cardmarket, nel nome MTGJSON, nel codice o nel nome del
+  set. Nei suggerimenti il nome Cardmarket in evidenza e sotto il nome MTGJSON con il set. A campo vuoto
+  restano i prodotti dell'uscita aperta, come prima
+- Colonna **"Nome Cardmarket"** nella griglia del registro
+- Endpoint `GET /api/purchasing/catalog/search?q=` (al più 40 risultati, uscite più recenti prima)
+
+#### Note Tecniche
+
+- Nome Cardmarket dal listino importato (`CardmarketProducts`, abbinato con `SealedProduct.CardmarketId`):
+  presente per 2.732 prodotti su 4.161 al 09/10/2026; per gli altri vale il nome MTGJSON
+- Il pulsante del tag proposto usa ora il prodotto scelto dalla ricerca, anche se di un'altra uscita
+
 ### [2026-10-09] Miglioria — Caricamento prodotti: prezzo d'acquisto dal Tag dell'acquisto
 
 - Nella maschera "Nuovo Prodotto", scrivendo o incollando il Tag di un acquisto del registro, il "Prezzo di

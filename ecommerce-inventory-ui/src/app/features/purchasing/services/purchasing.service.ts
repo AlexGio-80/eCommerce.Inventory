@@ -467,6 +467,7 @@ export interface ProductPurchase extends ProductPurchaseInput {
     cardsEstimated: boolean;
     /** Da usare nelle inserzioni: scritto a mano, altrimenti calcolato. */
     effectiveCostPerCard?: number;
+    cardmarketName?: string;
     id: number;
     productName: string;
     setCode: string;
@@ -475,6 +476,18 @@ export interface ProductPurchase extends ProductPurchaseInput {
     predictionCoverage?: number;
     predictedAt?: string;
     predictedTotalNet?: number;
+}
+
+/** Prodotto del catalogo sigillati trovato dalla ricerca del registro acquisti. */
+export interface CatalogProduct {
+    id: number;
+    /** Nome MTGJSON. */
+    name: string;
+    cardmarketName?: string;
+    setCode: string;
+    setName?: string;
+    category?: string;
+    subtype?: string;
 }
 
 export interface SetDetailImportResult {
@@ -613,6 +626,11 @@ export class PurchasingService {
     markNotificationsRead(id?: number): Observable<unknown> {
         const params: Record<string, string> = id ? { id: String(id) } : {};
         return this.http.post<ApiResponse<unknown>>(`${this.apiUrl}/notifications/read`, {}, { params });
+    }
+
+    searchCatalog(query: string): Observable<CatalogProduct[]> {
+        return this.http.get<ApiResponse<CatalogProduct[]>>(`${this.apiUrl}/catalog/search`, { params: { q: query } })
+            .pipe(map(response => response.data!));
     }
 
     getPurchases(): Observable<ProductPurchase[]> {

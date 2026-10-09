@@ -29,8 +29,57 @@ public class ProductPurchaseService
             .ToListAsync(cancellationToken);
 
         var cards = await CardsPerUnitAsync(purchases.Select(p => p.SealedProductId), cancellationToken);
-        return purchases.Select(p => Map(p, cards.GetValueOrDefault(p.SealedProductId))).ToList();
+        var cmNames = await CardmarketNamesAsync(purchases.Select(p => p.SealedProduct?.CardmarketId), cancellationToken);
+        return purchases.Select(p => Map(p, cards.GetValueOrDefault(p.SealedProductId), CmName(cmNames, p.SealedProduct))).ToList();
     }
+
+    private const int MaxSearchResults = 40;
+
+    /// <summary>
+    /// Ricerca nel catalogo sigillati per il registro acquisti: ogni parola cercata deve comparire nel
+    /// nome Cardmarket, nel nome MTGJSON, nel codice o nel nome del set. I nomi dei due cataloghi sono
+    /// spesso diversi ("Commander: Foundations: Deck Set" contro "Foundations Commander Decks Set of 5"),
+    /// e si compra pensando al nome Cardmarket. Le uscite più recenti prima.
+    /// </summary>
+    public async Task<List<CatalogProductDto>> SearchCatalogAsync(string? query, CancellationToken cancellationToken = default)
+    {
+        var words = (query ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (words.Length == 0) return new List<CatalogProductDto>();
+
+        var sets = await _db.MtgjsonSets.AsNoTracking()
+            .ToDictionaryAsync(s => s.Code, s => (s.Name, s.ReleaseDate), cancellationToken);
+        var products = await (
+                from p in _db.SealedProducts.AsNoTracking()
+                join c in _db.CardmarketProducts.AsNoTracking() on p.CardmarketId equals (int?)c.IdProduct into cm
+                from c in cm.DefaultIfEmpty()
+                select new { p.Id, p.Name, p.SetCode, p.Category, p.Subtype, CardmarketName = c != null ? c.Name : null })
+            .ToListAsync(cancellationToken);
+
+        return products
+            .Select(p => (Product: p, Set: sets.GetValueOrDefault(p.SetCode)))
+            .Where(x => words.All(w =>
+                x.Product.Name.Contains(w, StringComparison.OrdinalIgnoreCase)
+                || (x.Product.CardmarketName?.Contains(w, StringComparison.OrdinalIgnoreCase) ?? false)
+                || x.Product.SetCode.Equals(w, StringComparison.OrdinalIgnoreCase)
+                || (x.Set.Name?.Contains(w, StringComparison.OrdinalIgnoreCase) ?? false)))
+            .OrderByDescending(x => x.Set.ReleaseDate)
+            .ThenBy(x => x.Product.CardmarketName ?? x.Product.Name)
+            .Take(MaxSearchResults)
+            .Select(x => new CatalogProductDto(x.Product.Id, x.Product.Name, x.Product.CardmarketName, x.Product.SetCode,
+                x.Set.Name, x.Product.Category, x.Product.Subtype))
+            .ToList();
+    }
+
+    private async Task<Dictionary<int, string>> CardmarketNamesAsync(IEnumerable<int?> cardmarketIds, CancellationToken cancellationToken)
+    {
+        var ids = cardmarketIds.Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToList();
+        return await _db.CardmarketProducts.AsNoTracking()
+            .Where(c => ids.Contains(c.IdProduct))
+            .ToDictionaryAsync(c => c.IdProduct, c => c.Name, cancellationToken);
+    }
+
+    private static string? CmName(Dictionary<int, string> names, SealedProduct? product) =>
+        product?.CardmarketId is { } id ? names.GetValueOrDefault(id) : null;
 
     /// <summary>Tipi di busta più comuni, per le uscite di cui MTGJSON non ha ancora la composizione.</summary>
     private static readonly Dictionary<string, int> TypicalCardsPerPack = new(StringComparer.OrdinalIgnoreCase)
@@ -155,7 +204,8 @@ public class ProductPurchaseService
         await _db.SaveChangesAsync(cancellationToken);
         purchase.SealedProduct = product;
         var cards = await CardsPerUnitAsync(new[] { product.Id }, cancellationToken);
-        return Map(purchase, cards.GetValueOrDefault(product.Id));
+        var cmNames = await CardmarketNamesAsync(new[] { product.CardmarketId }, cancellationToken);
+        return Map(purchase, cards.GetValueOrDefault(product.Id), CmName(cmNames, product));
     }
 
     public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default)
@@ -197,7 +247,7 @@ public class ProductPurchaseService
     /// carte che contiene: al 09/10/2026 è il modo in cui l'utente calcolava a mano il prezzo d'acquisto
     /// delle inserzioni (es. Collector Box = prezzo / 12 buste × 15 carte).
     /// </summary>
-    private static ProductPurchaseDto Map(ProductPurchase p, CardsPerUnit? cards)
+    private static ProductPurchaseDto Map(ProductPurchase p, CardsPerUnit? cards, string? cardmarketName)
     {
         decimal? calculated = cards is { Cards: > 0 } ? Math.Round(p.UnitPrice / cards.Cards, 2) : null;
         return new ProductPurchaseDto(
@@ -207,7 +257,7 @@ public class ProductPurchaseService
             p.PredictedOpenValueNet, p.PredictionCoverage, p.PredictedAt,
             p.PredictedOpenValueNet.HasValue ? Math.Round(p.Quantity * p.PredictedOpenValueNet.Value, 2) : null,
             p.CostPerCard, calculated, cards?.Cards, cards?.Estimated ?? false,
-            p.CostPerCard ?? calculated);
+            p.CostPerCard ?? calculated, cardmarketName);
     }
 }
 
@@ -252,4 +302,9 @@ public record ProductPurchaseDto(
     decimal? CalculatedCostPerCard,
     int? CardsPerUnit,
     bool CardsEstimated,
-    decimal? EffectiveCostPerCard);
+    decimal? EffectiveCostPerCard,
+    string? CardmarketName);
+
+/// <param name="Name">Nome MTGJSON (quello del catalogo).</param>
+/// <param name="CardmarketName">Nome dello stesso prodotto su Cardmarket, se abbinato.</param>
+public record CatalogProductDto(int Id, string Name, string? CardmarketName, string SetCode, string? SetName, string? Category, string? Subtype);

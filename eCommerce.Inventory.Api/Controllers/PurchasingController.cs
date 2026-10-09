@@ -288,6 +288,14 @@ public class PurchasingController : ControllerBase
         return Ok(ApiResponse<List<ProductPurchaseDto>>.SuccessResult(purchases));
     }
 
+    /// <summary>Prodotti del catalogo sigillati per nome Cardmarket, nome MTGJSON o set (registro acquisti).</summary>
+    [HttpGet("catalog/search")]
+    public async Task<IActionResult> SearchCatalog([FromQuery] string? q, CancellationToken cancellationToken)
+    {
+        var products = await _purchases.SearchCatalogAsync(q, cancellationToken);
+        return Ok(ApiResponse<List<CatalogProductDto>>.SuccessResult(products));
+    }
+
     [HttpPost("purchases")]
     public Task<IActionResult> CreatePurchase([FromBody] ProductPurchaseInput input, CancellationToken cancellationToken) =>
         SavePurchaseAsync(null, input, cancellationToken);

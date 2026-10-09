@@ -212,6 +212,26 @@ public class OpeningCalibrationTests
     }
 
     [Fact]
+    public async Task CatalogSearch_FindsProductsByCardmarketName_MtgjsonName_OrSet()
+    {
+        _db.MtgjsonSets.Add(new MtgjsonSet { Code = "FDC", Name = "Foundations Commander", ReleaseDate = new DateOnly(2024, 11, 15) });
+        _db.CardmarketProducts.Add(new CardmarketProduct { IdProduct = 903009, Name = "Commander: Foundations: Deck Set" });
+        _db.SealedProducts.AddRange(
+            new SealedProduct { Uuid = Guid.NewGuid(), SetCode = "FDC", Name = "Foundations Commander Decks Set of 5", Category = "subset", CardmarketId = 903009 },
+            new SealedProduct { Uuid = Guid.NewGuid(), SetCode = "FDC", Name = "Foundations Commander Deck Wretched Ranks", Category = "deck" });
+        await _db.SaveChangesAsync();
+        var service = PurchaseService();
+
+        var byCardmarket = await service.SearchCatalogAsync("foundations deck set");
+        byCardmarket.Should().ContainSingle().Which.Should().Match<CatalogProductDto>(p =>
+            p.Name == "Foundations Commander Decks Set of 5" && p.CardmarketName == "Commander: Foundations: Deck Set");
+
+        (await service.SearchCatalogAsync("wretched")).Should().ContainSingle(p => p.CardmarketName == null);
+        (await service.SearchCatalogAsync("FDC")).Should().HaveCount(2, "il codice del set trova tutti i suoi prodotti");
+        (await service.SearchCatalogAsync("  ")).Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task CostPerCard_UsesTypicalPacksWhenTheCompositionIsNotPublished()
     {
         var box = SeedBox("BBB", withBoosterData: false);
