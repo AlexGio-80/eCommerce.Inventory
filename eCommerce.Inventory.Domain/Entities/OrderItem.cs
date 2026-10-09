@@ -30,4 +30,12 @@ public class OrderItem
     public string? Tag { get; set; }
 
     public bool IsPrepared { get; set; }
+
+    /// <summary>
+    /// Su una riga di un ordine "Ct connect" pagato (Card Trader Zero): la riga "hub_pending" della stessa
+    /// vendita, a cui è stata abbinata. Le vendite Card Trader Zero arrivano prima come ordini "hub_pending"
+    /// singoli, che si preparano giorno per giorno, e poi raccolte in un ordine pagato con le stesse righe.
+    /// Null se non ancora abbinata. Vedi <c>CtZeroPreparationReconciler</c>.
+    /// </summary>
+    public int? HubOrderItemId { get; set; }
 }

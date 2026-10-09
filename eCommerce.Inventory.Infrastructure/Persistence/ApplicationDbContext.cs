@@ -168,6 +168,10 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             .Property(oi => oi.Price)
             .HasPrecision(18, 2);
 
+        // Abbinamento Card Trader Zero: senza foreign key, è un riferimento informativo fra due righe
+        modelBuilder.Entity<OrderItem>()
+            .HasIndex(oi => oi.HubOrderItemId);
+
         // PendingListing -> Blueprint (Many-to-One)
         modelBuilder.Entity<PendingListing>()
             .HasOne(pl => pl.Blueprint)

@@ -2,6 +2,7 @@ using eCommerce.Inventory.Application.Interfaces;
 using eCommerce.Inventory.Domain.Entities;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.DTOs;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Mappers;
+using eCommerce.Inventory.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -534,6 +535,17 @@ public class InventorySyncService
             await dbContext!.SaveChangesAsync(cancellationToken);
             _logger.LogInformation("Orders synced: {InsertCount} inserted, {UpdateCount} updated",
                 insertCount, updateCount);
+
+            // Card Trader Zero: le righe dell'ordine settimanale raccolto ereditano la preparazione fatta
+            // giorno per giorno sugli ordini "hub_pending". Un errore qui non deve fermare la sincronizzazione.
+            try
+            {
+                await new CtZeroPreparationReconciler(dbContext, _logger).ReconcileAsync(cancellationToken: cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Abbinamento della preparazione Card Trader Zero non riuscito");
+            }
         }
         catch (Exception ex)
         {

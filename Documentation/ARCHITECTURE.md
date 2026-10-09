@@ -150,6 +150,7 @@ eCommerce.Inventory/
   - `AlertService.cs`, `EmailSender.cs` (`IEmailSender`/`SmtpEmailSender`): avvisi ed email di riepilogo
   - `PurchaseCostService.cs`: **unica fonte del costo d'acquisto** (pagina Espansioni, report di redditività, bilancio aperture)
   - `SecretLairRetrospectiveService.cs`: bilancio dei drop Secret Lair comprati interi (carta → drop via MTGJSON, prezzo dal registro o standard)
+  - `CtZeroPreparationReconciler.cs`: alla fine della sincronizzazione degli ordini, abbina le righe degli ordini "Ct connect" raccolti alle righe `hub_pending` della stessa vendita (`OrderItems.HubOrderItemId`) e ne eredita la preparazione
   - `SecretLairDropValuationService.cs`: valutazione dei prodotti del negozio Secret Lair (Fase 3): stampa base × curva del sovrapprezzo SL (`SecretLairPremiumCurve.cs`, misurata sui drop passati), valore atteso con `OpeningValueCalculator`, giudizio, prezzi reali dopo l'uscita, stima congelata
   - `SecretLairShopMonitorService.cs`: lettura del negozio Secret Lair di Wizards, prodotti, carte e avvisi sui drop nuovi; client in `ExternalServices/SecretLair/SecretLairShopClient.cs` (catalogo da StoreSearch di Scalefast, carte dall'HTML con AngleSharp)
 

@@ -9,6 +9,76 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-09] Feature — Articoli da preparare: l'ordine settimanale Card Trader Zero eredita la preparazione giornaliera
+
+#### Problema
+
+Le vendite Card Trader Zero si preparano giorno per giorno dagli ordini `hub_pending` in "Articoli da
+preparare". Quando arriva l'ordine "Ct connect" raccolto (di solito la domenica, a volte in settimana per le
+prevendite), le stesse righe ricomparivano tutte da preparare e si chiudevano a mano con
+`UPDATE OrderItems SET IsPrepared = 1, Price = 0 WHERE IsPrepared = 0 AND OrderId = …`. Il `Price = 0` non
+aveva effetto: la sincronizzazione rimette il prezzo da Card Trader al giro successivo.
+
+#### Soluzione Implementata
+
+- `CtZeroPreparationReconciler`, alla fine di ogni sincronizzazione degli ordini: ogni riga dell'ordine raccolto
+  si abbina alla riga `hub_pending` della stessa vendita (stesso prodotto Card Trader, ordine `hub_pending`
+  precedente, il più recente non ancora abbinato, copia per copia)
+  - gemella già preparata → la riga dell'ordine raccolto risulta preparata
+  - gemella non ancora preparata → la riga resta da preparare sull'ordine raccolto e la gemella si chiude,
+    così non compare due volte
+  - senza gemella → resta com'è: è da controllare
+- In "Articoli da preparare" resta solo quello che manca davvero; l'UPDATE manuale non serve più
+- Migration `AddOrderItemHubLink`: colonna `OrderItems.HubOrderItemId` (con indice), la riga `hub_pending`
+  abbinata. Una vendita già abbinata non si riusa per un'altra settimana
+
+#### Note Tecniche
+
+- Alla prima esecuzione si ripercorre lo storico in ordine di data. Provato su una copia del backup del 09/10:
+  16.215 righe abbinate in 2 secondi, nessun flag cambiato (lo storico era già chiuso a mano), 272 righe senza
+  gemella (235 in 33 ordini settimanali, il resto DOA/REPURCHASE), tutte già preparate. L'ordine 16815 ha le
+  446 righe abbinate, dagli `hub_pending` del 2–4 ottobre, sempre allo stesso prodotto
+- Tocca solo `IsPrepared` e `HubOrderItemId`, mai prezzi o quantità; un errore non ferma la sincronizzazione
+- Lo stato "preparato" della riga `hub_pending` è quello letto all'inizio: chiuderla per una copia non fa
+  risultare preparate le altre copie della stessa riga
+
+### [2026-10-09] Fix — Ordini "hub_pending" di Card Trader Zero contati due volte
+
+#### Problema
+
+Card Trader Zero crea un ordine `hub_pending` (acquirente "Ct connect", senza data di pagamento) per ogni
+singolo acquisto, poi raccoglie le carte in un ordine "Ct connect" pagato (`CONNECT-…`, qualche centinaio di
+euro) con le stesse righe. Gli `hub_pending` restano così per sempre: 12.899 ordini, 17.397 € dal 16/11/2025.
+Mese per mese il loro totale coincide con quello degli ordini raccolti (agosto 2.769 € contro 2.702 €).
+Due punti li contavano come vendite:
+
+- la vista **`ExpansionsROI`** (report di redditività per espansione, pagina Espansioni) sommava tutte le righe
+  d'ordine: venduto totale 123.308 € invece di 105.911 €, e per le uscite recenti esattamente il doppio
+  (Secrets of Strixhaven 935 € invece di 467,50 €, Lorwyn Eclipsed 1.247 € invece di 624 €, Secret Lair
+  8.902 € invece di 5.008 €)
+- **`BulkSellThroughService`**, la quota venduta usata dal valore atteso dei sigillati, dalle opportunità e
+  dalla stima dei drop Secret Lair
+
+#### Soluzione Implementata
+
+- Migration `FixExpansionsRoiPaidOrders`: la vista conta solo gli ordini pagati (`PaidAt IS NOT NULL`), come
+  già tutti gli altri report. `CREATE OR ALTER`, perché la vista era stata creata a mano e non è in nessuna
+  migration precedente; il `Down` rimette la definizione di prima
+- Quota venduta del bulk e per fascia solo sugli ordini pagati. Effetto al 09/10/2026: **bulk dal 35,3% al
+  20,7%**, fascia 0,25–1 € dal 78% al 65%, sopra 1 € 97–100% (prima 95–98%). Il valore atteso di box e drop
+  scende di conseguenza: è il dato corretto
+
+#### Note Tecniche
+
+- Controllati gli altri punti che leggono gli ordini: report di vendita, per tag, prezzo realizzato, bilancio
+  delle aperture e retrospettiva Secret Lair filtravano già sugli ordini pagati; la sincronizzazione degli
+  ordini non tocca il magazzino (si allinea dai prodotti Card Trader), quindi le quantità non erano scalate due
+  volte. Gli ordini annullati con data di pagamento (15, 74 €) restano contati come negli altri report
+- Gli `hub_pending` più recenti non ancora raccolti in un ordine pagato restano fuori finché Card Trader non
+  li raccoglie (qualche giorno)
+- "Articoli da preparare" legge le righe non preparate di qualunque ordine, comprese le `hub_pending`: è voluto,
+  le carte si preparano giorno per giorno proprio da quelle (vedi la voce sull'ordine settimanale)
+
 ### [2026-10-09] Miglioria — Ricerca nella scelta dell'uscita (pagina Acquisti)
 
 - La tendina "Uscita" della scheda Analisi uscita ha un campo di ricerca in cima: filtra mentre si scrive,
