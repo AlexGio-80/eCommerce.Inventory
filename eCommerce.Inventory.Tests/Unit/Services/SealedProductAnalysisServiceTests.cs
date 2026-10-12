@@ -197,6 +197,14 @@ public class SealedProductAnalysisServiceTests
         SealedProductAnalysisService.IsPriceMismatch((decimal)product, (decimal)components).Should().Be(expected);
 
     [Theory]
+    [InlineData(0.02, true)]   // Alpha Starter Deck, mazzi Salvat, Welcome Booster: prezzo di riempimento CM
+    [InlineData(0.05, true)]
+    [InlineData(3.01, false)]  // il trend sigillato più basso con vendite vere è sopra 1 €
+    [InlineData(null, false)]  // senza trend non c'è decisione, non un prezzo dubbio
+    public void IsPriceMismatch_FlagsFillerTrends_EvenWithoutComponents(double? product, bool expected) =>
+        SealedProductAnalysisService.IsPriceMismatch((decimal?)product, null).Should().Be(expected);
+
+    [Theory]
     [InlineData("TRK:play", "TRK", "Play")]
     [InlineData("TRK:collector", "TRK", "Collector")]
     [InlineData("TRC:collector-sample", "TRK", "TRC Collector Sample")]

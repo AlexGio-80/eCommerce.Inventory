@@ -23,6 +23,13 @@ public class AlertService
     /// <summary>Prodotti elencati per esteso in un avviso; gli altri si riassumono con il numero.</summary>
     private const int MaxListedProducts = 15;
 
+    /// <summary>
+    /// Resa dell'apertura oltre la quale l'avviso non si fida: nelle revisioni erano sempre trend
+    /// fermi o di riempimento (mazzi con trend di 3 € e nessuna offerta). Le opportunità vere arrivano
+    /// al +215% (Secret Lair). È una difesa in più rispetto al "Prezzo CM dubbio" della classifica.
+    /// </summary>
+    public const decimal MaxCredibleOpeningRoi = 300m;
+
     private readonly ApplicationDbContext _db;
     private readonly IEmailSender _email;
     private readonly ILogger<AlertService> _logger;
@@ -335,7 +342,8 @@ public class AlertService
         if (rule.Type == AlertRuleType.OpeningOpportunity)
         {
             var scope = InScope(rule, context).Select(p => p.Id).ToHashSet();
-            foreach (var o in context.Opportunities.Where(o => o.Decision == "Apri" && o.OpeningRoiPercent >= rule.Threshold && scope.Contains(o.SealedProductId)))
+            foreach (var o in context.Opportunities.Where(o => o.Decision == "Apri" && o.OpeningRoiPercent >= rule.Threshold
+                         && o.OpeningRoiPercent <= MaxCredibleOpeningRoi && scope.Contains(o.SealedProductId)))
             {
                 var info = context.Products[o.SealedProductId];
                 result.Add(new Match(info.Id, info.Name, info.MainSetCode,

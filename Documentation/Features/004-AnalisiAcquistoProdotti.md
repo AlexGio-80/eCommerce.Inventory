@@ -221,7 +221,23 @@ pesa le rarità e conta il bulk come se si vendesse tutto al valore medio.
   busta o un mazzo, o la copertura è sotto il 90%. **"Prezzo CM dubbio"** se il trend di un prodotto
   fatto solo di altri sigillati è fuori dal 60-160% della somma dei loro prezzi: MTGJSON a volte
   abbina al case l'id Cardmarket del prodotto sbagliato (Scene Box Case da 4 box sullo "Scene Box Set"
-  da 2; Gift Bundle Case sul Gift Bundle singolo).
+  da 2; Gift Bundle Case sul Gift Bundle singolo). **"Prezzo CM dubbio" anche con un trend di
+  riempimento** (≤ 0,05 €, `IsFillerTrend`, dal 2026-10-12), qualunque cosa contenga il prodotto:
+  Cardmarket mette 0,02 € ai prodotti senza vendite recenti, e su quel trend la resa arrivava a
+  +42.374.300% (Alpha Starter Deck, con il prezzo più basso a 84.000 €). Scelta una soglia assoluta e
+  non il rapporto low/trend: nella classifica nessun sigillato ha un trend fra 0,02 e 1 €, mentre il
+  low manca proprio su alcuni di questi prodotti (mazzi Salvat 2011) e un low alto c'è anche su
+  prodotti con trend vero (Alpha Booster Pack, Theme Booster di Kamigawa). Verificato su una copia del
+  backup del 12/10: ogni giorno dal 07/10 all'11/10 passano da "Apri" a "Prezzo CM dubbio" gli stessi
+  10 prodotti (Alpha e Unlimited Starter Deck, 7 mazzi Salvat 2011, Kamigawa Neon Dynasty Welcome
+  Booster); nessuno dei 133 Commander e delle 284 Secret Lair in "Apri" (trend minimi 23,61 € e
+  10,92 €). Senza decisione affidabile la resa resta vuota.
+- **Decisione e resa usano basi diverse**: la decisione confronta due netti (valore atteso netto
+  aprendo contro trend al netto dei costi di vendita), la resa confronta il valore atteso netto con il
+  trend lordo, cioè il prezzo d'acquisto. Un prodotto può quindi essere "Apri" con una resa fino a
+  circa −15% (pari ai costi di vendita): aprirlo rende più che rivenderlo chiuso, ma meno di quanto
+  costa comprarlo. Esempio: Hobbit Collector Box "Apri" al −13,2% il 12/10. Vale per chi il prodotto
+  ce l'ha già; per decidere un acquisto conta la resa. Lo spiega anche il tooltip della colonna.
 - **Pagina**: parametri modificabili (soglia, prezzo e quota del bulk, costi), riquadro per tipo di
   busta con valore netto CM/CT e, al clic, il dettaglio per foglio e le dieci carte che pesano di più;
   colonne Apri (CM), Apri (CT), Sigillato netto, Resa apertura, Decisione.
@@ -291,6 +307,11 @@ Le credenziali SMTP le imposta l'utente nella configurazione di produzione.
   **calo di prezzo** (trend sceso di almeno X% rispetto a 7 giorni prima, dallo storico giornaliero dei
   sigillati: funziona dal 14/10/2026, una settimana dopo l'inizio dello storico), **apertura
   conveniente** (prodotto in "Apri" con resa ≥ X%, facoltativamente solo per un'uscita o una categoria).
+  Dal 2026-10-12 l'apertura conveniente **ignora le rese oltre il 300%**
+  (`AlertService.MaxCredibleOpeningRoi`), come difesa in più rispetto al "Prezzo CM dubbio": nelle
+  revisioni degli avvisi erano sempre trend fermi o di riempimento (es. i mazzi singoli del Duel Deck
+  Merfolk vs Goblins, trend 3 € senza offerte, +510%), mentre le opportunità vere arrivavano al +215%.
+  Non serve un filtro sulla copertura: sotto il 90% la decisione è già "Dati incompleti", non "Apri".
 - **Un avviso scatta quando la condizione diventa vera** (`AlertRuleMatch` tiene i prodotti per cui è
   già vera): niente avvisi ripetuti ogni giorno; se la condizione smette di essere vera e poi lo
   ridiventa, l'avviso scatta di nuovo. Cambiando la condizione di una regola lo stato riparte da zero.

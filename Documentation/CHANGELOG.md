@@ -9,6 +9,31 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-12] Correzione — Trend di riempimento Cardmarket non più "Apri" nella classifica e negli avvisi
+
+#### Problema
+
+Nella classifica delle opportunità finivano in "Apri" prodotti con il trend Cardmarket a 0,02 €, il prezzo
+che Cardmarket mette ai prodotti senza vendite recenti: Alpha Starter Deck (low 84.000 €, resa +42.374.300%),
+Unlimited Starter Deck, sette mazzi Salvat 2011, Kamigawa Neon Dynasty Welcome Booster (+4.450%). Il controllo
+"Prezzo CM dubbio" guardava solo la somma dei prodotti contenuti, che qui non c'è. Da lì entravano negli avvisi
+di apertura conveniente, che non avevano un tetto sulla resa.
+
+#### Soluzione Implementata
+
+- Trend ≤ 0,05 € → **"Prezzo CM dubbio"** e resa vuota, qualunque cosa contenga il prodotto
+- Gli avvisi di **apertura conveniente ignorano le rese oltre il 300%** (difesa in più: trend fermi senza offerte)
+- Tooltip della decisione dedicato al trend di riempimento; tooltip della resa che spiega perché un prodotto
+  può essere "Apri" con una resa leggermente negativa
+
+#### Note Tecniche
+
+- `SealedProductAnalysisService.IsFillerTrend` (soglia `FillerTrendMax`), richiamato da `IsPriceMismatch`;
+  `AlertService.MaxCredibleOpeningRoi`
+- Verificato su una copia del backup del 12/10: 10 prodotti al giorno passano da "Apri" a "Prezzo CM dubbio",
+  nessun Commander o Secret Lair toccato. Dettaglio nel documento 004
+- Effetto sulla classifica dal ricalcolo successivo alla pubblicazione (o "Ricalcola" nelle Opportunità)
+
 ### [2026-10-09] Miglioria — Registro acquisti: ricerca su tutto il catalogo e nomi Cardmarket
 
 #### Problema

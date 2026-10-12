@@ -326,11 +326,24 @@ public class SealedProductAnalysisService
     /// MTGJSON a volte abbina a un case l'id Cardmarket del prodotto singolo o di una confezione
     /// diversa (es. lo Scene Box Case da 4 box abbinato allo "Scene Box Set" da 2): il prezzo letto
     /// non è quello del prodotto, e la decisione sarebbe sbagliata. Si riconosce perché è lontano
-    /// dalla somma dei prezzi di ciò che contiene.
+    /// dalla somma dei prezzi di ciò che contiene. Dubbio anche un trend di riempimento (vedi
+    /// <see cref="IsFillerTrend"/>), qualunque cosa contenga il prodotto.
     /// </summary>
     public static bool IsPriceMismatch(decimal? productTrend, decimal? componentsTrend) =>
-        productTrend is > 0 && componentsTrend is > 0
-        && (productTrend < componentsTrend * 0.6m || productTrend > componentsTrend * 1.6m);
+        IsFillerTrend(productTrend)
+        || (productTrend is > 0 && componentsTrend is > 0
+            && (productTrend < componentsTrend * 0.6m || productTrend > componentsTrend * 1.6m));
+
+    /// <summary>Sotto questo trend un sigillato non ha un prezzo vero (vedi <see cref="IsFillerTrend"/>).</summary>
+    public const decimal FillerTrendMax = 0.05m;
+
+    /// <summary>
+    /// Cardmarket mette 0,02 € di trend ai prodotti che non hanno vendite recenti (Alpha Starter Deck
+    /// con il prezzo più basso a 84.000 €, mazzi Salvat, Welcome Booster): calcolata su quel trend, la
+    /// resa dell'apertura arriva a milioni di punti percentuali. Nella classifica nessun sigillato ha
+    /// un trend fra 0,02 e 1 €, quindi la soglia non tocca prezzi veri.
+    /// </summary>
+    public static bool IsFillerTrend(decimal? productTrend) => productTrend is > 0 and <= FillerTrendMax;
 
     private static PackValueDto? BuildPackValueDto(string packKey, string mainSetCode, OpeningCalculators opening, OpeningValueSettings settings)
     {

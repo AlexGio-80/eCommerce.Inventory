@@ -79,6 +79,18 @@ public class SealedOpportunityServiceTests
     }
 
     [Fact]
+    public async Task Compute_FillerTrend_IsADoubtfulPrice_NotAnOpportunity()
+    {
+        await SeedReleaseAsync(boxTrend: 0.02m);
+
+        await CreateService().ComputeAsync();
+
+        var box = await _db.SealedOpportunities.SingleAsync();
+        box.Decision.Should().Be("Prezzo CM dubbio", "0,02 € è il prezzo di riempimento di Cardmarket, non un prezzo d'acquisto");
+        box.OpeningRoiPercent.Should().BeNull("una resa del +849.900% non dice nulla");
+    }
+
+    [Fact]
     public async Task Compute_TwiceTheSameDay_ReplacesInsteadOfDuplicating()
     {
         await SeedReleaseAsync(boxTrend: 160m);

@@ -91,6 +91,24 @@ public class AlertServiceTests
     }
 
     [Fact]
+    public async Task OpeningOpportunity_IgnoresReturnsTooHighToBeReal()
+    {
+        var box = await SeedBoxAsync(trend: 140m);
+        var welcome = new SealedProduct { Uuid = Guid.NewGuid(), SetCode = "TRK", Name = "Welcome Booster", Category = "booster_pack" };
+        _db.SealedProducts.Add(welcome);
+        _db.SealedOpportunities.AddRange(
+            new SealedOpportunity { Date = Today, SealedProductId = box.Id, MainSetCode = "TRK", Decision = "Apri", OpeningRoiPercent = 300m, OpenValueCm = 560m, CmTrend = 140m },
+            new SealedOpportunity { Date = Today, SealedProductId = welcome.Id, MainSetCode = "TRK", Decision = "Apri", OpeningRoiPercent = 4450m, OpenValueCm = 0.91m, CmTrend = 0.02m });
+        await _db.SaveChangesAsync();
+        var service = CreateService();
+        await service.SaveRuleAsync(null, new AlertRuleInput("Box", AlertRuleType.OpeningOpportunity, box.Id, null, null, 85m, false, true, false));
+        await service.SaveRuleAsync(null, new AlertRuleInput("Welcome", AlertRuleType.OpeningOpportunity, welcome.Id, null, null, 85m, false, true, false));
+
+        (await service.EvaluateAsync()).NewNotifications.Should().Be(1, "oltre il 300% la resa è quasi sempre un trend di riempimento");
+        (await service.ListNotificationsAsync(10)).Items.Single().Message.Should().Contain("+300,0%");
+    }
+
+    [Fact]
     public async Task Email_IsOneDigestPerRun_AndAFailureIsRecordedOnTheNotifications()
     {
         var box = await SeedBoxAsync(trend: 100m, trendWeekAgo: 200m);
