@@ -137,12 +137,14 @@ Proposta di regola iniziale, da creare dall'utente nella scheda Avvisi: "Da tene
 tutti i tipi, soglia 70, email sì. Il 15/10 i candidati con punteggio ≥ 70 erano 25 (≥ 80: 10). La prima
 valutazione li manda tutti in un'unica email, poi arrivano solo i candidati nuovi.
 
-### Fase 3 — Magazzino nel registro acquisti
+### Fase 3 — Magazzino nel registro acquisti *(pubblicata il 2026-10-15)*
 
-- Campo nuovo su `ProductPurchase`: `HoldForResale` (`bool`, default `false`). Nel registro, una casella
-  "Da tenere" nella maschera dell'acquisto. Migration `AddHoldForResale`.
-- Vista **"Magazzino"** (sezione del Registro acquisti, o scheda a sé) con gli acquisti da tenere ancora
-  sigillati:
+- Campo nuovo su `ProductPurchase`: `HoldForResale` (`bool`, default `false`: gli acquisti già registrati
+  non sono "da tenere" finché l'utente non li segna). Nel registro, casella "Da tenere" nella maschera
+  dell'acquisto e colonna nella griglia. Migration `AddHoldForResale`.
+- Scheda **"Magazzino"** della pagina Acquisti, **in fondo** alle altre: gli indirizzi `?tab=avvisi` e
+  `?tab=secretlair` aprono le schede per posizione. Calcolo in `HoldStockService`, endpoint
+  `GET /api/purchasing/hold-stock`. Contiene gli acquisti da tenere ancora sigillati:
 
 | Colonna | Fonte |
 |---|---|
@@ -154,7 +156,9 @@ valutazione li manda tutti in un'unica email, poi arrivano solo i candidati nuov
 | Guadagno latente, € e % | Il migliore fra chiuso e aperto, meno il costo |
 | Andamento | Trend di oggi rispetto al trend alla data d'acquisto, se nello storico |
 
-Riga di totale: costo, valore e guadagno latente di tutto il magazzino.
+Totali in alto: costo, valore di oggi e guadagno latente di tutto il magazzino. I valori vengono
+dall'ultima classifica, gli stessi della scheda Opportunità. Per un prodotto fuori dalla classifica il
+valore chiuso si calcola dal trend del listino, e quello aperto manca.
 
 Da valutare dopo l'uso, fuori da questa fase: un avviso quando un prodotto del magazzino supera un
 guadagno latente scelto ("è il momento di vendere").

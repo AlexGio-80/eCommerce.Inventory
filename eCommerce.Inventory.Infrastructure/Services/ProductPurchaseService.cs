@@ -195,6 +195,7 @@ public class ProductPurchaseService
         purchase.Tag = Trim(input.Tag, 100);
         purchase.Notes = Trim(input.Notes, 1000);
         purchase.CostPerCard = input.CostPerCard is > 0 ? Math.Round(input.CostPerCard.Value, 2) : null;
+        purchase.HoldForResale = input.HoldForResale;
 
         if (refreshPrediction)
         {
@@ -257,7 +258,7 @@ public class ProductPurchaseService
             p.PredictedOpenValueNet, p.PredictionCoverage, p.PredictedAt,
             p.PredictedOpenValueNet.HasValue ? Math.Round(p.Quantity * p.PredictedOpenValueNet.Value, 2) : null,
             p.CostPerCard, calculated, cards?.Cards, cards?.Estimated ?? false,
-            p.CostPerCard ?? calculated, cardmarketName);
+            p.CostPerCard ?? calculated, cardmarketName, p.HoldForResale);
     }
 }
 
@@ -271,7 +272,8 @@ public record ProductPurchaseInput(
     DateOnly? OpenedAt,
     string? Tag,
     string? Notes,
-    decimal? CostPerCard = null);
+    decimal? CostPerCard = null,
+    bool HoldForResale = false);
 
 /// <param name="Cards">Carte contenute in un'unità del prodotto.</param>
 /// <param name="Estimated">True se alcune buste non hanno la composizione MTGJSON e contano le carte tipiche del tipo.</param>
@@ -303,7 +305,8 @@ public record ProductPurchaseDto(
     int? CardsPerUnit,
     bool CardsEstimated,
     decimal? EffectiveCostPerCard,
-    string? CardmarketName);
+    string? CardmarketName,
+    bool HoldForResale);
 
 /// <param name="Name">Nome MTGJSON (quello del catalogo).</param>
 /// <param name="CardmarketName">Nome dello stesso prodotto su Cardmarket, se abbinato.</param>

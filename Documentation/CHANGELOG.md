@@ -9,6 +9,34 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-15] Feature — Magazzino da tenere (feature 005, Fase 3)
+
+#### Problema
+
+Dei prodotti comprati per tenerli non c'era un conto: quanto valgono oggi e quanto si guadagnerebbe a
+rivenderli o ad aprirli.
+
+#### Soluzione Implementata
+
+- Casella **"Da tenere"** nel Registro acquisti, e colonna nella griglia.
+- Scheda **"Magazzino"** nella pagina Acquisti con gli acquisti da tenere ancora sigillati, e per ognuno:
+  - costo e mesi di possesso;
+  - trend di oggi e trend alla data d'acquisto;
+  - valore netto chiuso e aperto, e offerta più bassa su Card Trader;
+  - uscita migliore, valore di oggi e guadagno latente in euro e in percentuale.
+- In alto i totali di costo, valore e guadagno latente.
+
+#### Note Tecniche
+
+- Migration `AddHoldForResale` (`bit NOT NULL DEFAULT 0`): gli acquisti già registrati restano non "da
+  tenere". Si applica da sola all'avvio.
+- `HoldStockService` e `GET /api/purchasing/hold-stock`. Il valore è il migliore fra netto chiuso e netto
+  aperto dell'ultima classifica; per un prodotto fuori dalla classifica il netto chiuso si calcola dal
+  trend del listino con `Purchasing:SellingCostPercent`.
+- La scheda è in fondo alla pagina: `?tab=avvisi` e `?tab=secretlair` aprono le schede per posizione.
+- Non provata su una copia del backup: la migration aggiunge una sola colonna con default, e le query sono
+  letture coperte dai test.
+
 ### [2026-10-15] Feature — Regola d'avviso "Da tenere" (feature 005, Fase 2)
 
 #### Problema

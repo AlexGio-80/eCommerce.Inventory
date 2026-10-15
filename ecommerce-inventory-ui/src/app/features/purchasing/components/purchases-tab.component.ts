@@ -13,6 +13,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import {
   CatalogProduct, ProductPurchase, ProductPurchaseInput, PurchasingService, SealedProductAnalysis
@@ -31,6 +32,7 @@ interface PurchaseForm {
   tag: string;
   notes: string;
   costPerCard: number | null;
+  holdForResale: boolean;
 }
 
 /**
@@ -41,7 +43,7 @@ interface PurchaseForm {
   selector: 'app-purchases-tab',
   standalone: true,
   imports: [GridStateDirective, CommonModule, FormsModule, AgGridAngular, GridCellCopyDirective, MatButtonModule, MatIconModule, MatFormFieldModule,
-    MatInputModule, MatSelectModule, MatTooltipModule, MatSnackBarModule, MatAutocompleteModule],
+    MatInputModule, MatSelectModule, MatTooltipModule, MatSnackBarModule, MatAutocompleteModule, MatCheckboxModule],
   template: `
     <div class="tab-container">
       <div class="form">
@@ -100,6 +102,10 @@ interface PurchaseForm {
             <mat-label>Note</mat-label>
             <input matInput [(ngModel)]="form.notes">
           </mat-form-field>
+          <mat-checkbox [(ngModel)]="form.holdForResale"
+            matTooltip="Comprato per tenerlo e rivenderlo più avanti: finché resta sigillato compare nella scheda Magazzino con il valore di oggi">
+            Da tenere
+          </mat-checkbox>
         </div>
         <div class="actions">
           <button mat-raised-button color="primary" (click)="save()" [disabled]="isSaving()">
@@ -168,6 +174,8 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
     { headerName: 'Acquistato', field: 'purchasedAt', width: 115, valueFormatter: this.date },
     { headerName: 'Aperto', field: 'openedAt', width: 105, valueFormatter: this.date },
     { headerName: 'Tag', field: 'tag', width: 170 },
+    { headerName: 'Da tenere', field: 'holdForResale', width: 105, valueFormatter: p => p.value ? 'sì' : '',
+      headerTooltip: 'Comprato per tenerlo: finché è sigillato è nella scheda Magazzino' },
     {
       headerName: 'Costo/carta', field: 'effectiveCostPerCard', width: 115, type: 'numericColumn',
       // Senza simbolo e con il punto: con il doppio clic si copia così com'è nel campo numerico
@@ -316,7 +324,8 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
       openedAt: this.form.openedAt || null,
       tag: this.form.tag || null,
       notes: this.form.notes || null,
-      costPerCard: this.form.costPerCard || null
+      costPerCard: this.form.costPerCard || null,
+      holdForResale: this.form.holdForResale
     };
     this.isSaving.set(true);
     this.purchasing.savePurchase(input, this.form.id).subscribe({
@@ -348,7 +357,8 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
       openedAt: purchase.openedAt ?? '',
       tag: purchase.tag ?? '',
       notes: purchase.notes ?? '',
-      costPerCard: purchase.costPerCard ?? null
+      costPerCard: purchase.costPerCard ?? null,
+      holdForResale: purchase.holdForResale
     };
     this.editingCalculated = purchase.calculatedCostPerCard ?? null;
     this.editingCards = purchase.cardsPerUnit ?? null;
@@ -387,6 +397,6 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
   }
 
   private emptyForm(): PurchaseForm {
-    return { sealedProductId: null, quantity: 1, unitPrice: null, store: 'Cardmarket', seller: '', purchasedAt: '', openedAt: '', tag: '', notes: '', costPerCard: null };
+    return { sealedProductId: null, quantity: 1, unitPrice: null, store: 'Cardmarket', seller: '', purchasedAt: '', openedAt: '', tag: '', notes: '', costPerCard: null, holdForResale: false };
   }
 }

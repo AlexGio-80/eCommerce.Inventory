@@ -42,6 +42,12 @@ public class ProductPurchase
     public decimal? CostPerCard { get; set; }
 
     /// <summary>
+    /// Comprato per tenerlo e rivenderlo più avanti, chiuso o aperto (feature 005, magazzino da
+    /// tenere): finché resta sigillato compare nel magazzino con il valore di oggi e il guadagno latente.
+    /// </summary>
+    public bool HoldForResale { get; set; }
+
+    /// <summary>
     /// Valore atteso netto di un'unità aprendola (prezzi Cardmarket corretti), calcolato al momento
     /// dell'apertura o, se ancora chiusa, della registrazione. Null se i dati non bastavano (es.
     /// composizione delle buste non ancora pubblicata): si ricalcola all'apertura.

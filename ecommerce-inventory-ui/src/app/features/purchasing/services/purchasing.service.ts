@@ -466,6 +466,43 @@ export interface ProductPurchaseInput {
     notes?: string | null;
     /** Costo per carta scritto a mano; null = calcolato. */
     costPerCard?: number | null;
+    /** Comprato per tenerlo: finché è sigillato compare nel magazzino. */
+    holdForResale: boolean;
+}
+
+/** Acquisto da tenere ancora sigillato, con il valore di oggi (feature 005, Fase 3). */
+export interface HoldStockItem {
+    purchaseId: number;
+    sealedProductId: number;
+    name: string;
+    setCode: string;
+    store?: string;
+    quantity: number;
+    unitPrice: number;
+    cost: number;
+    purchasedAt: string;
+    monthsHeld: number;
+    cmTrend?: number;
+    /** Netto di un'unità rivenduta chiusa. */
+    sealedNetUnit?: number;
+    /** Netto di un'unità aperta (valore atteso della classifica). */
+    openNetUnit?: number;
+    ctMinPrice?: number;
+    bestExit?: 'Sealed' | 'Open';
+    valueTotal?: number;
+    gain?: number;
+    gainPercent?: number;
+    trendAtPurchase?: number;
+    trendChangeSincePurchase?: number;
+    cardTraderBlueprintId?: number;
+}
+
+export interface HoldStock {
+    items: HoldStockItem[];
+    totalCost: number;
+    totalValue: number;
+    totalGain: number;
+    date?: string;
 }
 
 export interface ProductPurchase extends ProductPurchaseInput {
@@ -639,6 +676,11 @@ export class PurchasingService {
     searchCatalog(query: string): Observable<CatalogProduct[]> {
         return this.http.get<ApiResponse<CatalogProduct[]>>(`${this.apiUrl}/catalog/search`, { params: { q: query } })
             .pipe(map(response => response.data!));
+    }
+
+    getHoldStock(): Observable<HoldStock> {
+        return this.http.get<ApiResponse<HoldStock>>(`${this.apiUrl}/hold-stock`)
+            .pipe(map(response => response.data ?? { items: [], totalCost: 0, totalValue: 0, totalGain: 0 }));
     }
 
     getPurchases(): Observable<ProductPurchase[]> {

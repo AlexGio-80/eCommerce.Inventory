@@ -22,6 +22,7 @@ import { SecretLairTabComponent } from '../components/secret-lair-tab.component'
 import { OpportunitiesTabComponent } from '../components/opportunities-tab.component';
 import { AlertsTabComponent } from '../components/alerts-tab.component';
 import { PurchasesTabComponent } from '../components/purchases-tab.component';
+import { HoldStockTabComponent } from '../components/hold-stock-tab.component';
 import {
   OpeningValueParams, PackValue, PurchasingService, SealedProductAnalysis, SealedSetAnalysis, SealedSetOption
 } from '../services/purchasing.service';
@@ -38,7 +39,7 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
   imports: [GridStateDirective, 
     CommonModule, FormsModule, AgGridAngular, GridCellCopyDirective, MatCardModule, MatButtonModule, MatFormFieldModule,
     MatSelectModule, MatProgressSpinnerModule, MatSnackBarModule, MatIconModule, MatTooltipModule,
-    MatSlideToggleModule, MatInputModule, MatTabsModule, OpeningsTabComponent, SecretLairTabComponent, OpportunitiesTabComponent, PurchasesTabComponent, AlertsTabComponent
+    MatSlideToggleModule, MatInputModule, MatTabsModule, OpeningsTabComponent, SecretLairTabComponent, OpportunitiesTabComponent, PurchasesTabComponent, AlertsTabComponent, HoldStockTabComponent
   ],
   template: `
     <mat-tab-group class="tabs" [(selectedIndex)]="tabIndex" animationDuration="0ms">
@@ -225,6 +226,13 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
     <mat-tab label="Secret Lair">
       <ng-template matTabContent>
         <app-secret-lair-tab></app-secret-lair-tab>
+      </ng-template>
+    </mat-tab>
+
+    <!-- In fondo: gli indici delle schede precedenti sono usati da ?tab=avvisi e ?tab=secretlair. -->
+    <mat-tab label="Magazzino">
+      <ng-template matTabContent>
+        <app-hold-stock-tab></app-hold-stock-tab>
       </ng-template>
     </mat-tab>
     </mat-tab-group>

@@ -288,6 +288,14 @@ public class PurchasingController : ControllerBase
         return Ok(ApiResponse<List<ProductPurchaseDto>>.SuccessResult(purchases));
     }
 
+    /// <summary>Magazzino da tenere: acquisti "da tenere" ancora sigillati, con valore di oggi e guadagno latente.</summary>
+    [HttpGet("hold-stock")]
+    public async Task<IActionResult> GetHoldStock([FromServices] HoldStockService holdStock, CancellationToken cancellationToken)
+    {
+        var stock = await holdStock.GetAsync(cancellationToken);
+        return Ok(ApiResponse<HoldStockDto>.SuccessResult(stock));
+    }
+
     /// <summary>Prodotti del catalogo sigillati per nome Cardmarket, nome MTGJSON o set (registro acquisti).</summary>
     [HttpGet("catalog/search")]
     public async Task<IActionResult> SearchCatalog([FromQuery] string? q, CancellationToken cancellationToken)
