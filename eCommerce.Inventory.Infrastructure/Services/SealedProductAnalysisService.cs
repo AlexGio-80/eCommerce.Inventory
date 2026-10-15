@@ -383,6 +383,38 @@ public class SealedProductAnalysisService
     }
 
     /// <summary>
+    /// Offerta più bassa su Card Trader di alcuni sigillati, una chiamata per prodotto: per pochi
+    /// prodotti (il magazzino da tenere) costa meno che aggiornare le loro uscite, che scaricherebbe
+    /// anche tutte le singole. Salta quelli aggiornati da meno di <paramref name="maxAge"/>.
+    /// </summary>
+    /// <returns>Prodotti aggiornati.</returns>
+    public async Task<int> RefreshSealedCardTraderPricesAsync(IReadOnlyCollection<int> productIds, TimeSpan maxAge, CancellationToken cancellationToken = default)
+    {
+        if (productIds.Count == 0) return 0;
+        var staleBefore = DateTime.UtcNow - maxAge;
+        var products = await _db.SealedProducts
+            .Where(p => productIds.Contains(p.Id) && p.CardTraderBlueprintId != null
+                        && (p.CtPriceUpdatedAt == null || p.CtPriceUpdatedAt < staleBefore))
+            .ToListAsync(cancellationToken);
+
+        foreach (var product in products)
+        {
+            var offers = (await _cardTrader.GetMarketplaceProductsAsync(product.CardTraderBlueprintId!.Value, cancellationToken))
+                .Where(o => o.BlueprintId == product.CardTraderBlueprintId && o.PriceCents > 0 && o.Quantity > 0 && !o.OnVacation)
+                .Where(o => IsEnglish(o.Properties.Language))
+                .ToList();
+            product.CtMinPrice = offers.Count > 0 ? offers.Min(o => o.PriceCents) / 100m : null;
+            product.CtOfferCount = offers.Count;
+            product.CtPriceUpdatedAt = DateTime.UtcNow;
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        if (products.Count > 0)
+            _logger.LogInformation("Prezzi Card Trader di {Count} sigillati aggiornati uno per uno", products.Count);
+        return products.Count;
+    }
+
+    /// <summary>
     /// Aggiorna i prezzi Card Trader di un'uscita: sigillati e singole (queste ultime per il valore
     /// atteso). Una chiamata al marketplace per ciascuna espansione Card Trader coinvolta: l'espansione,
     /// il suo Commander, le varianti "Collectors" e simili, in genere fra due e sei.

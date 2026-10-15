@@ -33,7 +33,8 @@ import { HoldStock, HoldStockItem, PurchasingService } from '../services/purchas
         </div>
         <span class="muted" *ngIf="stock()?.date">valori della classifica del {{ stock()!.date | date:'dd/MM/yyyy' }}</span>
         <span class="spacer"></span>
-        <button mat-stroked-button (click)="load()" [disabled]="isLoading()">
+        <button mat-stroked-button (click)="refresh()" [disabled]="isLoading()"
+          matTooltip="Riscarica da Card Trader l'offerta più bassa dei prodotti aggiornati da più di 6 ore (si aggiorna comunque ogni mattina)">
           <mat-spinner *ngIf="isLoading()" diameter="18"></mat-spinner>
           <mat-icon *ngIf="!isLoading()">refresh</mat-icon> Aggiorna
         </button>
@@ -96,7 +97,7 @@ export class HoldStockTabComponent implements OnInit {
     { headerName: 'Aperto netto/unità', field: 'openNetUnit', width: 150, type: 'numericColumn', valueFormatter: this.euroCell,
       headerTooltip: 'Aprendolo e vendendo le carte: valore atteso netto della classifica' },
     { headerName: 'Min CT', field: 'ctMinPrice', width: 105, type: 'numericColumn', valueFormatter: this.euroCell,
-      headerTooltip: 'Offerta più bassa su Card Trader all\'ultimo aggiornamento dei prezzi CT del prodotto' },
+      headerTooltip: 'Offerta più bassa su Card Trader in inglese: si aggiorna ogni mattina e con il pulsante Aggiorna' },
     { headerName: 'Uscita migliore', field: 'bestExit', width: 130, valueFormatter: p => p.value === 'Open' ? 'Aprirlo' : p.value === 'Sealed' ? 'Chiuso' : '' },
     { headerName: 'Valore oggi', field: 'valueTotal', width: 120, type: 'numericColumn', valueFormatter: this.euroCell },
     { headerName: 'Guadagno', field: 'gain', width: 115, type: 'numericColumn', valueFormatter: this.euroCell, cellClass: this.signClass },
@@ -126,6 +127,21 @@ export class HoldStockTabComponent implements OnInit {
       error: err => {
         this.isLoading.set(false);
         this.snackBar.open(`Errore nel magazzino: ${err.error?.message || err.message}`, 'Chiudi', { duration: 8000 });
+      }
+    });
+  }
+
+  /** Prezzi Card Trader prima, poi la tabella: un errore su Card Trader non impedisce di vedere il magazzino. */
+  refresh() {
+    this.isLoading.set(true);
+    this.purchasing.refreshHoldStockCardTrader().subscribe({
+      next: updated => {
+        if (updated > 0) this.snackBar.open(`Prezzi Card Trader aggiornati per ${updated} prodotti`, 'Chiudi', { duration: 4000 });
+        this.load();
+      },
+      error: err => {
+        this.snackBar.open(`Prezzi Card Trader non aggiornati: ${err.error?.message || err.message}`, 'Chiudi', { duration: 8000 });
+        this.load();
       }
     });
   }

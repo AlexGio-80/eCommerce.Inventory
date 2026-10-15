@@ -9,6 +9,33 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-15] Miglioria — "Apri (se lo hai già)" e prezzi Card Trader del magazzino
+
+#### Problema
+
+- Circa 190 prodotti erano in "Apri" con resa negativa. La decisione è giusta per chi il prodotto ce l'ha
+  già (aprirlo rende più che rivenderlo chiuso), ma a schermo sembrava un consiglio d'acquisto.
+- Nella scheda Magazzino la colonna "Min CT" restava vuota: i prezzi Card Trader dei sigillati si
+  aggiornavano solo aprendo la loro uscita.
+
+#### Soluzione Implementata
+
+- Nella griglia dell'analisi e nelle Opportunità quei prodotti si leggono **"Apri (se lo hai già)"**, con un
+  suggerimento che spiega la differenza. Il valore della decisione resta "Apri", quindi filtri, avvisi e
+  registro non cambiano.
+- L'offerta più bassa su Card Trader dei prodotti in magazzino si aggiorna ogni mattina nel giro
+  dell'import Cardmarket, e con il pulsante "Aggiorna" della scheda Magazzino per i prodotti fermi da più
+  di 6 ore.
+
+#### Note Tecniche
+
+- `isOpenIfOwned` e `decisionLabel` in `purchasing.service.ts`, usate da entrambe le griglie.
+- `SealedProductAnalysisService.RefreshSealedCardTraderPricesAsync`: una chiamata al marketplace per
+  prodotto, con gli stessi filtri dell'aggiornamento per uscita (inglese, disponibili, venditore non in
+  ferie). Per pochi prodotti costa meno che aggiornare le loro uscite, che scaricherebbe anche tutte le
+  singole.
+- `HoldStockService.RefreshCardTraderPricesAsync`, endpoint `POST /api/purchasing/hold-stock/refresh-cardtrader`.
+
 ### [2026-10-15] Feature — Magazzino da tenere (feature 005, Fase 3)
 
 #### Problema

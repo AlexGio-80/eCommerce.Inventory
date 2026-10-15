@@ -12,7 +12,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { Opportunity, OpportunityList, PurchasePlan, PurchasingService } from '../services/purchasing.service';
+import { Opportunity, OpportunityList, PurchasePlan, PurchasingService, decisionLabel, isOpenIfOwned } from '../services/purchasing.service';
 import { PurchasePlanPanelComponent } from './purchase-plan-panel.component';
 import { GridStateDirective } from '../../../shared/directives/grid-state.directive';
 
@@ -159,7 +159,11 @@ export class OpportunitiesTabComponent implements OnInit {
     { headerName: 'Resa apertura', field: 'openingRoiPercent', width: 125, type: 'numericColumn', sort: 'desc',
       valueFormatter: this.percent, cellClass: this.signClass },
     { headerName: 'Copertura', field: 'coverageCm', width: 105, type: 'numericColumn', valueFormatter: p => p.value == null ? '' : `${p.value}%` },
-    { headerName: 'Decisione', field: 'decision', width: 140 },
+    { headerName: 'Decisione', field: 'decision', width: 165,
+      valueFormatter: p => decisionLabel(p.value, p.data?.openingRoiPercent),
+      tooltipValueGetter: p => isOpenIfOwned(p.data?.decision, p.data?.openingRoiPercent)
+        ? 'Se lo hai già, aprirlo rende di più che rivenderlo chiuso; comprarlo per aprirlo invece non conviene (resa negativa)'
+        : '' },
     { headerName: 'Da tenere', field: 'holdScore', width: 110, type: 'numericColumn',
       valueFormatter: p => p.value == null ? '' : p.value.toFixed(1),
       cellClass: (p: CellClassParams<Opportunity>) => p.data?.isHoldCandidate ? 'delta-good' : '',

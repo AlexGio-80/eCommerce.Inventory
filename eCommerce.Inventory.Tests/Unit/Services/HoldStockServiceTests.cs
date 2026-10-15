@@ -1,8 +1,11 @@
+using eCommerce.Inventory.Application.DTOs;
+using eCommerce.Inventory.Application.Interfaces;
 using eCommerce.Inventory.Domain.Entities;
 using eCommerce.Inventory.Infrastructure.Persistence;
 using eCommerce.Inventory.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace eCommerce.Inventory.Tests.Unit.Services;
 
@@ -18,8 +21,44 @@ public class HoldStockServiceTests
 
     private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.Today);
 
-    private HoldStockService CreateService() =>
-        new(_db, new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Purchasing:SellingCostPercent"] = "15" }).Build());
+    private readonly Mock<ICardTraderApiService> _cardTrader = new();
+
+    private HoldStockService CreateService()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Purchasing:SellingCostPercent"] = "15" }).Build();
+        var analysis = new SealedProductAnalysisService(_db, _cardTrader.Object, new BulkSellThroughService(_db),
+            new PriceRealizationService(_db), configuration, NullLogger<SealedProductAnalysisService>.Instance);
+        return new HoldStockService(_db, configuration, analysis);
+    }
+
+    [Fact]
+    public async Task RefreshCardTraderPrices_OnlyForStaleProductsStillHeld()
+    {
+        var stale = new SealedProduct { Uuid = Guid.NewGuid(), SetCode = "TST", Name = "Da aggiornare", CardTraderBlueprintId = 501 };
+        var fresh = new SealedProduct { Uuid = Guid.NewGuid(), SetCode = "TST", Name = "Aggiornato da poco", CardTraderBlueprintId = 502,
+            CtMinPrice = 50m, CtPriceUpdatedAt = DateTime.UtcNow.AddHours(-1) };
+        var notHeld = new SealedProduct { Uuid = Guid.NewGuid(), SetCode = "TST", Name = "Non da tenere", CardTraderBlueprintId = 503 };
+        _db.SealedProducts.AddRange(stale, fresh, notHeld);
+        await _db.SaveChangesAsync();
+        _db.ProductPurchases.AddRange(
+            new ProductPurchase { SealedProductId = stale.Id, Quantity = 1, UnitPrice = 40m, HoldForResale = true },
+            new ProductPurchase { SealedProductId = fresh.Id, Quantity = 1, UnitPrice = 40m, HoldForResale = true },
+            new ProductPurchase { SealedProductId = notHeld.Id, Quantity = 1, UnitPrice = 40m });
+        await _db.SaveChangesAsync();
+        _cardTrader.Setup(c => c.GetMarketplaceProductsAsync(501, It.IsAny<CancellationToken>())).ReturnsAsync(new[]
+        {
+            new CardTraderMarketplaceProductDto { BlueprintId = 501, PriceCents = 4599, Quantity = 1 },
+            new CardTraderMarketplaceProductDto { BlueprintId = 501, PriceCents = 4250, Quantity = 2 },
+            new CardTraderMarketplaceProductDto { BlueprintId = 501, PriceCents = 3000, Quantity = 0 } // esaurita
+        });
+
+        var updated = await CreateService().RefreshCardTraderPricesAsync();
+
+        updated.Should().Be(1);
+        (await _db.SealedProducts.FindAsync(stale.Id))!.CtMinPrice.Should().Be(42.50m);
+        (await _db.SealedProducts.FindAsync(stale.Id))!.CtOfferCount.Should().Be(2);
+        _cardTrader.Verify(c => c.GetMarketplaceProductsAsync(It.Is<int>(id => id != 501), It.IsAny<CancellationToken>()), Times.Never);
+    }
 
     [Fact]
     public void Value_TakesTheBetterExit_NetOfSellingCosts()

@@ -6,6 +6,19 @@ import { environment } from '../../../../environments/environment';
 import { ApiResponse } from '../../../core/models/api-response';
 
 /** Un'uscita analizzabile: espansione principale più i suoi set figli (es. Commander). */
+/**
+ * "Apri" con resa negativa: aprirlo rende più che rivenderlo chiuso, ma comprarlo per aprirlo non
+ * conviene. Vale per chi il prodotto ce l'ha già; a schermo non deve sembrare un consiglio d'acquisto.
+ */
+export function isOpenIfOwned(decision?: string | null, openingRoiPercent?: number | null): boolean {
+    return decision === 'Apri' && openingRoiPercent != null && openingRoiPercent < 0;
+}
+
+/** Etichetta della decisione a schermo: il valore resta "Apri" per filtri e avvisi. */
+export function decisionLabel(decision?: string | null, openingRoiPercent?: number | null): string {
+    return isOpenIfOwned(decision, openingRoiPercent) ? 'Apri (se lo hai già)' : decision ?? '';
+}
+
 export interface SealedSetOption {
     code: string;
     name: string;
@@ -681,6 +694,12 @@ export class PurchasingService {
     getHoldStock(): Observable<HoldStock> {
         return this.http.get<ApiResponse<HoldStock>>(`${this.apiUrl}/hold-stock`)
             .pipe(map(response => response.data ?? { items: [], totalCost: 0, totalValue: 0, totalGain: 0 }));
+    }
+
+    /** Riscarica l'offerta più bassa CT dei prodotti in magazzino aggiornati da più di 6 ore; restituisce quanti. */
+    refreshHoldStockCardTrader(): Observable<number> {
+        return this.http.post<ApiResponse<number>>(`${this.apiUrl}/hold-stock/refresh-cardtrader`, {})
+            .pipe(map(response => response.data ?? 0));
     }
 
     getPurchases(): Observable<ProductPurchase[]> {

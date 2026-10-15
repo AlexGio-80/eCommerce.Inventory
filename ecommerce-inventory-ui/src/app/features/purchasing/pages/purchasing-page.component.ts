@@ -24,7 +24,8 @@ import { AlertsTabComponent } from '../components/alerts-tab.component';
 import { PurchasesTabComponent } from '../components/purchases-tab.component';
 import { HoldStockTabComponent } from '../components/hold-stock-tab.component';
 import {
-  OpeningValueParams, PackValue, PurchasingService, SealedProductAnalysis, SealedSetAnalysis, SealedSetOption
+  OpeningValueParams, PackValue, PurchasingService, SealedProductAnalysis, SealedSetAnalysis, SealedSetOption,
+  decisionLabel, isOpenIfOwned
 } from '../services/purchasing.service';
 import { GridStateDirective } from '../../../shared/directives/grid-state.directive';
 
@@ -408,12 +409,14 @@ export class PurchasingPageComponent implements OnInit {
       headerTooltip: 'Valore atteso netto aprendo rispetto al prezzo di acquisto (trend CM, o l\'offerta più bassa se è più alta del trend). La decisione confronta invece due netti (aprendo e rivendendolo chiuso): può dire Apri anche con una resa fino a circa −15%'
     },
     {
-      headerName: 'Decisione', field: 'decision', width: 150,
+      headerName: 'Decisione', field: 'decision', width: 170,
+      valueFormatter: p => decisionLabel(p.value, p.data?.openingRoiPercent),
       cellClass: (p: CellClassParams) => p.value === 'Apri' ? 'decision-open'
         : p.value === 'Tieni sigillato' ? 'decision-keep' : p.value ? 'decision-warn' : '',
       tooltipValueGetter: p => {
         const d = p.data;
         if (!d) return '';
+        if (isOpenIfOwned(d.decision, d.openingRoiPercent)) return `Se lo hai già, aprirlo rende di più che rivenderlo chiuso (aprendo ${this.formatEuro(d.openValueCm)} netti, chiuso ${this.formatEuro(d.sealedNetCm)} netti). Comprarlo per aprirlo invece non conviene: la resa sul prezzo d'acquisto è ${d.openingRoiPercent?.toFixed(1)}%`;
         if (d.decision === 'Non giocabili') return 'Carte non giocabili a torneo (bordo dorato, World Championship, Collectors\' Edition): nessuna vendita conferma che il trend CM di quelle singole si incassi davvero';
         if (d.decision === 'Prezzo CM dubbio' && d.cmTrend != null && d.cmTrend <= 0.05) return `Il trend CM (${this.formatEuro(d.cmTrend)}) è un prezzo di riempimento, non di vendite vere: la resa non è calcolabile`;
         if (d.decision === 'Prezzo CM dubbio') return `Il trend CM (${this.formatEuro(d.cmTrend)}) è lontano dalla somma di ciò che contiene (${this.formatEuro(d.componentsTrend)}): probabile abbinamento sbagliato su MTGJSON`;

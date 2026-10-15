@@ -296,6 +296,14 @@ public class PurchasingController : ControllerBase
         return Ok(ApiResponse<HoldStockDto>.SuccessResult(stock));
     }
 
+    /// <summary>Riscarica l'offerta più bassa su Card Trader dei prodotti in magazzino aggiornati da più di 6 ore.</summary>
+    [HttpPost("hold-stock/refresh-cardtrader")]
+    public async Task<IActionResult> RefreshHoldStockCardTrader([FromServices] HoldStockService holdStock, CancellationToken cancellationToken)
+    {
+        var updated = await holdStock.RefreshCardTraderPricesAsync(cancellationToken);
+        return Ok(ApiResponse<int>.SuccessResult(updated));
+    }
+
     /// <summary>Prodotti del catalogo sigillati per nome Cardmarket, nome MTGJSON o set (registro acquisti).</summary>
     [HttpGet("catalog/search")]
     public async Task<IActionResult> SearchCatalog([FromQuery] string? q, CancellationToken cancellationToken)

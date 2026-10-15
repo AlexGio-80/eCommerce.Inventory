@@ -16,11 +16,30 @@ public class HoldStockService
 {
     private readonly ApplicationDbContext _db;
     private readonly IConfiguration _configuration;
+    private readonly SealedProductAnalysisService _analysis;
 
-    public HoldStockService(ApplicationDbContext db, IConfiguration configuration)
+    public HoldStockService(ApplicationDbContext db, IConfiguration configuration, SealedProductAnalysisService analysis)
     {
         _db = db;
         _configuration = configuration;
+        _analysis = analysis;
+    }
+
+    /// <summary>Oltre quest'età i prezzi Card Trader dei prodotti del magazzino si riscaricano.</summary>
+    public static readonly TimeSpan CardTraderPriceMaxAge = TimeSpan.FromHours(6);
+
+    /// <summary>
+    /// Offerta più bassa su Card Trader dei prodotti in magazzino: senza, la colonna resta vuota finché
+    /// qualcuno non apre la loro uscita. Gira ogni mattina e dal pulsante "Aggiorna" della scheda.
+    /// </summary>
+    public async Task<int> RefreshCardTraderPricesAsync(CancellationToken cancellationToken = default)
+    {
+        var productIds = await _db.ProductPurchases.AsNoTracking()
+            .Where(p => p.HoldForResale && p.OpenedAt == null)
+            .Select(p => p.SealedProductId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        return await _analysis.RefreshSealedCardTraderPricesAsync(productIds, CardTraderPriceMaxAge, cancellationToken);
     }
 
     public async Task<HoldStockDto> GetAsync(CancellationToken cancellationToken = default)
