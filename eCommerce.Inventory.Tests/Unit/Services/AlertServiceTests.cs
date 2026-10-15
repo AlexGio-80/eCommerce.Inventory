@@ -109,6 +109,57 @@ public class AlertServiceTests
     }
 
     [Fact]
+    public async Task HoldCandidate_FiresOnCandidatesAboveTheScore_OnlyWhenTheyBecomeCandidates()
+    {
+        var box = await SeedBoxAsync(trend: 140m);
+        var deck = new SealedProduct { Uuid = Guid.NewGuid(), SetCode = "TRK", Name = "Commander Deck", Category = "deck" };
+        var bundle = new SealedProduct { Uuid = Guid.NewGuid(), SetCode = "TRK", Name = "Bundle", Category = "bundle" };
+        _db.SealedProducts.AddRange(deck, bundle);
+        _db.SealedOpportunities.AddRange(
+            new SealedOpportunity { Date = Today, SealedProductId = box.Id, MainSetCode = "TRK", Decision = "Apri", CmTrend = 140m,
+                OpeningRoiPercent = -3m, HoldScore = 85m, FloorPercent = 97m, ReleaseAgeMonths = 24, IsHoldCandidate = true },
+            // Punteggio sotto la soglia della regola.
+            new SealedOpportunity { Date = Today, SealedProductId = deck.Id, MainSetCode = "TRK", Decision = "Apri", CmTrend = 50m,
+                OpeningRoiPercent = -8m, HoldScore = 65m, FloorPercent = 90m, ReleaseAgeMonths = 24, IsHoldCandidate = true },
+            // Punteggio alto ma non candidato (es. uscita troppo recente).
+            new SealedOpportunity { Date = Today, SealedProductId = bundle.Id, MainSetCode = "TRK", Decision = "Tieni sigillato", CmTrend = 40m,
+                OpeningRoiPercent = -10m, HoldScore = 80m, FloorPercent = 88m, ReleaseAgeMonths = 3, IsHoldCandidate = false });
+        await _db.SaveChangesAsync();
+        var service = CreateService();
+        await service.SaveRuleAsync(null, new AlertRuleInput("Da tenere", AlertRuleType.HoldCandidate, null, null, null, 70m, false, true, false));
+
+        (await service.EvaluateAsync()).NewNotifications.Should().Be(1);
+        (await service.ListNotificationsAsync(10)).Items.Single().Message.Should().Contain("punteggio 85,0").And.Contain("97%");
+
+        (await service.EvaluateAsync()).NewNotifications.Should().Be(0, "resta candidato: l'avviso non si ripete");
+    }
+
+    [Fact]
+    public void FitMessage_KeepsWholeLines_AndCountsTheProductsLeftOut()
+    {
+        var lines = Enumerable.Range(1, 15).Select(i => $"• Prodotto {i}: " + new string('x', 140)).ToList();
+
+        var message = AlertService.FitMessage(lines, total: 25);
+
+        message.Length.Should().BeLessThanOrEqualTo(2000);
+        var parts = message.Split('\n');
+        parts[..^1].Should().Equal(lines.Take(parts.Length - 1), "solo righe intere, nell'ordine");
+        parts[^1].Should().Be($"… e altri {25 - (parts.Length - 1)} prodotti (scheda Opportunità o Avvisi della pagina Acquisti)");
+    }
+
+    [Fact]
+    public void FitMessage_ShortList_HasNoTrailer() =>
+        AlertService.FitMessage(new List<string> { "• A: uno", "• B: due" }, total: 2).Should().Be("• A: uno\n• B: due");
+
+    [Fact]
+    public async Task HoldCandidate_ScoreAbove100_IsRejected()
+    {
+        var act = () => CreateService().SaveRuleAsync(null, new AlertRuleInput("Da tenere", AlertRuleType.HoldCandidate, null, null, null, 150m, false, true, false));
+
+        await act.Should().ThrowAsync<ArgumentException>();
+    }
+
+    [Fact]
     public async Task Email_IsOneDigestPerRun_AndAFailureIsRecordedOnTheNotifications()
     {
         var box = await SeedBoxAsync(trend: 100m, trendWeekAgo: 200m);

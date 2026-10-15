@@ -55,6 +55,7 @@ interface RuleForm {
             <mat-label>Tipo</mat-label>
             <mat-select [(ngModel)]="form.type">
               <mat-option value="OpeningOpportunity">Apertura conveniente</mat-option>
+              <mat-option value="HoldCandidate">Da tenere</mat-option>
               <mat-option value="PriceDrop">Calo di prezzo in 7 giorni</mat-option>
               <mat-option value="PriceAtLow">Prezzo al minimo</mat-option>
               <mat-option value="PriceBelow">Prezzo sotto soglia</mat-option>
@@ -188,7 +189,8 @@ export class AlertsTabComponent implements OnInit {
   form: RuleForm = this.emptyForm();
 
   private static readonly typeLabels: Record<AlertRuleType, string> = {
-    PriceBelow: 'Prezzo sotto soglia', PriceDrop: 'Calo di prezzo', OpeningOpportunity: 'Apertura conveniente', PriceAtLow: 'Prezzo al minimo'
+    PriceBelow: 'Prezzo sotto soglia', PriceDrop: 'Calo di prezzo', OpeningOpportunity: 'Apertura conveniente', PriceAtLow: 'Prezzo al minimo',
+    HoldCandidate: 'Da tenere'
   };
 
   ruleColumns: ColDef<AlertRule>[] = [
@@ -205,6 +207,7 @@ export class AlertsTabComponent implements OnInit {
         const condition = r.type === 'PriceBelow' ? `${r.useLowPrice ? 'low' : 'trend'} ≤ ${r.threshold} €`
           : r.type === 'PriceDrop' ? `calo ≥ ${r.threshold}% in 7 giorni`
           : r.type === 'PriceAtLow' ? `al minimo di ${r.threshold} giorni`
+          : r.type === 'HoldCandidate' ? `candidato da tenere con punteggio ≥ ${r.threshold}`
           : `"Apri" con resa ≥ ${r.threshold}%`;
         return `${scope}: ${condition}`;
       }
@@ -252,6 +255,7 @@ export class AlertsTabComponent implements OnInit {
     return this.form.type === 'PriceBelow' ? 'Soglia €'
       : this.form.type === 'PriceDrop' ? 'Calo minimo %'
       : this.form.type === 'PriceAtLow' ? 'Giorni di storico'
+      : this.form.type === 'HoldCandidate' ? 'Punteggio minimo (0–100)'
       : 'Resa minima %';
   }
 

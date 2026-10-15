@@ -63,7 +63,13 @@ public enum AlertRuleType
     /// Trend Cardmarket al valore più basso degli ultimi N giorni (N = soglia). Relativo alla storia
     /// di ciascun prodotto: funziona solo quando lo storico copre tutta la finestra.
     /// </summary>
-    PriceAtLow = 3
+    PriceAtLow = 3,
+
+    /// <summary>
+    /// Un prodotto diventa candidato da tenere (feature 005) con punteggio almeno pari alla soglia
+    /// (0–100): carte che coprono quasi tutto il prezzo, uscita all'età giusta, resa negativa.
+    /// </summary>
+    HoldCandidate = 4
 }
 
 /// <summary>

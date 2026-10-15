@@ -146,7 +146,7 @@ Prodotti sigillati da comprare oggi e tenere 1–3 anni, segnalati nelle Opportu
 
 - [x] **Fase 0 — Prodotti non comprabili non più "Apri"** — pubblicata e verificata il 2026-10-15 (80 prodotti in "Nessuna offerta", nessun "Apri" senza offerte su Cardmarket): decisione "Nessuna offerta" (nessuna offerta su Cardmarket) e resa calcolata sul trend, o sul low se è più alto. Verifica: dopo "Ricalcola" nelle Opportunità, i mazzi del Duel Deck Merfolk vs Goblins in "Nessuna offerta" e nessun "Apri" con low vuoto
 - [x] **Fase 1 — Punteggio "da tenere" e scheda nelle Opportunità** — pubblicata e verificata il 2026-10-15: 1.301 prodotti valutati, 47 candidati (21 mazzi, 15 box), nessun Secret Lair, tutti con resa negativa. Migration `AddHoldScore`: pavimento (valore delle carte / prezzo), età dell'uscita, posizione nello storico del prodotto
-- [ ] **Fase 2 — Regola d'avviso "Da tenere"** nell'email di riepilogo; regola iniziale solo dopo l'ok dell'utente
+- [x] **Fase 2 — Regola d'avviso "Da tenere"** — pubblicata e verificata il 2026-10-15 (regola creata, 25 prodotti, email partita). Pubblicata lo stesso giorno la correzione del testo degli avvisi tagliato a metà riga (effetto da vedere sul prossimo avviso con molti prodotti): tipo di regola "Da tenere" nella scheda Avvisi, dentro l'email di riepilogo. Regola iniziale proposta, da creare dall'utente: gruppo, tutti i tipi, soglia 70 (25 candidati il 15/10)
 - [ ] **Fase 3 — Magazzino nel registro acquisti** (migration `AddHoldForResale`): segno "da tenere" sull'acquisto, vista con costo, valore di oggi chiuso e aperto, guadagno latente
 
 ### Sicurezza — i quattro punti del 2026-08-27 sono chiusi

@@ -9,6 +9,32 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-15] Feature — Regola d'avviso "Da tenere" (feature 005, Fase 2)
+
+#### Problema
+
+I candidati da tenere si vedevano solo aprendo la scheda Opportunità: nessun avviso o email quando un
+prodotto lo diventa.
+
+#### Soluzione Implementata
+
+- Tipo di regola nuovo **"Da tenere"** nella scheda Avvisi. Scatta quando un prodotto diventa candidato
+  da tenere con punteggio almeno pari alla soglia (0–100). Ambito per prodotto o per gruppo come le altre
+  regole, ed entra nell'email di riepilogo.
+- L'avviso riporta punteggio, quota del prezzo coperta dalle carte, trend ed età dell'uscita.
+
+#### Note Tecniche
+
+- `AlertRuleType.HoldCandidate = 4`; `AlertService` legge `IsHoldCandidate` e `HoldScore` dalla classifica
+  del giorno. Soglia oltre 100 rifiutata.
+- Nessuna migration: il tipo è salvato come intero.
+- **Verificata il 15/10:** regola "Da tenere" (soglia 70) creata dall'utente, 25 prodotti, avviso ed
+  email partiti senza errori.
+- **Corretto nella stessa verifica, pubblicato il 15/10 alle 14:03:** il testo degli avvisi si tagliava a 2.000 caratteri
+  a metà riga. L'email, che è costruita da quel testo, mostrava 14 prodotti su 25, l'ultimo spezzato e
+  senza il "… e altri N". Era successo già a due avvisi del 12/10. Ora `AlertService.FitMessage` tiene
+  solo righe intere entro il limite e aggiunge sempre quanti prodotti restano fuori.
+
 ### [2026-10-15] Feature — Punteggio "da tenere" nelle Opportunità (feature 005, Fase 1)
 
 #### Problema

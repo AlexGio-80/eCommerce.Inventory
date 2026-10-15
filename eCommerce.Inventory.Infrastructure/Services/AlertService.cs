@@ -117,8 +117,6 @@ public class AlertService
         var sets = ordered.Select(m => m.SetCode).Distinct().ToList();
 
         var lines = ordered.Take(MaxListedProducts).Select(m => single != null ? m.Detail : $"• {m.ProductName}: {m.Detail}").ToList();
-        if (ordered.Count > MaxListedProducts)
-            lines.Add($"… e altri {ordered.Count - MaxListedProducts} prodotti (scheda Opportunità o Avvisi della pagina Acquisti)");
 
         return new AlertNotification
         {
@@ -126,10 +124,27 @@ public class AlertService
             SealedProductId = single?.ProductId,
             SetCode = sets.Count == 1 ? sets[0] : null,
             Title = Truncate(single != null ? $"{rule.Name}: {single.ProductName}" : $"{rule.Name}: {ordered.Count} prodotti", 300),
-            Message = Truncate(string.Join("\n", lines), 2000),
+            Message = FitMessage(lines, ordered.Count),
             EmailRequested = rule.SendEmail
         };
     }
+
+    /// <summary>
+    /// Elenco dei prodotti entro la lunghezza della colonna, solo a righe intere, con il conto di
+    /// quelli rimasti fuori. Tagliare il testo a 2.000 caratteri spezzava l'ultima riga e perdeva il
+    /// "… e altri N" (avviso "Da tenere" del 15/10: 14 prodotti visibili su 25, nessun cenno agli altri).
+    /// </summary>
+    public static string FitMessage(List<string> lines, int total, int maxLength = MaxMessageLength)
+    {
+        string Trailer(int shown) => $"… e altri {total - shown} prodotti (scheda Opportunità o Avvisi della pagina Acquisti)";
+        string Compose(int shown) => string.Join("\n", lines.Take(shown).Concat(shown < total ? new[] { Trailer(shown) } : Array.Empty<string>()));
+
+        var shown = lines.Count;
+        while (shown > 1 && Compose(shown).Length > maxLength) shown--;
+        return Truncate(Compose(shown), maxLength);
+    }
+
+    private const int MaxMessageLength = 2000;
 
     public async Task SendTestEmailAsync(CancellationToken cancellationToken = default) =>
         await _email.SendAsync("Avvisi acquisti — email di prova",
@@ -158,6 +173,8 @@ public class AlertService
             throw new ArgumentException("La soglia deve essere maggiore di zero");
         if (input.Type == AlertRuleType.PriceAtLow && input.Threshold < 7)
             throw new ArgumentException("Per \"prezzo al minimo\" la soglia sono i giorni di storico: almeno 7");
+        if (input.Type == AlertRuleType.HoldCandidate && input.Threshold > 100)
+            throw new ArgumentException("Per \"da tenere\" la soglia è il punteggio minimo, da 0 a 100");
 
         SealedProduct? product = null;
         if (input.SealedProductId is { } productId)
@@ -349,6 +366,20 @@ public class AlertService
                 result.Add(new Match(info.Id, info.Name, info.MainSetCode,
                     $"aprirlo rende il {o.OpeningRoiPercent!.Value.ToString("+0.0;-0.0", Italian)}% (valore atteso netto {Euro(o.OpenValueCm ?? 0)}, trend {Euro(o.CmTrend ?? 0)})",
                     o.OpeningRoiPercent.Value));
+            }
+            return result;
+        }
+
+        if (rule.Type == AlertRuleType.HoldCandidate)
+        {
+            var scope = InScope(rule, context).Select(p => p.Id).ToHashSet();
+            foreach (var o in context.Opportunities.Where(o => o.IsHoldCandidate && o.HoldScore >= rule.Threshold && scope.Contains(o.SealedProductId)))
+            {
+                var info = context.Products[o.SealedProductId];
+                var age = o.ReleaseAgeMonths is { } months ? $", uscito {months} mesi fa" : string.Empty;
+                result.Add(new Match(info.Id, info.Name, info.MainSetCode,
+                    $"da tenere, punteggio {o.HoldScore!.Value.ToString("0.0", Italian)}: le carte valgono il {o.FloorPercent?.ToString("0", Italian)}% del prezzo (trend {Euro(o.CmTrend ?? 0)}){age}",
+                    o.HoldScore.Value));
             }
             return result;
         }

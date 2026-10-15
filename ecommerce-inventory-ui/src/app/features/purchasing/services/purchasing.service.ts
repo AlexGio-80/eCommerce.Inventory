@@ -403,7 +403,7 @@ export interface PurchasePlan {
     ctZero: { productCount: number; total: number; openValueNet: number; margin: number; items: PlanOffer[] };
 }
 
-export type AlertRuleType = 'PriceBelow' | 'PriceDrop' | 'OpeningOpportunity' | 'PriceAtLow';
+export type AlertRuleType = 'PriceBelow' | 'PriceDrop' | 'OpeningOpportunity' | 'PriceAtLow' | 'HoldCandidate';
 
 export interface AlertRuleInput {
     name: string;

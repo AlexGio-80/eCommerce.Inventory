@@ -122,17 +122,20 @@ mesi, posizione nello storico. Il suggerimento sul punteggio spiega le tre parti
 
 Migration: `AddHoldScore`.
 
-### Fase 2 — Regola d'avviso "Da tenere"
+### Fase 2 — Regola d'avviso "Da tenere" *(pubblicata e verificata il 2026-10-15)*
 
-Tipo nuovo `AlertRuleType.HoldCandidate = 4`: il prodotto **diventa** candidato da tenere con punteggio
-almeno pari alla soglia. Come le altre regole:
+Tipo nuovo `AlertRuleType.HoldCandidate = 4`: il prodotto **diventa** candidato da tenere
+(`SealedOpportunity.IsHoldCandidate`) con punteggio almeno pari alla soglia (0–100). Come le altre regole:
 - ambito per prodotto o per gruppo (set, tipo, sottotipo, uscite recenti);
 - scatta quando la condizione diventa vera, non finché resta vera;
-- entra nell'email di riepilogo.
+- entra nell'email di riepilogo. Ogni riga dice punteggio, quota del prezzo coperta dalle carte, trend
+  ed età dell'uscita.
 
-Proposta di regola iniziale, da creare solo dopo l'ok dell'utente: "Da tenere, box e mazzi", soglia 70,
-email sì. Il primo giorno il rumore sarà alto (tutti i candidati sono "nuovi"): valutare di crearla
-spenta e accenderla il giorno dopo il primo calcolo.
+Il tipo di regola è salvato come intero: nessuna migration.
+
+Proposta di regola iniziale, da creare dall'utente nella scheda Avvisi: "Da tenere", gruppo di prodotti,
+tutti i tipi, soglia 70, email sì. Il 15/10 i candidati con punteggio ≥ 70 erano 25 (≥ 80: 10). La prima
+valutazione li manda tutti in un'unica email, poi arrivano solo i candidati nuovi.
 
 ### Fase 3 — Magazzino nel registro acquisti
 
