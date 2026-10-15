@@ -345,6 +345,22 @@ public class SealedProductAnalysisService
     /// </summary>
     public static bool IsFillerTrend(decimal? productTrend) => productTrend is > 0 and <= FillerTrendMax;
 
+    /// <summary>
+    /// Nessuna offerta in vendita su Cardmarket, dove si compra: il trend è quello di vendite vecchie
+    /// (Duel Deck, mazzi Salvat) e il prodotto non si può comprare a nessun prezzo.
+    /// </summary>
+    public static bool HasNoOffers(decimal? productTrend, decimal? productLow) =>
+        productTrend is > 0 && productLow is not > 0;
+
+    /// <summary>
+    /// Prezzo a cui si compra davvero: il trend, ma se l'offerta più bassa è sopra il trend non si
+    /// trova niente a quel prezzo (Salvat Elfos: trend 8,65 €, offerta più bassa 26 €).
+    /// </summary>
+    public static decimal? PurchasePrice(decimal? productTrend, decimal? productLow) =>
+        productTrend is not > 0 ? null
+        : productLow is { } low && low > productTrend ? low
+        : productTrend;
+
     private static PackValueDto? BuildPackValueDto(string packKey, string mainSetCode, OpeningCalculators opening, OpeningValueSettings settings)
     {
         var cm = opening.Cardmarket.Pack(packKey);
@@ -650,9 +666,11 @@ public class SealedProductAnalysisService
         // Decisione su Cardmarket, dove si compra: aprire conviene se il ricavato netto dalle singole
         // supera quello della rivendita del sigillato (che paga anch'essa i costi di vendita).
         decimal? sealedNet = price?.Trend is > 0 ? Math.Round(settings.Net(price.Trend.Value), 2) : null;
-        decimal? openingRoi = openCm is not null && price?.Trend is > 0
-            ? Math.Round((openCm.Value - price.Trend.Value) / price.Trend.Value * 100m, 1)
+        var purchasePrice = PurchasePrice(price?.Trend, price?.Low);
+        decimal? openingRoi = openCm is not null && purchasePrice is { } paid
+            ? Math.Round((openCm.Value - paid) / paid * 100m, 1)
             : null;
+        var noOffers = HasNoOffers(price?.Trend, price?.Low);
         // Con una busta senza composizione o un mazzo non trovato il valore è sottostimato: meglio
         // nessuna decisione che un "tieni sigillato" dovuto ai dati mancanti.
         // Carte dal bordo dorato o non ammesse a torneo (World Championship Deck, Pro Tour Collector
@@ -661,9 +679,10 @@ public class SealedProductAnalysisService
         string? decision = sealedNet is null || cmValue is null ? null
             : notPlayable ? "Non giocabili"
             : priceMismatch ? "Prezzo CM dubbio"
+            : noOffers ? "Nessuna offerta"
             : cmValue.MissingPacks.Count > 0 || cmValue.MissingDecks.Count > 0 || cmValue.Coverage < 0.9m ? "Dati incompleti"
             : openCm > sealedNet ? "Apri" : "Tieni sigillato";
-        if (priceMismatch) openingRoi = null;
+        if (priceMismatch || noOffers) openingRoi = null;
 
         return new SealedProductAnalysisDto(
             product.Id, product.Name, product.Category, product.Subtype, product.SetCode,

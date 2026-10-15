@@ -205,6 +205,22 @@ public class SealedProductAnalysisServiceTests
         SealedProductAnalysisService.IsPriceMismatch((decimal?)product, null).Should().Be(expected);
 
     [Theory]
+    [InlineData(3.01, null, true)]   // Duel Deck Merfolk vs Goblins: trend vecchio, nessuna offerta
+    [InlineData(3.01, 0.0, true)]
+    [InlineData(66.48, 149.98, false)]
+    [InlineData(null, null, false)]  // senza trend non c'è decisione da cambiare
+    public void HasNoOffers_FlagsProductsNobodySells(double? trend, double? low, bool expected) =>
+        SealedProductAnalysisService.HasNoOffers((decimal?)trend, (decimal?)low).Should().Be(expected);
+
+    [Theory]
+    [InlineData(8.65, 26.00, 26.00)]    // Salvat Elfos: al trend non si trova niente, si compra al low
+    [InlineData(178.88, 106.99, 178.88)] // low più basso del trend: resta il trend (venditore spesso lontano)
+    [InlineData(43.18, null, 43.18)]
+    [InlineData(null, 26.00, null)]
+    public void PurchasePrice_IsTrendUnlessTheCheapestOfferIsHigher(double? trend, double? low, double? expected) =>
+        SealedProductAnalysisService.PurchasePrice((decimal?)trend, (decimal?)low).Should().Be((decimal?)expected);
+
+    [Theory]
     [InlineData("TRK:play", "TRK", "Play")]
     [InlineData("TRK:collector", "TRK", "Collector")]
     [InlineData("TRC:collector-sample", "TRK", "TRC Collector Sample")]

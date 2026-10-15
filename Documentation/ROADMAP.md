@@ -140,6 +140,15 @@ giornalieri di Cardmarket (l'API CM non accetta nuove richieste), abbinamento CT
   - Alle aperture di Star Trek (box in arrivo a novembre): segnare la data di apertura sull'acquisto (la previsione si calcola in quel momento) e usare il tag proposto dal pulsante accanto al campo (`#TRK_PB_AAAAMMGG`, `#TRK_CB_AAAAMMGG`) anche sulle inserzioni
 - [ ] **Da fare subito dall'utente, senza codice**: alle prossime aperture usare il Tag `CODICE_TIPO_AAAAMMGG` (es. `TRK_PB_20261115`) al posto del tag fisso per espansione
 
+### Magazzino da tenere — fasi (dettaglio in `Documentation/Features/005-MagazzinoDaTenere.md`)
+
+Prodotti sigillati da comprare oggi e tenere 1–3 anni, segnalati nelle Opportunità e negli avvisi, e il conto di quelli comprati per tenerli. Progettato il 2026-10-15 con l'utente.
+
+- [x] **Fase 0 — Prodotti non comprabili non più "Apri"** — pubblicata e verificata il 2026-10-15 (80 prodotti in "Nessuna offerta", nessun "Apri" senza offerte su Cardmarket): decisione "Nessuna offerta" (nessuna offerta su Cardmarket) e resa calcolata sul trend, o sul low se è più alto. Verifica: dopo "Ricalcola" nelle Opportunità, i mazzi del Duel Deck Merfolk vs Goblins in "Nessuna offerta" e nessun "Apri" con low vuoto
+- [ ] **Fase 1 — Punteggio "da tenere" e scheda nelle Opportunità** (migration `AddHoldScore`): pavimento (valore delle carte / prezzo), età dell'uscita, posizione nello storico del prodotto
+- [ ] **Fase 2 — Regola d'avviso "Da tenere"** nell'email di riepilogo; regola iniziale solo dopo l'ok dell'utente
+- [ ] **Fase 3 — Magazzino nel registro acquisti** (migration `AddHoldForResale`): segno "da tenere" sull'acquisto, vista con costo, valore di oggi chiuso e aperto, guadagno latente
+
 ### Sicurezza — i quattro punti del 2026-08-27 sono chiusi
 
 Tutti erano **preesistenti**, non introdotti dal lavoro sull'autopricer. Codice risolto e messo in produzione il 2026-08-29, password di `admin` cambiata e utente `testuser` eliminato lo stesso giorno. Dettaglio nel CHANGELOG.

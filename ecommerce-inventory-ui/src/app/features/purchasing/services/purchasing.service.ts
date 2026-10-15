@@ -62,7 +62,7 @@ export interface SealedProductAnalysis {
     /** Ricavato netto rivendendo il sigillato al trend CM. */
     sealedNetCm?: number;
     openingRoiPercent?: number;
-    decision?: 'Apri' | 'Tieni sigillato' | 'Dati incompleti' | 'Prezzo CM dubbio' | 'Non giocabili';
+    decision?: 'Apri' | 'Tieni sigillato' | 'Dati incompleti' | 'Prezzo CM dubbio' | 'Nessuna offerta' | 'Non giocabili';
     priceMismatch: boolean;
     componentsTrend?: number;
     missingPacks: string[];

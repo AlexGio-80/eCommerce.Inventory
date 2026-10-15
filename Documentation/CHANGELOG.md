@@ -9,6 +9,31 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-15] Correzione — Prodotti non comprabili non più "Apri" con rese irreali
+
+#### Problema
+
+Dopo il fix dei trend di riempimento restavano in "Apri" prodotti con rese del 100–500% che non si
+possono comprare a quel prezzo:
+- **Nessuna offerta su Cardmarket.** Il trend viene da vendite vecchie. Esempi: i mazzi del Duel Deck
+  Merfolk vs Goblins (+548% e +339%), i mazzi Salvat, il Game Night. Erano 20 in "Apri".
+- **Offerta più bassa sopra il trend.** Al trend non si trova niente (Salvat Elfos: trend 8,65 €,
+  offerta più bassa 26 €). Erano 55 in "Apri", e per 30 la resa calcolata sul low è negativa.
+
+#### Soluzione Implementata
+
+- Decisione nuova **"Nessuna offerta"**, senza resa, con il suo suggerimento nella pagina Acquisti.
+- La resa dell'apertura si calcola sul prezzo a cui si compra davvero: il trend, oppure il low se è più
+  alto. Il netto della rivendita chiusa resta sul trend.
+
+#### Note Tecniche
+
+- `SealedProductAnalysisService.HasNoOffers` e `PurchasePrice`. La decisione nuova sta dopo "Prezzo CM
+  dubbio" e prima di "Dati incompleti".
+- Gli avvisi di apertura conveniente guardano solo "Apri", quindi ne escono da soli.
+- Nei test della classifica i prodotti hanno ora anche il low, come quelli veri.
+- Primo passo della feature `Features/005-MagazzinoDaTenere.md` (Fase 0).
+
 ### [2026-10-12] Correzione — Trend di riempimento Cardmarket non più "Apri" nella classifica e negli avvisi
 
 #### Problema

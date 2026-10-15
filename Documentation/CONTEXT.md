@@ -51,6 +51,8 @@
 
 ### Cosa è in sospeso / da verificare
 
+- **Feature "Magazzino da tenere" (progettata il 2026-10-15):** documento in `Documentation/Features/005-MagazzinoDaTenere.md`, fasi in ROADMAP. La **Fase 0** (decisione "Nessuna offerta" e resa sul prezzo a cui si compra davvero) è pubblicata e verificata il 2026-10-15. Le Fasi 1–3 partono dopo l'ok dell'utente sul documento
+
 - **Secret Lair, stima congelata:** dopo l'uscita dei Masters of the Universe (03/11) confrontare la stima con i prezzi reali, colonna "Scarto stima"
 - **Box Star Trek (uscita 13/11):** MTGJSON non ha ancora la composizione delle buste TRK/TRC, quindi niente previsione. All'apertura l'utente segna la data sull'acquisto e usa il Tag `#TRK_PB_AAAAMMGG` / `#TRK_CB_AAAAMMGG`, anche sulle inserzioni
 - **Revisione settimanale degli avvisi:** il lunedì alle 08:00 un'attività di Claude scrive il rapporto in `Revisioni-avvisi/` (locale, fuori da git). Le regole nuove si creano solo dopo l'ok dell'utente. Da seguire:
@@ -70,6 +72,8 @@
 
 | Data | Decisione | Perché |
 |------|-----------|--------|
+| 2026-10-15 | Resa dell'apertura sul trend, o sul low se è più alto; "Nessuna offerta" se su Cardmarket nessuno vende il prodotto | Al trend non si può comprare se l'offerta più bassa è sopra, e senza offerte non si può comprare affatto: le rese del 100–500% di Duel Deck e mazzi Salvat venivano da qui |
+| 2026-10-15 | Magazzino da tenere con orizzonte di 1–3 anni, punteggio dal "pavimento" (valore delle carte / prezzo), dall'età dell'uscita e dalla posizione nello storico | Scelte dell'utente. Le medie a 30 giorni di Cardmarket non esistono per i sigillati e il nostro storico parte dal 07/10: il pavimento è il segnale affidabile già oggi |
 | 2026-10-12 | Trend Cardmarket fino a 0,05 € trattato come prezzo di riempimento ("Prezzo CM dubbio") e avvisi di apertura con tetto al 300% di resa | Cardmarket mette 0,02 € sui prodotti che non si scambiano da anni: finivano in "Apri" con rese di milioni di % e negli avvisi |
 | 2026-10-12 | "Apri" anche con resa negativa | Non è un difetto: la decisione confronta il netto dell'apertura con il netto della rivendita del sigillato (per chi il prodotto ce l'ha già), la resa confronta l'apertura con il prezzo d'acquisto. Gli avvisi chiedono una resa positiva |
 | 2026-10-09 | Ordini `hub_pending` di "Ct connect" esclusi da venduto e quote vendute | Sono doppioni degli ordini "Ct connect" pagati: raddoppiavano il venduto delle uscite recenti |

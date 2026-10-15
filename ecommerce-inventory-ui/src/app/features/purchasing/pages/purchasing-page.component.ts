@@ -397,7 +397,7 @@ export class PurchasingPageComponent implements OnInit {
       headerName: 'Resa apertura', field: 'openingRoiPercent', width: 125, type: 'numericColumn',
       valueFormatter: p => p.value == null ? '' : `${p.value > 0 ? '+' : ''}${p.value.toFixed(1)}%`,
       cellClass: (p: CellClassParams) => p.value == null ? '' : p.value > 0 ? 'delta-good' : 'delta-bad',
-      headerTooltip: 'Valore atteso netto aprendo rispetto al prezzo di acquisto (trend CM). La decisione confronta invece due netti (aprendo e rivendendolo chiuso): può dire Apri anche con una resa fino a circa −15%'
+      headerTooltip: 'Valore atteso netto aprendo rispetto al prezzo di acquisto (trend CM, o l\'offerta più bassa se è più alta del trend). La decisione confronta invece due netti (aprendo e rivendendolo chiuso): può dire Apri anche con una resa fino a circa −15%'
     },
     {
       headerName: 'Decisione', field: 'decision', width: 150,
@@ -409,6 +409,7 @@ export class PurchasingPageComponent implements OnInit {
         if (d.decision === 'Non giocabili') return 'Carte non giocabili a torneo (bordo dorato, World Championship, Collectors\' Edition): nessuna vendita conferma che il trend CM di quelle singole si incassi davvero';
         if (d.decision === 'Prezzo CM dubbio' && d.cmTrend != null && d.cmTrend <= 0.05) return `Il trend CM (${this.formatEuro(d.cmTrend)}) è un prezzo di riempimento, non di vendite vere: la resa non è calcolabile`;
         if (d.decision === 'Prezzo CM dubbio') return `Il trend CM (${this.formatEuro(d.cmTrend)}) è lontano dalla somma di ciò che contiene (${this.formatEuro(d.componentsTrend)}): probabile abbinamento sbagliato su MTGJSON`;
+        if (d.decision === 'Nessuna offerta') return `Nessuna offerta in vendita su Cardmarket: il trend (${this.formatEuro(d.cmTrend)}) viene da vendite vecchie e il prodotto oggi non si può comprare`;
         if (d.decision === 'Dati incompleti') return this.coverageTooltip(d, 'cm');
         if (d.decision) return `Aprendo ${this.formatEuro(d.openValueCm)} netti, rivendendolo chiuso ${this.formatEuro(d.sealedNetCm)} netti`;
         return '';

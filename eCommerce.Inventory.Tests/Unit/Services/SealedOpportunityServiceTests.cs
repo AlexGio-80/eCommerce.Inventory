@@ -45,10 +45,10 @@ public class SealedOpportunityServiceTests
         _db.CardmarketLatestPrices.Add(new CardmarketLatestPrice { IdProduct = 10, Trend = 20m });
 
         _db.CardmarketPriceSnapshots.AddRange(
-            new CardmarketPriceSnapshot { IdProduct = 1, Date = Today, Trend = boxTrend },
-            new CardmarketPriceSnapshot { IdProduct = 1, Date = Today.AddDays(-7), Trend = 200m },
-            new CardmarketPriceSnapshot { IdProduct = 2, Date = Today, Trend = boxTrend * 6 },
-            new CardmarketPriceSnapshot { IdProduct = 3, Date = Today, Trend = 99m });
+            new CardmarketPriceSnapshot { IdProduct = 1, Date = Today, Trend = boxTrend, Low = boxTrend },
+            new CardmarketPriceSnapshot { IdProduct = 1, Date = Today.AddDays(-7), Trend = 200m, Low = 200m },
+            new CardmarketPriceSnapshot { IdProduct = 2, Date = Today, Trend = boxTrend * 6, Low = boxTrend * 6 },
+            new CardmarketPriceSnapshot { IdProduct = 3, Date = Today, Trend = 99m, Low = 99m });
         await _db.SaveChangesAsync();
     }
 
