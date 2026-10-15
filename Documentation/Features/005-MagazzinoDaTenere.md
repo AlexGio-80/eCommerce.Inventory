@@ -70,17 +70,25 @@ Soluzione:
 
 Il netto della rivendita chiusa resta sul trend: è a quel prezzo che si vende.
 
-### Fase 1 — Punteggio "da tenere" e scheda nelle Opportunità
+### Fase 1 — Punteggio "da tenere" e scheda nelle Opportunità *(pubblicata e verificata il 2026-10-15: 47 candidati)*
 
 Ogni giorno, insieme alla classifica, si calcola per ogni prodotto un **punteggio da tenere** (0–100).
+Calcolo in `HoldScoreCalculator`, soglie in `Purchasing:Hold:*`.
 
 **Prodotti valutati**
-- Tipi: box di buste, bundle, box set, mazzi (Commander compresi). Esclusi buste singole, prodotti per
-  draft e prerelease, case.
+- Tipi (`Category` di MTGJSON): `booster_box`, `bundle`, `box_set`, `deck`, `deck_box`, `subset`,
+  `multiple_decks`. Esclusi buste singole, prodotti per draft e prerelease, kit, case.
 - Esclusi i prodotti con decisione "Prezzo CM dubbio", "Nessuna offerta", "Dati incompleti" o "Non
   giocabili": senza un prezzo o un valore affidabili il punteggio non ha senso.
-- Inclusi sia "Apri" sia "Tieni sigillato". Un prodotto in "Apri" con un buon punteggio è il caso
-  migliore: si può tenere, e se non sale lo si apre.
+- Valutati sia "Apri" sia "Tieni sigillato", ma **candidati solo con resa dell'apertura negativa**
+  (`MaxOpeningRoiPercent` = 0). Chi rende già aprendolo è un'occasione "compra e apri", già nella lista
+  Apri e nei suoi avvisi. Da tenere sono i prodotti le cui carte coprono quasi tutto il prezzo ma che oggi
+  non conviene ancora aprire. Senza questa regola, nella prova del 15/10, 405 candidati su 405 erano già
+  in "Apri" con resa positiva; con la regola sono 104.
+- **Secret Lair esclusi** (sottotipi `secret_lair*`), per scelta dell'utente del 15/10: li apre sempre,
+  e li segue nella loro scheda e nella valutazione del drop. Inoltre il set SLD ha la data del 2019 per
+  tutti i drop, quindi l'età non si potrebbe calcolare. Un prodotto senza data d'uscita ha l'età neutra
+  (50 punti) e non è escluso.
 
 **Componenti del punteggio**
 
@@ -90,12 +98,17 @@ Ogni giorno, insieme alla classifica, si calcola per ogni prodotto un **punteggi
 | Età dell'uscita | 30% | 0 punti sotto i 6 mesi (il prezzo di solito sta ancora scendendo). Pieno fra 12 e 30 mesi, a salire fra 6 e 12. A scendere fino a 0 a 60 mesi: chi è già uscito di stampa da anni ha di solito già fatto il suo rialzo |
 | Prezzo rispetto al proprio storico | 20% | Quanto il trend di oggi è vicino al minimo dello storico del prodotto (100 = al minimo, 0 = al massimo). Con meno di 60 giorni di storico vale 50, neutro |
 
-**Candidato da tenere:** punteggio ≥ 60 **e** pavimento ≥ 75% **e** età fra 6 e 48 mesi. Le soglie si
-tarano dopo le prime settimane d'uso.
+**Candidato da tenere:** punteggio ≥ 60 **e** pavimento ≥ 75% **e** resa dell'apertura negativa **e**
+età fra 6 e 48 mesi (o non nota). Le soglie si tarano dopo le prime settimane d'uso.
 
-**Interfaccia:** nella scheda Opportunità, filtro "Da tenere" accanto a "Solo Apri". Colonne nuove:
-punteggio, pavimento %, età in mesi, posizione nello storico. Il suggerimento sul punteggio spiega le
-tre parti.
+**Prova su una copia del backup del 14/10, con il listino del 15/10:** 104 candidati, di cui 50 Secret
+Lair, poi esclusi: ne restano circa 54, soprattutto mazzi Commander e box di 1–3 anni fa, con un
+pavimento fra l'87% e il 100%. Esempi: Chocobo Bundle di Final Fantasy, box di Assassin's
+Creed, Set Booster Box di Commander Masters, mazzi Commander di Duskmourn e Tarkir.
+
+**Interfaccia:** nella scheda Opportunità, voce "Da tenere" nel filtro Decisione. In quella vista i
+filtri sulla resa non si applicano. Colonne nuove: punteggio (in verde i candidati), pavimento %, età in
+mesi, posizione nello storico. Il suggerimento sul punteggio spiega le tre parti.
 
 **Dati:** campi nuovi su `SealedOpportunity`, scritti dal calcolo giornaliero insieme agli altri.
 
@@ -105,6 +118,7 @@ tre parti.
 | `FloorPercent` | `decimal?` | Valore atteso netto / prezzo d'acquisto × 100 |
 | `ReleaseAgeMonths` | `int?` | Mesi dall'uscita del set principale |
 | `HistoryPosition` | `decimal?` | 0–100, null finché lo storico è più corto di 60 giorni |
+| `IsHoldCandidate` | `bool` | Candidato secondo le soglie del giorno: lo legge la regola d'avviso della Fase 2 |
 
 Migration: `AddHoldScore`.
 

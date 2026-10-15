@@ -338,6 +338,14 @@ export interface Opportunity {
     valueChange7?: number;
     valueChange30?: number;
     cardTraderBlueprintId?: number;
+    /** Punteggio "da tenere" 0–100 (feature 005). */
+    holdScore?: number;
+    /** Valore atteso netto dell'apertura / prezzo d'acquisto × 100. */
+    floorPercent?: number;
+    releaseAgeMonths?: number;
+    /** 100 = trend al minimo dello storico; vuoto finché lo storico è corto. */
+    historyPosition?: number;
+    isHoldCandidate: boolean;
 }
 
 export interface OpportunityList {

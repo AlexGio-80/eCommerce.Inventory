@@ -145,7 +145,7 @@ giornalieri di Cardmarket (l'API CM non accetta nuove richieste), abbinamento CT
 Prodotti sigillati da comprare oggi e tenere 1–3 anni, segnalati nelle Opportunità e negli avvisi, e il conto di quelli comprati per tenerli. Progettato il 2026-10-15 con l'utente.
 
 - [x] **Fase 0 — Prodotti non comprabili non più "Apri"** — pubblicata e verificata il 2026-10-15 (80 prodotti in "Nessuna offerta", nessun "Apri" senza offerte su Cardmarket): decisione "Nessuna offerta" (nessuna offerta su Cardmarket) e resa calcolata sul trend, o sul low se è più alto. Verifica: dopo "Ricalcola" nelle Opportunità, i mazzi del Duel Deck Merfolk vs Goblins in "Nessuna offerta" e nessun "Apri" con low vuoto
-- [ ] **Fase 1 — Punteggio "da tenere" e scheda nelle Opportunità** (migration `AddHoldScore`): pavimento (valore delle carte / prezzo), età dell'uscita, posizione nello storico del prodotto
+- [x] **Fase 1 — Punteggio "da tenere" e scheda nelle Opportunità** — pubblicata e verificata il 2026-10-15: 1.301 prodotti valutati, 47 candidati (21 mazzi, 15 box), nessun Secret Lair, tutti con resa negativa. Migration `AddHoldScore`: pavimento (valore delle carte / prezzo), età dell'uscita, posizione nello storico del prodotto
 - [ ] **Fase 2 — Regola d'avviso "Da tenere"** nell'email di riepilogo; regola iniziale solo dopo l'ok dell'utente
 - [ ] **Fase 3 — Magazzino nel registro acquisti** (migration `AddHoldForResale`): segno "da tenere" sull'acquisto, vista con costo, valore di oggi chiuso e aperto, guadagno latente
 

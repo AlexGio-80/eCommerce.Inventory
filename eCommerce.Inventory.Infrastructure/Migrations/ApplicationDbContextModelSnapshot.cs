@@ -1638,6 +1638,21 @@ namespace eCommerce.Inventory.Infrastructure.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
+                    b.Property<decimal?>("FloorPercent")
+                        .HasPrecision(9, 1)
+                        .HasColumnType("decimal(9,1)");
+
+                    b.Property<decimal?>("HistoryPosition")
+                        .HasPrecision(5, 1)
+                        .HasColumnType("decimal(5,1)");
+
+                    b.Property<decimal?>("HoldScore")
+                        .HasPrecision(5, 1)
+                        .HasColumnType("decimal(5,1)");
+
+                    b.Property<bool>("IsHoldCandidate")
+                        .HasColumnType("bit");
+
                     b.Property<string>("MainSetCode")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -1650,6 +1665,9 @@ namespace eCommerce.Inventory.Infrastructure.Migrations
                     b.Property<decimal?>("OpeningRoiPercent")
                         .HasPrecision(9, 1)
                         .HasColumnType("decimal(9,1)");
+
+                    b.Property<int?>("ReleaseAgeMonths")
+                        .HasColumnType("int");
 
                     b.Property<decimal?>("SealedNetCm")
                         .HasPrecision(18, 2)

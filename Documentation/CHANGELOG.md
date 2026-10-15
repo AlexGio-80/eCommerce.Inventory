@@ -9,6 +9,36 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-15] Feature — Punteggio "da tenere" nelle Opportunità (feature 005, Fase 1)
+
+#### Problema
+
+La classifica diceva se conviene aprire un prodotto o rivenderlo chiuso, non se conviene comprarlo oggi
+e tenerlo uno-tre anni.
+
+#### Soluzione Implementata
+
+- Ogni giorno, con la classifica, un **punteggio da tenere** 0–100 per box, bundle, box set e mazzi:
+  - pavimento (valore atteso netto / prezzo d'acquisto), 50%;
+  - età dell'uscita, 30%, con il massimo fra 12 e 30 mesi;
+  - posizione del prezzo nello storico del prodotto, 20%, neutra finché lo storico ha meno di 60 giorni.
+- **Candidato da tenere:** punteggio ≥ 60, pavimento ≥ 75%, resa dell'apertura negativa, uscita di 6–48
+  mesi fa.
+- **Secret Lair esclusi**, per scelta dell'utente: li apre sempre e li segue nella loro scheda.
+- Scheda Opportunità: voce "Da tenere" nel filtro Decisione e colonne Da tenere, Pavimento, Età (mesi),
+  Storico.
+
+#### Note Tecniche
+
+- `HoldScoreCalculator`, con pesi e soglie da `Purchasing:Hold:*` in `appsettings.json`.
+- Migration `AddHoldScore`: cinque colonne su `SealedOpportunities`. Si applica da sola all'avvio. Le righe
+  dei giorni passati restano senza punteggio.
+- `SealedOpportunityService` riceve `IConfiguration` e legge minimo, massimo e prima data dello storico di
+  ogni prodotto con una sola query raggruppata.
+- **Provata su una copia del backup del 14/10** (`eCommerceInventory_Fase1Hold`, poi eliminata). La
+  migration si applica senza errori e la classifica si calcola in 51 s. La regola sulla resa negativa è
+  nata da lì: senza, i candidati erano 405, tutti già in "Apri" con resa positiva.
+
 ### [2026-10-15] Correzione — Prodotti non comprabili non più "Apri" con rese irreali
 
 #### Problema

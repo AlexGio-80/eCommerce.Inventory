@@ -54,12 +54,11 @@ public class SealedOpportunityServiceTests
 
     private SealedOpportunityService CreateService()
     {
+        // Senza costo per carta: i valori attesi del test sono calcolati sui soli prezzi.
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Purchasing:CostPerCard"] = "0" }).Build();
         var analysis = new SealedProductAnalysisService(_db, Mock.Of<ICardTraderApiService>(), new BulkSellThroughService(_db),
-            new PriceRealizationService(_db),
-            // Senza costo per carta: i valori attesi del test sono calcolati sui soli prezzi.
-            new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Purchasing:CostPerCard"] = "0" }).Build(),
-            NullLogger<SealedProductAnalysisService>.Instance);
-        return new SealedOpportunityService(_db, analysis, NullLogger<SealedOpportunityService>.Instance);
+            new PriceRealizationService(_db), configuration, NullLogger<SealedProductAnalysisService>.Instance);
+        return new SealedOpportunityService(_db, analysis, configuration, NullLogger<SealedOpportunityService>.Instance);
     }
 
     [Fact]
@@ -76,6 +75,23 @@ public class SealedOpportunityServiceTests
         box.OpenValueCm.Should().Be(170m);
         box.Decision.Should().Be("Apri", "170 € netti aprendo contro 136 € rivendendolo chiuso");
         rows.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Compute_StoresTheHoldScore()
+    {
+        await SeedReleaseAsync(boxTrend: 160m);
+
+        await CreateService().ComputeAsync();
+
+        var box = await _db.SealedOpportunities.SingleAsync(o => o.SealedProduct!.Name == "Test Box");
+        box.FloorPercent.Should().Be(106.2m, "170 € netti aprendolo contro 160 € di prezzo (106,25, arrotondato al pari)");
+        box.ReleaseAgeMonths.Should().Be(HoldScoreCalculator.AgeInMonths(new DateOnly(2025, 1, 1), Today));
+        box.HistoryPosition.Should().BeNull("lo storico di prova è di 7 giorni");
+        box.HoldScore.Should().NotBeNull();
+
+        var list = await CreateService().GetLatestAsync();
+        list.Items.Single(i => i.Name == "Test Box").HoldScore.Should().Be(box.HoldScore);
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 using eCommerce.Inventory.Domain.Entities;
 using eCommerce.Inventory.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace eCommerce.Inventory.Infrastructure.Services;
@@ -16,15 +17,18 @@ public class SealedOpportunityService
 
     private readonly ApplicationDbContext _db;
     private readonly SealedProductAnalysisService _analysis;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<SealedOpportunityService> _logger;
 
     public SealedOpportunityService(
         ApplicationDbContext db,
         SealedProductAnalysisService analysis,
+        IConfiguration configuration,
         ILogger<SealedOpportunityService> logger)
     {
         _db = db;
         _analysis = analysis;
+        _configuration = configuration;
         _logger = logger;
     }
 
@@ -53,31 +57,54 @@ public class SealedOpportunityService
             var today = DateOnly.FromDateTime(DateTime.Today);
             _db.SealedOpportunities.RemoveRange(await _db.SealedOpportunities.Where(o => o.Date == today).ToListAsync(cancellationToken));
 
-            var rows = analyses
-                .SelectMany(a => a.Products
-                    .Where(p => p.Decision != null && !p.IsCase)
-                    .Select(p => new SealedOpportunity
-                    {
-                        Date = today,
-                        SealedProductId = p.Id,
-                        MainSetCode = a.Code,
-                        CmTrend = p.CmTrend,
-                        CmLow = p.CmLow,
-                        OpenValueCm = p.OpenValueCm,
-                        CoverageCm = p.CoverageCm,
-                        SealedNetCm = p.SealedNetCm,
-                        OpeningRoiPercent = p.OpeningRoiPercent,
-                        Decision = p.Decision,
-                        ComputedAt = started
-                    }))
+            var products = analyses
+                .SelectMany(a => a.Products.Where(p => p.Decision != null && !p.IsCase).Select(p => (Set: a.Code, Product: p)))
                 .ToList();
+
+            var releases = sets.ToDictionary(s => s.Code, s => s.ReleaseDate);
+            var history = await HistoryRangesAsync(
+                products.Where(x => x.Product.CardmarketId.HasValue).Select(x => x.Product.CardmarketId!.Value).Distinct().ToList(),
+                cancellationToken);
+            var holdSettings = HoldSettings.From(_configuration);
+
+            var rows = products.Select(x =>
+            {
+                var p = x.Product;
+                var range = p.CardmarketId is { } cmId ? history.GetValueOrDefault(cmId) : null;
+                var hold = HoldScoreCalculator.Compute(new HoldInput(
+                    p.Category, p.Subtype, p.Decision, p.OpenValueCm,
+                    SealedProductAnalysisService.PurchasePrice(p.CmTrend, p.CmLow), p.CmTrend,
+                    releases.GetValueOrDefault(x.Set), today,
+                    range?.Min, range?.Max, range is null ? 0 : today.DayNumber - range.First.DayNumber,
+                    p.OpeningRoiPercent), holdSettings);
+
+                return new SealedOpportunity
+                {
+                    Date = today,
+                    SealedProductId = p.Id,
+                    MainSetCode = x.Set,
+                    CmTrend = p.CmTrend,
+                    CmLow = p.CmLow,
+                    OpenValueCm = p.OpenValueCm,
+                    CoverageCm = p.CoverageCm,
+                    SealedNetCm = p.SealedNetCm,
+                    OpeningRoiPercent = p.OpeningRoiPercent,
+                    Decision = p.Decision,
+                    HoldScore = hold?.Score,
+                    FloorPercent = hold?.FloorPercent,
+                    ReleaseAgeMonths = hold?.AgeMonths,
+                    HistoryPosition = hold?.HistoryPosition,
+                    IsHoldCandidate = hold?.IsCandidate ?? false,
+                    ComputedAt = started
+                };
+            }).ToList();
 
             _db.SealedOpportunities.AddRange(rows);
             await _db.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(
-                "Classifica opportunità sigillati: {Rows} prodotti da {Sets} uscite in {Seconds:F0} s",
-                rows.Count, analyses.Count, (DateTime.UtcNow - started).TotalSeconds);
+                "Classifica opportunità sigillati: {Rows} prodotti da {Sets} uscite in {Seconds:F0} s, {Hold} candidati da tenere",
+                rows.Count, analyses.Count, (DateTime.UtcNow - started).TotalSeconds, rows.Count(r => r.IsHoldCandidate));
 
             return rows.Count;
         }
@@ -104,6 +131,7 @@ public class SealedOpportunityService
             {
                 o.SealedProductId, o.MainSetCode, o.CmTrend, o.CmLow, o.OpenValueCm, o.CoverageCm, o.SealedNetCm,
                 o.OpeningRoiPercent, o.Decision, o.ComputedAt,
+                o.HoldScore, o.FloorPercent, o.ReleaseAgeMonths, o.HistoryPosition, o.IsHoldCandidate,
                 Product = new { o.SealedProduct!.Name, o.SealedProduct.Category, o.SealedProduct.Subtype, o.SealedProduct.SetCode, o.SealedProduct.CardmarketId, o.SealedProduct.CardTraderBlueprintId }
             })
             .ToListAsync(cancellationToken);
@@ -138,13 +166,27 @@ public class SealedOpportunityService
                 r.CmTrend, r.CmLow, r.OpenValueCm, r.CoverageCm, r.SealedNetCm, r.OpeningRoiPercent, r.Decision,
                 Change(r.CmTrend, trend7), Change(r.CmTrend, trend30),
                 Change(r.OpenValueCm, value7), Change(r.OpenValueCm, value30),
-                r.Product.CardTraderBlueprintId);
+                r.Product.CardTraderBlueprintId,
+                r.HoldScore, r.FloorPercent, r.ReleaseAgeMonths, r.HistoryPosition, r.IsHoldCandidate);
         })
         .OrderByDescending(o => o.OpeningRoiPercent ?? decimal.MinValue)
         .ToList();
 
         return new OpportunityList(latest, rows.Max(r => r.ComputedAt), result);
     }
+
+    /// <summary>Trend minimo e massimo di ogni sigillato nello storico Cardmarket, e la prima rilevazione.</summary>
+    private async Task<Dictionary<int, HistoryRange>> HistoryRangesAsync(List<int> ids, CancellationToken cancellationToken)
+    {
+        if (ids.Count == 0) return new();
+        return await _db.CardmarketPriceSnapshots.AsNoTracking()
+            .Where(s => ids.Contains(s.IdProduct) && s.Trend > 0)
+            .GroupBy(s => s.IdProduct)
+            .Select(g => new { g.Key, Min = g.Min(s => s.Trend), Max = g.Max(s => s.Trend), First = g.Min(s => s.Date) })
+            .ToDictionaryAsync(g => g.Key, g => new HistoryRange(g.Min, g.Max, g.First), cancellationToken);
+    }
+
+    private record HistoryRange(decimal? Min, decimal? Max, DateOnly First);
 
     /// <summary>Trend dei sigillati in due date passate, dallo storico giornaliero Cardmarket.</summary>
     private async Task<Dictionary<(int, DateOnly), decimal?>> TrendsAtAsync(
@@ -164,6 +206,7 @@ public record OpportunityList(DateOnly? Date, DateTime? ComputedAt, List<Opportu
 
 /// <param name="TrendChange7">Variazione % del trend del sigillato rispetto a 7 giorni prima.</param>
 /// <param name="ValueChange7">Variazione % del valore atteso rispetto a 7 giorni prima.</param>
+/// <param name="HoldScore">Punteggio "da tenere" 0–100, vedi <see cref="HoldScoreCalculator"/>.</param>
 public record OpportunityDto(
     int SealedProductId,
     string Name,
@@ -183,4 +226,9 @@ public record OpportunityDto(
     decimal? TrendChange30,
     decimal? ValueChange7,
     decimal? ValueChange30,
-    int? CardTraderBlueprintId);
+    int? CardTraderBlueprintId,
+    decimal? HoldScore,
+    decimal? FloorPercent,
+    int? ReleaseAgeMonths,
+    decimal? HistoryPosition,
+    bool IsHoldCandidate);

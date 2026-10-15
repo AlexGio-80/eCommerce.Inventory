@@ -501,6 +501,9 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
                 entity.Property<decimal?>(property).HasPrecision(18, 2);
             entity.Property(o => o.CoverageCm).HasPrecision(5, 1);
             entity.Property(o => o.OpeningRoiPercent).HasPrecision(9, 1);
+            entity.Property(o => o.HoldScore).HasPrecision(5, 1);
+            entity.Property(o => o.FloorPercent).HasPrecision(9, 1);
+            entity.Property(o => o.HistoryPosition).HasPrecision(5, 1);
 
             entity.HasOne(o => o.SealedProduct)
                 .WithMany()

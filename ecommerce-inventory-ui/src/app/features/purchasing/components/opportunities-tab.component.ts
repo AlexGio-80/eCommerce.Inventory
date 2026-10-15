@@ -32,6 +32,7 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
           <mat-label>Decisione</mat-label>
           <mat-select [ngModel]="decision()" (ngModelChange)="decision.set($event)">
             <mat-option value="Apri">Solo "Apri"</mat-option>
+            <mat-option [value]="holdFilter">Da tenere</mat-option>
             <mat-option value="">Tutte</mat-option>
           </mat-select>
         </mat-form-field>
@@ -70,6 +71,12 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
           <mat-spinner *ngIf="isComputing()" diameter="18"></mat-spinner>
           <mat-icon *ngIf="!isComputing()">calculate</mat-icon> Ricalcola
         </button>
+      </div>
+      <div class="muted hint" *ngIf="isHoldView()">
+        Prodotti da comprare oggi e tenere uno-tre anni: le carte contenute valgono buona parte del prezzo (il "pavimento"),
+        l'uscita ha l'età in cui di solito i sigillati toccano il minimo, e il prezzo è basso rispetto al suo storico.
+        Solo prodotti che oggi non conviene ancora aprire (resa negativa); Secret Lair esclusi, sono nella loro scheda.
+        In questa vista i filtri sulla resa non si applicano. La posizione nello storico conta da quando lo storico avrà 60 giorni (dicembre 2026).
       </div>
       <div class="muted hint">
         Uscite con i dati delle buste già scaricati: il worker ne aggiunge un lotto ogni giorno, partendo dalle più recenti.
@@ -121,11 +128,17 @@ export class OpportunitiesTabComponent implements OnInit {
 
   setCount = computed(() => new Set((this.list()?.items ?? []).map(i => i.mainSetCode)).size);
 
+  /** Valore del filtro Decisione che mostra i candidati da tenere invece di una decisione. */
+  readonly holdFilter = '__hold';
+  isHoldView = computed(() => this.decision() === this.holdFilter);
+
+  // Nella vista "Da tenere" i filtri sulla resa non valgono: un prodotto da tenere può avere una
+  // resa dell'apertura negativa, conta il pavimento.
   visible = computed(() => (this.list()?.items ?? []).filter(i =>
-    (!this.decision() || i.decision === this.decision())
+    (this.isHoldView() ? i.isHoldCandidate : !this.decision() || i.decision === this.decision())
     && (!this.category() || i.category === this.category())
-    && (this.minRoi() == null || (i.openingRoiPercent ?? -Infinity) >= this.minRoi()!)
-    && (this.maxRoi() == null || (i.openingRoiPercent ?? -Infinity) <= this.maxRoi()!)
+    && (this.isHoldView() || this.minRoi() == null || (i.openingRoiPercent ?? -Infinity) >= this.minRoi()!)
+    && (this.isHoldView() || this.maxRoi() == null || (i.openingRoiPercent ?? -Infinity) <= this.maxRoi()!)
     && (this.minCoverage() == null || (i.coverageCm ?? 0) >= this.minCoverage()!)));
 
   private static readonly euroFormat = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' });
@@ -147,6 +160,19 @@ export class OpportunitiesTabComponent implements OnInit {
       valueFormatter: this.percent, cellClass: this.signClass },
     { headerName: 'Copertura', field: 'coverageCm', width: 105, type: 'numericColumn', valueFormatter: p => p.value == null ? '' : `${p.value}%` },
     { headerName: 'Decisione', field: 'decision', width: 140 },
+    { headerName: 'Da tenere', field: 'holdScore', width: 110, type: 'numericColumn',
+      valueFormatter: p => p.value == null ? '' : p.value.toFixed(1),
+      cellClass: (p: CellClassParams<Opportunity>) => p.data?.isHoldCandidate ? 'delta-good' : '',
+      headerTooltip: 'Punteggio 0–100: quanto conviene comprarlo oggi e tenerlo uno-tre anni. Pavimento 50%, età dell\'uscita 30%, posizione nello storico 20%',
+      tooltipValueGetter: p => this.holdTooltip(p.data) },
+    { headerName: 'Pavimento', field: 'floorPercent', width: 110, type: 'numericColumn',
+      valueFormatter: p => p.value == null ? '' : `${p.value.toFixed(1)}%`,
+      headerTooltip: 'Valore atteso netto aprendolo rispetto al prezzo d\'acquisto: quanto si recupera aprendolo se il sigillato non sale' },
+    { headerName: 'Età (mesi)', field: 'releaseAgeMonths', width: 105, type: 'numericColumn',
+      headerTooltip: 'Mesi dall\'uscita del set principale' },
+    { headerName: 'Storico', field: 'historyPosition', width: 100, type: 'numericColumn',
+      valueFormatter: p => p.value == null ? '' : p.value.toFixed(0),
+      headerTooltip: '100 = prezzo al minimo del suo storico, 0 = al massimo. Vuoto finché lo storico è più corto di 60 giorni' },
     { headerName: 'Prezzo 7 gg', field: 'trendChange7', width: 115, type: 'numericColumn', valueFormatter: this.percent,
       headerTooltip: 'Variazione del trend del sigillato rispetto a 7 giorni prima (vuoto finché non c\'è lo storico)' },
     { headerName: 'Prezzo 30 gg', field: 'trendChange30', width: 120, type: 'numericColumn', valueFormatter: this.percent },
@@ -161,6 +187,14 @@ export class OpportunitiesTabComponent implements OnInit {
 
   ngOnInit() {
     this.load();
+  }
+
+  holdTooltip(o?: Opportunity): string {
+    if (!o || o.holdScore == null) return '';
+    const age = o.releaseAgeMonths == null ? 'età non nota (neutra)' : `${o.releaseAgeMonths} mesi dall'uscita`;
+    const history = o.historyPosition == null ? 'storico ancora corto (neutro)' : `storico ${o.historyPosition.toFixed(0)}/100`;
+    const verdict = o.isHoldCandidate ? 'Candidato da tenere' : 'Non candidato';
+    return `${verdict}: pavimento ${o.floorPercent?.toFixed(1)}%, ${age}, ${history}`;
   }
 
   categoryLabel(category?: string | null): string {

@@ -31,5 +31,23 @@ public class SealedOpportunity
     public decimal? OpeningRoiPercent { get; set; }
     public string? Decision { get; set; }
 
+    /// <summary>
+    /// Punteggio "da tenere" 0–100 (feature 005): quanto conviene comprarlo per tenerlo uno-tre anni.
+    /// Null per i prodotti non valutabili (buste singole, prezzo dubbio, dati incompleti...).
+    /// </summary>
+    public decimal? HoldScore { get; set; }
+
+    /// <summary>Valore atteso netto dell'apertura / prezzo d'acquisto × 100: il "pavimento".</summary>
+    public decimal? FloorPercent { get; set; }
+
+    /// <summary>Mesi dall'uscita del set principale; null per i Secret Lair.</summary>
+    public int? ReleaseAgeMonths { get; set; }
+
+    /// <summary>100 = trend al minimo dello storico del prodotto; null finché lo storico è corto.</summary>
+    public decimal? HistoryPosition { get; set; }
+
+    /// <summary>Candidato da tenere: punteggio, pavimento ed età entro le soglie <c>Purchasing:Hold:*</c>.</summary>
+    public bool IsHoldCandidate { get; set; }
+
     public DateTime ComputedAt { get; set; } = DateTime.UtcNow;
 }
