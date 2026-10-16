@@ -153,6 +153,15 @@ Prodotti sigillati da comprare oggi e tenere 1–3 anni, segnalati nelle Opportu
 - [x] **Fase 3 — Magazzino nel registro acquisti** — pubblicata il 2026-10-15; migration applicata e primo acquisto segnato "Da tenere" dall'utente, valori attesi ricalcolati sul database (uscita migliore: aprirlo). Migration `AddHoldForResale`: segno "da tenere" sull'acquisto, vista con costo, valore di oggi chiuso e aperto, guadagno latente
 - [x] **Magazzino e Opportunità, ritocchi (2026-10-15)** — pubblicati e verificati il 2026-10-15 (prezzo CT del primo prodotto in magazzino riscaricato dal pulsante Aggiorna): "Apri (se lo hai già)" per i prodotti in "Apri" con resa negativa, e offerta più bassa su Card Trader dei prodotti in magazzino aggiornata ogni mattina e dal pulsante "Aggiorna" della scheda Magazzino
 
+### App per smartphone — fasi (dettaglio in `Documentation/Features/006-AppSmartphone.md`)
+
+Foto e valutazione delle carte, valutazione al volo e pending list dal telefono (Android). Progettata il 2026-10-16 con l'utente: PWA sul frontend Angular, accesso da fuori con Tailscale e Tailscale Serve (nessuna porta aperta sul router), riconoscimento e stima della condizione con Claude (proposta, da confermare a mano).
+
+- [x] **Fase 0 — Accesso dal telefono, fuori casa** — pubblicata, configurata e verificata dall'utente il 2026-10-16: dal telefono Android in 4G login, dashboard e griglia "Da preparare" caricate; con Tailscale spento il sito non è raggiungibile; `http://inventory.local` come prima; criterio d'accesso di Tailscale limitato alle porte 443 e 8443 del PC. Guida in `DEPLOY.md`, "Accesso dal telefono". Contenuto: Tailscale sul PC (servizio) e sul telefono, Serve per frontend e API, ACL; indirizzo dell'API ricavato dalla pagina invece di `localhost:5152` fisso; origine `*.ts.net` in CORS
+- [ ] **Fase 1 — PWA e "Valuta carta"**: sezione per il telefono (Scansiona, Cerca, Coda), riconoscimento da foto con Claude, scheda con prezzi CT, CM e prezzo delle regole; ultimo prezzo Cardmarket di tutte le singole (migration `AddCardmarketLatestPrice`)
+- [ ] **Fase 2 — Stima della condizione**: `IGradingService` con Claude, mock con voti casuali tolto, voti sui campi `Grading*` di `PendingListing`
+- [ ] **Fase 3 — Pending list dal telefono**: aggiunta alla coda dalla scheda, pagina Coda con modifica e "Invia a Card Trader"
+
 ### Sicurezza — i quattro punti del 2026-08-27 sono chiusi
 
 Tutti erano **preesistenti**, non introdotti dal lavoro sull'autopricer. Codice risolto e messo in produzione il 2026-08-29, password di `admin` cambiata e utente `testuser` eliminato lo stesso giorno. Dettaglio nel CHANGELOG.

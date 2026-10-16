@@ -9,6 +9,38 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-16] Feature — App per smartphone, Fase 0: accesso dal telefono con Tailscale
+
+#### Problema
+
+- Il gestionale si usava solo dal PC di casa. Dal telefono, anche dentro una VPN, la pagina si sarebbe
+  aperta ma ogni chiamata sarebbe fallita: il frontend chiamava l'API su `http://localhost:5152`, fissato
+  alla compilazione, e "localhost" sul telefono è il telefono. In più il browser del telefono nega
+  fotocamera e installazione dell'app senza HTTPS.
+
+#### Soluzione Implementata
+
+- **Indirizzo dell'API ricavato dalla pagina** (`environment.prod.ts`): da un indirizzo `*.ts.net`
+  l'API è lo stesso nome sulla porta 8443, altrimenti resta `http://localhost:5152`.
+- **Origini CORS in più da configurazione** (`Cors:ExtraOrigins`), per l'indirizzo Tailscale del PC
+  senza scriverlo nel repository.
+- **Pagina di login** con un margine sugli schermi stretti.
+- **Guida in `DEPLOY.md`, "Accesso dal telefono"**: Tailscale sul PC in modalità unattended, binding IIS
+  solo su `127.0.0.1:8080`, Tailscale Serve sulle porte 443 (frontend) e 8443 (API), origine in
+  `appsettings.Production.json`, Tailscale sul telefono Android, criterio d'accesso limitato alle due porte.
+
+#### Note Tecniche
+
+- Nessuna porta aperta sul router e niente Tailscale Funnel: il servizio resta visibile solo nella rete
+  Tailscale dell'utente. Kestrel resta su `localhost:5152`, il binding `inventory.local` di IIS non cambia.
+- `Cors:ExtraOrigins` è una lista separata dalle origini di base perché gli array di configurazione si
+  fondono per indice.
+- Il sito IIS ha un binding in più solo su `127.0.0.1:8080`, senza nome: il binding `inventory.local` non
+  accetterebbe le richieste inoltrate da Tailscale Serve.
+- Verificato dall'utente il 2026-10-16 da un telefono Android in 4G: login, dashboard, "Da preparare";
+  con Tailscale spento il sito non risponde. Dal PC stesso l'indirizzo `*.ts.net` va in timeout (forse
+  per NordVPN, attivo sul PC): non serve, sul PC si usa `inventory.local`.
+
 ### [2026-10-16] Miglioria — Carrello più veloce dalle proposte d'acquisto
 
 #### Problema

@@ -185,6 +185,121 @@ icacls "C:\{install-path}\Publish\api\logs" /grant "*S-1-5-20:(OI)(CI)M"
 
 ---
 
+## Accesso dal telefono, fuori casa (Tailscale)
+
+> Fase 0 della feature 006 (`Documentation/Features/006-AppSmartphone.md`). **Nessuna porta aperta sul
+> router**: il PC e il telefono entrano nella stessa rete privata Tailscale con connessioni in uscita, e
+> il gestionale resta invisibile da internet. Tailscale Serve dà l'HTTPS con un certificato valido, che
+> il browser del telefono richiede per la fotocamera e per installare l'app.
+
+Schema finale:
+
+| Dal telefono | Tailscale Serve inoltra a | Cosa c'è |
+|---|---|---|
+| `https://<pc>.<tailnet>.ts.net` | `http://127.0.0.1:8080` | IIS, il frontend |
+| `https://<pc>.<tailnet>.ts.net:8443` | `http://127.0.0.1:5152` | Kestrel, l'API e l'hub SignalR |
+
+Il frontend capisce da solo dove si trova: aperto da un indirizzo `*.ts.net` chiama l'API sulla porta
+8443 dello stesso nome; aperto da `http://inventory.local` chiama `http://localhost:5152` come sempre
+(`environment.prod.ts`). Kestrel e il binding `inventory.local` di IIS non cambiano.
+
+### 1. Tailscale sul PC (una sola volta)
+
+1. Scaricare e installare Tailscale per Windows da `https://tailscale.com/download/windows` e accedere
+   con l'account scelto (piano personale gratuito).
+2. Tenerlo attivo anche senza nessun utente collegato a Windows, dal prompt dei comandi come Administrator:
+   ```powershell
+   tailscale up --unattended
+   ```
+3. Nel pannello web di Tailscale (`https://login.tailscale.com/admin`):
+   - **DNS**: MagicDNS attivo e **HTTPS Certificates** abilitati;
+   - **Machines**: segnare il nome completo del PC, `<pc>.<tailnet>.ts.net` (serve sotto), e
+     disattivare la scadenza della chiave del PC (**Disable key expiry**), altrimenti dopo qualche mese
+     il PC esce dalla rete e il telefono non lo raggiunge più.
+
+### 2. Binding di IIS solo locale (una sola volta)
+
+Il sito IIS risponde solo al nome `inventory.local`, mentre le richieste che arrivano da Tailscale Serve
+hanno un altro nome. Si aggiunge un binding sulla porta 8080 **solo su 127.0.0.1**, senza nome: dalla rete
+di casa non è raggiungibile, ed è la porta a cui Tailscale Serve inoltra.
+
+```powershell
+# Come Administrator
+& "$env:windir\system32\inetsrv\appcmd.exe" set site /site.name:"InventorySite" /+"bindings.[protocol='http',bindingInformation='127.0.0.1:8080:']"
+```
+
+`publish.ps1` non tocca i binding di un sito che esiste già, quindi resta anche dopo le pubblicazioni.
+Controllo: `http://127.0.0.1:8080` nel browser del PC apre il gestionale.
+
+### 3. Tailscale Serve (una sola volta)
+
+```powershell
+# Come Administrator
+tailscale serve --bg --https=443 http://127.0.0.1:8080
+tailscale serve --bg --https=8443 http://127.0.0.1:5152
+tailscale serve status
+```
+
+La configurazione resta salvata e riparte da sola con il servizio Tailscale. Per toglierla:
+`tailscale serve reset`. **Mai `tailscale funnel`**: pubblicherebbe il gestionale su internet.
+
+### 4. Origine Tailscale nell'API
+
+In `appsettings.Production.json` (non versionato: il nome della rete Tailscale non va nel repository):
+
+```json
+"Cors": {
+  "ExtraOrigins": [ "https://<pc>.<tailnet>.ts.net" ]
+}
+```
+
+Poi pubblicare con `publish.ps1` (o riavviare il servizio). Senza questa voce la pagina si apre dal
+telefono ma ogni chiamata all'API è rifiutata dal browser (errore CORS nella console).
+
+### 5. Il telefono (Android)
+
+1. Installare **Tailscale** dal Play Store e accedere con lo **stesso account** del PC.
+2. Con Tailscale acceso, aprire in Chrome `https://<pc>.<tailnet>.ts.net` e fare login.
+3. Facoltativo, dalla Fase 1 in poi: menu di Chrome → "Aggiungi a schermata Home".
+
+### 6. Limitare il telefono alle due porte (consigliato)
+
+Il criterio predefinito di Tailscale lascia ogni dispositivo dell'account libero di raggiungere tutti gli
+altri su ogni porta. Per far arrivare il telefono solo al gestionale, nel pannello web → **Access controls**,
+sostituire il criterio con (l'indirizzo `100.x.y.z` del PC è nella pagina Machines):
+
+```json
+{
+  "hosts": { "inventory-pc": "100.x.y.z" },
+  "grants": [
+    { "src": ["autogroup:member"], "dst": ["inventory-pc"], "ip": ["tcp:443", "tcp:8443"] }
+  ]
+}
+```
+
+Attenzione: è l'unica regola, quindi ogni altro accesso fra i dispositivi dell'account smette di
+funzionare, ping compreso: dopo il salvataggio il ping dall'app del telefono al PC può non rispondere, ed
+è normale. Se ci sono altri dispositivi in rete che si parlano, aggiungere le loro regole.
+
+### 7. Verifica
+
+- Dal telefono **in 4G, con il Wi-Fi spento**: `https://<pc>.<tailnet>.ts.net` apre la pagina di login
+  con il lucchetto, il login riesce, la dashboard mostra i dati (quindi l'API sulla 8443 risponde).
+- Dal telefono con **Tailscale spento**: l'indirizzo non risponde.
+- Dal PC: `http://inventory.local` funziona come prima.
+- Telefono perso: pannello web → Machines → rimuovere il telefono. L'accesso finisce subito, anche
+  se il JWT (7 giorni) è ancora valido.
+
+| Problema | Causa probabile | Soluzione |
+|---|---|---|
+| La pagina si apre ma il login fallisce, errore CORS nella console | `Cors:ExtraOrigins` mancante o diverso dall'indirizzo esatto (con `https://`, senza barra finale) | Correggere `appsettings.Production.json` e riavviare il servizio |
+| Pagina IIS 404 o pagina predefinita di IIS | Binding `127.0.0.1:8080` mancante | Punto 2 |
+| Errore di certificato o `tailscale serve` rifiuta l'HTTPS | HTTPS Certificates non abilitati nel pannello | Punto 1.3 |
+| Dal PC `https://<pc>.<tailnet>.ts.net` va in timeout, dal telefono funziona | Il PC non raggiunge il proprio indirizzo Tailscale (osservato il 2026-10-16, con NordVPN attivo sul PC) | Niente da correggere: sul PC si usa `http://inventory.local` |
+| Dal telefono non risponde niente, con Tailscale acceso | PC fuori dalla rete (chiave scaduta, servizio fermo) o criterio di accesso troppo stretto | `tailscale status` sul PC; Machines nel pannello; Access controls |
+
+---
+
 ## Variabili di Configurazione (Produzione)
 
 | Chiave | Descrizione |
@@ -196,6 +311,7 @@ icacls "C:\{install-path}\Publish\api\logs" /grant "*S-1-5-20:(OI)(CI)M"
 | `CardmarketImport:Enabled` / `RunTime` | Import giornaliero listino Cardmarket, catalogo MTGJSON, classifica e avvisi (in produzione `true`, 07:00) |
 | `Purchasing:*` | Parametri del valore atteso (soglia e prezzo del bulk, costi di vendita) e lotto giornaliero di uscite MTGJSON |
 | `Email:*` | SMTP per le email degli avvisi (password solo qui) |
+| `Cors:ExtraOrigins` | Origini in più accettate dall'API, oltre a `localhost:4200` e `inventory.local`: l'indirizzo Tailscale del PC per il telefono (vedi "Accesso dal telefono") |
 
 > In produzione: usare `appsettings.Production.json` (non committato) o variabili d'ambiente di sistema.
 

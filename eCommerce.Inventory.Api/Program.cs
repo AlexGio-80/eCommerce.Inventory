@@ -436,11 +436,18 @@ builder.Services.AddRateLimiter(options =>
 });
 
 // Add CORS for frontend integration
+// Le origini in più (es. l'indirizzo Tailscale del PC, https://<pc>.<tailnet>.ts.net, per il telefono)
+// stanno in Cors:ExtraOrigins nel file di configurazione dell'ambiente: il nome della rete Tailscale
+// non va nel repository, che è pubblico. Una lista separata, perché gli array di configurazione si
+// fondono per indice e una lista unica sostituirebbe le origini di base.
+var corsOrigins = new[] { "http://localhost:4200", "http://127.0.0.1:4200", "http://inventory.local" }
+    .Concat(builder.Configuration.GetSection("Cors:ExtraOrigins").Get<string[]>() ?? Array.Empty<string>())
+    .ToArray();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.WithOrigins("http://localhost:4200", "http://127.0.0.1:4200", "http://inventory.local")
+        policy.WithOrigins(corsOrigins)
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();
