@@ -9,6 +9,41 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-16] Feature — App per smartphone, Fase 1: foto, riconoscimento e scheda di valutazione
+
+#### Problema
+
+- Per valutare una carta bisognava essere al PC: fotografarla, passare la foto, cercarla nella maschera.
+  Fuori casa non c'era modo di vedere al volo il prezzo delle regole e i prezzi CT e CM.
+
+#### Soluzione Implementata
+
+- **Sezione per il telefono `/m`**, dove si entra direttamente dall'indirizzo Tailscale: **Scansiona**
+  (fotocamera di Android, foto ridotta sul telefono, riconoscimento con Claude, scelta fra al massimo 5
+  carte del database), **Cerca** (nome, nome italiano, numero di raccolta) e **scheda di valutazione** con
+  prezzo delle regole, offerta più bassa CT e CT Zero, numero di offerte, trend e low Cardmarket, mie
+  inserzioni; condizione, lingua e foil modificabili.
+- **App installabile** da Chrome ("Aggiungi a schermata Home"): manifest, icone e un service worker che
+  non mette in cache niente.
+- Endpoint `POST /api/scan/recognize` e `GET /api/scan/card/{blueprintId}`.
+
+#### Note Tecniche
+
+- `ClaudeCardImageReader` (SDK ufficiale `Anthropic`, modello in `Scan:Model`, predefinito
+  `claude-opus-5-5`, effort basso, risposta JSON vincolata a uno schema) legge soltanto: la corrispondenza
+  con i blueprint la fa `CardScanService.Rank` sui dati nostri (set, numero senza zeri davanti, nome inglese
+  o italiano), solo fra le carte Magic. Una lettura sbagliata dà candidati da scartare, mai una carta inventata.
+- Card Trader mette le versioni speciali (borderless, extended art, showcase) in un'espansione "Collectors"
+  con la sigla preceduta da "c" (`cafr` per AFR), le promo con "p" e le prerelease con "pre", mentre sulla
+  carta è stampata la sigla del set base: la ricerca prova tutte e quattro le sigle. Trovato nella prova
+  dell'utente del 16/10 (Iymrith, Desert Doom e Repurposed Enforcer extended art riconosciute nella versione
+  normale).
+- Limite giornaliero `Scan:DailyLimit` (200), contato in memoria. Le foto non si salvano. Ogni chiamata
+  scrive nel log i token consumati, per misurare il costo vero.
+- L'ultimo prezzo Cardmarket di tutte le singole era già in `CardmarketLatestPrices`: nessuna migration.
+- `PricingEngine.ConditionMatches` e `LanguageMatches` ora pubblici, riusati dal filtro delle offerte
+  della scheda.
+
 ### [2026-10-16] Feature — App per smartphone, Fase 0: accesso dal telefono con Tailscale
 
 #### Problema

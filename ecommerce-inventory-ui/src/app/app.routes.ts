@@ -5,12 +5,19 @@ import { InventoryListComponent } from './features/inventory/pages/inventory-lis
 import { SyncPageComponent } from './features/sync/pages/sync-page.component';
 import { LoginComponent } from './features/auth/pages/login/login.component';
 import { AuthGuard } from './core/guards/auth.guard';
+import { isRemoteHost } from './core/utils/remote-host';
 
 export const routes: Routes = [
   {
     path: '',
-    redirectTo: '/layout/dashboard',
+    // Dal telefono (indirizzo Tailscale) si entra nella sezione per il telefono, dal PC nella dashboard.
+    redirectTo: () => isRemoteHost() ? '/m' : '/layout/dashboard',
     pathMatch: 'full'
+  },
+  {
+    path: 'm',
+    canActivate: [AuthGuard],
+    loadChildren: () => import('./features/mobile/mobile.routes').then(m => m.MOBILE_ROUTES)
   },
   {
     path: 'login',

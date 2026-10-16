@@ -300,6 +300,28 @@ funzionare, ping compreso: dopo il salvataggio il ping dall'app del telefono al 
 
 ---
 
+## Riconoscimento delle carte (chiave API Anthropic)
+
+> Fase 1 della feature 006. Senza chiave la sezione per il telefono funziona lo stesso (Cerca e scheda di
+> valutazione), e "Scansiona" risponde che il riconoscimento non è configurato.
+
+1. Su `https://console.anthropic.com` creare un account (è diverso dall'abbonamento a Claude) e, in
+   **Billing**, caricare un credito prepagato. In **Limits** impostare un tetto di spesa mensile.
+2. In **API keys** creare una chiave (es. "eCommerce.Inventory") e copiarla: si vede una volta sola.
+3. In `appsettings.Production.json` (non versionato), accanto alle altre sezioni:
+   ```json
+   "Anthropic": {
+     "ApiKey": "<la chiave>"
+   },
+   ```
+   Facoltativi, con i valori predefiniti: `"Scan": { "Model": "claude-opus-5-5", "DailyLimit": 200 }`.
+4. Pubblicare con `publish.ps1`. La chiave **non va mai** in chat, in un file versionato o in uno screenshot.
+
+Ogni riconoscimento scrive nel log i token consumati (`Riconoscimento carta con ...`): da lì si ricava il
+costo vero per carta. Per cambiare modello basta `Scan:Model` e un riavvio del servizio.
+
+---
+
 ## Variabili di Configurazione (Produzione)
 
 | Chiave | Descrizione |
@@ -311,6 +333,8 @@ funzionare, ping compreso: dopo il salvataggio il ping dall'app del telefono al 
 | `CardmarketImport:Enabled` / `RunTime` | Import giornaliero listino Cardmarket, catalogo MTGJSON, classifica e avvisi (in produzione `true`, 07:00) |
 | `Purchasing:*` | Parametri del valore atteso (soglia e prezzo del bulk, costi di vendita) e lotto giornaliero di uscite MTGJSON |
 | `Email:*` | SMTP per le email degli avvisi (password solo qui) |
+| `Anthropic:ApiKey` | Chiave API per il riconoscimento delle carte dal telefono (vedi "Riconoscimento delle carte") |
+| `Scan:Model` / `Scan:DailyLimit` | Modello Claude del riconoscimento (predefinito `claude-opus-5-5`) e riconoscimenti al giorno (predefinito 200) |
 | `Cors:ExtraOrigins` | Origini in più accettate dall'API, oltre a `localhost:4200` e `inventory.local`: l'indirizzo Tailscale del PC per il telefono (vedi "Accesso dal telefono") |
 
 > In produzione: usare `appsettings.Production.json` (non committato) o variabili d'ambiente di sistema.

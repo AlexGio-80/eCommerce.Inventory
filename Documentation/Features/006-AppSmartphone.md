@@ -9,7 +9,7 @@
 
 **Titolo feature:** `App per smartphone`
 **Priorità:** ultima grande feature in programma
-**Stato (2026-10-16):** progetto approvato; Fase 0 pubblicata, configurata e verificata (guida in `DEPLOY.md`, "Accesso dal telefono").
+**Stato (2026-10-16):** progetto approvato; Fase 0 pubblicata, configurata e verificata (guida in `DEPLOY.md`, "Accesso dal telefono"); Fase 1 pubblicata e verificata.
 
 L'utente vuole usare il gestionale dal telefono, in quest'ordine di importanza:
 
@@ -37,7 +37,7 @@ L'utente vuole usare il gestionale dal telefono, in quest'ordine di importanza:
 
 - [x] Backend (API: endpoint di riconoscimento, valutazione rapida; Infrastructure: client Anthropic, prezzo Cardmarket di tutte le singole)
 - [x] Frontend (Angular: PWA, indirizzo dell'API letto all'avvio, pagine per il telefono)
-- [x] Database (una migration: ultimo prezzo Cardmarket delle singole, Fase 1)
+- [ ] Database: nessuna migration (l'ultimo prezzo Cardmarket di tutte le singole c'era già)
 - [x] Integrazione esterna: **API Anthropic** (nuova, solo in uscita), **Tailscale** (nuovo, sul PC e sul telefono)
 - [x] Configurazione sul PC di casa: Tailscale come servizio, Tailscale Serve, CORS
 
@@ -84,8 +84,8 @@ L'utente vuole usare il gestionale dal telefono, in quest'ordine di importanza:
    Tailscale Serve lo dà già (indirizzo `*.ts.net`).
 3. **Prezzi Cardmarket delle singole solo per le espansioni degli ultimi 12 mesi**
    (`CardmarketImport:SinglesTrackingMonths`): per una carta vecchia trovata in giro il prezzo CM
-   oggi non c'è. Il listino pubblico lo contiene per tutte le singole: basta tenerne l'ultimo valore
-   (Fase 1), senza storico.
+   oggi non c'è. *Corretto in Fase 1: l'ultimo prezzo di tutti i prodotti c'era già, in
+   `CardmarketLatestPrices`.*
 4. **CORS** accetta solo `localhost:4200` e `inventory.local`: va aggiunto l'indirizzo Tailscale.
 5. **Il JWT dura 7 giorni e non è revocabile.** Su un telefono che si può perdere conta di più che
    sul PC (vedi §7).
@@ -172,32 +172,52 @@ Ogni fase si pubblica e si verifica da sola, come per la 004 e la 005.
 login, si vede la dashboard. Sul PC `http://inventory.local` funziona come prima. Con l'app Tailscale
 spenta, dal telefono l'indirizzo non risponde.
 
-### Fase 1 — PWA e "Valuta carta" (bisogni 1 e 3)
+### Fase 1 — PWA e "Valuta carta" (bisogni 1 e 3) *(pubblicata e verificata il 2026-10-16)*
 
-- PWA: manifest, icone, service worker solo per i file dell'app (**nessun dato in cache sul telefono**:
-  i prezzi devono essere sempre quelli di adesso).
-- Sezione per il telefono (es. `/m`), con barra in basso: **Scansiona**, **Cerca**, **Coda**.
-- **Scansiona:** foto dalla fotocamera posteriore, ridotta sul telefono (circa 1.000 px sul lato lungo)
-  prima dell'invio. Nuovo endpoint `POST /api/scan/recognize`: Claude restituisce nome, sigla del set,
-  numero di raccolta, lingua, foil; il backend cerca i blueprint corrispondenti e risponde con 1–5
-  candidati e immagine. L'utente tocca quello giusto (o corregge con la ricerca).
-- **Scheda di valutazione** della carta scelta, con condizione, lingua e foil modificabili:
-  - Card Trader: offerta più bassa, numero di offerte, e quella CT Zero (da `marketplace-stats`);
-  - **prezzo delle regole** (`/api/pricing/suggest`), con la regola usata;
-  - Cardmarket: trend e low dall'ultimo listino;
-  - le mie inserzioni di quella carta e quante copie ho.
-- **Cerca:** stessa scheda partendo dal nome o dal numero di raccolta, senza foto (utile anche senza
-  IA, per esempio a una fiera con poca rete).
-- **Prezzo Cardmarket di tutte le singole:** tabella con l'ultimo prezzo di ogni singola del listino
-  (una riga per prodotto, sovrascritta ogni mattina dall'import delle 07:00, nessuno storico). Migration
-  `AddCardmarketLatestPrice`. Lo storico delle singole recenti resta com'è.
-- Chiave API Anthropic in `appsettings.Production.json` (mai nei file versionati), limite giornaliero
-  di riconoscimenti in configurazione (`Scan:DailyLimit`) contro errori e cicli.
+Schermate approvate dall'utente il 2026-10-16, con tre scelte: dall'indirizzo Tailscale si entra
+direttamente nella sezione per il telefono (link "Versione completa" per le pagine di sempre); le foto
+non si salvano; al massimo 200 riconoscimenti al giorno.
+
+- **PWA:** `manifest.webmanifest`, icone in `public/icons`, `sw.js` che non mette in cache niente (né file
+  né dati: i prezzi sono sempre quelli di adesso, e a ogni pubblicazione il telefono vede la versione
+  nuova). Il service worker si registra solo da un indirizzo `*.ts.net`.
+- **Sezione `/m`** (`features/mobile`), barra in basso con **Scansiona** e **Cerca** (la **Coda** arriva con
+  la Fase 3). L'indirizzo vuoto porta a `/m` dal telefono e alla dashboard dal PC (`isRemoteHost`).
+- **Scansiona:** il pulsante apre la fotocamera di Android (`capture="environment"`), non un riquadro
+  nella pagina: messa a fuoco e flash contano per leggere il numero di raccolta. Il telefono riduce la
+  foto a 1.400 px sul lato lungo (JPEG) prima dell'invio. `POST /api/scan/recognize`: Claude
+  (`ClaudeCardImageReader`, risposta JSON vincolata a uno schema) legge nome inglese e stampato, sigla del
+  set, numero di raccolta, lingua, foil; `CardScanService` cerca fra le carte Magic quelle del set letto e
+  quelle con lo stesso nome (inglese o italiano) e ne propone al massimo 5. Una carta del set entra solo se
+  ha anche il nome o il numero giusto; la stampa con set e numero giusti è "esatta" e, se è la prima ed è
+  l'unica, si va dritti alla scheda.
+- **Scheda di valutazione** (`GET /api/scan/card/{blueprintId}?condition&language&isFoil`), con condizione,
+  lingua e foil modificabili:
+  - **prezzo delle regole** (`ListingPriceSuggestionService`, lo stesso della maschera);
+  - Card Trader: offerta più bassa, più bassa CT Zero e numero di offerte della stessa condizione, lingua e
+    foil, escluse le mie, firmate, alterate, gradate, in vacanza e sopra 1.000 € (prezzi in vetrina). Le
+    offerte passano dalla cache di 10 minuti, con la precedenza nel limite di Card Trader;
+  - Cardmarket: trend e low (foil se la carta è foil) dall'ultimo listino;
+  - le mie inserzioni della carta, di qualsiasi condizione.
+- **Cerca:** la ricerca della maschera "Nuovo Prodotto" (nome, nome italiano, numero), solo carte Magic.
+- **Prezzo Cardmarket di tutte le singole: c'era già.** `CardmarketLatestPrices` tiene l'ultimo prezzo di
+  ogni prodotto del listino (128.220 righe il 16/10), e il 98% delle carte Magic ha l'abbinamento con
+  Cardmarket (121.775 su 124.045). Nessuna migration.
+- Configurazione: `Anthropic:ApiKey` (solo in `appsettings.Production.json`), `Scan:Model` (predefinito
+  `claude-opus-5-5`), `Scan:DailyLimit` (predefinito 200, contatore in memoria che si azzera anche al
+  riavvio). Senza chiave il riconoscimento risponde che non è configurato; Cerca e la scheda funzionano.
 
 **Verifica:** fotografare 20 carte miste (nuove e vecchie, italiane e inglesi, foil, frame speciali):
 quante sono riconosciute al primo colpo e in quanti secondi dalla foto alla scheda. Obiettivo proposto:
 almeno 17 su 20 al primo candidato, sotto i 10 secondi in 4G. Prezzo CM presente anche su una carta
 di 10 anni fa.
+
+**Esito (2026-10-16):** obiettivo raggiunto. Riconosciute carte nuove e vecchie, italiane e inglesi, e
+tutte le Secret Lair provate. Quarta Edizione (senza simbolo né numero): carta giusta nell'elenco, stampa
+scelta a mano, come previsto. Le extended art finivano sulla versione normale perché Card Trader le tiene
+nelle espansioni "Collectors" (`cafr`, `cfra`): corretto lo stesso giorno, verificato dall'utente. Le art
+card non si riconoscono, scelta accettata. Costo misurato: circa 2.700 token in ingresso e 100 in uscita,
+circa 1,3 centesimi a carta con Opus 5.5; circa 6 s fra PC e Claude.
 
 ### Fase 2 — Stima della condizione (completamento del bisogno 1)
 

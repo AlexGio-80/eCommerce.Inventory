@@ -111,6 +111,12 @@ builder.Services.AddScoped<AutoPricingService>();
 builder.Services.AddSingleton<IMarketplaceOfferCache, MarketplaceOfferCache>();
 builder.Services.AddScoped<ListingPriceSuggestionService>();
 
+// Sezione per il telefono (feature 006): riconoscimento delle carte con Claude e scheda di valutazione.
+// Il lettore tiene il client Anthropic, il contatore il limite giornaliero: entrambi singleton.
+builder.Services.AddSingleton<ICardImageReader, ClaudeCardImageReader>();
+builder.Services.AddSingleton<ScanDailyCounter>();
+builder.Services.AddScoped<CardScanService>();
+
 // Coda condivisa fra i produttori (webhook delle vendite, sincronizzazione delle
 // inserzioni) e il worker che la consuma: dev'essere singleton
 builder.Services.AddSingleton<IPriceRefreshQueue, PriceRefreshQueue>();

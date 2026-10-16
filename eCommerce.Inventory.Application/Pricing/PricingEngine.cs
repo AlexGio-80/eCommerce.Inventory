@@ -754,7 +754,7 @@ public class PricingEngine
     /// Card Trader restituisce le condizioni in inglese esteso ("Near Mint"), mentre
     /// l'inventario locale può usare la stessa forma o l'abbreviazione: si normalizza prima di confrontare.
     /// </summary>
-    private static bool ConditionMatches(string offerCondition, string myCondition)
+    public static bool ConditionMatches(string offerCondition, string myCondition)
         => NormalizeCondition(offerCondition) == NormalizeCondition(myCondition);
 
     private static string NormalizeCondition(string condition)
@@ -776,7 +776,7 @@ public class PricingEngine
     /// <summary>
     /// Il marketplace usa codici brevi ("en", "it"), l'inventario nomi estesi ("English").
     /// </summary>
-    private static bool LanguageMatches(string offerLanguage, string myLanguage)
+    public static bool LanguageMatches(string offerLanguage, string myLanguage)
         => NormalizeLanguage(offerLanguage) == NormalizeLanguage(myLanguage);
 
     private static string NormalizeLanguage(string language)
