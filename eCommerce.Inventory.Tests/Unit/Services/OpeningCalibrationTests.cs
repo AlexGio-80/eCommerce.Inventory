@@ -72,6 +72,89 @@ public class OpeningCalibrationTests
         result.Factor.Should().Be(1m);
     }
 
+    /// <summary>Carta di un set MTGJSON del tipo dato, abbinata alla stampa tramite Scryfall.</summary>
+    private void SeedTypedCard(int blueprintId, int cmId, decimal trend, string setCode, string setType)
+    {
+        SeedCard(blueprintId, cmId, trend);
+        var scryfallId = $"scry-{blueprintId}";
+        _db.Blueprints.Local.Single(b => b.Id == blueprintId).ScryfallId = scryfallId;
+        if (!_db.MtgjsonSets.Local.Any(s => s.Code == setCode))
+            _db.MtgjsonSets.Add(new MtgjsonSet { Code = setCode, Name = setCode, Type = setType });
+        _db.MtgjsonCards.Add(new MtgjsonCard { Uuid = Guid.NewGuid(), SetCode = setCode, Name = $"Carta {blueprintId}", ScryfallId = scryfallId });
+    }
+
+    [Fact]
+    public async Task PriceRealization_IsMeasuredByCardKind_FallingBackToTheOverallFactor()
+    {
+        SeedTypedCard(1, 101, trend: 10m, "FRA", "expansion");
+        SeedTypedCard(2, 102, trend: 10m, "FRC", "commander");
+        SeedTypedCard(3, 103, trend: 10m, "SLD", "box");
+        Sell(1, 1, 10, 15m, DateTime.UtcNow.AddDays(-5));   // buste: 150 su 100
+        Sell(1, 2, 10, 9m, DateTime.UtcNow.AddDays(-5));    // mazzi: 90 su 100
+        Sell(1, 3, 2, 20m, DateTime.UtcNow.AddDays(-5));    // Secret Lair: 20 di trend, campione piccolo
+        await _db.SaveChangesAsync();
+
+        var result = await new PriceRealizationService(_db).MeasureAsync();
+
+        result.Factor.Should().Be(1.273m, "280 incassati su 220 di trend");
+        result.FactorFor(CardKind.Booster).Should().Be(1.5m);
+        result.FactorFor(CardKind.Deck).Should().Be(0.9m);
+        result.Kinds.Single(k => k.Kind == CardKind.SecretLair).Measured.Should().BeFalse();
+        result.FactorFor(CardKind.SecretLair).Should().Be(1.273m, "con un campione piccolo vale il complessivo");
+    }
+
+    [Fact]
+    public async Task PriceRealization_CountsCtZeroSalesNotYetPaid_OnceOnly_AndIgnoresFreeRows()
+    {
+        SeedCard(1, 101, trend: 10m);
+        // Ordine pagato nella finestra: fissa il numero d'ordine Card Trader da cui partire.
+        _db.Orders.Add(new Order { Id = 1, CardTraderOrderId = 1000, Code = "PAID", State = "done", PaidAt = DateTime.UtcNow.AddDays(-5) });
+        _db.Orders.Add(new Order { Id = 2, CardTraderOrderId = 1001, Code = "HUB-ABBINATO", State = "hub_pending" });
+        _db.Orders.Add(new Order { Id = 3, CardTraderOrderId = 1002, Code = "HUB-NUOVO", State = "hub_pending" });
+        _db.Orders.Add(new Order { Id = 4, CardTraderOrderId = 500, Code = "HUB-VECCHIO", State = "hub_pending" });
+        _db.OrderItems.AddRange(
+            new OrderItem { Id = 20, OrderId = 2, BlueprintId = 1, Quantity = 5, Price = 12m, Name = "x" },
+            new OrderItem { Id = 10, OrderId = 1, BlueprintId = 1, Quantity = 5, Price = 12m, Name = "x", HubOrderItemId = 20 },
+            new OrderItem { Id = 30, OrderId = 3, BlueprintId = 1, Quantity = 5, Price = 8m, Name = "x" },
+            new OrderItem { Id = 31, OrderId = 3, BlueprintId = 1, Quantity = 3, Price = 0m, Name = "x" },
+            new OrderItem { Id = 40, OrderId = 4, BlueprintId = 1, Quantity = 5, Price = 30m, Name = "x" });
+        await _db.SaveChangesAsync();
+
+        var result = await new PriceRealizationService(_db).MeasureAsync();
+
+        result.Copies.Should().Be(10, "la riga pagata e la hub_pending non ancora pagata; non la gemella, né la riga a 0, né l'ordine fuori finestra");
+        result.Factor.Should().Be(1m, "100 incassati su 100 di trend");
+    }
+
+    [Fact]
+    public void PriceFactor_FollowsTheKindOfEachCard()
+    {
+        var booster = Guid.NewGuid();
+        var deck = Guid.NewGuid();
+        var unknown = Guid.NewGuid();
+        var settings = new OpeningValueSettings(0.25m, 0.05m, 0.40m, 0m, PriceFactor: 1.2m,
+            PriceFactors: new Dictionary<CardKind, decimal> { [CardKind.Booster] = 1.5m, [CardKind.Deck] = 0.9m });
+        var calculator = new OpeningValueCalculator(
+            (_, _) => 10m, settings,
+            new Dictionary<string, List<BoosterConfig>>(), new Dictionary<(string, string), BoosterSheet>(),
+            new Dictionary<string, MtgjsonDeck>(),
+            uuid => uuid == booster ? CardKind.Booster : uuid == deck ? CardKind.Deck : null);
+
+        calculator.CardValue(booster, false).Should().Be(15m);
+        calculator.CardValue(deck, false).Should().Be(9m);
+        calculator.CardValue(unknown, false).Should().Be(12m, "senza tipo vale il fattore complessivo");
+    }
+
+    [Theory]
+    [InlineData("FRA", "expansion", CardKind.Booster)]
+    [InlineData("PIP", "commander", CardKind.Deck)]
+    [InlineData("DDU", "duel_deck", CardKind.Deck)]
+    [InlineData("SLD", "box", CardKind.SecretLair)]
+    [InlineData("SLU", "box", CardKind.SecretLair)]
+    [InlineData("XYZ", null, CardKind.Booster)]
+    public void CardKind_ComesFromTheSetOfThePrinting(string setCode, string? setType, CardKind expected) =>
+        CardKinds.Of(setCode, setType).Should().Be(expected);
+
     [Fact]
     public void PriceFactor_RaisesCardsAboveTheBulkThreshold_ButNotTheBulk()
     {

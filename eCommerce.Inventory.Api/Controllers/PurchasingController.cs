@@ -76,11 +76,14 @@ public class PurchasingController : ControllerBase
         [FromQuery] decimal? bulkPrice,
         [FromQuery] decimal? bulkSellThroughPercent,
         [FromQuery] decimal? sellingCostPercent,
-        [FromQuery] decimal? priceRealizationPercent,
         [FromQuery] decimal? costPerCard,
+        [FromQuery] decimal? boosterPriceRealizationPercent,
+        [FromQuery] decimal? deckPriceRealizationPercent,
+        [FromQuery] decimal? secretLairPriceRealizationPercent,
         CancellationToken cancellationToken)
     {
-        var overrides = new OpeningValueOverrides(bulkThreshold, bulkPrice, bulkSellThroughPercent, sellingCostPercent, priceRealizationPercent, costPerCard);
+        var overrides = new OpeningValueOverrides(bulkThreshold, bulkPrice, bulkSellThroughPercent, sellingCostPercent, costPerCard,
+            boosterPriceRealizationPercent, deckPriceRealizationPercent, secretLairPriceRealizationPercent);
         var analysis = await _analysis.AnalyzeAsync(code, overrides, cancellationToken);
         return analysis == null
             ? NotFound(ApiResponse<object>.ErrorResult($"Espansione {code} non presente nel catalogo MTGJSON"))

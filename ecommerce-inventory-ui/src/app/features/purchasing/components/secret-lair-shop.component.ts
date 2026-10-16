@@ -54,7 +54,7 @@ type ShopRow = SecretLairShopProduct & { estimate?: SecretLairDropEstimate };
           Stima: ogni carta vale la stampa più economica portata al prezzo tipico della versione Secret Lair
           ({{ val.model.normalSamples + val.model.foilSamples }} carte dei drop passati; una carta da pochi centesimi vale
           circa {{ val.model.normalCurve[0]?.secretLairPrice | number:'1.2-2' }} €, foil {{ val.model.foilCurve[0]?.secretLairPrice | number:'1.2-2' }} €),
-          con prezzo realizzato {{ val.model.settings.priceRealizationPercent | number:'1.0-0' }}%, quota venduta per fascia
+          con prezzo realizzato {{ secretLairRealization(val) | number:'1.0-0' }}% (quello delle carte Secret Lair), quota venduta per fascia
           e costi {{ val.model.settings.sellingCostPercent }}%. "Compra" sopra il {{ val.model.buyMarginPercent }}% di margine.
           <ng-container *ngIf="val.model.backtest.drops > 0">
             Sui {{ val.model.backtest.drops }} drop passati lo scarto tipico è del {{ val.model.backtest.medianAbsoluteErrorPercent | number:'1.0-0' }}%
@@ -145,6 +145,10 @@ export class SecretLairShopComponent implements OnInit {
     if (e.realNetValue != null) totals.push(`Prezzi reali (trend CM): ${euro(e.realTrend)}, netto ${euro(e.realNetValue)}`);
     if (e.weakSharePercent > 0) totals.push(`${e.weakSharePercent.toLocaleString('it-IT')}% del valore da carte senza stampe precedenti`);
     return [...lines, '', ...totals].join('\n');
+  }
+
+  secretLairRealization(valuation: SecretLairValuation): number | undefined {
+    return valuation.model.settings.priceRealizations.find(p => p.kind === 'SecretLair')?.percent;
   }
 
   biasText(valuation: SecretLairValuation): string {

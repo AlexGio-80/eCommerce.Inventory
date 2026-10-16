@@ -24,7 +24,7 @@ import { AlertsTabComponent } from '../components/alerts-tab.component';
 import { PurchasesTabComponent } from '../components/purchases-tab.component';
 import { HoldStockTabComponent } from '../components/hold-stock-tab.component';
 import {
-  OpeningValueParams, PackValue, PurchasingService, SealedProductAnalysis, SealedSetAnalysis, SealedSetOption,
+  CardKind, OpeningValueParams, PackValue, PurchasingService, SealedProductAnalysis, SealedSetAnalysis, SealedSetOption,
   decisionLabel, isOpenIfOwned
 } from '../services/purchasing.service';
 import { GridStateDirective } from '../../../shared/directives/grid-state.directive';
@@ -136,9 +136,17 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
                 <mat-label>Costo per carta €</mat-label>
                 <input matInput type="number" step="0.01" min="0" [(ngModel)]="params.costPerCard">
               </mat-form-field>
-              <mat-form-field appearance="outline" class="num" [matTooltip]="priceRealizationTooltip()">
-                <mat-label>Prezzo realizzato %</mat-label>
-                <input matInput type="number" step="1" [(ngModel)]="params.priceRealizationPercent">
+              <mat-form-field appearance="outline" class="num" [matTooltip]="priceRealizationTooltip('Booster')" matTooltipClass="multiline-tooltip">
+                <mat-label>Realizzato buste %</mat-label>
+                <input matInput type="number" step="1" [(ngModel)]="params.boosterPriceRealizationPercent">
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="num" [matTooltip]="priceRealizationTooltip('Deck')" matTooltipClass="multiline-tooltip">
+                <mat-label>Realizzato mazzi %</mat-label>
+                <input matInput type="number" step="1" [(ngModel)]="params.deckPriceRealizationPercent">
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="num" [matTooltip]="priceRealizationTooltip('SecretLair')" matTooltipClass="multiline-tooltip">
+                <mat-label>Realizzato SL %</mat-label>
+                <input matInput type="number" step="1" [(ngModel)]="params.secretLairPriceRealizationPercent">
               </mat-form-field>
               <button mat-stroked-button (click)="loadAnalysis()">Ricalcola</button>
               <button mat-button (click)="resetParams()" matTooltip="Torna a configurazione e valori misurati sulle vendite">Predefiniti</button>
@@ -322,13 +330,26 @@ export class PurchasingPageComponent implements OnInit {
       bands.join('\n');
   });
 
-  priceRealizationTooltip = computed(() => {
+  private readonly kindLabels: Record<CardKind, string> = {
+    Booster: 'carte delle espansioni (buste)',
+    Deck: 'carte dei set di mazzi (Commander, Duel Deck…)',
+    SecretLair: 'carte Secret Lair'
+  };
+
+  priceRealizationTooltip(kind: CardKind): string {
     const st = this.analysis()?.settings;
-    if (!st) return '';
-    return st.priceRealizationMeasured
-      ? `Incassato sulle tue vendite degli ultimi 30 giorni rispetto al trend Cardmarket (carte da 1 € in su, ${st.priceRealizationSampleCopies} copie): ${st.measuredPriceRealizationPercent}%. Si applica alle carte sopra soglia nel valore atteso CM.`
-      : 'Troppe poche vendite recenti per misurarlo: nessuna correzione (100%)';
-  });
+    const pr = st?.priceRealizations.find(p => p.kind === kind);
+    if (!st || !pr) return '';
+    const what = `Incassato rispetto al trend Cardmarket sulle tue vendite degli ultimi 30 giorni (carte da 1 € in su, comprese le vendite CT Zero non ancora pagate), ${this.kindLabels[kind]}: `;
+    const measured = pr.measured
+      ? `${pr.measuredPercent}% su ${pr.copies} copie.`
+      : `troppe poche vendite (${pr.copies} copie), si usa il complessivo: ${pr.measuredPercent}%.`;
+    const overall = st.priceRealizationMeasured
+      ? `\n\nSu tutte le vendite: ${st.measuredPriceRealizationPercent}% (${st.priceRealizationSampleCopies} copie).`
+      : '';
+    return what + measured + overall + '\n\nSi applica alle carte sopra soglia nel valore atteso CM, secondo il set della carta.';
+  }
+
   openPack = signal<string | null>(null);
   readonly packPreviewCount = 10;
   showAllPacks = signal(false);
@@ -522,9 +543,15 @@ export class PurchasingPageComponent implements OnInit {
       bulkPrice: st.bulkPrice,
       bulkSellThroughPercent: st.bulkSellThroughPercent,
       sellingCostPercent: st.sellingCostPercent,
-      priceRealizationPercent: st.priceRealizationPercent,
-      costPerCard: st.costPerCard
+      costPerCard: st.costPerCard,
+      boosterPriceRealizationPercent: this.realizationPercent(st, 'Booster'),
+      deckPriceRealizationPercent: this.realizationPercent(st, 'Deck'),
+      secretLairPriceRealizationPercent: this.realizationPercent(st, 'SecretLair')
     };
+  }
+
+  private realizationPercent(st: SealedSetAnalysis['settings'], kind: CardKind): number | null {
+    return st.priceRealizations.find(p => p.kind === kind)?.percent ?? null;
   }
 
   importDetails() {

@@ -99,15 +99,28 @@ export interface OpeningValueSettings {
     bulkSellThroughMeasured: boolean;
     bulkSellThroughExpansions: BulkSellThroughExpansion[];
     measuredCardTraderFeePercent?: number;
-    /** Fattore "prezzo realizzato" applicato (incassato / trend CM), in percentuale. */
-    priceRealizationPercent: number;
+    /** Fattore "prezzo realizzato" su tutte le vendite (incassato / trend CM), in percentuale. */
     measuredPriceRealizationPercent: number;
     priceRealizationMeasured: boolean;
     priceRealizationSampleCopies: number;
+    /** Lo stesso fattore per tipo di carta: è quello applicato nel valore atteso CM. */
+    priceRealizations: PriceRealization[];
     /** Costo fisso in euro per ogni copia venduta sopra la soglia del bulk. */
     costPerCard: number;
     /** Quota venduta per fascia di prezzo sopra la soglia del bulk. */
     sellThroughBands: SellThroughBand[];
+}
+
+export type CardKind = 'Booster' | 'Deck' | 'SecretLair';
+
+export interface PriceRealization {
+    kind: CardKind;
+    /** Fattore applicato: misurato o scritto nella pagina. */
+    percent: number;
+    /** Misurato sulle vendite; il complessivo se il campione del tipo è troppo piccolo. */
+    measuredPercent: number;
+    measured: boolean;
+    copies: number;
 }
 
 export interface SellThroughBand {
@@ -155,8 +168,10 @@ export interface OpeningValueParams {
     bulkPrice?: number | null;
     bulkSellThroughPercent?: number | null;
     sellingCostPercent?: number | null;
-    priceRealizationPercent?: number | null;
     costPerCard?: number | null;
+    boosterPriceRealizationPercent?: number | null;
+    deckPriceRealizationPercent?: number | null;
+    secretLairPriceRealizationPercent?: number | null;
 }
 
 /** Un drop Secret Lair comprato intero, con spesa, incassato e resa. */

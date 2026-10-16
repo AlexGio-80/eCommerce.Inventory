@@ -397,6 +397,20 @@ premere "Email di prova" nella scheda Avvisi.
   e sovrastima i costi (Marvel 3.674 € invece di circa 2.040 €). **Corretto il 2026-10-07**: il costo viene da
   `PurchaseCostService`, unico per report e bilancio aperture (vedi CHANGELOG).
 
+**Fattore per tipo di carta (2026-10-16).** Confrontando previsione e vendite delle aperture recenti di
+mazzi Commander il fattore unico (116,8%) si è rivelato una media fra mercati diversi: veniva quasi
+tutto dalle carte di Reality Fracture appena uscita. Sulle carte dei mazzi Commander l'utente incassava
+il 90–100% del trend CM, e il valore dei mazzi era gonfiato di circa il 20% (Fallout Hail Caesar
+proposto "da tenere" con l'88% di pavimento, il 68% sui prezzi Card Trader). Ora il fattore si misura
+e si applica per tipo di carta, dal set MTGJSON della stampa: **buste** (espansioni e il resto),
+**mazzi** (set `commander`, `duel_deck`, `premium_deck`, `planechase`, `archenemy`, `starter`) e
+**Secret Lair** (SLD, SLC, SLU, SLP), con il complessivo per un tipo con meno di 100 € di trend venduto.
+Le vendite contano anche le righe "hub_pending" di Card Trader Zero non ancora abbinate a un ordine
+pagato (senza, le vendite degli ultimi giorni, cioè delle aperture più recenti, restavano fuori) e
+non contano le righe a prezzo 0. Al 16/10: buste 127,5%, mazzi 94,8%, Secret Lair 116,3%, complessivo
+112,3%. L'08/10 le carte Commander risultavano a ~1,2 volte il trend su 84 copie: il dato si è mosso con
+le aperture di mazzi nuovi, ed è per questo che si rimisura ogni giorno.
+
 **Decisioni prese con l'utente (2026-10-07):**
 - Il fattore "prezzo realizzato" si applica **in automatico** al valore atteso su prezzi Cardmarket
   (carte sopra la soglia del bulk), misurato e modificabile dalla pagina. Non si applica ai prezzi

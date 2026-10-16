@@ -9,6 +9,37 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-16] Fix — Prezzo realizzato misurato per buste, mazzi e Secret Lair
+
+#### Problema
+
+- Il valore atteso su prezzi Cardmarket correggeva ogni carta con un fattore unico (116,8%), che veniva
+  quasi tutto dalle carte delle buste di un'uscita recente. Le carte dei mazzi Commander si vendono
+  intorno al trend (90–100%): il valore dei mazzi era gonfiato di circa il 20%, e con lui decisione,
+  resa e punteggio "da tenere" (es. Fallout Hail Caesar, 88% di pavimento invece di circa il 70%).
+- Il fattore non contava le vendite Card Trader Zero non ancora pagate ("hub_pending"), cioè proprio
+  quelle delle aperture più recenti, e contava le righe a prezzo 0.
+
+#### Soluzione Implementata
+
+- Il fattore si misura e si applica per tipo di carta, dal set MTGJSON della stampa: buste, mazzi
+  (set Commander, Duel Deck, mazzi introduttivi e simili), Secret Lair. Un tipo con poche vendite usa il
+  complessivo. Al 16/10: buste 127,5%, mazzi 94,8%, Secret Lair 116,3%.
+- Nella pagina il campo "Prezzo realizzato %" diventa tre: "Realizzato buste %", "mazzi %", "SL %",
+  ciascuno con il dettaglio della misura nel suggerimento. La valutazione dei drop Secret Lair usa il
+  fattore Secret Lair.
+
+#### Note Tecniche
+
+- `PriceRealizationService`: vendite = righe pagate negli ultimi 30 giorni + righe "hub_pending" senza
+  gemella pagata (`HubOrderItemId`) con numero d'ordine Card Trader non più vecchio del primo ordine
+  pagato nella finestra (gli "hub_pending" non hanno data). Tipo di carta con `CardKinds.Of` (stessa
+  regola nel valore atteso), tramite Blueprint → ScryfallId → `MtgjsonCards`.
+- `OpeningValueSettings.PriceFactors` + `FactorFor`; `OpeningValueCalculator` riceve il tipo di ogni carta
+  (`kindOf`). Il calcolatore su prezzi Card Trader usa `WithoutPriceFactor()`.
+- API: `priceRealizationPercent` sostituito da `booster/deck/secretLairPriceRealizationPercent`; il DTO
+  delle impostazioni espone `PriceRealizations`.
+
 ### [2026-10-15] Miglioria — "Apri (se lo hai già)" e prezzi Card Trader del magazzino
 
 #### Problema

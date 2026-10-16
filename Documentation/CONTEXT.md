@@ -9,7 +9,7 @@
 ## Stato Attuale
 
 **Branch principale:** `master`
-**Ultimo aggiornamento:** 2026-10-15
+**Ultimo aggiornamento:** 2026-10-16
 **Fase:** In produzione (uso quotidiano attivo)
 
 ### Cosa funziona adesso
@@ -53,6 +53,7 @@
 
 - **Feature "Magazzino da tenere" (progettata il 2026-10-15):** documento in `Documentation/Features/005-MagazzinoDaTenere.md`, fasi in ROADMAP. La **Fase 0** (decisione "Nessuna offerta" e resa sul prezzo a cui si compra davvero) è pubblicata e verificata il 2026-10-15. La **Fase 1** (punteggio e vista "Da tenere" nelle Opportunità, migration `AddHoldScore`) è pubblicata e verificata il 2026-10-15: 47 candidati, Secret Lair esclusi per scelta dell'utente. La **Fase 2** (regola d'avviso "Da tenere", soglia 70) è pubblicata e verificata il 2026-10-15. Pubblicata lo stesso giorno la correzione del testo degli avvisi, che si tagliava a metà riga a 2.000 caratteri anche nell'email: da controllare sul prossimo avviso con molti prodotti che finisca con "… e altri N prodotti". La **Fase 3** (casella "Da tenere" nel registro e scheda "Magazzino" in fondo alla pagina Acquisti, migration `AddHoldForResale`) è pubblicata il 2026-10-15, con il primo acquisto segnato "Da tenere" dall'utente. Pubblicati e verificati lo stesso giorno: "Apri (se lo hai già)" per le rese negative, e prezzi Card Trader del magazzino ogni mattina e dal pulsante "Aggiorna"
 
+- **Prezzo realizzato per tipo di carta:** pubblicato e verificato il 2026-10-16 (buste 127,5%, mazzi 94,8%, Secret Lair 116,3%; sui mazzi Fallout il valore CM ora coincide con quello CT). Da controllare alla classifica del 17/10 che Fallout Hail Caesar non sia più candidato "da tenere" (pavimento sceso al 69%)
 - **Secret Lair, stima congelata:** dopo l'uscita dei Masters of the Universe (03/11) confrontare la stima con i prezzi reali, colonna "Scarto stima"
 - **Box Star Trek (uscita 13/11):** MTGJSON non ha ancora la composizione delle buste TRK/TRC, quindi niente previsione. All'apertura l'utente segna la data sull'acquisto e usa il Tag `#TRK_PB_AAAAMMGG` / `#TRK_CB_AAAAMMGG`, anche sulle inserzioni
 - **Revisione settimanale degli avvisi:** il lunedì alle 08:00 un'attività di Claude scrive il rapporto in `Revisioni-avvisi/` (locale, fuori da git). Le regole nuove si creano solo dopo l'ok dell'utente. Da seguire:
@@ -72,6 +73,7 @@
 
 | Data | Decisione | Perché |
 |------|-----------|--------|
+| 2026-10-16 | Prezzo realizzato per tipo di carta (buste, mazzi, Secret Lair) dal set MTGJSON, vendite CT Zero non ancora pagate comprese | Il fattore unico (116,8%) veniva dalle buste di un'uscita recente; sui mazzi Commander si incassa il 95% del trend, e il valore dei mazzi era gonfiato di circa il 20% |
 | 2026-10-15 | Resa dell'apertura sul trend, o sul low se è più alto; "Nessuna offerta" se su Cardmarket nessuno vende il prodotto | Al trend non si può comprare se l'offerta più bassa è sopra, e senza offerte non si può comprare affatto: le rese del 100–500% di Duel Deck e mazzi Salvat venivano da qui |
 | 2026-10-15 | Magazzino da tenere con orizzonte di 1–3 anni, punteggio dal "pavimento" (valore delle carte / prezzo), dall'età dell'uscita e dalla posizione nello storico | Scelte dell'utente. Le medie a 30 giorni di Cardmarket non esistono per i sigillati e il nostro storico parte dal 07/10: il pavimento è il segnale affidabile già oggi |
 | 2026-10-12 | Trend Cardmarket fino a 0,05 € trattato come prezzo di riempimento ("Prezzo CM dubbio") e avvisi di apertura con tetto al 300% di resa | Cardmarket mette 0,02 € sui prodotti che non si scambiano da anni: finivano in "Apri" con rese di milioni di % e negli avvisi |

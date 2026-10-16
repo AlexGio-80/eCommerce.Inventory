@@ -355,7 +355,8 @@ public class SecretLairDropValuationService : ISecretLairDropValuation
                 model.Settings.Values,
                 new Dictionary<string, List<BoosterConfig>>(),
                 new Dictionary<(string, string), BoosterSheet>(),
-                new Dictionary<string, MtgjsonDeck>());
+                new Dictionary<string, MtgjsonDeck>(),
+                _ => CardKind.SecretLair);
         }
 
         /// <summary>Valore realizzabile lordo di una copia a questo prezzo (bulk, quota venduta, costo per carta).</summary>

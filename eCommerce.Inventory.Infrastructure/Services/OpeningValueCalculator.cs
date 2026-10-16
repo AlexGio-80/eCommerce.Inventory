@@ -17,6 +17,7 @@ namespace eCommerce.Inventory.Infrastructure.Services;
 public class OpeningValueCalculator
 {
     private readonly Func<Guid, bool, decimal?> _priceOf;
+    private readonly Func<Guid, CardKind?>? _kindOf;
     private readonly OpeningValueSettings _settings;
     private readonly Dictionary<(Guid, bool), decimal?> _cardValueCache = new();
     private readonly Dictionary<string, PackValue> _packCache = new();
@@ -28,14 +29,17 @@ public class OpeningValueCalculator
     /// <param name="configs">Configurazioni per chiave busta ("TRK:play").</param>
     /// <param name="sheets">Fogli per chiave busta e nome foglio.</param>
     /// <param name="decks">Mazzi per chiave "SET:nome".</param>
+    /// <param name="kindOf">Tipo di una carta, per il fattore prezzo realizzato del suo tipo; null = fattore unico.</param>
     public OpeningValueCalculator(
         Func<Guid, bool, decimal?> priceOf,
         OpeningValueSettings settings,
         IReadOnlyDictionary<string, List<BoosterConfig>> configs,
         IReadOnlyDictionary<(string PackKey, string Sheet), BoosterSheet> sheets,
-        IReadOnlyDictionary<string, MtgjsonDeck> decks)
+        IReadOnlyDictionary<string, MtgjsonDeck> decks,
+        Func<Guid, CardKind?>? kindOf = null)
     {
         _priceOf = priceOf;
+        _kindOf = kindOf;
         _settings = settings;
         _configs = configs;
         _sheets = sheets;
@@ -46,8 +50,9 @@ public class OpeningValueCalculator
 
     /// <summary>
     /// Valore realizzabile di una copia: il bulk vale il suo prezzo per la quota venduta. Le altre
-    /// valgono il prezzo corretto da <see cref="OpeningValueSettings.PriceFactor"/>, meno il costo
-    /// fisso per carta, per la quota che se ne vende in quella fascia di prezzo. Mai meno del bulk.
+    /// valgono il prezzo corretto dal fattore prezzo realizzato del loro tipo
+    /// (<see cref="OpeningValueSettings.FactorFor"/>), meno il costo fisso per carta, per la quota che
+    /// se ne vende in quella fascia di prezzo. Mai meno del bulk.
     /// </summary>
     public decimal? CardValue(Guid uuid, bool foil)
     {
@@ -55,12 +60,13 @@ public class OpeningValueCalculator
 
         var price = _priceOf(uuid, foil);
         var bulkValue = _settings.BulkPrice * _settings.BulkSellThrough;
+        var factor = _settings.FactorFor(_kindOf?.Invoke(uuid));
         decimal? value = price switch
         {
             null => null,
             _ when price < _settings.BulkThreshold => bulkValue,
             _ => Math.Max(bulkValue,
-                _settings.SellThroughAt(price.Value) * (price.Value * _settings.PriceFactor - CostPerCardGross()))
+                _settings.SellThroughAt(price.Value) * (price.Value * factor - CostPerCardGross()))
         };
 
         _cardValueCache[(uuid, foil)] = value;
@@ -211,7 +217,8 @@ public class OpeningValueCalculator
 
 /// <param name="PriceFactor">
 /// Rapporto fra quanto si incassa davvero e il prezzo usato (vedi <see cref="PriceRealizationService"/>);
-/// 1 = nessuna correzione. Non tocca il bulk, che ha le sue regole.
+/// 1 = nessuna correzione. Non tocca il bulk, che ha le sue regole. Vale per le carte di tipo
+/// sconosciuto e per i tipi assenti da <paramref name="PriceFactors"/>.
 /// </param>
 /// <param name="CostPerCard">
 /// Costo fisso in euro per ogni copia venduta sopra la soglia del bulk: tempo per caricarla,
@@ -221,6 +228,7 @@ public class OpeningValueCalculator
 /// Quota venduta per fascia di prezzo sopra la soglia del bulk (vedi <see cref="BulkSellThroughService"/>).
 /// Null o vuota = si presume di vendere tutto.
 /// </param>
+/// <param name="PriceFactors">Fattore prezzo realizzato per tipo di carta; null = <paramref name="PriceFactor"/> per tutte.</param>
 public record OpeningValueSettings(
     decimal BulkThreshold,
     decimal BulkPrice,
@@ -228,9 +236,16 @@ public record OpeningValueSettings(
     decimal SellingCostPercent,
     decimal PriceFactor = 1m,
     decimal CostPerCard = 0m,
-    IReadOnlyList<SellThroughBand>? SellThroughBands = null)
+    IReadOnlyList<SellThroughBand>? SellThroughBands = null,
+    IReadOnlyDictionary<CardKind, decimal>? PriceFactors = null)
 {
     public decimal Net(decimal gross) => gross * (1 - SellingCostPercent / 100m);
+
+    public decimal FactorFor(CardKind? kind) =>
+        kind is { } k && PriceFactors != null && PriceFactors.TryGetValue(k, out var factor) ? factor : PriceFactor;
+
+    /// <summary>Stessi parametri senza correzione del prezzo: per i prezzi Card Trader, il mercato su cui si vende.</summary>
+    public OpeningValueSettings WithoutPriceFactor() => this with { PriceFactor = 1m, PriceFactors = null };
 
     /// <summary>Quota venduta delle carte a questo prezzo; 1 se non misurata.</summary>
     public decimal SellThroughAt(decimal price) =>

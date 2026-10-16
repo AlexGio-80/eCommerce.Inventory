@@ -198,8 +198,10 @@ public class SealedProductAnalysisService
         var sellThrough = overrides?.BulkSellThroughPercent is { } percent ? percent / 100m : measured.Share;
         var bands = await _bulkSellThrough.MeasureBandsAsync(threshold, measured, cancellationToken);
 
+        // Fattore prezzo realizzato per tipo di carta: misurato, o quello scritto nella pagina.
         var realization = await _priceRealization.MeasureAsync(cancellationToken);
-        var priceFactor = overrides?.PriceRealizationPercent is { } factorPercent ? factorPercent / 100m : realization.Factor;
+        var priceFactors = Enum.GetValues<CardKind>().ToDictionary(k => k, k =>
+            overrides?.PriceRealizationPercentFor(k) is { } percentOverride ? percentOverride / 100m : realization.FactorFor(k));
 
         // Commissione reale di Card Trader dagli ordini: solo informativa, accanto al costo scelto.
         var fees = await _db.Orders.AsNoTracking()
@@ -208,14 +210,16 @@ public class SealedProductAnalysisService
             .Select(g => new { Fee = g.Sum(o => o.SellerFee), Subtotal = g.Sum(o => o.SellerSubtotal) })
             .FirstOrDefaultAsync(cancellationToken);
 
-        var values = new OpeningValueSettings(threshold, bulkPrice, sellThrough, costPercent, priceFactor, costPerCard,
-            bands.Select(b => new SellThroughBand(b.From, b.Share)).ToList());
+        var values = new OpeningValueSettings(threshold, bulkPrice, sellThrough, costPercent, realization.Factor, costPerCard,
+            bands.Select(b => new SellThroughBand(b.From, b.Share)).ToList(), priceFactors);
         var dto = new OpeningValueSettingsDto(
             threshold, bulkPrice, Math.Round(sellThrough * 100m, 1), costPercent,
             Math.Round(measured.Share * 100m, 1), measured.Measured,
             measured.Expansions.Select(e => new BulkSellThroughDto(e.Name, e.ReleaseDate, e.Sold, e.InStock, Math.Round(e.Share * 100m, 1))).ToList(),
             fees is { Subtotal: > 0 } ? Math.Round(fees.Fee / fees.Subtotal * 100m, 2) : null,
-            Math.Round(priceFactor * 100m, 1), Math.Round(realization.Factor * 100m, 1), realization.Measured, realization.Copies,
+            Math.Round(realization.Factor * 100m, 1), realization.Measured, realization.Copies,
+            realization.Kinds.Select(k => new PriceRealizationDto(
+                k.Kind.ToString(), Math.Round(priceFactors[k.Kind] * 100m, 1), Math.Round(k.Factor * 100m, 1), k.Measured, k.Copies)).ToList(),
             costPerCard,
             bands.Select(b => new SellThroughBandDto(b.From, b.To, b.Sold, b.InStock, Math.Round(b.Share * 100m, 1), b.Measured)).ToList());
 
@@ -281,6 +285,10 @@ public class SealedProductAnalysisService
             return foil ? price.TrendFoil is > 0 ? price.TrendFoil : null : price.Trend is > 0 ? price.Trend : null;
         }
 
+        var setTypes = await _db.MtgjsonSets.AsNoTracking().ToDictionaryAsync(s => s.Code, s => s.Type, cancellationToken);
+        CardKind? KindOf(Guid uuid) =>
+            cards.TryGetValue(uuid, out var card) ? CardKinds.Of(card.SetCode, setTypes.GetValueOrDefault(card.SetCode)) : null;
+
         decimal? CtPrice(Guid uuid, bool foil)
         {
             if (!cards.TryGetValue(uuid, out var card) || card.ScryfallId == null) return null;
@@ -289,9 +297,9 @@ public class SealedProductAnalysisService
         }
 
         return new OpeningCalculators(
-            new OpeningValueCalculator(CmPrice, settings, configs, sheets, decks),
+            new OpeningValueCalculator(CmPrice, settings, configs, sheets, decks, KindOf),
             // Card Trader è il mercato su cui si vende: il fattore misurato rispetto a Cardmarket non vale.
-            new OpeningValueCalculator(CtPrice, settings with { PriceFactor = 1m }, configs, sheets, decks),
+            new OpeningValueCalculator(CtPrice, settings.WithoutPriceFactor(), configs, sheets, decks),
             cards,
             ctPrices.Count > 0 ? ctPrices.Values.Max(p => p.UpdatedAt) : null);
     }
@@ -892,8 +900,19 @@ public record OpeningValueOverrides(
     decimal? BulkPrice,
     decimal? BulkSellThroughPercent,
     decimal? SellingCostPercent,
-    decimal? PriceRealizationPercent = null,
-    decimal? CostPerCard = null);
+    decimal? CostPerCard = null,
+    decimal? BoosterPriceRealizationPercent = null,
+    decimal? DeckPriceRealizationPercent = null,
+    decimal? SecretLairPriceRealizationPercent = null)
+{
+    public decimal? PriceRealizationPercentFor(CardKind kind) => kind switch
+    {
+        CardKind.Booster => BoosterPriceRealizationPercent,
+        CardKind.Deck => DeckPriceRealizationPercent,
+        CardKind.SecretLair => SecretLairPriceRealizationPercent,
+        _ => null
+    };
+}
 
 public record OpeningValueSettingsDto(
     decimal BulkThreshold,
@@ -904,12 +923,18 @@ public record OpeningValueSettingsDto(
     bool BulkSellThroughMeasured,
     List<BulkSellThroughDto> BulkSellThroughExpansions,
     decimal? MeasuredCardTraderFeePercent,
-    decimal PriceRealizationPercent,
     decimal MeasuredPriceRealizationPercent,
     bool PriceRealizationMeasured,
     int PriceRealizationSampleCopies,
+    List<PriceRealizationDto> PriceRealizations,
     decimal CostPerCard,
     List<SellThroughBandDto> SellThroughBands);
+
+/// <param name="Kind">Tipo di carta (<see cref="CardKind"/>): Booster, Deck, SecretLair.</param>
+/// <param name="Percent">Fattore usato: quello misurato o quello scritto nella pagina.</param>
+/// <param name="MeasuredPercent">Misurato sulle vendite; il complessivo se il campione del tipo è troppo piccolo.</param>
+/// <param name="Measured">False se il campione del tipo era troppo piccolo.</param>
+public record PriceRealizationDto(string Kind, decimal Percent, decimal MeasuredPercent, bool Measured, int Copies);
 
 /// <param name="SharePercent">Quota venduta; 100 se il campione è troppo piccolo (<paramref name="Measured"/> falso).</param>
 public record SellThroughBandDto(decimal From, decimal? To, int Sold, int InStock, decimal SharePercent, bool Measured);
