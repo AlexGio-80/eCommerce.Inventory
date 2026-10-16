@@ -334,6 +334,7 @@ costo vero per carta. Per cambiare modello basta `Scan:Model` e un riavvio del s
 | `Purchasing:*` | Parametri del valore atteso (soglia e prezzo del bulk, costi di vendita) e lotto giornaliero di uscite MTGJSON |
 | `Email:*` | SMTP per le email degli avvisi (password solo qui) |
 | `Anthropic:ApiKey` | Chiave API per il riconoscimento delle carte dal telefono (vedi "Riconoscimento delle carte") |
+| `Grading:Provider` | Stima della condizione dalle foto: `Claude` (predefinito, usa la stessa chiave Anthropic) o `Ximilar` (serve `Ximilar:ApiKey`; lettura della risposta non ancora scritta) |
 | `Scan:Model` / `Scan:DailyLimit` | Modello Claude del riconoscimento (predefinito `claude-opus-5-5`) e riconoscimenti al giorno (predefinito 200) |
 | `Cors:ExtraOrigins` | Origini in più accettate dall'API, oltre a `localhost:4200` e `inventory.local`: l'indirizzo Tailscale del PC per il telefono (vedi "Accesso dal telefono") |
 

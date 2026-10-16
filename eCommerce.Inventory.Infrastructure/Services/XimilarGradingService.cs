@@ -36,10 +36,10 @@ namespace eCommerce.Inventory.Infrastructure.Services
         {
             var apiKey = _configuration["Ximilar:ApiKey"];
 
+            // Niente più voti inventati senza chiave: un voto casuale finito in un'inserzione è peggio di nessun voto.
             if (string.IsNullOrEmpty(apiKey))
             {
-                _logger.LogWarning("Ximilar API Key not found. Returning MOCK data for {Count} images.", images.Count);
-                return GetMockGradingResult(images.Count);
+                throw new InvalidOperationException("Chiave API Ximilar non configurata (Ximilar:ApiKey)");
             }
 
             try
@@ -69,26 +69,6 @@ namespace eCommerce.Inventory.Infrastructure.Services
                 _logger.LogError(ex, "Error calling Ximilar API");
                 throw;
             }
-        }
-
-        private GradingResultDto GetMockGradingResult(int imageCount)
-        {
-            var random = new Random();
-            var overallGrade = (decimal)(random.Next(70, 100) / 10.0);
-            var result = new GradingResultDto
-            {
-                OverallGrade = overallGrade,
-                Centering = (decimal)(random.Next(80, 100) / 10.0),
-                Corners = (decimal)(random.Next(70, 100) / 10.0),
-                Edges = (decimal)(random.Next(70, 100) / 10.0),
-                Surface = (decimal)(random.Next(60, 100) / 10.0),
-                Confidence = 0.95m,
-                Provider = "MockService",
-                ImagesAnalyzed = imageCount
-            };
-
-            ApplyConditionMapping(result);
-            return result;
         }
 
         private GradingResultDto ParseXimilarResponse(string json)

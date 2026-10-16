@@ -9,6 +9,49 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-16] Feature — App per smartphone, Fase 2: stima della condizione dalle foto
+
+#### Problema
+
+- La stima della condizione con l'IA era un mock: senza chiave Ximilar dava voti casuali, e con la chiave
+  valori fissi (la lettura della risposta non era mai stata scritta). Nella maschera quei voti finivano
+  nel campo condizione e sui campi `Grading*` delle inserzioni.
+
+#### Soluzione Implementata
+
+- **"Stima condizione"** nella scheda del telefono: foto del fronte e, se si vuole, del retro; Claude propone
+  la condizione Card Trader con la sicurezza e una motivazione per angoli, bordi, superficie e centratura.
+  **"Usa questa condizione"** la applica e ricalcola i prezzi; senza quel tocco non cambia niente.
+- Nel dubbio la stima sceglie la condizione peggiore: un'inserzione troppo ottimista costa un reclamo.
+- La pagina "AI Grading" e la sezione "AI Grading" della maschera usano la stessa stima vera.
+
+#### Note Tecniche
+
+- `ClaudeGradingService` implementa `IGradingService` (effort medio, JSON vincolato a uno schema); scelta
+  da `Grading:Provider` (predefinito Claude). `XimilarGradingService` senza chiave ora risponde con un
+  errore invece che con voti inventati.
+- `AnthropicClientProvider` condiviso con il riconoscimento; `GradingController` conta ogni stima nel
+  limite `Scan:DailyLimit` e risponde 503/429/502 con un messaggio in italiano.
+- `GradingResultDto` ha le motivazioni per aspetto e un riepilogo.
+- Il prompt descrive il retro standard di Magic (logo, sfere colorate, scritta "Deckmaster" con i suoi segni
+  stampati) e gli elementi stampati del fronte: non sono difetti. Alla prima prova dell'utente il segno blu
+  stampato su "Deckmaster" era stato preso per inchiostro di penna, e la carta valutata Played. Un segno che
+  potrebbe essere stampato si segnala nella nota ma non abbassa la condizione.
+- Dopo le prove dell'utente del 16/10 (Writ of Passage stimata NM, poi SP; sbeccature del fronte e retro
+  ingiallito di una Montagna M10 visibili solo sotto la luce o in controluce; bordo dentellato non visto):
+  - **Near Mint solo con il retro fotografato e sicurezza alta** (`ApplyNearMintGuard`), altrimenti
+    Slightly Played con la nota "Potrebbe essere Near Mint": regola fissa, non lasciata all'IA;
+  - fino a **due foto "dettaglio"** oltre a fronte e retro (sotto la luce, controluce, primo piano); il ruolo
+    di ogni foto arriva dal nome del file (`fronte`, `retro`, `dettaglio-N`), dal PC la prima è il fronte e la
+    seconda il retro;
+  - istruzioni sui difetti facili da perdere: sbeccature bianche sui bordi neri, bordi dentellati o tagliati
+    male, retro ingiallito o opaco, leggere curvature;
+  - consiglio sullo schermo di riempire la foto con la carta; effort alto invece di medio: 4-6 centesimi a
+    stima secondo il numero di foto (misurato il 16/10).
+- Sulle foto Claude risponde quasi sempre con sicurezza media, quindi la regola abbassava ogni NM: quando
+  succede (`NearMintPossible`) il telefono offre anche "Usa Near Mint". Il log scrive per ogni stima la
+  proposta, la condizione detta da Claude, la sicurezza e le foto.
+
 ### [2026-10-16] Feature — App per smartphone, Fase 1: foto, riconoscimento e scheda di valutazione
 
 #### Problema

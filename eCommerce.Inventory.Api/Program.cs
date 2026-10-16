@@ -113,6 +113,7 @@ builder.Services.AddScoped<ListingPriceSuggestionService>();
 
 // Sezione per il telefono (feature 006): riconoscimento delle carte con Claude e scheda di valutazione.
 // Il lettore tiene il client Anthropic, il contatore il limite giornaliero: entrambi singleton.
+builder.Services.AddSingleton<AnthropicClientProvider>();
 builder.Services.AddSingleton<ICardImageReader, ClaudeCardImageReader>();
 builder.Services.AddSingleton<ScanDailyCounter>();
 builder.Services.AddScoped<CardScanService>();
@@ -238,8 +239,11 @@ builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJ
 builder.Services.Configure<BackupSettings>(builder.Configuration.GetSection("Backup"));
 builder.Services.AddHostedService<BackupService>();
 
-// Register Grading Service
-builder.Services.AddHttpClient<IGradingService, XimilarGradingService>();
+// Stima della condizione dalle foto: Claude (predefinito) o Ximilar, da Grading:Provider.
+if (string.Equals(builder.Configuration["Grading:Provider"], "Ximilar", StringComparison.OrdinalIgnoreCase))
+    builder.Services.AddHttpClient<IGradingService, XimilarGradingService>();
+else
+    builder.Services.AddSingleton<IGradingService, ClaudeGradingService>();
 
 // Listino prezzi pubblico di Cardmarket: import giornaliero nello storico (CardmarketImport:Enabled)
 builder.Services.AddHttpClient<eCommerce.Inventory.Infrastructure.ExternalServices.Cardmarket.ICardmarketDownloadClient,

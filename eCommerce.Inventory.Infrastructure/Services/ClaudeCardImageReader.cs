@@ -3,23 +3,19 @@ using Anthropic;
 using Anthropic.Models.Messages;
 using eCommerce.Inventory.Application.DTOs;
 using eCommerce.Inventory.Application.Interfaces;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace eCommerce.Inventory.Infrastructure.Services;
 
 /// <summary>
 /// Legge una carta Magic dalla foto con Claude (API Anthropic). Una sola chiamata, risposta in JSON
-/// vincolato a uno schema. La chiave sta in <c>Anthropic:ApiKey</c>, solo nella configurazione di
-/// produzione; il modello in <c>Scan:Model</c> (predefinito Claude Opus 5.5).
+/// vincolato a uno schema. Chiave e modello da <see cref="AnthropicClientProvider"/>.
 ///
 /// Il lettore non sceglie la carta: restituisce quello che è stampato, e la corrispondenza con i
 /// blueprint la fa <see cref="CardScanService"/>.
 /// </summary>
 public class ClaudeCardImageReader : ICardImageReader
 {
-    public const string DefaultModel = "claude-opus-5-5";
-
     /// <summary>Le lingue con i nomi usati dalla maschera "Nuovo Prodotto" e da Card Trader.</summary>
     public static readonly string[] Languages =
         { "English", "Italian", "Japanese", "French", "German", "Spanish", "Chinese", "Portuguese", "Russian", "Korean" };
@@ -37,28 +33,23 @@ public class ClaudeCardImageReader : ICardImageReader
         - notes: one short sentence in Italian about anything unreadable or doubtful, or null.
         """;
 
-    private readonly IConfiguration _configuration;
+    private readonly AnthropicClientProvider _anthropic;
     private readonly ILogger<ClaudeCardImageReader> _logger;
-    private AnthropicClient? _client;
 
-    public ClaudeCardImageReader(IConfiguration configuration, ILogger<ClaudeCardImageReader> logger)
+    public ClaudeCardImageReader(AnthropicClientProvider anthropic, ILogger<ClaudeCardImageReader> logger)
     {
-        _configuration = configuration;
+        _anthropic = anthropic;
         _logger = logger;
     }
 
-    private string? ApiKey => _configuration["Anthropic:ApiKey"];
-
-    public bool IsConfigured => !string.IsNullOrWhiteSpace(ApiKey);
+    public bool IsConfigured => _anthropic.IsConfigured;
 
     public async Task<CardReading> ReadAsync(byte[] image, string mediaType, CancellationToken cancellationToken = default)
     {
-        if (!IsConfigured) throw new InvalidOperationException("Chiave API Anthropic non configurata (Anthropic:ApiKey)");
+        var client = _anthropic.Client;
+        var model = _anthropic.Model;
 
-        _client ??= new AnthropicClient { ApiKey = ApiKey };
-        var model = _configuration["Scan:Model"] ?? DefaultModel;
-
-        var response = await _client.Messages.Create(new MessageCreateParams
+        var response = await client.Messages.Create(new MessageCreateParams
         {
             Model = model,
             MaxTokens = 4096,
@@ -75,19 +66,7 @@ public class ClaudeCardImageReader : ICardImageReader
                     Role = Role.User,
                     Content = new List<ContentBlockParam>
                     {
-                        new ImageBlockParam
-                        {
-                            Source = new Base64ImageSource
-                            {
-                                Data = Convert.ToBase64String(image),
-                                MediaType = mediaType switch
-                                {
-                                    "image/png" => MediaType.ImagePng,
-                                    "image/webp" => MediaType.ImageWebP,
-                                    _ => MediaType.ImageJpeg,
-                                },
-                            },
-                        },
+                        AnthropicClientProvider.ImageBlock(image, mediaType),
                         new TextBlockParam { Text = "Read this card." },
                     },
                 },

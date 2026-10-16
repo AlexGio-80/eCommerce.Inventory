@@ -9,7 +9,7 @@
 
 **Titolo feature:** `App per smartphone`
 **Priorità:** ultima grande feature in programma
-**Stato (2026-10-16):** progetto approvato; Fase 0 pubblicata, configurata e verificata (guida in `DEPLOY.md`, "Accesso dal telefono"); Fase 1 pubblicata e verificata.
+**Stato (2026-10-16):** progetto approvato; Fasi 0, 1 e 2 pubblicate e verificate (accesso con la guida in `DEPLOY.md`, "Accesso dal telefono"); resta la Fase 3 (pending list dal telefono).
 
 L'utente vuole usare il gestionale dal telefono, in quest'ordine di importanza:
 
@@ -219,16 +219,37 @@ nelle espansioni "Collectors" (`cafr`, `cfra`): corretto lo stesso giorno, verif
 card non si riconoscono, scelta accettata. Costo misurato: circa 2.700 token in ingresso e 100 in uscita,
 circa 1,3 centesimi a carta con Opus 5.5; circa 6 s fra PC e Claude.
 
-### Fase 2 — Stima della condizione (completamento del bisogno 1)
+### Fase 2 — Stima della condizione (completamento del bisogno 1) *(pubblicata e verificata il 2026-10-16)*
 
-- Nella scheda, "Stima condizione": foto del fronte e del retro (anche due inquadrature dello stesso
-  lato), stessa chiamata a Claude con un prompt dedicato. Risposta nel formato di `GradingResultDto`,
-  con le motivazioni ("angolo in alto a destra sbiancato").
-- Nuova implementazione di `IGradingService` per Claude; `XimilarGradingService` resta come
-  alternativa da configurazione. Il **mock con voti casuali viene tolto** dalla strada normale: un voto
-  inventato che finisce in una pending list è peggio di nessun voto.
-- La condizione stimata **propone** il valore del campo; i voti si salvano sui campi `Grading*` già
-  esistenti di `PendingListing`.
+Schermate e proposte approvate dall'utente il 2026-10-16.
+
+- Nella scheda, **"Stima condizione"**: foto del fronte (obbligatoria) e del retro (facoltativa), ridotte
+  sul telefono a 1.568 px sul lato lungo (il massimo che Claude usa davvero), in una sola chiamata a
+  `POST /api/grading/analyze-multi`.
+- `ClaudeGradingService` (nuova implementazione di `IGradingService`, effort medio, JSON vincolato a uno
+  schema): condizione Card Trader (NM, SP, MP, PL, PO), sicurezza, voti 1-10 per centratura, angoli,
+  bordi, superficie, e una motivazione in italiano per ciascuno. **Nel dubbio sceglie la condizione
+  peggiore**; con bustina, riflessi o foto mossa lo dice e abbassa la sicurezza.
+- **"Usa questa condizione"** imposta la condizione della scheda e ricalcola i prezzi: senza quel tocco non
+  cambia niente.
+- Il grading finto è tolto: `Grading:Provider` sceglie fra Claude (predefinito) e Ximilar, e Ximilar senza
+  chiave risponde con un errore invece che con voti casuali (la lettura della risposta Ximilar resta da
+  scrivere, se un giorno servisse). Anche la pagina "AI Grading" e la sezione "AI Grading" della maschera
+  "Nuovo Prodotto" usano ora la stima vera; nella maschera la condizione proposta va nel campo, che si
+  controlla prima di inviare (comportamento di prima).
+- Dopo le prime prove dell'utente (16/10): **Near Mint solo con il retro fotografato e sicurezza alta**,
+  altrimenti Slightly Played con la nota "Potrebbe essere Near Mint"; fino a **due foto "dettaglio"** (sotto
+  la luce, controluce, primo piano di un difetto); istruzioni su sbeccature dei bordi neri, bordi dentellati,
+  retro ingiallito; consiglio di riempire la foto con la carta; effort alto. La stima resta un primo filtro:
+  alcuni difetti si vedono solo con la carta in mano.
+- Quando la regola abbassa un Near Mint di Claude, accanto a "Usa questa condizione" (SP) compare **"Usa
+  Near Mint"**: sulle foto Claude risponde quasi sempre con sicurezza media, e senza il pulsante NM sarebbe
+  raggiungibile solo dal menu.
+- Ogni stima conta come un riconoscimento nel limite `Scan:DailyLimit`. Il log scrive per ogni stima la
+  proposta, la condizione detta da Claude, la sicurezza e le foto usate. Client Anthropic condiviso
+  (`AnthropicClientProvider`). Le foto non si salvano.
+- I voti si salveranno sui campi `Grading*` di `PendingListing` con la Fase 3, aggiungendo alla coda dal
+  telefono.
 
 **Verifica:** 20 carte di cui l'utente conosce la condizione (anche alcune SP e MP): quante stime
 coincidono e, soprattutto, quante volte la stima è *migliore* della realtà (l'errore che costa). Se
@@ -249,6 +270,14 @@ Tag giusti; nella maschera del PC la coda è la stessa; nel log, "pubblicati al 
 quelle lasciate al prezzo proposto.
 
 ### Fuori da queste fasi, da rivalutare dopo l'uso
+
+- **Stima che impara dalle correzioni** (idea dell'utente del 16/10). Con la Fase 3 ogni inserzione caricata dal
+  telefono avrà sia la condizione proposta (`GradingConditionCode`, con le motivazioni) sia quella scelta
+  davvero (`Condition`): le differenze nette sono già un archivio di errori, senza lavoro in più. Da lì due
+  strade, senza addestrare un modello: una revisione periodica (come quella degli avvisi) che propone
+  ritocchi alle istruzioni della stima, da approvare; oppure le ultime correzioni nette, come brevi "lezioni"
+  scritte, aggiunte in automatico alle istruzioni. Le valutazioni che solo una persona può dare (tolleranza
+  sulle carte vecchie e di poco valore) restano fuori: sono regole di vendita, non di stima.
 
 - **Capacitor**, se la fotocamera del browser si rivela scomoda (messa a fuoco, flash).
 - **Scansione a raffica** (più carte di fila senza tornare alla scheda) per i lotti.

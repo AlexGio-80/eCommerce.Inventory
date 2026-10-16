@@ -14,6 +14,14 @@ export interface GradingResult {
     conditionCode: string;    // NM, SP, MP, PL, PO
     conditionName: string;    // Near Mint, Slightly Played, etc.
     imagesAnalyzed: number;
+    // Motivazioni in italiano, per aspetto (stima con Claude)
+    centeringNote?: string;
+    cornersNote?: string;
+    edgesNote?: string;
+    surfaceNote?: string;
+    summary?: string;
+    // Claude ha detto Near Mint, la regola prudente ha proposto Slightly Played
+    nearMintPossible?: boolean;
 }
 
 @Injectable({
@@ -30,10 +38,10 @@ export class GradingService {
         return this.http.post<GradingResult>(`${this.apiUrl}/analyze`, formData);
     }
 
-    analyzeCardMultiple(images: File[]): Observable<GradingResult> {
+    analyzeCardMultiple(images: Blob[]): Observable<GradingResult> {
         const formData = new FormData();
-        images.forEach(image => {
-            formData.append('images', image);
+        images.forEach((image, i) => {
+            formData.append('images', image, image instanceof File ? image.name : `foto-${i + 1}.jpg`);
         });
         return this.http.post<GradingResult>(`${this.apiUrl}/analyze-multi`, formData);
     }

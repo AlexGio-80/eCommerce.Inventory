@@ -12,5 +12,17 @@ namespace eCommerce.Inventory.Application.DTOs
         public string ConditionCode { get; set; } = string.Empty; // NM, SP, MP, PL, PO
         public string ConditionName { get; set; } = string.Empty; // Near Mint, Slightly Played, etc.
         public int ImagesAnalyzed { get; set; } = 1;
+
+        // Motivazioni in italiano, una per aspetto (stima con Claude; vuote con Ximilar).
+        public string? CenteringNote { get; set; }
+        public string? CornersNote { get; set; }
+        public string? EdgesNote { get; set; }
+        public string? SurfaceNote { get; set; }
+
+        /// <summary>Una frase sul perché della condizione proposta, o sui limiti della foto.</summary>
+        public string? Summary { get; set; }
+
+        /// <summary>Claude ha detto Near Mint, ma la regola prudente ha proposto Slightly Played: il telefono offre "Usa Near Mint".</summary>
+        public bool NearMintPossible { get; set; }
     }
 }
