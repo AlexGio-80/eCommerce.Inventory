@@ -9,6 +9,54 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-16] Feature — Prezzo delle regole nella maschera "Nuovo Prodotto"
+
+#### Problema
+
+- Nella maschera il prezzo si metteva a mano (spesso la media), e il riprezzo subito dopo la
+  pubblicazione lo correggeva: il 15/10 lo ha fatto sul 98% delle 302 carte pubblicate.
+- Listando a blocchi di 20, durante il blocco successivo la maschera diventava lenta: 18 richieste
+  di statistiche oltre i 20 s (fino a 55 s), tutte nei 2-3 minuti dopo una pubblicazione. Il
+  riprezzo costava 2 richieste a carta (lettura del marketplace e scrittura) e si prendeva i 20
+  permessi di ogni finestra in una decina di secondi; il limitatore serviva in ordine d'arrivo e la
+  maschera aspettava la finestra successiva. Il coordinatore delle esecuzioni non c'entrava: il
+  riprezzo dopo la pubblicazione non ci passa.
+- Ogni carta costava anche 1,57 letture del marketplace solo nella maschera, rifatte a ogni cambio
+  di condizione, lingua o foil.
+
+#### Soluzione Implementata
+
+- Scelta la carta, la maschera mostra il **prezzo delle regole** (fascia, N-esima offerta, ripieghi,
+  solo Card Trader Zero, conversione vetrina/incasso) e lo mette nel campo, se il prezzo non è stato
+  scelto a mano. Si ricalcola a ogni cambio di condizione, lingua, foil o firma. In modifica di
+  un'inserzione esistente si propone soltanto. Se le regole non danno un prezzo la maschera lo dice,
+  con la motivazione del motore nel suggerimento.
+- Se il prezzo inviato è quello delle regole, la pubblicazione **non accoda il riprezzo**: la carta
+  resta "nuova" per la notturna, che corregge l'eventuale scarto di centesimi sul sovrapprezzo.
+- Le offerte lette restano in cache 10 minuti: statistiche, prezzo delle regole e riprezzo dopo la
+  pubblicazione usano la stessa lettura. La notturna rilegge sempre.
+- Il limite di 20 richieste al minuto dà la precedenza alla maschera; mentre è in uso (5 minuti
+  dall'ultima richiesta) il lavoro in background lascia libere 5 richieste per finestra.
+
+#### Note Tecniche
+
+- `PricingEngine.SuggestNewListingPrice`: stima di partenza = mediana delle offerte confrontabili meno
+  il sovrapprezzo minimo, poi `Evaluate` come carta nuova (stesso codice, `EvaluateCore` con
+  `suggestion: true` cambia solo le motivazioni). Endpoint `GET /api/pricing/suggest/{blueprintId}`
+  (id locale) → `ListingPriceSuggestionService`.
+- `IMarketplaceOfferCache` / `MarketplaceOfferCache` (singleton): `AutoPricingService.RunAsync` riceve
+  `reuseOffersYoungerThan`, passato solo da `PriceRefreshWorker` col trigger `ListingCreated`.
+  `marketplace-stats` passa dalla cache.
+- `PendingListings.SuggestedPrice` (decimal(18,2) nullable, migration `AddPendingListingSuggestedPrice`):
+  la pubblicazione salta il riprezzo di un blueprint se tutte le sue inserzioni del giro hanno
+  `SellingPrice == SuggestedPrice`.
+- `CardTraderRateLimiter` riscritto (finestra fissa da 20, `TimeProvider` per i test): due code,
+  `CardTraderRequestPriority` (AsyncLocal) segna le richieste interattive. Tolto il tetto di 10
+  richieste in coda, oltre il quale il limitatore lanciava un'eccezione che il client trasformava in
+  "nessuna offerta". Le attese della maschera oltre 5 s finiscono nel log a livello Information.
+- Test: `CardTraderRateLimiterTests`, `MarketplaceOfferCacheTests`, prezzo delle regole e riuso delle
+  offerte in `InserzioniNuoveTests`, salto del riprezzo in `PublishedListingRepricingTests`.
+
 ### [2026-10-16] Fix — Prezzo realizzato misurato per buste, mazzi e Secret Lair
 
 #### Problema

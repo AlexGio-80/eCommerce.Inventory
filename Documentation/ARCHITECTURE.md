@@ -82,8 +82,9 @@ eCommerce.Inventory/
   - `IExpansionAnalyticsService.cs`, `IGradingService.cs`
   - `IPriceRefreshQueue.cs`: Coda dei blueprint da riprezzare fuori dall'esecuzione notturna — vendite e nuove inserzioni. Chi accoda risponde subito, il consumo avviene in background
   - `IPricingRunCoordinator.cs`: Tiene **una sola** esecuzione dell'autopricer per volta e la porta avanti fuori dal ciclo di richiesta HTTP
+  - `IMarketplaceOfferCache.cs`: Offerte del marketplace già lette, per blueprint, riusate per qualche minuto dalla maschera "Nuovo Prodotto" e dal riprezzo dopo la pubblicazione (mai dalla notturna)
 - **Pricing/** — logica di prezzo pura, senza dipendenze da rete o database
-  - `PricingEngine.cs`: Decide il prezzo di una carta date le offerte comparabili. Le regole della stessa fascia sono una catena di ripiego (si passa alla successiva se il mercato non basta); le carte mai prezzate (`isNewListing`) hanno la fascia ricalcolata sul prezzo proposto e nessun guardrail
+  - `PricingEngine.cs`: Decide il prezzo di una carta date le offerte comparabili. Le regole della stessa fascia sono una catena di ripiego (si passa alla successiva se il mercato non basta); le carte mai prezzate (`isNewListing`) hanno la fascia ricalcolata sul prezzo proposto e nessun guardrail. `SuggestNewListingPrice` dà il prezzo delle regole a una carta non ancora in vendita (maschera "Nuovo Prodotto"): parte dalla mediana delle offerte confrontabili e poi è la stessa valutazione della carta nuova
   - `PricingDecision.cs`: Esito della valutazione, con la motivazione
   - `PriceHistoryRecorder.cs`: Decide quali rilevazioni vale la pena registrare (serie a delta)
 - **Metrics/BusinessMetrics.cs**: Metriche Prometheus di dominio
@@ -139,6 +140,8 @@ eCommerce.Inventory/
 - `AutoPricingService.cs`: Orchestra l'autopricer — seleziona le carte, recupera le offerte, invoca il motore, scrive su Card Trader e registra ogni valutazione
 - `PricingRunCoordinator.cs`: Implementa `IPricingRunCoordinator`. **Singleton**: lo slot occupato dev'essere lo stesso per tutti
 - `PriceRefreshQueue.cs`: Coda in memoria dei blueprint da riprezzare. In memoria è sufficiente, perché una richiesta persa per un riavvio viene comunque recuperata dall'esecuzione notturna
+- `MarketplaceOfferCache.cs`: Implementa `IMarketplaceOfferCache`. **Singleton**, in memoria, età massima 10 minuti nel giro della maschera; due richieste contemporanee per la stessa carta condividono la lettura, una lettura vuota (anche un errore del client) non si conserva
+- `ListingPriceSuggestionService.cs`: Prezzo delle regole per la maschera "Nuovo Prodotto": profilo attivo, offerte dalla cache, `PricingEngine.SuggestNewListingPrice`
 - `AuthService.cs`, `BackupService.cs`, `ExpansionAnalyticsService.cs`, `RedisCacheService.cs`, `XimilarGradingService.cs`
 - Analisi acquisti:
   - `CardmarketPriceImportService.cs`: import del listino CM nello storico e negli ultimi prezzi
@@ -185,7 +188,7 @@ eCommerce.Inventory/
 **Caratteristiche**:
 - ✅ Dipende da Domain e Application
 - ✅ Contiene tutte le implementazioni concrete
-- ✅ HttpClient configurato con Bearer Token e rate limiter condiviso (20 req/min)
+- ✅ HttpClient configurato con Bearer Token e rate limiter condiviso (20 req/min, `CardTraderRateLimiter`): le richieste segnate con `CardTraderRequestPriority.BeginInteractive()` (la maschera "Nuovo Prodotto") passano davanti al lavoro in background e, per 5 minuti dopo l'ultima, il background lascia loro 5 richieste per finestra. Nessun tetto alla coda
 - ✅ Logging completo
 
 ---
@@ -294,6 +297,25 @@ eCommerce.Inventory/
 │  Frontend Angular (IIS) | Webhook Card Trader | Prometheus  │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+### Maschera "Nuovo Prodotto" e riprezzo dopo la pubblicazione
+
+```
+scelta della carta / cambio di condizione, lingua, foil
+  ├─ GET /api/cardtrader/inventory/marketplace-stats/{ctId}  ┐ priorità interattiva,
+  └─ GET /api/pricing/suggest/{blueprintId}                  ┘ una lettura in cache (10 min)
+        → PricingEngine.SuggestNewListingPrice → il prezzo va nel campo se non è stato toccato a mano
+invio → PendingListing.SellingPrice + SuggestedPrice
+pubblicazione (POST /api/pending-listings/sync)
+  ├─ prezzo = SuggestedPrice  → nessun riprezzo (la notturna tratta ancora la carta da nuova)
+  └─ prezzo diverso           → PriceRefreshQueue → PriceRefreshWorker → AutoPricingService
+                                 (trigger ListingCreated, offerte riusate dalla cache)
+```
+
+> Una carta non ancora pubblicata non è nel feed del marketplace, quindi il sovrapprezzo di Card
+> Trader non si può ricavare e vale il minimo noto (0,09 €). Sulle carte oltre 0,25 € il prezzo delle
+> regole nella maschera può risultare di qualche centesimo più alto di quello che la notturna
+> calcolerà a carta pubblicata: è lei a correggerlo.
 
 > Il Domain non dipende da nulla; l'Application dipende solo dal Domain; Infrastructure e API
 > dipendono da entrambi. Le frecce qui sopra indicano il **flusso dei dati**, non la direzione
@@ -596,6 +618,7 @@ L'architettura è progettata per aggiungere facilmente nuovi marketplace:
 | 2026-10-07 | Costo d'acquisto da un servizio unico in C#, non dalla vista | La regola delle copie aggiunte serve in quattro report e nel bilancio aperture: una sola implementazione evita versioni SQL e C# che divergono |
 | 2026-10-07 | Avvisi con stato: scattano quando la condizione diventa vera | Senza stato un "prezzo sotto soglia" vero per settimane manderebbe la stessa email ogni mattina |
 | 2026-10-08 | Regole di pricing a ripiego: le regole della stessa fascia si provano in ordine di priorità, e minimo di offerte e filtro Card Trader Zero possono stare sulla regola | Il minimo di offerte del profilo si controllava prima di scegliere la regola: un ripiego limitato alla posizione mancante non avrebbe aiutato i mercati sottili. Filtro venditori, scarto anomalie, minimo e posizione sono ora un passaggio unico ripetuto per ogni regola (`PrepareMarket`). Il ripiego scatta solo per mercato insufficiente, mai per guardrail o direzione |
+| 2026-10-16 | Prezzo delle regole già nella maschera "Nuovo Prodotto", niente riprezzo dopo la pubblicazione se il prezzo inviato è quello; offerte in cache per 10 minuti; precedenza alle richieste interattive nel limite di Card Trader | Il 15/10, dopo ogni blocco di 20 carte pubblicate, il riprezzo (2 richieste a carta, il 98% delle volte una scrittura) occupava il limite per 2-3 minuti e la maschera aspettava fino a 55 s per carta. Il calcolo resta nel motore (`SuggestNewListingPrice`), non duplicato. La cache non vale per la notturna, che deve vedere il mercato del momento |
 | 2026-10-08 | Carta "nuova" per l'autopricer = mai prezzata secondo lo storico (`PriceChangeLogs` senza `Applied`/`NoChangeNeeded`) | Il trigger dice solo da dove arriva la valutazione: se il riprezzo dopo la pubblicazione salta, la notturna deve trattarla ancora da nuova. Sulle carte nuove la fascia si ricalcola sul prezzo proposto e guardrail e direzione non si applicano |
 | 2026-10-08 | Valore atteso con costo fisso per carta e quota venduta per fascia di prezzo | Il costo per carta riportato al lordo (`CostPerCard / (1 − costi %)`) pesa al netto esattamente quanto configurato; le quote per fascia si misurano sulle stesse aperture all'uscita del bulk |
 | 2026-10-08 | Negozio Secret Lair letto dall'interfaccia StoreSearch di Scalefast, non dall'HTML | Il catalogo non è nell'HTML (lo disegna il browser); StoreSearch è la fonte della pagina stessa, non documentata (scelta dell'utente). Una risposta di forma inattesa è un errore registrato, non un catalogo vuoto |

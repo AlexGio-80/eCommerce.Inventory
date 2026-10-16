@@ -38,6 +38,8 @@ export interface CreatePendingListingDto {
     blueprintId: number;
     quantity: number;
     price: number;
+    /** Prezzo delle regole proposto dalla maschera: se coincide con price, niente riprezzo dopo la pubblicazione. */
+    suggestedPrice?: number;
     purchasePrice: number;
     condition: string;
     language: string;

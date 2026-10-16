@@ -195,6 +195,10 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             .Property(pl => pl.PurchasePrice)
             .HasPrecision(18, 2);
 
+        modelBuilder.Entity<PendingListing>()
+            .Property(pl => pl.SuggestedPrice)
+            .HasPrecision(18, 2);
+
         // Index for pending listings queries
         modelBuilder.Entity<PendingListing>()
             .HasIndex(pl => pl.IsSynced)

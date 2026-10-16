@@ -235,4 +235,123 @@ public class InserzioniNuoveTests
         run.AppliedCount.Should().Be(0);
         (await context.InventoryItems.SingleAsync()).ListingPrice.Should().Be(5m);
     }
+
+    // --- Prezzo delle regole nella maschera "Nuovo Prodotto", prima della pubblicazione ---
+
+    private static InventoryItem DaPubblicare() => new()
+    {
+        BlueprintId = 10,
+        Condition = "Near Mint",
+        Language = "English",
+        Quantity = 1,
+        Location = ""
+    };
+
+    [Fact]
+    public void La_maschera_propone_il_prezzo_che_il_riprezzo_darebbe_alla_carta_appena_pubblicata()
+    {
+        var engine = new PricingEngine();
+
+        var suggestion = engine.SuggestNewListingPrice(DaPubblicare(), BulkMarket(), Profile(), MyUserId);
+        var afterPublishing = engine.Evaluate(Item(5m), BulkMarket(), Profile(), MyUserId, isNewListing: true);
+
+        suggestion.Outcome.Should().Be(PricingOutcome.Applied);
+        suggestion.RuleId.Should().Be(1);
+        suggestion.ProposedPrice.Should().Be(0.30m).And.Be(afterPublishing.ProposedPrice);
+        suggestion.Reason.Should().StartWith("Prezzo delle regole");
+    }
+
+    [Fact]
+    public void Sulla_carta_di_valore_la_maschera_usa_la_regola_della_sua_fascia()
+    {
+        // Mediana 12 €: fascia 1–25 €, 2ª offerta −0,10 → 12 − 0,10 − 0,09 = 11,81 €.
+        var market = new List<CardTraderMarketplaceProductDto>
+        {
+            Offer(10m, userId: 2001), Offer(12m, userId: 2002), Offer(14m, userId: 2003)
+        };
+
+        var suggestion = new PricingEngine().SuggestNewListingPrice(DaPubblicare(), market, Profile(), MyUserId);
+
+        suggestion.RuleId.Should().Be(2);
+        suggestion.ProposedPrice.Should().Be(11.81m);
+    }
+
+    [Fact]
+    public void Le_mie_offerte_non_entrano_nel_prezzo_proposto_dalla_maschera()
+    {
+        var market = BulkMarket();
+        market.Add(Offer(0.05m, userId: MyUserId));
+
+        var suggestion = new PricingEngine().SuggestNewListingPrice(DaPubblicare(), market, Profile(), MyUserId);
+
+        suggestion.ProposedPrice.Should().Be(0.30m);
+    }
+
+    [Fact]
+    public void Senza_offerte_confrontabili_la_maschera_non_propone_un_prezzo()
+    {
+        var suggestion = new PricingEngine().SuggestNewListingPrice(
+            DaPubblicare(), new List<CardTraderMarketplaceProductDto>(), Profile(), MyUserId);
+
+        suggestion.Outcome.Should().Be(PricingOutcome.InsufficientOffers);
+    }
+
+    // --- Riprezzo dopo la pubblicazione con le offerte già lette dalla maschera ---
+
+    private static async Task<(AutoPricingService Service, PricingProfile Profile, Mock<ICardTraderApiService> Api)> PredisponiConCacheAsync(
+        MarketplaceOfferCache cache)
+    {
+        var context = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options);
+
+        var profile = Profile();
+        profile.IsActive = true;
+        context.PricingProfiles.Add(profile);
+        context.Blueprints.Add(new Blueprint { Id = 10, CardTraderId = 4242, Name = "Carta di prova", Version = "1" });
+        var item = Item(5m);
+        item.CardTraderProductId = 777;
+        context.InventoryItems.Add(item);
+        await context.SaveChangesAsync();
+
+        var api = new Mock<ICardTraderApiService>();
+        api.Setup(a => a.GetMarketplaceProductsAsync(4242, It.IsAny<CancellationToken>())).ReturnsAsync(BulkMarket());
+        api.Setup(a => a.UpdateProductPriceAsync(It.IsAny<int>(), It.IsAny<decimal>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["CardTraderApi:UserId"] = MyUserId.ToString() })
+            .Build();
+
+        var service = new AutoPricingService(context, api.Object, new PricingEngine(), configuration,
+            NullLogger<AutoPricingService>.Instance, cache);
+
+        return (service, profile, api);
+    }
+
+    [Fact]
+    public async Task Il_riprezzo_dopo_la_pubblicazione_riusa_le_offerte_lette_dalla_maschera()
+    {
+        var cache = new MarketplaceOfferCache();
+        await cache.GetOrFetchAsync(4242, TimeSpan.FromMinutes(10), _ => Task.FromResult<IEnumerable<CardTraderMarketplaceProductDto>>(BulkMarket()));
+        var (service, profile, api) = await PredisponiConCacheAsync(cache);
+
+        var run = await service.RunAsync(new[] { 10 }, profile, PricingTrigger.ListingCreated,
+            refreshPricesFirst: false, reuseOffersYoungerThan: TimeSpan.FromMinutes(10));
+
+        run.AppliedCount.Should().Be(1);
+        api.Verify(a => a.GetMarketplaceProductsAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task La_notturna_rilegge_sempre_il_marketplace_anche_con_la_cache_piena()
+    {
+        var cache = new MarketplaceOfferCache();
+        await cache.GetOrFetchAsync(4242, TimeSpan.FromMinutes(10), _ => Task.FromResult<IEnumerable<CardTraderMarketplaceProductDto>>(BulkMarket()));
+        var (service, profile, api) = await PredisponiConCacheAsync(cache);
+
+        await service.RunAsync(new[] { 10 }, profile, PricingTrigger.Scheduled, refreshPricesFirst: false);
+
+        api.Verify(a => a.GetMarketplaceProductsAsync(4242, It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

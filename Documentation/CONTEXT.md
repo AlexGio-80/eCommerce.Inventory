@@ -19,11 +19,11 @@
 - Utente unico `admin` con JWT. **Ogni endpoint richiede il ruolo `Admin`** per criterio globale (`FallbackPolicy` in `Program.cs`). Le eccezioni sono dichiarate una per una: login, webhook Card Trader (firma HMAC obbligatoria), `/health`, `/health-ui`, `/metrics` e l'hub SignalR. La registrazione non esiste: gli account si creano a mano sul database. La password si cambia da `POST /api/auth/change-password`
 - Le migration si applicano da sole all'avvio, in ogni ambiente
 - Osservabilità: `/health` (database, Card Trader, Redis), `/metrics` Prometheus, tracing OpenTelemetry su console, Correlation ID nei log Serilog
-- Rate limiter verso Card Trader (20 richieste al minuto, condiviso da tutta l'applicazione)
+- Rate limiter verso Card Trader (20 richieste al minuto, condiviso da tutta l'applicazione), con precedenza alle richieste della maschera "Nuovo Prodotto"
 
 **Card Trader: sincronizzazione, inserzioni, ordini**
 - Sincronizzazione di giochi, espansioni, blueprint, inserzioni e ordini, notturna (`ScheduledProductSyncWorker`) e manuale. Un fallimento di sezione marca l'intera sincronizzazione come fallita
-- "Nuovo Prodotto": ricerca per nome, nome italiano e numero di raccolta; descrizione Card Trader; pannello "Le mie inserzioni" per modificare quelle esistenti, con grafico dello storico prezzi e riferimento di mercato; link a Card Trader. Il prezzo d'acquisto si riempie dal Tag dell'acquisto
+- "Nuovo Prodotto": ricerca per nome, nome italiano e numero di raccolta; prezzo delle regole dell'autopricer già nel campo quando si sceglie la carta; descrizione Card Trader; pannello "Le mie inserzioni" per modificare quelle esistenti, con grafico dello storico prezzi e riferimento di mercato; link a Card Trader. Il prezzo d'acquisto si riempie dal Tag dell'acquisto
 - Storico prezzi (`PriceHistoryEntries`) alimentato dalla sincronizzazione notturna, solo quando prezzo o quantità cambiano
 - Ordini con griglia "Articoli da preparare". Card Trader Zero: le carte si preparano giorno per giorno dagli ordini `hub_pending`, e l'ordine "Ct connect" raccolto eredita la preparazione riga per riga
 - Il webhook Card Trader non è raggiungibile dall'esterno (scelta, vedi sotto): l'inventario resta allineato con il giro a polling
@@ -32,7 +32,7 @@
 - Regole per fascia di prezzo con collocazione fra i venditori, scarto delle offerte anomale (MAD e rapporto sulla mediana), conversione fra prezzo di vetrina e incasso (sovrapprezzo Card Trader ricavato come differenza), guardrail asimmetrico con soglia in euro sotto cui non scatta
 - Regole a ripiego: più regole sulla stessa fascia, provate in ordine di priorità quando il mercato non basta, con minimo di offerte e filtro venditori propri
 - Carte "nuove", cioè mai prezzate: fascia ricalcolata sul prezzo proposto, niente guardrail
-- Notturna alle 01:00 (`AutoPricing:RunTime`, si cambia solo nel file e serve un riavvio): carte di valore ogni notte, bulk a rotazione (2.000 blueprint a notte, ciclo di circa 9 giorni). Riprezzo subito dopo la pubblicazione dalla maschera. Esecuzione manuale in background con indicatore in alto
+- Notturna alle 01:00 (`AutoPricing:RunTime`, si cambia solo nel file e serve un riavvio): carte di valore ogni notte, bulk a rotazione (2.000 blueprint a notte, ciclo di circa 9 giorni). Riprezzo subito dopo la pubblicazione dalla maschera, solo per le carte inviate a un prezzo diverso da quello delle regole. Esecuzione manuale in background con indicatore in alto
 - Schede Regole, Anteprima (filtrabile, "Applica le selezionate"), Esecuzioni (filtro per Origine), Storico (griglia dei calcoli carta per carta, "Applica comunque" sulle bloccate dal guardrail)
 - **Profilo in produzione, scelto dall'utente:** rialzo massimo 10.000%, ribasso massimo 80%, variazione libera 0,15 €, minimo 4 offerte comparabili, solo venditori Card Trader Zero. "N-esima più bassa" in tutte le fasce (2ª offerta, 3ª sopra 100 €), con ripieghi configurati
 
@@ -50,6 +50,8 @@
 - Copia del valore di una cella con doppio clic in tutte le griglie. Colonne salvate in automatico, tranne Inventario, Ordini e Articoli da preparare (salvataggio da menu)
 
 ### Cosa è in sospeso / da verificare
+
+- **Prezzo delle regole nella maschera "Nuovo Prodotto":** pubblicato il 2026-10-16 (migration `AddPendingListingSuggestedPrice` applicata); il prezzo compare appena si sceglie la carta, e statistiche e prezzo delle regole usano una sola lettura. Da controllare al primo caricamento a blocchi: inviando un blocco al prezzo delle regole il log dice "pubblicati al prezzo delle regole: riprezzo ... non necessario" e non ci sono "Rivalutazione immediata"; durante il blocco successivo la maschera resta veloce (eventuali attese compaiono come "Attesa di N s per il limite di Card Trader (interattiva)")
 
 - **Feature "Magazzino da tenere" (progettata il 2026-10-15):** documento in `Documentation/Features/005-MagazzinoDaTenere.md`, fasi in ROADMAP. La **Fase 0** (decisione "Nessuna offerta" e resa sul prezzo a cui si compra davvero) è pubblicata e verificata il 2026-10-15. La **Fase 1** (punteggio e vista "Da tenere" nelle Opportunità, migration `AddHoldScore`) è pubblicata e verificata il 2026-10-15: 47 candidati, Secret Lair esclusi per scelta dell'utente. La **Fase 2** (regola d'avviso "Da tenere", soglia 70) è pubblicata e verificata il 2026-10-15. Pubblicata lo stesso giorno la correzione del testo degli avvisi, che si tagliava a metà riga a 2.000 caratteri anche nell'email: da controllare sul prossimo avviso con molti prodotti che finisca con "… e altri N prodotti". La **Fase 3** (casella "Da tenere" nel registro e scheda "Magazzino" in fondo alla pagina Acquisti, migration `AddHoldForResale`) è pubblicata il 2026-10-15, con il primo acquisto segnato "Da tenere" dall'utente. Pubblicati e verificati lo stesso giorno: "Apri (se lo hai già)" per le rese negative, e prezzi Card Trader del magazzino ogni mattina e dal pulsante "Aggiorna"
 
@@ -73,6 +75,7 @@
 
 | Data | Decisione | Perché |
 |------|-----------|--------|
+| 2026-10-16 | Prezzo delle regole già nella maschera; niente riprezzo dopo la pubblicazione se il prezzo inviato è quello; precedenza alla maschera nel limite di Card Trader | Listando a blocchi di 20, il riprezzo del blocco appena pubblicato occupava il limite per 2-3 minuti e la maschera aspettava fino a 55 s per carta (log del 15/10) |
 | 2026-10-16 | Prezzo realizzato per tipo di carta (buste, mazzi, Secret Lair) dal set MTGJSON, vendite CT Zero non ancora pagate comprese | Il fattore unico (116,8%) veniva dalle buste di un'uscita recente; sui mazzi Commander si incassa il 95% del trend, e il valore dei mazzi era gonfiato di circa il 20% |
 | 2026-10-15 | Resa dell'apertura sul trend, o sul low se è più alto; "Nessuna offerta" se su Cardmarket nessuno vende il prodotto | Al trend non si può comprare se l'offerta più bassa è sopra, e senza offerte non si può comprare affatto: le rese del 100–500% di Duel Deck e mazzi Salvat venivano da qui |
 | 2026-10-15 | Magazzino da tenere con orizzonte di 1–3 anni, punteggio dal "pavimento" (valore delle carte / prezzo), dall'età dell'uscita e dalla posizione nello storico | Scelte dell'utente. Le medie a 30 giorni di Cardmarket non esistono per i sigillati e il nostro storico parte dal 07/10: il pavimento è il segnale affidabile già oggi |
@@ -96,6 +99,7 @@
 
 - **Il database di sviluppo è quello di produzione** (`eCommerceInventory` anche in `appsettings.Development.json`). Per provare codice con migration, o un'operazione rischiosa, si lavora su una copia ripristinata dal backup (procedura in fondo)
 - **Un fix fatto in un worktree va pubblicato dopo averlo portato sul `master` di `C:\Lavoro\eCommerce.Inventory`.** `publish.ps1` compila la cartella da cui parte, e il servizio gira da `Publish\api` di quella cartella. Il 12/10 una pubblicazione dal checkout principale, rimasto indietro, ha lasciato fuori dalla produzione fino al 15/10 un fix già "verificato". Prima di lavorare: `git log master..origin/master`
+- **`publish.ps1` cancella tutta la cartella `Publish`, log compresi:** in `Publish/api/logs` c'è solo il giorno della pubblicazione. I giorni precedenti sono negli zip di backup (`InventoryBackup_Complete_*.zip`, cartella `Logs/`)
 - **Pubblicare dopo le 09:30:** il riavvio del servizio interrompe la sincronizzazione notturna se è ancora in corso
 - **Le migration si applicano da sole all'avvio.** Il log elenca quelle da applicare prima di farlo. Generarle con `dotnet ef migrations add ... --context ApplicationDbContext` (il progetto ha due contesti per via di Health Checks UI)
 - **⚠️ Migration con colonne bool o con default:** EF le aggiunge con default `false`/0, quindi le righe già a database non ereditano il default definito in C#. Serve un `UPDATE` esplicito o il default scritto a mano nella migration

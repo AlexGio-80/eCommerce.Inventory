@@ -106,6 +106,11 @@ builder.Services.AddScoped<IExpansionAnalyticsService, ExpansionAnalyticsService
 builder.Services.AddSingleton<eCommerce.Inventory.Application.Pricing.PricingEngine>();
 builder.Services.AddScoped<AutoPricingService>();
 
+// Offerte del marketplace già lette, riusate per qualche minuto dalla maschera "Nuovo Prodotto" e dal
+// riprezzo subito dopo la pubblicazione. Singleton perché i due girano in scope diversi.
+builder.Services.AddSingleton<IMarketplaceOfferCache, MarketplaceOfferCache>();
+builder.Services.AddScoped<ListingPriceSuggestionService>();
+
 // Coda condivisa fra i produttori (webhook delle vendite, sincronizzazione delle
 // inserzioni) e il worker che la consuma: dev'essere singleton
 builder.Services.AddSingleton<IPriceRefreshQueue, PriceRefreshQueue>();

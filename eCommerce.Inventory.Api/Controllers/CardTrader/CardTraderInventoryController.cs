@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using eCommerce.Inventory.Application.Interfaces;
 using eCommerce.Inventory.Domain.Entities;
+using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
+using eCommerce.Inventory.Infrastructure.Services;
 
 namespace eCommerce.Inventory.Api.Controllers.CardTrader;
 
@@ -245,6 +247,7 @@ public class CardTraderInventoryController : ControllerBase
     [HttpGet("marketplace-stats/{blueprintId}")]
     public async Task<ActionResult<Application.DTOs.MarketplaceStatsDto>> GetMarketplaceStats(
         int blueprintId,
+        [FromServices] IMarketplaceOfferCache offerCache,
         [FromQuery] string? condition = null,
         [FromQuery] string? language = null,
         [FromQuery] bool? isFoil = null,
@@ -252,7 +255,15 @@ public class CardTraderInventoryController : ControllerBase
     {
         try
         {
-            var products = await _cardTraderApiService.GetMarketplaceProductsAsync(blueprintId);
+            // La maschera "Nuovo Prodotto" la chiama a ogni cambio di condizione, lingua o foil, e
+            // insieme al prezzo proposto: una sola lettura del marketplace per carta, con la
+            // precedenza sul lavoro in background nel limite di Card Trader.
+            using var interactive = CardTraderRequestPriority.BeginInteractive();
+            var products = await offerCache.GetOrFetchAsync(
+                blueprintId,
+                MarketplaceOfferCache.ListingWorkflowMaxAge,
+                ct => _cardTraderApiService.GetMarketplaceProductsAsync(blueprintId, ct),
+                HttpContext.RequestAborted);
 
             if (!products.Any())
             {

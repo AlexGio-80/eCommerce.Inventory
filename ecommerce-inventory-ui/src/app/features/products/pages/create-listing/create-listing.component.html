@@ -217,6 +217,30 @@
                             Caricamento prezzi...
                         </div>
 
+                        <!-- Prezzo delle regole dell'autopricer -->
+                        <div *ngIf="priceSuggestion() as s"
+                            style="margin-bottom: 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 14px;">
+                            <ng-container *ngIf="s.suggestedPrice !== null; else noRulesPrice">
+                                <span style="color: #666;">Prezzo delle regole:</span>
+                                <button mat-stroked-button type="button" (click)="applySuggestedPrice()"
+                                    [matTooltip]="s.reason" matTooltipClass="multiline-tooltip">
+                                    €{{ s.suggestedPrice.toFixed(2) }}
+                                </button>
+                                <span style="font-size: 12px; color: #999;">({{ s.comparableOffersCount }} offerte confrontabili)</span>
+                                <span *ngIf="isAtRulesPrice()" style="font-size: 12px; color: #2e7d32;">
+                                    in uso: niente riprezzo dopo la pubblicazione
+                                </span>
+                            </ng-container>
+                            <ng-template #noRulesPrice>
+                                <span style="color: #e65100;" [matTooltip]="s.reason" matTooltipClass="multiline-tooltip">
+                                    Le regole non danno un prezzo per questa carta: dopo la pubblicazione la valuterà il riprezzo.
+                                </span>
+                            </ng-template>
+                        </div>
+                        <div *ngIf="isLoadingSuggestion()" style="margin-bottom: 16px; color: #666; font-size: 14px;">
+                            Calcolo del prezzo delle regole...
+                        </div>
+
                         <div class="checkbox-row">
                             <mat-checkbox formControlName="isFoil">Foil</mat-checkbox>
                             <mat-checkbox formControlName="isSigned">Firmata</mat-checkbox>

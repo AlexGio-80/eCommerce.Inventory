@@ -55,6 +55,59 @@ public class PricingEngine
         int myUserId,
         bool bypassGuardrail = false,
         bool isNewListing = false)
+        => EvaluateCore(item, offers, profile, myUserId, bypassGuardrail, isNewListing, suggestion: false);
+
+    /// <summary>
+    /// Prezzo che le regole darebbero a una carta non ancora in vendita, per proporlo nella maschera
+    /// "Nuovo Prodotto" prima della pubblicazione. È la stessa valutazione della carta nuova fatta dal
+    /// riprezzo dopo la pubblicazione, con due differenze inevitabili:
+    /// <list type="bullet">
+    /// <item>non c'è un prezzo di caricamento su cui scegliere la fascia, quindi si parte dalla
+    /// mediana delle offerte confrontabili e la fascia si ricalcola sul prezzo proposto, come per
+    /// ogni carta nuova;</item>
+    /// <item>la mia offerta non è ancora nel feed, quindi il sovrapprezzo di Card Trader non si può
+    /// ricavare e vale il minimo noto. Sulle carte oltre 0,25 € il prezzo proposto può risultare di
+    /// qualche centesimo più alto di quello che la notturna calcolerà a carta pubblicata.</item>
+    /// </list>
+    /// </summary>
+    /// <param name="listing">Condizione, lingua, foil e firma della carta da mettere in vendita. Il prezzo è ignorato.</param>
+    public PricingDecision SuggestNewListingPrice(
+        InventoryItem listing,
+        IReadOnlyList<CardTraderMarketplaceProductDto> offers,
+        PricingProfile profile,
+        int myUserId)
+    {
+        var comparable = FilterComparable(offers.Where(o => o.User?.Id != myUserId).ToList(), listing, profile);
+        var sortedPrices = comparable.Select(o => o.PriceCents / 100m).OrderBy(p => p).ToList();
+        var estimate = sortedPrices.Count > 0 ? Median(sortedPrices) - FallbackMarketFee : profile.MinPrice;
+
+        var start = new InventoryItem
+        {
+            BlueprintId = listing.BlueprintId,
+            Condition = listing.Condition,
+            Language = listing.Language,
+            IsFoil = listing.IsFoil,
+            IsSigned = listing.IsSigned,
+            Quantity = listing.Quantity,
+            Location = listing.Location,
+            ListingPrice = Math.Max(estimate, profile.MinPrice)
+        };
+
+        return EvaluateCore(start, offers, profile, myUserId, bypassGuardrail: false, isNewListing: true, suggestion: true);
+    }
+
+    /// <param name="suggestion">
+    /// Valutazione per <see cref="SuggestNewListingPrice"/>: il prezzo "corrente" è solo la stima da
+    /// cui scegliere la fascia, quindi non si confronta col proposto e le motivazioni lo dicono.
+    /// </param>
+    private PricingDecision EvaluateCore(
+        InventoryItem item,
+        IReadOnlyList<CardTraderMarketplaceProductDto> offers,
+        PricingProfile profile,
+        int myUserId,
+        bool bypassGuardrail,
+        bool isNewListing,
+        bool suggestion)
     {
         var currentPrice = item.ListingPrice;
 
@@ -101,9 +154,10 @@ public class PricingEngine
             var repick = PickRule(comparable, profile, price.Proposed);
             if (repick.Skip == null)
             {
-                newListingNote =
-                    $"Inserzione nuova: fascia scelta sul prezzo di mercato stimato ({price.Proposed:0.00} €) " +
-                    $"invece che su quello di caricamento ({currentPrice:0.00} €).";
+                newListingNote = suggestion
+                    ? $"Fascia scelta sul prezzo stimato ({price.Proposed:0.00} €) invece che sulla mediana delle offerte ({currentPrice:0.00} €)."
+                    : $"Inserzione nuova: fascia scelta sul prezzo di mercato stimato ({price.Proposed:0.00} €) " +
+                      $"invece che su quello di caricamento ({currentPrice:0.00} €).";
                 pick = repick;
                 price = ProposePrice(pick, profile, marketFee);
             }
@@ -133,7 +187,7 @@ public class PricingEngine
 
         var context = DescribeContext(
             currentPrice, myMarketPrice, marketFee, feeDerived, reference, proposedMarket,
-            sortedPrices, rule, candidates.Count, outliersRejected);
+            sortedPrices, rule, candidates.Count, outliersRejected, suggestion);
 
         if (failures.Count > 0)
         {
@@ -146,7 +200,7 @@ public class PricingEngine
             context = newListingNote + " " + context;
         }
 
-        if (proposed == currentPrice)
+        if (proposed == currentPrice && !suggestion)
         {
             decision.Outcome = PricingOutcome.NoChangeNeeded;
             decision.Reason = $"Prezzo già allineato: resta {currentPrice:0.00} €. {context}";
@@ -158,7 +212,9 @@ public class PricingEngine
         if (isNewListing)
         {
             decision.Outcome = profile.DryRun ? PricingOutcome.SimulatedDryRun : PricingOutcome.Applied;
-            decision.Reason = $"Inserzione nuova, guardrail non applicato: {currentPrice:0.00} € → {proposed:0.00} €. {context}";
+            decision.Reason = suggestion
+                ? $"Prezzo delle regole: {proposed:0.00} €. {context}"
+                : $"Inserzione nuova, guardrail non applicato: {currentPrice:0.00} € → {proposed:0.00} €. {context}";
             return decision;
         }
 
@@ -259,7 +315,8 @@ public class PricingEngine
         List<decimal> sortedComparablePrices,
         PricingRule rule,
         int comparableCount,
-        int outliersRejected)
+        int outliersRejected,
+        bool suggestion = false)
     {
         var parts = new List<string>();
 
@@ -272,6 +329,13 @@ public class PricingEngine
                 $"In vetrina la mia carta costa {myMarketPrice.Value:0.00} € (incasso {sellerPrice:0.00} €, " +
                 $"Card Trader aggiunge {myMarketPrice.Value - sellerPrice:0.00} €) e sono in posizione {position} " +
                 $"su {comparableCount + 1} offerte comparabili");
+        }
+        else if (suggestion)
+        {
+            // La carta non è ancora in vendita: non c'è un incasso attuale da citare.
+            parts.Add(
+                $"Carta non ancora in vendita, sovrapprezzo di Card Trader al minimo noto di {fee:0.00} € " +
+                $"({comparableCount} offerte comparabili)");
         }
         else
         {

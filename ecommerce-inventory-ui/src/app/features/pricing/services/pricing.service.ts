@@ -193,6 +193,17 @@ export interface CoverageReport {
     fasce: CoverageBand[];
 }
 
+/** Prezzo delle regole per una carta da mettere in vendita dalla maschera "Nuovo Prodotto". */
+export interface ListingPriceSuggestion {
+    /** Null quando le regole non danno un prezzo: reason dice perché. */
+    suggestedPrice: number | null;
+    outcome: string;
+    reason: string;
+    comparableOffersCount: number;
+    referencePrice: number | null;
+    profileName: string | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class PricingService {
     private readonly baseUrl = `${environment.apiUrl}/api/pricing`;
@@ -202,6 +213,22 @@ export class PricingService {
     getProfiles(): Observable<PricingProfile[]> {
         return this.http.get<ApiResponse<PricingProfile[]>>(`${this.baseUrl}/profiles`)
             .pipe(map(r => r.data ?? []));
+    }
+
+    /** @param blueprintId id locale del blueprint */
+    suggestListingPrice(blueprintId: number, filters: {
+        condition?: string;
+        language?: string;
+        isFoil?: boolean;
+        isSigned?: boolean;
+    }): Observable<ListingPriceSuggestion> {
+        const params: Record<string, string> = {};
+        if (filters.condition) params['condition'] = filters.condition;
+        if (filters.language) params['language'] = filters.language;
+        params['isFoil'] = String(!!filters.isFoil);
+        params['isSigned'] = String(!!filters.isSigned);
+        return this.http.get<ApiResponse<ListingPriceSuggestion>>(`${this.baseUrl}/suggest/${blueprintId}`, { params })
+            .pipe(map(r => r.data!));
     }
 
     updateProfile(id: number, changes: Partial<PricingProfile>): Observable<PricingProfile> {

@@ -1,6 +1,7 @@
 using eCommerce.Inventory.Api.Models;
 using eCommerce.Inventory.Application.Interfaces;
 using eCommerce.Inventory.Domain.Entities;
+using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
 using eCommerce.Inventory.Infrastructure.Persistence;
 using eCommerce.Inventory.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -279,6 +280,33 @@ public class AutoPricingController : ControllerBase
 
         return Accepted(ApiResponse<object>.SuccessResult(
             MapStatus(result.Status, null), "Applicazione avviata: prosegue in background"));
+    }
+
+    /// <summary>
+    /// Prezzo delle regole per una carta da mettere in vendita dalla maschera "Nuovo Prodotto".
+    /// Non passa dal coordinatore: non scrive nulla e costa al più una lettura del marketplace,
+    /// già in cache se la maschera ha appena chiesto le statistiche della stessa carta. La lettura
+    /// ha la precedenza sul lavoro in background nel limite di Card Trader.
+    /// </summary>
+    /// <param name="blueprintId">Id locale del blueprint.</param>
+    [HttpGet("suggest/{blueprintId:int}")]
+    public async Task<IActionResult> SuggestListingPrice(
+        int blueprintId,
+        [FromServices] ListingPriceSuggestionService suggestionService,
+        [FromQuery] string? condition,
+        [FromQuery] string? language,
+        [FromQuery] bool isFoil,
+        [FromQuery] bool isSigned,
+        CancellationToken cancellationToken)
+    {
+        using var interactive = CardTraderRequestPriority.BeginInteractive();
+
+        var suggestion = await suggestionService.SuggestAsync(
+            blueprintId, condition, language, isFoil, isSigned, cancellationToken);
+
+        if (suggestion == null) return NotFound(ApiResponse<object>.ErrorResult($"Blueprint {blueprintId} non trovato"));
+
+        return Ok(ApiResponse<object>.SuccessResult(suggestion));
     }
 
     /// <summary>

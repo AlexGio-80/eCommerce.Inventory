@@ -1118,6 +1118,10 @@ namespace eCommerce.Inventory.Infrastructure.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal?>("SuggestedPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("SyncError")
                         .HasColumnType("nvarchar(max)");
 

@@ -20,6 +20,7 @@ public class AutoPricingService
     private readonly ICardTraderApiService _cardTraderApi;
     private readonly PricingEngine _engine;
     private readonly ILogger<AutoPricingService> _logger;
+    private readonly IMarketplaceOfferCache? _offerCache;
     private readonly int _myUserId;
 
     public AutoPricingService(
@@ -27,12 +28,14 @@ public class AutoPricingService
         ICardTraderApiService cardTraderApi,
         PricingEngine engine,
         IConfiguration configuration,
-        ILogger<AutoPricingService> logger)
+        ILogger<AutoPricingService> logger,
+        IMarketplaceOfferCache? offerCache = null)
     {
         _context = context;
         _cardTraderApi = cardTraderApi;
         _engine = engine;
         _logger = logger;
+        _offerCache = offerCache;
 
         // Serve a escludere le proprie inserzioni dal riferimento di mercato.
         _myUserId = configuration.GetValue<int>("CardTraderApi:UserId", 0);
@@ -179,6 +182,11 @@ public class AutoPricingService
     /// da fuori: la preparazione (selezione delle carte e allineamento dei prezzi) può durare
     /// parecchio, e fino a quel momento non c'è un identificativo da cui leggere l'avanzamento.
     /// </param>
+    /// <param name="reuseOffersYoungerThan">
+    /// Riusa le offerte del marketplace lette da non più di questo tempo, dalla cache condivisa con
+    /// la maschera "Nuovo Prodotto". Lo passa solo il riprezzo subito dopo la pubblicazione, che
+    /// valuta carte appena viste nella maschera; null (il default) legge sempre il dato del momento.
+    /// </param>
     public async Task<PricingRunLog> RunAsync(
         IReadOnlyList<int> blueprintIds,
         PricingProfile profile,
@@ -188,7 +196,8 @@ public class AutoPricingService
         CancellationToken cancellationToken = default,
         Action<PricingRunLog>? onRunCreated = null,
         bool forceApply = false,
-        bool bypassGuardrail = false)
+        bool bypassGuardrail = false,
+        TimeSpan? reuseOffersYoungerThan = null)
     {
         var dryRun = forceDryRun || (profile.DryRun && !forceApply);
 
@@ -248,7 +257,7 @@ public class AutoPricingService
 
             try
             {
-                await EvaluateBlueprintAsync(blueprintId, profile, trigger, dryRun, run, persistRun, cancellationToken, bypassGuardrail);
+                await EvaluateBlueprintAsync(blueprintId, profile, trigger, dryRun, run, persistRun, cancellationToken, bypassGuardrail, reuseOffersYoungerThan);
             }
             catch (Exception ex)
             {
@@ -283,7 +292,8 @@ public class AutoPricingService
         PricingRunLog run,
         bool persistRun,
         CancellationToken cancellationToken,
-        bool bypassGuardrail = false)
+        bool bypassGuardrail = false,
+        TimeSpan? reuseOffersYoungerThan = null)
     {
         var items = await _context.InventoryItems
             .Where(i => i.BlueprintId == blueprintId && i.Quantity > 0)
@@ -303,8 +313,10 @@ public class AutoPricingService
 
         // Una sola chiamata API per blueprint, riusata per tutte le mie copie della carta:
         // è la risorsa scarsa, va spesa con parsimonia.
-        var offers = (await _cardTraderApi.GetMarketplaceProductsAsync(blueprint.CardTraderId, cancellationToken))
-            .ToList();
+        var offers = reuseOffersYoungerThan.HasValue && _offerCache != null
+            ? (await _offerCache.GetOrFetchAsync(blueprint.CardTraderId, reuseOffersYoungerThan.Value,
+                ct => _cardTraderApi.GetMarketplaceProductsAsync(blueprint.CardTraderId, ct), cancellationToken)).ToList()
+            : (await _cardTraderApi.GetMarketplaceProductsAsync(blueprint.CardTraderId, cancellationToken)).ToList();
 
         // Carte a cui l'autopricer non ha mai scritto né confermato un prezzo: il loro prezzo è
         // ancora quello di caricamento. Lo dice lo storico e non il trigger, così una carta resta

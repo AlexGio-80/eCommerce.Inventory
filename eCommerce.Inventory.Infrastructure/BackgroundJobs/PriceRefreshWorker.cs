@@ -1,4 +1,5 @@
 using eCommerce.Inventory.Application.Interfaces;
+using eCommerce.Inventory.Domain.Entities;
 using eCommerce.Inventory.Infrastructure.Persistence;
 using eCommerce.Inventory.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
@@ -91,7 +92,13 @@ public class PriceRefreshWorker : BackgroundService
             request.Trigger,
             forceDryRun: false,
             refreshPricesFirst: false,
-            stoppingToken);
+            stoppingToken,
+            // La carta appena pubblicata è stata vista nella maschera pochi minuti fa: le sue offerte
+            // sono già in cache e rileggerle costerebbe una richiesta per carta. Dopo una vendita no,
+            // perché la vendita stessa è il segnale che il mercato si è mosso.
+            reuseOffersYoungerThan: request.Trigger == PricingTrigger.ListingCreated
+                ? MarketplaceOfferCache.ListingWorkflowMaxAge
+                : null);
 
         _logger.LogInformation(
             "Rivalutazione del blueprint {BlueprintId} conclusa: applicati {Applied}, simulati {Simulated}, " +

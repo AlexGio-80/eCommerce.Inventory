@@ -27,7 +27,7 @@ public class PublishedListingRepricingTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options);
 
-    private static async Task<(ApplicationDbContext Context, int BlueprintId)> SeedPendingListingAsync()
+    private static async Task<(ApplicationDbContext Context, int BlueprintId)> SeedPendingListingAsync(decimal? suggestedPrice = null)
     {
         var context = CreateContext();
 
@@ -46,6 +46,7 @@ public class PublishedListingRepricingTests
             BlueprintId = blueprint.Id,
             Quantity = 1,
             SellingPrice = 50m,
+            SuggestedPrice = suggestedPrice,
             PurchasePrice = 2m,
             Condition = "Near Mint",
             Language = "Italian",
@@ -143,5 +144,55 @@ public class PublishedListingRepricingTests
         (await context.InventoryItems.CountAsync()).Should().Be(1);
 
         queue.Verify(q => q.Enqueue(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<PricingTrigger>()), Times.Never);
+    }
+
+    /// <summary>
+    /// Il prezzo è quello che le regole proponevano nella maschera: il riprezzo lo ricalcolerebbe
+    /// identico, spendendo una lettura del marketplace (e spesso una scrittura) per niente. Con i
+    /// blocchi da 20 carte quelle richieste rallentavano la maschera durante il blocco successivo.
+    /// </summary>
+    [Fact]
+    public async Task Al_prezzo_delle_regole_la_pubblicazione_non_accoda_il_riprezzo()
+    {
+        var (context, _) = await SeedPendingListingAsync(suggestedPrice: 50m);
+        var (controller, queue) = CreateController(context);
+
+        await controller.SyncPendingListings(CancellationToken.None);
+
+        (await context.InventoryItems.SingleAsync()).ListingPrice.Should().Be(50m);
+        queue.Verify(q => q.Enqueue(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<PricingTrigger>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Con_un_prezzo_diverso_da_quello_delle_regole_il_riprezzo_resta()
+    {
+        var (context, blueprintId) = await SeedPendingListingAsync(suggestedPrice: 0.30m);
+        var (controller, queue) = CreateController(context);
+
+        await controller.SyncPendingListings(CancellationToken.None);
+
+        queue.Verify(q => q.Enqueue(blueprintId, It.IsAny<string>(), PricingTrigger.ListingCreated), Times.Once);
+    }
+
+    [Fact]
+    public async Task Basta_una_copia_fuori_dal_prezzo_delle_regole_per_riprezzare_la_carta()
+    {
+        var (context, blueprintId) = await SeedPendingListingAsync(suggestedPrice: 50m);
+        context.PendingListings.Add(new PendingListing
+        {
+            BlueprintId = blueprintId,
+            Quantity = 1,
+            SellingPrice = 60m,
+            SuggestedPrice = 50m,
+            Condition = "Near Mint",
+            Language = "Italian",
+            IsSynced = false
+        });
+        await context.SaveChangesAsync();
+        var (controller, queue) = CreateController(context);
+
+        await controller.SyncPendingListings(CancellationToken.None);
+
+        queue.Verify(q => q.Enqueue(blueprintId, It.IsAny<string>(), PricingTrigger.ListingCreated), Times.Once);
     }
 }

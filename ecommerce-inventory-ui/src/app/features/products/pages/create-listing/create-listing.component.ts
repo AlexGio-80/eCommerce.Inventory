@@ -27,6 +27,7 @@ import { PendingListingsService, PendingListing, CreatePendingListingDto, Bluepr
 import { Blueprint, PriceHistorySeries, PriceHistoryResponse } from '../../../../core/models';
 import { GradingService, GradingResult } from '../../../../core/services/grading.service';
 import { PurchasingService } from '../../../purchasing/services/purchasing.service';
+import { PricingService, ListingPriceSuggestion } from '../../../pricing/services/pricing.service';
 
 // Registrato qui perché questo componente è standalone e caricato lazy: a differenza di
 // ReportingModule (che lo registra nel proprio costruttore), niente garantisce che quel
@@ -247,7 +248,8 @@ export class CreateListingComponent {
     private snackBar: MatSnackBar,
     private cardTraderService: CardTraderApiService,
     private gradingService: GradingService,
-    private purchasingService: PurchasingService
+    private purchasingService: PurchasingService,
+    private pricingService: PricingService
   ) {
     const defaults = this.loadDefaults();
     this.listingForm = this.fb.group({
@@ -284,6 +286,7 @@ export class CreateListingComponent {
     ).subscribe(() => {
       if (this.selectedBlueprint()) {
         this.loadMarketplaceStats();
+        this.loadPriceSuggestion();
       }
     });
   }
@@ -401,8 +404,11 @@ export class CreateListingComponent {
 
   onBlueprintSelected(blueprint: Blueprint) {
     this.selectedBlueprint.set(blueprint);
+    // Quella della carta precedente non deve finire nel prezzo di questa durante il reset.
+    this.priceSuggestion.set(null);
     this.resetFormState();
     this.loadMarketplaceStats();
+    this.loadPriceSuggestion();
     this.loadBlueprintListings(blueprint.id);
     this.loadPriceHistory(blueprint.id);
   }
@@ -644,6 +650,7 @@ export class CreateListingComponent {
     this.blueprintListings.set([]);
     this.priceHistory.set({ series: [], marketReference: [] });
     this.priceHistoryChartData = { labels: [], datasets: [] };
+    this.priceSuggestion.set(null);
     this.resetFormState();
   }
 
@@ -677,6 +684,12 @@ export class CreateListingComponent {
         tag: ''
       });
     }
+
+    // Dopo un invio la carta resta selezionata: il prezzo torna quello delle regole, non quello
+    // salvato fra i valori predefiniti.
+    this.listingForm.get('sellingPrice')!.markAsPristine();
+    const suggestion = this.priceSuggestion();
+    if (suggestion) this.applySuggestedPriceIfUntouched(suggestion);
   }
 
   onEditPending(item: PendingListing) {
@@ -783,6 +796,85 @@ export class CreateListingComponent {
   applyPrice(price: number) {
     this.listingForm.patchValue({ sellingPrice: price });
     this.listingForm.markAsDirty();
+    // Scelta esplicita: un prezzo delle regole che arriva dopo non la sostituisce.
+    this.listingForm.get('sellingPrice')!.markAsDirty();
+  }
+
+  // Prezzo delle regole dell'autopricer
+  priceSuggestion = signal<ListingPriceSuggestion | null>(null);
+  isLoadingSuggestion = signal(false);
+  /** Carta e filtri a cui si riferisce priceSuggestion: all'invio deve corrispondere al form. */
+  private suggestionKey: string | null = null;
+  private suggestionRequestId = 0;
+
+  private currentSuggestionKey(): string | null {
+    const blueprint = this.selectedBlueprint();
+    if (!blueprint) return null;
+    const v = this.listingForm.value;
+    return JSON.stringify([blueprint.id, v.condition, v.language, !!v.isFoil, !!v.isSigned]);
+  }
+
+  /**
+   * Chiede il prezzo che le regole dell'autopricer darebbero alla carta con condizione, lingua,
+   * foil e firma scelte. Le offerte lette per le statistiche sono in cache sul server, quindi di
+   * norma non costa una richiesta in più verso Card Trader.
+   */
+  loadPriceSuggestion() {
+    const blueprint = this.selectedBlueprint();
+    if (!blueprint) return;
+
+    const requestId = ++this.suggestionRequestId;
+    const key = this.currentSuggestionKey();
+    this.priceSuggestion.set(null);
+    this.suggestionKey = null;
+    this.isLoadingSuggestion.set(true);
+
+    const v = this.listingForm.value;
+    this.pricingService.suggestListingPrice(blueprint.id, {
+      condition: v.condition,
+      language: v.language,
+      isFoil: v.isFoil,
+      isSigned: v.isSigned
+    }).subscribe({
+      next: (suggestion) => {
+        if (requestId !== this.suggestionRequestId) return;
+        this.priceSuggestion.set(suggestion);
+        this.suggestionKey = key;
+        this.isLoadingSuggestion.set(false);
+        this.applySuggestedPriceIfUntouched(suggestion);
+      },
+      error: (err) => {
+        if (requestId !== this.suggestionRequestId) return;
+        console.error('Error loading rules price', err);
+        this.isLoadingSuggestion.set(false);
+      }
+    });
+  }
+
+  /**
+   * Mette il prezzo delle regole se l'utente non ne ha scelto uno. Mai quando si modifica
+   * un'inserzione esistente: lì si propone, non si sostituisce.
+   */
+  private applySuggestedPriceIfUntouched(suggestion: ListingPriceSuggestion) {
+    if (suggestion.suggestedPrice === null) return;
+    if (this.editingId() || this.ctNativeProductId) return;
+
+    const control = this.listingForm.get('sellingPrice')!;
+    if (control.dirty) return;
+    control.setValue(suggestion.suggestedPrice);
+  }
+
+  applySuggestedPrice() {
+    const price = this.priceSuggestion()?.suggestedPrice;
+    if (price !== null && price !== undefined) this.applyPrice(price);
+  }
+
+  /** Il prezzo nel form è quello delle regole: all'invio la carta non andrà al riprezzo. */
+  isAtRulesPrice(): boolean {
+    const price = this.priceSuggestion()?.suggestedPrice;
+    return price !== null && price !== undefined
+      && this.suggestionKey === this.currentSuggestionKey()
+      && Number(this.listingForm.get('sellingPrice')!.value) === price;
   }
 
   onSubmit() {
@@ -801,6 +893,10 @@ export class CreateListingComponent {
       blueprintId: this.selectedBlueprint()!.id,
       quantity: formValue.quantity,
       price: formValue.sellingPrice,
+      // Solo se si riferisce alla carta e ai filtri che si stanno inviando.
+      suggestedPrice: this.suggestionKey !== null && this.suggestionKey === this.currentSuggestionKey()
+        ? this.priceSuggestion()?.suggestedPrice ?? undefined
+        : undefined,
       condition: formValue.condition,
       language: formValue.language,
       isFoil: formValue.isFoil,

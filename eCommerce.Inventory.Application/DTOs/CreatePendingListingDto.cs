@@ -15,6 +15,9 @@ public class CreatePendingListingDto
     [Range(0, double.MaxValue, ErrorMessage = "Price must be non-negative")]
     public decimal Price { get; set; } // Maps to SellingPrice
 
+    /// <summary>Prezzo delle regole proposto dalla maschera, se c'era: vedi <c>PendingListing.SuggestedPrice</c>.</summary>
+    public decimal? SuggestedPrice { get; set; }
+
     [Required]
     public string Condition { get; set; } = string.Empty;
 

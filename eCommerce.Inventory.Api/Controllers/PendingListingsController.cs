@@ -232,6 +232,12 @@ public class PendingListingsController : ControllerBase
             {
                 existingItem.Quantity += dto.Quantity;
 
+                // Stesso prezzo, quindi stessa carta per il riprezzo: vale la proposta più recente.
+                if (dto.SuggestedPrice.HasValue)
+                {
+                    existingItem.SuggestedPrice = dto.SuggestedPrice;
+                }
+
                 if (dto.GradingScore.HasValue)
                 {
                     existingItem.GradingScore = dto.GradingScore;
@@ -257,6 +263,7 @@ public class PendingListingsController : ControllerBase
             BlueprintId = dto.BlueprintId,
             Quantity = dto.Quantity,
             SellingPrice = dto.Price,
+            SuggestedPrice = dto.SuggestedPrice,
             PurchasePrice = dto.PurchasePrice,
             Condition = dto.Condition,
             Language = dto.Language,
@@ -326,6 +333,7 @@ public class PendingListingsController : ControllerBase
         item.BlueprintId = dto.BlueprintId;
         item.Quantity = dto.Quantity;
         item.SellingPrice = dto.Price;
+        item.SuggestedPrice = dto.SuggestedPrice;
         item.PurchasePrice = dto.PurchasePrice;
         item.Condition = dto.Condition;
         item.Language = dto.Language;
@@ -382,6 +390,7 @@ public class PendingListingsController : ControllerBase
         int successCount = 0;
         int errorCount = 0;
         var repriceBlueprintIds = new HashSet<int>();
+        var atRulesPriceBlueprintIds = new HashSet<int>();
 
         foreach (var pending in pendingItems)
         {
@@ -468,7 +477,15 @@ public class PendingListingsController : ControllerBase
                     }
                 }
 
-                repriceBlueprintIds.Add(pending.BlueprintId);
+                if (IsAtRulesPrice(pending))
+                {
+                    atRulesPriceBlueprintIds.Add(pending.BlueprintId);
+                }
+                else
+                {
+                    repriceBlueprintIds.Add(pending.BlueprintId);
+                }
+
                 successCount++;
             }
             catch (Exception ex)
@@ -480,6 +497,16 @@ public class PendingListingsController : ControllerBase
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        // Un blueprint con anche una sola inserzione a un prezzo diverso da quello delle regole va
+        // riprezzato: il riprezzo valuta tutte le copie della carta insieme.
+        atRulesPriceBlueprintIds.ExceptWith(repriceBlueprintIds);
+        if (atRulesPriceBlueprintIds.Count > 0)
+        {
+            _logger.LogInformation(
+                "{Count} blueprint pubblicati al prezzo delle regole: riprezzo dopo la pubblicazione non necessario",
+                atRulesPriceBlueprintIds.Count);
+        }
 
         EnqueuePublishedListingsForRepricing(repriceBlueprintIds);
 
@@ -496,10 +523,20 @@ public class PendingListingsController : ControllerBase
     }
 
     /// <summary>
+    /// L'inserzione è uscita dalla maschera al prezzo che le regole proponevano: il riprezzo
+    /// calcolerebbe lo stesso valore, spendendo una lettura del marketplace (e spesso una scrittura)
+    /// per niente. Lo scarto possibile sul sovrapprezzo di Card Trader, che prima della
+    /// pubblicazione non si può ricavare, lo corregge la notturna, che tratta ancora la carta da nuova.
+    /// </summary>
+    private static bool IsAtRulesPrice(PendingListing pending)
+        => pending.SuggestedPrice.HasValue && pending.SuggestedPrice.Value == pending.SellingPrice;
+
+    /// <summary>
     /// Accoda per rivalutazione le carte appena pubblicate su Card Trader.
     ///
-    /// Il prezzo con cui una carta entra dalla maschera è messo a mano, spesso alto di
-    /// proposito in attesa di un riferimento: allinearlo al mercato solo con l'esecuzione
+    /// Arrivano qui solo le carte il cui prezzo non è quello proposto dalle regole nella maschera
+    /// (vedi <see cref="IsAtRulesPrice"/>): messo a mano, o proposta non disponibile per mercato
+    /// insufficiente. Allinearlo al mercato solo con l'esecuzione
     /// notturna la lascerebbe fuori mercato per tutta la giornata. La valutazione costa una
     /// chiamata al marketplace per carta, soggetta al limite di 20 al minuto, quindi non può
     /// avvenire dentro questa richiesta: si accoda e ci pensa <c>PriceRefreshWorker</c>.

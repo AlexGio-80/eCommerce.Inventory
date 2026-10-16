@@ -15,6 +15,13 @@ public class PendingListing
     // Listing data (same as InventoryItem)
     public int Quantity { get; set; }
     public decimal SellingPrice { get; set; }
+
+    /// <summary>
+    /// Prezzo delle regole dell'autopricer che la maschera proponeva per questa carta al momento
+    /// dell'invio (null se non ne proponeva uno). Se coincide con <see cref="SellingPrice"/> la
+    /// pubblicazione non accoda il riprezzo: il prezzo è già quello che il riprezzo calcolerebbe.
+    /// </summary>
+    public decimal? SuggestedPrice { get; set; }
     public decimal PurchasePrice { get; set; }
     public string Condition { get; set; } = string.Empty;
     public string Language { get; set; } = string.Empty;
