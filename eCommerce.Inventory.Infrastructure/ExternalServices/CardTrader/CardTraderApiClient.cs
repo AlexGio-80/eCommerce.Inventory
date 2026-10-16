@@ -396,6 +396,110 @@ public class CardTraderApiClient : ICardTraderApiService
     }
 
     /// <summary>
+    /// Aggiunge un'offerta al carrello Card Trader dell'account: POST /cart/add. Il carrello è lo
+    /// stesso del sito; l'acquisto (POST /cart/purchase) non si chiama mai da qui, si conclude sul
+    /// sito dopo aver controllato spedizione e totale.
+    /// </summary>
+    public async Task<string?> AddToCartAsync(int marketplaceProductId, int quantity, bool viaCardTraderZero, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var payload = new { product_id = marketplaceProductId, quantity, via_cardtrader_zero = viaCardTraderZero };
+
+            await _rateLimiter.AcquireAsync(cancellationToken);
+            var response = await _httpClient.PostAsJsonAsync("cart/add", payload, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation("Aggiunta al carrello Card Trader l'offerta {ProductId} (CT Zero: {Zero})", marketplaceProductId, viaCardTraderZero);
+                return null;
+            }
+
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogWarning("Card Trader ha rifiutato l'aggiunta al carrello dell'offerta {ProductId}. Status: {StatusCode}, Response: {Response}",
+                marketplaceProductId, response.StatusCode, body);
+            return $"Card Trader ha risposto {(int)response.StatusCode}: {(body.Length > 300 ? body[..300] : body)}";
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Errore nell'aggiunta al carrello Card Trader dell'offerta {ProductId}", marketplaceProductId);
+            return ex.Message;
+        }
+    }
+
+    /// <summary>
+    /// Carrello Card Trader dell'account: GET /cart, sotto-carrelli per venditore (più quello di Card
+    /// Trader Zero) con le righe. L'id dell'offerta è in <c>product.id</c>, a volte come stringa.
+    /// </summary>
+    public async Task<List<CardTraderCartLine>> GetCartAsync(CancellationToken cancellationToken = default)
+    {
+        await _rateLimiter.AcquireAsync(cancellationToken);
+        var response = await _httpClient.GetAsync("cart", cancellationToken);
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogError("Lettura del carrello Card Trader fallita. Status: {StatusCode}, Response: {Response}", response.StatusCode, json);
+            response.EnsureSuccessStatusCode();
+        }
+        return ParseCart(json);
+    }
+
+    public static List<CardTraderCartLine> ParseCart(string json)
+    {
+        var lines = new List<CardTraderCartLine>();
+        if (string.IsNullOrWhiteSpace(json)) return lines;
+
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        if (root.TryGetProperty("resource", out var resource)) root = resource;
+        if (!root.TryGetProperty("subcarts", out var subcarts) || subcarts.ValueKind != JsonValueKind.Array) return lines;
+
+        foreach (var subcart in subcarts.EnumerateArray())
+        {
+            string? seller = null;
+            if (subcart.TryGetProperty("seller", out var s) && s.ValueKind == JsonValueKind.Object && s.TryGetProperty("username", out var u))
+                seller = u.GetString();
+            if (!subcart.TryGetProperty("cart_items", out var items) || items.ValueKind != JsonValueKind.Array) continue;
+
+            foreach (var item in items.EnumerateArray())
+            {
+                if (!item.TryGetProperty("product", out var product) || !product.TryGetProperty("id", out var idElement)) continue;
+                var id = idElement.ValueKind == JsonValueKind.Number ? idElement.GetInt32()
+                    : int.TryParse(idElement.GetString(), out var parsed) ? parsed : 0;
+                if (id == 0) continue;
+                var quantity = item.TryGetProperty("quantity", out var q) && q.ValueKind == JsonValueKind.Number ? q.GetInt32() : 1;
+                var name = product.TryGetProperty("name_en", out var n) ? n.GetString() : null;
+                lines.Add(new CardTraderCartLine(id, quantity, name, seller));
+            }
+        }
+        return lines;
+    }
+
+    /// <summary>Toglie unità di un'offerta dal carrello Card Trader: POST /cart/remove.</summary>
+    public async Task<string?> RemoveFromCartAsync(int marketplaceProductId, int quantity, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _rateLimiter.AcquireAsync(cancellationToken);
+            var response = await _httpClient.PostAsJsonAsync("cart/remove", new { product_id = marketplaceProductId, quantity }, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation("Tolta dal carrello Card Trader l'offerta {ProductId} ({Quantity} unità)", marketplaceProductId, quantity);
+                return null;
+            }
+
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogWarning("Card Trader ha rifiutato la rimozione dal carrello dell'offerta {ProductId}. Status: {StatusCode}, Response: {Response}",
+                marketplaceProductId, response.StatusCode, body);
+            return $"Card Trader ha risposto {(int)response.StatusCode}: {(body.Length > 300 ? body[..300] : body)}";
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Errore nella rimozione dal carrello Card Trader dell'offerta {ProductId}", marketplaceProductId);
+            return ex.Message;
+        }
+    }
+
+    /// <summary>
     /// Delete a product from Card Trader
     /// </summary>
     public async Task DeleteProductOnCardTraderAsync(int cardTraderProductId, CancellationToken cancellationToken = default)

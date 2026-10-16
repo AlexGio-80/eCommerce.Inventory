@@ -266,4 +266,40 @@ public class AlertServiceTests
 
         (await service.ListNotificationsAsync(10)).Unread.Should().Be(0);
     }
+
+    [Fact]
+    public async Task Email_ListsEachProductWithItsCardTraderAndCardmarketLinks()
+    {
+        var box = await SeedBoxAsync(trend: 100m);
+        box.CardTraderBlueprintId = 4321;
+        _db.CardmarketProducts.Add(new CardmarketProduct { IdProduct = 897524, Name = "Star Trek Play Booster Box" });
+        await _db.SaveChangesAsync();
+        string? body = null;
+        _email.SetupGet(e => e.IsConfigured).Returns(true);
+        _email.Setup(e => e.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback<string, string, CancellationToken>((_, html, _) => body = html)
+            .Returns(Task.CompletedTask);
+        var service = CreateService();
+        await service.SaveRuleAsync(null, new AlertRuleInput("Sotto 130", AlertRuleType.PriceBelow, box.Id, null, null, 130m, false, true, true));
+
+        (await service.EvaluateAsync()).Email.Should().Be("inviata");
+
+        body.Should().Contain("href=\"https://www.cardtrader.com/cards/4321\"");
+        body.Should().Contain("href=\"https://www.cardmarket.com/en/Magic/Products/Search?searchString=Star%20Trek%20Play%20Booster%20Box\"");
+    }
+
+    [Fact]
+    public void DigestBody_TextOnlyNotification_KeepsItsMessage_AndProductsBeyondTheListAreCounted()
+    {
+        var text = new DigestEntry(new AlertNotification { Title = "Drop Secret Lair", Message = "riga 1\nriga 2" }, null, 0);
+        var list = new DigestEntry(new AlertNotification { Title = "Box da aprire: 17 prodotti", Message = "" },
+            new List<DigestLine> { new("Box A: rende il +20%", null, null) }, 17);
+
+        var body = AlertService.BuildDigestBody(new[] { text, list });
+
+        body.Should().Contain("riga 1<br>riga 2");
+        body.Should().Contain("• Box A: rende il +20%");
+        body.Should().NotContain("<a ", "senza blueprint e senza nome Cardmarket non ci sono link");
+        body.Should().Contain("… e altri 16 prodotti");
+    }
 }

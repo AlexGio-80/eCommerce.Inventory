@@ -9,6 +9,51 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-16] Miglioria — Carrello più veloce dalle proposte d'acquisto
+
+#### Problema
+
+- Dall'email degli avvisi e dal piano d'acquisto il carrello si faceva prodotto per prodotto: nell'email
+  non c'erano link, nel piano si apriva un link alla volta e su Card Trader si rimetteva ogni offerta
+  nel carrello a mano.
+
+#### Soluzione Implementata
+
+- **Email di riepilogo**: accanto a ogni prodotto di un avviso di regola i link "Card Trader" (pagina
+  del blueprint) e "Cardmarket" (ricerca col nome esatto Cardmarket; non esiste un indirizzo per id).
+  Gli avvisi solo testo (drop Secret Lair) restano come prima.
+- **Piano d'acquisto**: caselle di selezione sulle offerte e tre azioni.
+  - "Metti nel carrello Card Trader": aggiunge le offerte selezionate al carrello dell'account con
+    l'API (`POST /cart/add`), una unità ciascuna; via Card Trader Zero per le offerte del carrello CT
+    Zero, direttamente dal venditore per gli altri. Lo stesso pulsante sta sull'intestazione del
+    carrello CT Zero e di ogni venditore. **Non compra**: l'acquisto si conclude sul sito, dove si
+    vedono spedizione e totale. Le offerte rifiutate (vendute nel frattempo) sono elencate.
+  - "Apri su Card Trader (N)" / "Apri su Cardmarket (N)": un link per prodotto, delle offerte spuntate o,
+    senza spunte, di tutto il piano; N dice su quanti prodotti agiscono. Chrome lascia aprire una
+    sola scheda per clic finché non si consentono i popup del sito; le schede bloccate restano in un
+    elenco di link da aprire uno per uno, con l'indicazione per consentire i popup di inventory.local.
+- **Stato del carrello nel piano** (dopo la prima prova dell'utente): il piano legge il carrello Card
+  Trader all'apertura e dopo ogni modifica. Le offerte già nel carrello hanno il segno "nel carrello"
+  (con la quantità se più di una) e una × per toglierle; in alto il conteggio, "Rileggi", "Togli le
+  offerte del piano" e il link al carrello. Le righe spuntate sono evidenziate e dopo l'aggiunta le
+  spunte si tolgono. L'aggiunta salta le offerte già nel carrello: alla prima prova quattro prodotti
+  presenti sia nel carrello CT Zero sia nel blocco del venditore erano finiti nel carrello con
+  quantità 2. Il link al carrello è `/cart/edit` (`/cart` dà 404).
+
+#### Note Tecniche
+
+- `AlertService.BuildDigestBody` (pubblico, testato): `DigestEntry`/`DigestLine` portano blueprint e
+  nome Cardmarket dei prodotti elencati; il testo salvato sull'avviso non cambia.
+- `ICardTraderApiService.AddToCartAsync` / `GetCartAsync` / `RemoveFromCartAsync` (mai `POST /cart/purchase`);
+  `CardTraderApiClient.ParseCart` legge `subcarts[].cart_items[]` (`product.id`, anche come stringa,
+  `quantity`, venditore del sotto-carrello). `PurchasePlanService.AddToCartAsync` (al massimo 60
+  offerte, doppioni e offerte già nel carrello saltati), `RemoveFromCartAsync` (tutte le unità).
+  Endpoint `GET|POST /api/purchasing/purchase-plan/cart` e `POST .../purchase-plan/cart/remove`
+  (richieste interattive per il limitatore); le risposte riportano il carrello aggiornato.
+  `PlanOffer.CardTraderProductId` = id dell'offerta.
+- Test: link nell'email e corpo del riepilogo in `AlertServiceTests`; aggiunta, offerte già nel
+  carrello, rimozione e lettura del carrello in `PurchasePlanServiceTests`.
+
 ### [2026-10-16] Feature — Prezzo delle regole nella maschera "Nuovo Prodotto"
 
 #### Problema

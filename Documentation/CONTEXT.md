@@ -39,9 +39,9 @@
 **Pagina "Acquisti": analisi dei prodotti sigillati.** Dettaglio in `Documentation/Features/004-AnalisiAcquistoProdotti.md`
 - Dati: listino pubblico Cardmarket ogni mattina alle 07:00 (`CardmarketImportWorker`); catalogo sigillati e composizione delle buste da MTGJSON
 - Analisi uscita: convenienza fra formati, valore atteso dell'apertura (prezzi CM e CT affiancati, fattore "prezzo realizzato", quota venduta per fascia, costo per carta, costi di vendita 15%), decisione Apri / Tieni sigillato / Dati incompleti / Prezzo CM dubbio / Non giocabili. Trend CM fino a 0,05 € = prezzo di riempimento, quindi "Prezzo CM dubbio"
-- Opportunità: classifica giornaliera di tutte le uscite, filtro "Resa massima %", piano d'acquisto su Card Trader per venditore
+- Opportunità: classifica giornaliera di tutte le uscite, filtro "Resa massima %", piano d'acquisto su Card Trader per venditore, con "Metti nel carrello Card Trader" (via API, non compra) e "Apri tutti" su Card Trader o Cardmarket
 - Aperture (bilancio reale per Tag) e Registro acquisti (ricerca su tutto il catalogo per nome Cardmarket, costo per carta, previsione salvata all'apertura)
-- Avvisi: regole per prodotto o per gruppo, campanella ed email di riepilogo (SMTP configurato). Gli avvisi di apertura ignorano le rese oltre il 300%
+- Avvisi: regole per prodotto o per gruppo, campanella ed email di riepilogo (SMTP configurato) con i link Card Trader e Cardmarket di ogni prodotto. Gli avvisi di apertura ignorano le rese oltre il 300%
 - Secret Lair: retrospettiva dei drop comprati; negozio Wizards letto alle 8, 14 e 20 con avviso per ogni superdrop nuovo; valutazione del drop prima dell'acquisto (Compra / Al limite / Lascia)
 
 **Report e altre pagine**
@@ -75,6 +75,7 @@
 
 | Data | Decisione | Perché |
 |------|-----------|--------|
+| 2026-10-16 | Carrello dal piano d'acquisto via API Card Trader (`/cart/add`, mai `/cart/purchase`); "Apri tutti" con elenco di link per le schede bloccate; venditori Cardmarket non ricavabili | L'acquisto si conclude sul sito per vedere spedizione e totale. Chrome apre una sola scheda per clic senza il permesso dei popup. Su Cardmarket lo Shopping Wizard lavora sulle liste dei desideri, che non accettano i sigillati (provato il 16/10): il raggruppamento per venditore resta manuale |
 | 2026-10-16 | Prezzo delle regole già nella maschera; niente riprezzo dopo la pubblicazione se il prezzo inviato è quello; precedenza alla maschera nel limite di Card Trader | Listando a blocchi di 20, il riprezzo del blocco appena pubblicato occupava il limite per 2-3 minuti e la maschera aspettava fino a 55 s per carta (log del 15/10) |
 | 2026-10-16 | Prezzo realizzato per tipo di carta (buste, mazzi, Secret Lair) dal set MTGJSON, vendite CT Zero non ancora pagate comprese | Il fattore unico (116,8%) veniva dalle buste di un'uscita recente; sui mazzi Commander si incassa il 95% del trend, e il valore dei mazzi era gonfiato di circa il 20% |
 | 2026-10-15 | Resa dell'apertura sul trend, o sul low se è più alto; "Nessuna offerta" se su Cardmarket nessuno vende il prodotto | Al trend non si può comprare se l'offerta più bassa è sopra, e senza offerte non si può comprare affatto: le rese del 100–500% di Duel Deck e mazzi Salvat venivano da qui |

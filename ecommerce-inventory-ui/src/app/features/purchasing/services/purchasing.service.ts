@@ -394,6 +394,30 @@ export interface PlanOffer {
     available: number;
     openValueNet: number;
     roiPercent: number;
+    /** Id dell'offerta sul marketplace Card Trader, per metterla nel carrello. */
+    cardTraderProductId: number;
+}
+
+export interface PlanCartItem {
+    cardTraderProductId: number;
+    viaCardTraderZero: boolean;
+    productName?: string;
+}
+
+/** Riga del carrello Card Trader dell'account. */
+export interface CardTraderCartLine {
+    productId: number;
+    quantity: number;
+    name?: string;
+    sellerName?: string;
+}
+
+export interface PlanCartResult {
+    added: number;
+    alreadyInCart: number;
+    failed: { cardTraderProductId: number; productName?: string; reason: string }[];
+    /** Carrello Card Trader dopo l'operazione. */
+    cart: CardTraderCartLine[];
 }
 
 export interface PlanProduct {
@@ -665,6 +689,20 @@ export class PurchasingService {
 
     buildPurchasePlan(sealedProductIds: number[]): Observable<PurchasePlan> {
         return this.http.post<ApiResponse<PurchasePlan>>(`${this.apiUrl}/purchase-plan`, sealedProductIds).pipe(map(r => r.data!));
+    }
+
+    /** Mette le offerte nel carrello Card Trader dell'account: non compra, si conclude sul sito. */
+    addPlanToCart(items: PlanCartItem[]): Observable<PlanCartResult> {
+        return this.http.post<ApiResponse<PlanCartResult>>(`${this.apiUrl}/purchase-plan/cart`, items).pipe(map(r => r.data!));
+    }
+
+    getPlanCart(): Observable<CardTraderCartLine[]> {
+        return this.http.get<ApiResponse<CardTraderCartLine[]>>(`${this.apiUrl}/purchase-plan/cart`).pipe(map(r => r.data!));
+    }
+
+    /** Toglie dal carrello Card Trader le offerte indicate, tutte le unità. */
+    removeFromPlanCart(cardTraderProductIds: number[]): Observable<PlanCartResult> {
+        return this.http.post<ApiResponse<PlanCartResult>>(`${this.apiUrl}/purchase-plan/cart/remove`, cardTraderProductIds).pipe(map(r => r.data!));
     }
 
     getAlertRules(): Observable<AlertRule[]> {

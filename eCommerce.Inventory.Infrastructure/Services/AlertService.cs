@@ -52,6 +52,7 @@ public class AlertService
             var rules = await _db.AlertRules.Where(r => r.IsActive).ToListAsync(cancellationToken);
             var context = await LoadContextAsync(rules, cancellationToken);
             var created = new List<AlertNotification>();
+            var digest = new List<DigestEntry>();
 
             foreach (var rule in rules)
             {
@@ -68,6 +69,7 @@ public class AlertService
                     var notification = BuildNotification(rule, fresh);
                     _db.AlertNotifications.Add(notification);
                     created.Add(notification);
+                    if (notification.EmailRequested) digest.Add(BuildDigestEntry(notification, fresh, context));
                 }
 
                 // Condizione non più vera: se lo ridiventa, l'avviso scatta di nuovo.
@@ -79,7 +81,7 @@ public class AlertService
 
             await _db.SaveChangesAsync(cancellationToken);
 
-            var emailed = await SendDigestAsync(created.Where(n => n.EmailRequested).ToList(), cancellationToken);
+            var emailed = await SendDigestAsync(digest, cancellationToken);
 
             _logger.LogInformation("Avvisi acquisti: {Rules} regole valutate, {New} avvisi nuovi, email {Email}",
                 rules.Count, created.Count, emailed);
@@ -107,7 +109,7 @@ public class AlertService
         _db.AlertNotifications.Add(notification);
         await _db.SaveChangesAsync(cancellationToken);
 
-        if (sendEmail) await SendDigestAsync(new List<AlertNotification> { notification }, cancellationToken);
+        if (sendEmail) await SendDigestAsync(new List<DigestEntry> { new(notification, null, 0) }, cancellationToken);
     }
 
     private static AlertNotification BuildNotification(AlertRule rule, List<Match> fresh)
@@ -127,6 +129,62 @@ public class AlertService
             Message = FitMessage(lines, ordered.Count),
             EmailRequested = rule.SendEmail
         };
+    }
+
+    /// <summary>
+    /// Righe dell'email per un avviso di regola: gli stessi prodotti dell'avviso, ciascuno con i link
+    /// per aprirlo su Card Trader e su Cardmarket (per fare il carrello senza cercarli a mano).
+    /// </summary>
+    private static DigestEntry BuildDigestEntry(AlertNotification notification, List<Match> fresh, EvaluationContext context)
+    {
+        var ordered = fresh.OrderByDescending(m => m.SortKey).ToList();
+        var lines = ordered.Take(MaxListedProducts).Select(m =>
+        {
+            var info = context.Products[m.ProductId];
+            var cmName = info.CardmarketId is { } cmId ? context.CardmarketNames.GetValueOrDefault(cmId) : null;
+            return new DigestLine(ordered.Count == 1 ? m.Detail : $"{m.ProductName}: {m.Detail}",
+                info.CardTraderBlueprintId, cmName ?? info.Name);
+        }).ToList();
+        return new DigestEntry(notification, lines, ordered.Count);
+    }
+
+    /// <summary>Link Card Trader del prodotto (pagina del blueprint, con le offerte).</summary>
+    public static string CardTraderUrl(int blueprintId) => $"https://www.cardtrader.com/cards/{blueprintId}";
+
+    /// <summary>Cardmarket non ha un indirizzo per id prodotto: si apre la ricerca col nome esatto.</summary>
+    public static string CardmarketSearchUrl(string name) =>
+        "https://www.cardmarket.com/en/Magic/Products/Search?searchString=" + Uri.EscapeDataString(name);
+
+    /// <summary>
+    /// Corpo HTML dell'email di riepilogo. Gli avvisi di regola elencano i prodotti con i link CT e CM;
+    /// gli altri (es. drop Secret Lair) mostrano il loro testo.
+    /// </summary>
+    public static string BuildDigestBody(IEnumerable<DigestEntry> entries)
+    {
+        static string Link(string url, string text) => $"<a href=\"{WebUtility.HtmlEncode(url)}\">{text}</a>";
+
+        static string Item(DigestEntry e)
+        {
+            var title = $"<strong>{WebUtility.HtmlEncode(e.Notification.Title)}</strong>";
+            if (e.Lines == null)
+                return $"<li>{title}<br>{WebUtility.HtmlEncode(e.Notification.Message).Replace("\n", "<br>")}</li>";
+
+            var bullet = e.TotalProducts == 1 ? string.Empty : "• ";
+            var rows = e.Lines.Select(l =>
+            {
+                var links = new List<string>();
+                if (l.CardTraderBlueprintId is { } bp) links.Add(Link(CardTraderUrl(bp), "Card Trader"));
+                if (!string.IsNullOrWhiteSpace(l.CardmarketName)) links.Add(Link(CardmarketSearchUrl(l.CardmarketName), "Cardmarket"));
+                return bullet + WebUtility.HtmlEncode(l.Text) + (links.Count > 0 ? " — " + string.Join(" · ", links) : string.Empty);
+            }).ToList();
+            if (e.TotalProducts > e.Lines.Count)
+                rows.Add(WebUtility.HtmlEncode($"… e altri {e.TotalProducts - e.Lines.Count} prodotti (scheda Opportunità o Avvisi della pagina Acquisti)"));
+            return $"<li>{title}<br>{string.Join("<br>", rows)}</li>";
+        }
+
+        return "<p>Nuovi avvisi sugli acquisti di sigillati:</p><ul>"
+               + string.Concat(entries.Select(Item))
+               + "</ul><p>Dettagli nella pagina Acquisti di eCommerce.Inventory.</p>";
     }
 
     /// <summary>
@@ -264,10 +322,11 @@ public class AlertService
     // ---------------------------------------------------------------------------------------------
     // Valutazione
 
-    private record ProductInfo(int Id, string Name, string? Category, string? Subtype, string MainSetCode, DateOnly? ReleaseDate, int? CardmarketId);
+    private record ProductInfo(int Id, string Name, string? Category, string? Subtype, string MainSetCode, DateOnly? ReleaseDate, int? CardmarketId, int? CardTraderBlueprintId);
 
     private record EvaluationContext(
         Dictionary<int, ProductInfo> Products,
+        Dictionary<int, string> CardmarketNames,
         Dictionary<int, CardmarketLatestPrice> LatestPrices,
         Dictionary<int, decimal?> TrendWeekAgo,
         Dictionary<int, List<(DateOnly Date, decimal Trend)>> History,
@@ -284,15 +343,20 @@ public class AlertService
         // I case si escludono: non si comprano, e il loro prezzo Cardmarket è spesso abbinato male.
         var products = (await _db.SealedProducts.AsNoTracking()
                 .Where(p => p.Category == null || !p.Category.EndsWith("_case"))
-                .Select(p => new { p.Id, p.Name, p.Category, p.Subtype, p.SetCode, p.CardmarketId })
+                .Select(p => new { p.Id, p.Name, p.Category, p.Subtype, p.SetCode, p.CardmarketId, p.CardTraderBlueprintId })
                 .ToListAsync(cancellationToken))
             .Select(p =>
             {
                 var main = MainOf(p.SetCode);
                 return new ProductInfo(p.Id, p.Name, p.Category, p.Subtype, main,
-                    setByCode.TryGetValue(main, out var s) ? s.ReleaseDate : null, p.CardmarketId);
+                    setByCode.TryGetValue(main, out var s) ? s.ReleaseDate : null, p.CardmarketId, p.CardTraderBlueprintId);
             })
             .ToDictionary(p => p.Id);
+
+        // Nome Cardmarket per il link di ricerca nell'email.
+        var cardmarketNames = await _db.CardmarketProducts.AsNoTracking()
+            .Where(c => _db.SealedProducts.Any(s => s.CardmarketId == c.IdProduct))
+            .ToDictionaryAsync(c => c.IdProduct, c => c.Name, cancellationToken);
 
         var latest = await _db.CardmarketLatestPrices.AsNoTracking()
             .Where(p => _db.SealedProducts.Any(s => s.CardmarketId == p.IdProduct))
@@ -331,7 +395,7 @@ public class AlertService
             ? new List<SealedOpportunity>()
             : await _db.SealedOpportunities.AsNoTracking().Where(o => o.Date == lastDate).ToListAsync(cancellationToken);
 
-        return new EvaluationContext(products, latest, trendWeekAgo, history, firstSeen, opportunities);
+        return new EvaluationContext(products, cardmarketNames, latest, trendWeekAgo, history, firstSeen, opportunities);
     }
 
     /// <param name="SortKey">Per ordinare l'elenco nell'avviso: prima i prodotti più interessanti.</param>
@@ -436,8 +500,9 @@ public class AlertService
     }
 
     /// <summary>Un'unica email per giro con tutti gli avvisi nuovi; l'esito resta sull'avviso.</summary>
-    private async Task<string> SendDigestAsync(List<AlertNotification> notifications, CancellationToken cancellationToken)
+    private async Task<string> SendDigestAsync(List<DigestEntry> entries, CancellationToken cancellationToken)
     {
+        var notifications = entries.Select(e => e.Notification).ToList();
         if (notifications.Count == 0) return "nessun avviso da inviare";
         if (!_email.IsConfigured)
         {
@@ -446,10 +511,7 @@ public class AlertService
             return "non configurata";
         }
 
-        var body = "<p>Nuovi avvisi sugli acquisti di sigillati:</p><ul>"
-                   + string.Concat(notifications.Select(n =>
-                       $"<li><strong>{WebUtility.HtmlEncode(n.Title)}</strong><br>{WebUtility.HtmlEncode(n.Message).Replace("\n", "<br>")}</li>"))
-                   + "</ul><p>Dettagli nella pagina Acquisti di eCommerce.Inventory.</p>";
+        var body = BuildDigestBody(entries);
         var subject = notifications.Count == 1 ? notifications[0].Title : $"{notifications.Count} nuovi avvisi sugli acquisti";
 
         try
@@ -472,6 +534,13 @@ public class AlertService
 
     private static string Truncate(string value, int max) => value.Length <= max ? value : value[..max];
 }
+
+/// <summary>Prodotto nell'email di riepilogo, con gli id per i link CT e CM.</summary>
+public record DigestLine(string Text, int? CardTraderBlueprintId, string? CardmarketName);
+
+/// <param name="Lines">Prodotti elencati (avvisi di regola); null per gli avvisi solo testo.</param>
+/// <param name="TotalProducts">Prodotti dell'avviso, anche quelli oltre l'elenco.</param>
+public record DigestEntry(AlertNotification Notification, List<DigestLine>? Lines, int TotalProducts);
 
 public record AlertEvaluationResult(int RulesEvaluated, int NewNotifications, string Email);
 

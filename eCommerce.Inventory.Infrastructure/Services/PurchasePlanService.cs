@@ -80,7 +80,8 @@ public class PurchasePlanService
                     product.Id, product.Name, product.Opportunity!.MainSetCode,
                     o.User.Id, o.User.Username, o.User.CountryCode, o.User.CanSellSealedWithCtZero,
                     o.PriceCents / 100m, o.Quantity, openValue.Value,
-                    Math.Round((openValue.Value - o.PriceCents / 100m) / (o.PriceCents / 100m) * 100m, 1)))
+                    Math.Round((openValue.Value - o.PriceCents / 100m) / (o.PriceCents / 100m) * 100m, 1),
+                    o.Id))
                 .ToList();
 
             var cheapest = valid.OrderBy(o => o.Price).FirstOrDefault();
@@ -126,6 +127,61 @@ public class PurchasePlanService
         return new PurchasePlan(DateTime.UtcNow, productSummaries.OrderBy(p => p.Name).ToList(), sellers, zero);
     }
 
+    /// <summary>Offerte aggiungibili al carrello con un clic: oltre, meglio restringere il piano.</summary>
+    public const int MaxCartItems = 60;
+
+    /// <summary>
+    /// Mette nel carrello Card Trader dell'account le offerte scelte nel piano, una unità ciascuna
+    /// (via Card Trader Zero per il carrello CT Zero, direttamente dal venditore per gli altri).
+    /// Non compra: l'acquisto si conclude sul sito. Un'offerta nel frattempo venduta o modificata
+    /// viene rifiutata da Card Trader e finisce fra quelle non aggiunte, senza fermare le altre.
+    ///
+    /// Le offerte già nel carrello si saltano: Card Trader ne alzerebbe la quantità (prima prova del
+    /// 16/10: un prodotto del carrello CT Zero e dello stesso venditore finiva nel carrello due volte).
+    /// </summary>
+    /// <exception cref="ArgumentException">Nessuna offerta o troppe offerte.</exception>
+    public async Task<PlanCartResult> AddToCartAsync(IReadOnlyCollection<PlanCartItem> items, CancellationToken cancellationToken = default)
+    {
+        if (items.Count == 0) throw new ArgumentException("Nessuna offerta da mettere nel carrello");
+        if (items.Count > MaxCartItems) throw new ArgumentException($"Troppe offerte ({items.Count}): al massimo {MaxCartItems} per volta");
+
+        var inCart = (await _cardTrader.GetCartAsync(cancellationToken)).Select(l => l.ProductId).ToHashSet();
+        var added = 0;
+        var alreadyInCart = 0;
+        var failed = new List<PlanCartFailure>();
+        foreach (var item in items.GroupBy(i => i.CardTraderProductId).Select(g => g.First()))
+        {
+            if (inCart.Contains(item.CardTraderProductId)) { alreadyInCart++; continue; }
+            var error = await _cardTrader.AddToCartAsync(item.CardTraderProductId, 1, item.ViaCardTraderZero, cancellationToken);
+            if (error == null) added++;
+            else failed.Add(new PlanCartFailure(item.CardTraderProductId, item.ProductName, error));
+        }
+
+        _logger.LogInformation("Carrello Card Trader dal piano: {Added} offerte aggiunte, {Already} già nel carrello, {Failed} rifiutate",
+            added, alreadyInCart, failed.Count);
+        return new PlanCartResult(added, alreadyInCart, failed, await GetCartAsync(cancellationToken));
+    }
+
+    /// <summary>Contenuto del carrello Card Trader, per segnare nel piano le offerte già messe.</summary>
+    public async Task<List<CardTraderCartLine>> GetCartAsync(CancellationToken cancellationToken = default) =>
+        await _cardTrader.GetCartAsync(cancellationToken);
+
+    /// <summary>Toglie dal carrello Card Trader le offerte indicate, tutte le unità presenti.</summary>
+    public async Task<PlanCartResult> RemoveFromCartAsync(IReadOnlyCollection<int> cardTraderProductIds, CancellationToken cancellationToken = default)
+    {
+        if (cardTraderProductIds.Count == 0) throw new ArgumentException("Nessuna offerta da togliere dal carrello");
+
+        var cart = (await _cardTrader.GetCartAsync(cancellationToken)).GroupBy(l => l.ProductId).ToDictionary(g => g.Key, g => g.Sum(l => l.Quantity));
+        var failed = new List<PlanCartFailure>();
+        foreach (var id in cardTraderProductIds.Distinct())
+        {
+            if (!cart.TryGetValue(id, out var quantity)) continue;
+            var error = await _cardTrader.RemoveFromCartAsync(id, quantity, cancellationToken);
+            if (error != null) failed.Add(new PlanCartFailure(id, null, error));
+        }
+        return new PlanCartResult(0, 0, failed, await GetCartAsync(cancellationToken));
+    }
+
     /// <summary>Si compra solo in inglese; un'offerta senza lingua indicata è accettata (sigillati).</summary>
     private static bool IsEnglish(string? language) =>
         string.IsNullOrEmpty(language)
@@ -135,6 +191,7 @@ public class PurchasePlanService
 
 /// <param name="OpenValueNet">Valore atteso netto dell'apertura (dalla classifica).</param>
 /// <param name="RoiPercent">Resa dell'apertura al prezzo di questa offerta.</param>
+/// <param name="CardTraderProductId">Id dell'offerta sul marketplace, per metterla nel carrello.</param>
 public record PlanOffer(
     int ProductId,
     string ProductName,
@@ -146,7 +203,8 @@ public record PlanOffer(
     decimal Price,
     int Available,
     decimal OpenValueNet,
-    decimal RoiPercent);
+    decimal RoiPercent,
+    int CardTraderProductId);
 
 public record PlanProduct(
     int ProductId,
@@ -176,3 +234,12 @@ public record PlanSeller(
 public record PlanZeroBasket(int ProductCount, decimal Total, decimal OpenValueNet, decimal Margin, List<PlanOffer> Items);
 
 public record PurchasePlan(DateTime ComputedAt, List<PlanProduct> Products, List<PlanSeller> Sellers, PlanZeroBasket CtZero);
+
+/// <summary>Offerta del piano da mettere nel carrello Card Trader.</summary>
+/// <param name="ViaCardTraderZero">True per le offerte del carrello CT Zero (un'unica spedizione).</param>
+public record PlanCartItem(int CardTraderProductId, bool ViaCardTraderZero, string? ProductName);
+
+public record PlanCartFailure(int CardTraderProductId, string? ProductName, string Reason);
+
+/// <param name="Cart">Carrello Card Trader dopo l'operazione.</param>
+public record PlanCartResult(int Added, int AlreadyInCart, List<PlanCartFailure> Failed, List<CardTraderCartLine> Cart);

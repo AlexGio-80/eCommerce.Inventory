@@ -363,6 +363,36 @@ venditore più prodotti convenienti per risparmiare sulla spedizione.
 - Spedizione esclusa dai conti: Card Trader la calcola al carrello.
 - **Pubblicato e verificato il 2026-10-07.**
 
+**Carrello più veloce dalle proposte (richiesta dell'utente, 2026-10-16):**
+- **Email degli avvisi**: ogni prodotto elencato ha i link "Card Trader" (pagina del blueprint) e
+  "Cardmarket" (ricerca col nome esatto: Cardmarket non ha un indirizzo per id prodotto).
+- **Carrello Card Trader via API**: l'API completa di Card Trader ha il carrello (`GET /cart`,
+  `POST /cart/add` con `product_id`, `quantity`, `via_cardtrader_zero`, `POST /cart/remove`,
+  `POST /cart/purchase`). Nel piano, "Metti nel carrello Card Trader" aggiunge le offerte selezionate
+  (o tutto il carrello CT Zero, o tutti i prodotti di un venditore) con `/cart/add`, una unità
+  ciascuna. `/cart/purchase` non si usa mai: l'acquisto si conclude sul sito, dove si vedono
+  spedizione e totale. Non esiste invece un link unico che metta più prodotti nel carrello.
+- **Stato del carrello**: il piano legge il carrello Card Trader (`GET /cart`) all'apertura e dopo ogni
+  modifica; le offerte già nel carrello hanno il segno "nel carrello" e si tolgono da lì
+  (`POST /cart/remove`, tutte le unità). L'aggiunta salta le offerte già nel carrello, perché Card
+  Trader ne alzerebbe la quantità (alla prima prova del 16/10 quattro prodotti presenti sia nel
+  carrello CT Zero sia nel blocco del venditore erano finiti nel carrello due volte).
+- **"Apri su Card Trader / Cardmarket (N)"**: un link per prodotto, delle offerte spuntate o, senza
+  spunte, di tutto il piano; il numero sul pulsante dice quanti prodotti apre. Chrome concede una sola finestra nuova per clic dell'utente (il clic si "consuma" alla prima
+  apertura): le altre `window.open` restituiscono null e Chrome mostra l'icona dei popup bloccati.
+  Aprire a gruppi non cambia niente, servirebbe comunque un clic per scheda. Scelta: si prova ad
+  aprirle tutte, e quelle bloccate restano in un elenco di link nel piano (ogni clic apre una scheda),
+  con l'indicazione per consentire una volta per tutte i popup di inventory.local; da allora un clic
+  apre tutto.
+- **Venditori Cardmarket**: restano non ricavabili dai dati. Il listino pubblico non ha venditori,
+  l'API è chiusa alle nuove richieste e la lettura delle pagine è esclusa. L'unico modo legittimo è
+  lo **Shopping Wizard** del sito: si mettono i prodotti in una lista dei desideri (da "Apri tutti su
+  Cardmarket", pulsante "Aggiungi alla lista" di ogni prodotto) e il sito trova la combinazione di
+  venditori più economica, spedizioni comprese. **Provato dall'utente il 16/10: le liste dei desideri
+  non accettano i prodotti sigillati**, quindi il raggruppamento per venditore resta manuale.
+- **Pubblicato e verificato il 2026-10-16** (carrello Card Trader, stato del carrello nel piano,
+  "Apri" dopo aver consentito i popup). Da vedere il primo avviso via email con i link.
+
 **Evoluzione delle regole:** le tre regole predefinite sono un punto di partenza. Ogni lunedì alle
 08:00 un'attività programmata di Claude (app desktop) legge in sola lettura avvisi, classifica e
 acquisti e scrive in `Revisioni-avvisi/` (locale, escluso da git) un rapporto con le regole da rivedere

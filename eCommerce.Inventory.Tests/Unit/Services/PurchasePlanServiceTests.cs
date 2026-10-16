@@ -95,4 +95,73 @@ public class PurchasePlanServiceTests
         plan.Products.Single().Note.Should().Contain("blueprint");
         _cardTrader.Verify(c => c.GetMarketplaceProductsAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
     }
+
+    [Fact]
+    public async Task Cart_AddsEveryOffer_OnceEach_AndReportsTheRefusedOnes()
+    {
+        _cardTrader.Setup(c => c.GetCartAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<CardTraderCartLine>());
+        _cardTrader.Setup(c => c.AddToCartAsync(11, 1, true, It.IsAny<CancellationToken>())).ReturnsAsync((string?)null);
+        _cardTrader.Setup(c => c.AddToCartAsync(22, 1, false, It.IsAny<CancellationToken>())).ReturnsAsync("Card Trader ha risposto 422: venduto");
+
+        var result = await CreateService().AddToCartAsync(new[]
+        {
+            new PlanCartItem(11, true, "Box A"),
+            new PlanCartItem(11, true, "Box A"),      // doppione: una sola chiamata
+            new PlanCartItem(22, false, "Box B")
+        });
+
+        result.Added.Should().Be(1);
+        result.Failed.Should().ContainSingle().Which.ProductName.Should().Be("Box B");
+        _cardTrader.Verify(c => c.AddToCartAsync(11, 1, true, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Cart_SkipsOffersAlreadyInTheCart_SoTheQuantityDoesNotGrow()
+    {
+        _cardTrader.Setup(c => c.GetCartAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<CardTraderCartLine> { new(11, 1, "Box A", "Venditore") });
+        _cardTrader.Setup(c => c.AddToCartAsync(22, 1, false, It.IsAny<CancellationToken>())).ReturnsAsync((string?)null);
+
+        var result = await CreateService().AddToCartAsync(new[] { new PlanCartItem(11, false, "Box A"), new PlanCartItem(22, false, "Box B") });
+
+        result.Added.Should().Be(1);
+        result.AlreadyInCart.Should().Be(1);
+        _cardTrader.Verify(c => c.AddToCartAsync(11, It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RemoveFromCart_TakesAwayEveryUnitOfTheOffer()
+    {
+        _cardTrader.Setup(c => c.GetCartAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<CardTraderCartLine> { new(11, 2, "Box A", "Venditore") });
+        _cardTrader.Setup(c => c.RemoveFromCartAsync(11, 2, It.IsAny<CancellationToken>())).ReturnsAsync((string?)null);
+
+        var result = await CreateService().RemoveFromCartAsync(new[] { 11, 99 });
+
+        result.Failed.Should().BeEmpty();
+        _cardTrader.Verify(c => c.RemoveFromCartAsync(11, 2, It.IsAny<CancellationToken>()), Times.Once);
+        _cardTrader.Verify(c => c.RemoveFromCartAsync(99, It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public void ParseCart_ReadsOfferIdQuantityAndSeller_EvenWithTheIdAsAString()
+    {
+        const string json = """
+            { "id": 1, "subcarts": [
+                { "id": 7, "seller": { "id": 3, "username": "Venditore" },
+                  "cart_items": [ { "quantity": 2, "price_cents": 814, "price_currency": "EUR", "product": { "id": 105234025, "name_en": "Box A" } },
+                                  { "quantity": 1, "price_cents": 100, "price_currency": "EUR", "product": { "id": "42", "name_en": "Box B" } } ] } ] }
+            """;
+
+        var lines = eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.CardTraderApiClient.ParseCart(json);
+
+        lines.Should().BeEquivalentTo(new[] { new CardTraderCartLine(105234025, 2, "Box A", "Venditore"), new CardTraderCartLine(42, 1, "Box B", "Venditore") });
+    }
+
+    [Fact]
+    public async Task Cart_WithoutOffers_IsRejected()
+    {
+        var act = () => CreateService().AddToCartAsync(Array.Empty<PlanCartItem>());
+        await act.Should().ThrowAsync<ArgumentException>();
+    }
 }

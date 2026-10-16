@@ -39,6 +39,19 @@ public interface ICardTraderApiService
     /// Restituisce true se Card Trader ha accettato la modifica.
     /// </summary>
     Task<bool> UpdateProductPriceAsync(int cardTraderProductId, decimal newPrice, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Aggiunge un'offerta del marketplace al carrello Card Trader dell'account (POST /cart/add).
+    /// Non compra nulla: l'acquisto si conclude sul sito. Restituisce null se riuscito, altrimenti
+    /// il motivo del rifiuto.
+    /// </summary>
+    Task<string?> AddToCartAsync(int marketplaceProductId, int quantity, bool viaCardTraderZero, CancellationToken cancellationToken = default);
+
+    /// <summary>Righe del carrello Card Trader dell'account (GET /cart).</summary>
+    Task<List<CardTraderCartLine>> GetCartAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Toglie unità di un'offerta dal carrello (POST /cart/remove). Null se riuscito, altrimenti il motivo.</summary>
+    Task<string?> RemoveFromCartAsync(int marketplaceProductId, int quantity, CancellationToken cancellationToken = default);
+
     Task DeleteProductOnCardTraderAsync(int cardTraderProductId, CancellationToken cancellationToken = default);
 
     // Product detail

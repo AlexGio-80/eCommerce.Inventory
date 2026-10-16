@@ -1,4 +1,6 @@
+using eCommerce.Inventory.Application.DTOs;
 using eCommerce.Inventory.Api.Models;
+using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
 using eCommerce.Inventory.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -205,6 +207,49 @@ public class PurchasingController : ControllerBase
             _logger.LogInformation("Piano d'acquisto Card Trader richiesto per {Count} prodotti", sealedProductIds.Count);
             var plan = await _plans.BuildAsync(sealedProductIds, cancellationToken);
             return Ok(ApiResponse<PurchasePlan>.SuccessResult(plan));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ApiResponse<object>.ErrorResult(ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// Mette nel carrello Card Trader dell'account le offerte scelte nel piano d'acquisto. Non compra:
+    /// l'acquisto si conclude sul sito. Una chiamata a Card Trader per offerta.
+    /// </summary>
+    [HttpPost("purchase-plan/cart")]
+    public async Task<IActionResult> AddPlanToCart([FromBody] List<PlanCartItem> items, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogInformation("Carrello Card Trader dal piano: {Count} offerte", items.Count);
+            using var interactive = CardTraderRequestPriority.BeginInteractive();
+            var result = await _plans.AddToCartAsync(items, cancellationToken);
+            return Ok(ApiResponse<PlanCartResult>.SuccessResult(result));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ApiResponse<object>.ErrorResult(ex.Message));
+        }
+    }
+
+    /// <summary>Contenuto del carrello Card Trader dell'account, per segnare nel piano le offerte già messe.</summary>
+    [HttpGet("purchase-plan/cart")]
+    public async Task<IActionResult> GetPlanCart(CancellationToken cancellationToken)
+    {
+        using var interactive = CardTraderRequestPriority.BeginInteractive();
+        return Ok(ApiResponse<List<CardTraderCartLine>>.SuccessResult(await _plans.GetCartAsync(cancellationToken)));
+    }
+
+    /// <summary>Toglie dal carrello Card Trader le offerte indicate (id delle offerte del marketplace).</summary>
+    [HttpPost("purchase-plan/cart/remove")]
+    public async Task<IActionResult> RemoveFromPlanCart([FromBody] List<int> cardTraderProductIds, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var interactive = CardTraderRequestPriority.BeginInteractive();
+            return Ok(ApiResponse<PlanCartResult>.SuccessResult(await _plans.RemoveFromCartAsync(cardTraderProductIds, cancellationToken)));
         }
         catch (ArgumentException ex)
         {
