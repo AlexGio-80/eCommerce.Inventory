@@ -23,6 +23,7 @@ import { OpportunitiesTabComponent } from '../components/opportunities-tab.compo
 import { AlertsTabComponent } from '../components/alerts-tab.component';
 import { PurchasesTabComponent } from '../components/purchases-tab.component';
 import { HoldStockTabComponent } from '../components/hold-stock-tab.component';
+import { BudgetPlanTabComponent } from '../components/budget-plan-tab.component';
 import {
   CardKind, OpeningValueParams, PackValue, PurchasingService, SealedProductAnalysis, SealedSetAnalysis, SealedSetOption,
   decisionLabel, isOpenIfOwned
@@ -40,7 +41,7 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
   imports: [GridStateDirective, 
     CommonModule, FormsModule, AgGridAngular, GridCellCopyDirective, MatCardModule, MatButtonModule, MatFormFieldModule,
     MatSelectModule, MatProgressSpinnerModule, MatSnackBarModule, MatIconModule, MatTooltipModule,
-    MatSlideToggleModule, MatInputModule, MatTabsModule, OpeningsTabComponent, SecretLairTabComponent, OpportunitiesTabComponent, PurchasesTabComponent, AlertsTabComponent, HoldStockTabComponent
+    MatSlideToggleModule, MatInputModule, MatTabsModule, OpeningsTabComponent, SecretLairTabComponent, OpportunitiesTabComponent, PurchasesTabComponent, AlertsTabComponent, HoldStockTabComponent, BudgetPlanTabComponent
   ],
   template: `
     <mat-tab-group class="tabs" [(selectedIndex)]="tabIndex" animationDuration="0ms">
@@ -242,6 +243,12 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
     <mat-tab label="Magazzino">
       <ng-template matTabContent>
         <app-hold-stock-tab></app-hold-stock-tab>
+      </ng-template>
+    </mat-tab>
+
+    <mat-tab label="Budget">
+      <ng-template matTabContent>
+        <app-budget-plan-tab></app-budget-plan-tab>
       </ng-template>
     </mat-tab>
     </mat-tab-group>

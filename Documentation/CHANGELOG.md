@@ -9,6 +9,29 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-17] Feature — Pianificatore del budget, Fase 0 *(pubblicata e verificata il 2026-10-17)*
+
+#### Problema
+
+- Per comprare, l'utente partiva da "posso spendere X" e componeva a mano i carrelli fra classifica, Card Trader,
+  Cardmarket e negozio Wizards, contando a occhio budget e spedizioni.
+
+#### Soluzione Implementata
+
+- Scheda **"Budget"** nella pagina Acquisti: budget, cursore aprire/tenere, Secret Lair "Al limite" a scelta,
+  spedizioni modificabili. Il piano propone carrelli per negozio e venditore (Card Trader Zero, venditori Card
+  Trader, Cardmarket al prezzo più basso con il venditore da cercare, Wizards) dentro il budget, con guadagno
+  atteso, punteggio dei tenuti e avvisi sul tempo (prezzo in calo, caro rispetto allo storico, uscita recente,
+  giorni rimasti su Wizards). Si può togliere una riga e ricalcolare subito; "Metti nel carrello Card Trader".
+
+#### Note Tecniche
+
+- `BudgetPlanner` (scelta un'offerta alla volta, spedizione una volta per venditore, divisione del budget con
+  passaggio dell'avanzo), `BudgetPlanService`, `BudgetPlanRunner` (background, piani in memoria 6 ore),
+  endpoint `api/purchasing/budget-plan`. Nessuna migration. Dettaglio nel documento 007.
+- Corretti nelle prove: tenuti solo se prezzo più spedizione non superano il trend CM del 10%; Cardmarket senza
+  venditore al trend (o al più basso se più alto), come la classifica; nessun tenuto oltre il 40% della sua parte.
+
 ### [2026-10-17] Deploy — `publish.ps1` conserva i log
 
 #### Problema

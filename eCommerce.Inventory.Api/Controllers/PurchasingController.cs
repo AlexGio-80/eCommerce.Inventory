@@ -27,6 +27,8 @@ public class PurchasingController : ControllerBase
     private readonly SealedOpportunityService _opportunities;
     private readonly AlertService _alerts;
     private readonly PurchasePlanService _plans;
+    private readonly BudgetPlanService _budgetPlans;
+    private readonly BudgetPlanRunner _budgetRunner;
     private readonly IConfiguration _configuration;
     private readonly ILogger<PurchasingController> _logger;
 
@@ -42,6 +44,8 @@ public class PurchasingController : ControllerBase
         SealedOpportunityService opportunities,
         AlertService alerts,
         PurchasePlanService plans,
+        BudgetPlanService budgetPlans,
+        BudgetPlanRunner budgetRunner,
         IConfiguration configuration,
         ILogger<PurchasingController> logger)
     {
@@ -49,6 +53,8 @@ public class PurchasingController : ControllerBase
         _secretLairShop = secretLairShop;
         _secretLairValuation = secretLairValuation;
         _plans = plans;
+        _budgetPlans = budgetPlans;
+        _budgetRunner = budgetRunner;
         _alerts = alerts;
         _opportunities = opportunities;
         _openingBalance = openingBalance;
@@ -257,6 +263,42 @@ public class PurchasingController : ControllerBase
         }
     }
 
+    /// <summary>Spedizioni predefinite del pianificatore del budget, da mostrare nella scheda.</summary>
+    [HttpGet("budget-plan/settings")]
+    public IActionResult GetBudgetPlanSettings() =>
+        Ok(ApiResponse<BudgetShipping>.SuccessResult(_budgetPlans.DefaultShipping));
+
+    /// <summary>
+    /// Avvia il pianificatore del budget (feature 007): legge le offerte Card Trader dei candidati in
+    /// background, 1–2 minuti. Se un calcolo è già in corso restituisce quello.
+    /// </summary>
+    [HttpPost("budget-plan")]
+    public IActionResult StartBudgetPlan([FromBody] BudgetPlanRequest request)
+    {
+        if (request.Budget <= 0) return BadRequest(ApiResponse<object>.ErrorResult("Indica un budget maggiore di zero"));
+        _logger.LogInformation("Pianificatore del budget richiesto: {Budget} €, {Open}% per aprire", request.Budget, request.OpenSharePercent);
+        return Ok(ApiResponse<BudgetPlanStatus>.SuccessResult(_budgetRunner.Start(request)));
+    }
+
+    [HttpGet("budget-plan/{id}")]
+    public IActionResult GetBudgetPlan(string id)
+    {
+        var status = _budgetRunner.Get(id);
+        return status == null
+            ? NotFound(ApiResponse<object>.ErrorResult("Piano non trovato: è scaduto o il servizio è ripartito, ricalcolalo"))
+            : Ok(ApiResponse<BudgetPlanStatus>.SuccessResult(status));
+    }
+
+    /// <summary>Ricalcola il piano sulle offerte già lette, senza Card Trader: righe tolte, spedizioni cambiate.</summary>
+    [HttpPost("budget-plan/{id}/recompute")]
+    public IActionResult RecomputeBudgetPlan(string id, [FromBody] BudgetRecomputeRequest request)
+    {
+        var status = _budgetRunner.Recompute(id, request.Shipping, request.Excluded ?? new List<string>());
+        return status == null
+            ? NotFound(ApiResponse<object>.ErrorResult("Piano non trovato: è scaduto o il servizio è ripartito, ricalcolalo"))
+            : Ok(ApiResponse<BudgetPlanStatus>.SuccessResult(status));
+    }
+
     [HttpGet("alerts")]
     public async Task<IActionResult> GetAlertRules(CancellationToken cancellationToken) =>
         Ok(ApiResponse<List<AlertRuleDto>>.SuccessResult(await _alerts.ListRulesAsync(cancellationToken)));
@@ -402,3 +444,6 @@ public class PurchasingController : ControllerBase
         }
     }
 }
+
+/// <param name="Excluded">Offerte tolte dall'utente (chiavi delle righe del piano).</param>
+public record BudgetRecomputeRequest(BudgetShipping? Shipping, List<string>? Excluded);

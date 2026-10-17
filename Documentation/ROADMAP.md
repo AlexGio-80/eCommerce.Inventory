@@ -164,6 +164,14 @@ Foto e valutazione delle carte, valutazione al volo e pending list dal telefono 
 - [x] **Scorrimento del set nella scheda** — pubblicato e verificato dall'utente il 2026-10-17 (nessuna migration). Richiesta dell'utente: ‹ ›, swipe e "Vai al numero" per caricare carte dello stesso set senza fotografarle; condizione, lingua, foil, Tag e prezzo d'acquisto restano. Verifica: da una carta scansionata di un set, 5 carte di fila con ‹ › e swipe e una con "Vai al numero", aggiunte alla coda con i dati giusti
 - [ ] **Prova dei modelli sul riconoscimento** — fatta il 2026-10-17 su 9 carte: Opus 9/9, Sonnet 9/9 (più veloce, metà costo), Haiku 8/9 (sbaglia carte vecchie senza sigla e foil). Riconoscimento passato a Sonnet 5.5, stima su Opus (`Grading:Model`), pubblicato il 2026-10-17. Sulle carte vecchie senza sigla Sonnet non legge il set: Opus di riserva in quei casi (`Scan:FallbackModel`) e ristampe 30th Anniversary/Collectors' Edition dopo le edizioni vecchie, pubblicati e verificati il 2026-10-17 (Death Ward riletta da Opus come Quarta Edizione). Opus resta in confronto per qualche giorno (`Scan:CompareModels`): se nessuna differenza su foto più difficili (bustina, riflessi), spegnere il confronto
 
+### Pianificatore del budget — fasi (dettaglio in `Documentation/Features/007-PianificatoreBudget.md`)
+
+Progettato il 2026-10-17 con l'utente: dato un budget, quali prodotti sigillati comprare, da chi e quanti, fra Card Trader, Cardmarket e negozio Secret Lair, con le rese e i punteggi della classifica e le spedizioni. Scelte approvate: budget diviso dall'utente fra aprire e tenere, copie limitate dalla quota venduta, Cardmarket al prezzo più basso finché non ci sono i venditori, spedizioni stimate modificabili, venditori Cardmarket da pagine incollate (la lettura automatica è bloccata da Cloudflare e vietata).
+
+- [x] **Fase 0 — Pianificatore con Card Trader, Secret Lair e Cardmarket al prezzo più basso** — pubblicata e verificata dall'utente il 2026-10-17 (nessuna migration; corretti in prova il tetto dei tenuti, il prezzo Cardmarket al trend e la varietà dei tenuti): scheda "Budget" in fondo alla pagina Acquisti, calcolo in background, carrelli per negozio e venditore, avvisi sul tempo. Verifica: budget di 300 €, carrelli che l'utente farebbe anche a mano, prezzi Card Trader come sul sito
+- [ ] **Fase 1 — Pagine dei venditori Cardmarket incollate**: lettura del testo copiato, offerte salvate 3 giorni, carrelli veri per venditore Cardmarket
+- [ ] **Fase 2 — Dopo l'acquisto** (facoltativa): "Segna come comprato" verso il registro acquisti
+
 ### Sicurezza — i quattro punti del 2026-08-27 sono chiusi
 
 Tutti erano **preesistenti**, non introdotti dal lavoro sull'autopricer. Codice risolto e messo in produzione il 2026-08-29, password di `admin` cambiata e utente `testuser` eliminato lo stesso giorno. Dettaglio nel CHANGELOG.

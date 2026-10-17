@@ -705,6 +705,26 @@ export class PurchasingService {
         return this.http.post<ApiResponse<PlanCartResult>>(`${this.apiUrl}/purchase-plan/cart/remove`, cardTraderProductIds).pipe(map(r => r.data!));
     }
 
+    // --- Pianificatore del budget (feature 007) ---
+    getBudgetPlanSettings(): Observable<BudgetShipping> {
+        return this.http.get<ApiResponse<BudgetShipping>>(`${this.apiUrl}/budget-plan/settings`).pipe(map(r => r.data!));
+    }
+
+    /** Avvia il calcolo in background: restituisce subito lo stato, poi si chiede con getBudgetPlan. */
+    startBudgetPlan(request: BudgetPlanRequest): Observable<BudgetPlanStatus> {
+        return this.http.post<ApiResponse<BudgetPlanStatus>>(`${this.apiUrl}/budget-plan`, request).pipe(map(r => r.data!));
+    }
+
+    getBudgetPlan(id: string): Observable<BudgetPlanStatus> {
+        return this.http.get<ApiResponse<BudgetPlanStatus>>(`${this.apiUrl}/budget-plan/${id}`).pipe(map(r => r.data!));
+    }
+
+    /** Ricalcola sulle offerte già lette: righe tolte, spedizioni cambiate. */
+    recomputeBudgetPlan(id: string, shipping: BudgetShipping, excluded: string[]): Observable<BudgetPlanStatus> {
+        return this.http.post<ApiResponse<BudgetPlanStatus>>(`${this.apiUrl}/budget-plan/${id}/recompute`, { shipping, excluded })
+            .pipe(map(r => r.data!));
+    }
+
     getAlertRules(): Observable<AlertRule[]> {
         return this.http.get<ApiResponse<AlertRule[]>>(`${this.apiUrl}/alerts`).pipe(map(r => r.data ?? []));
     }
@@ -775,4 +795,92 @@ export class PurchasingService {
         return this.http.post<ApiResponse<SealedCatalogImportResult>>(`${this.apiUrl}/catalog/import`, {})
             .pipe(map(response => response.data!));
     }
+}
+
+// --- Pianificatore del budget (feature 007) ---
+export interface BudgetShipping {
+    cardTrader: number;
+    cardTraderZero: number;
+    cardmarket: number;
+    wizards: number;
+}
+
+export interface BudgetPlanRequest {
+    budget: number;
+    /** Parte del budget per aprire, 0-100; il resto per tenere. */
+    openSharePercent: number;
+    includeSecretLairBorderline: boolean;
+    shipping?: BudgetShipping;
+}
+
+export type BudgetKind = 'Open' | 'Hold' | 'SecretLair';
+
+export interface BudgetOfferInfo {
+    productId?: number;
+    name: string;
+    setCode?: string;
+    kind: BudgetKind;
+    store: string;
+    seller?: string;
+    country?: string;
+    openValueNet?: number;
+    roiPercent?: number;
+    holdScore?: number;
+    floorPercent?: number;
+    flags: string[];
+    cardTraderBlueprintId?: number;
+    cardmarketName?: string;
+    wizardsUrl?: string;
+    cardTraderProductId?: number;
+    verdict?: string;
+}
+
+export interface BudgetPlanLine {
+    offerKey: string;
+    info: BudgetOfferInfo;
+    quantity: number;
+    unitPrice: number;
+    /** Guadagno atteso per la quantità; null per i tenuti. */
+    gain?: number | null;
+}
+
+export interface BudgetPlanBasket {
+    key: string;
+    store: string;
+    seller?: string;
+    country?: string;
+    shipping: number;
+    total: number;
+    gain: number;
+    lines: BudgetPlanLine[];
+}
+
+export interface BudgetPlanResult {
+    collectedAt: string;
+    budget: number;
+    openSharePercent: number;
+    spent: number;
+    shipping: number;
+    openGain: number;
+    holdSpent: number;
+    holdFloor: number;
+    remaining: number;
+    remainingReason?: string;
+    shippingUsed: BudgetShipping;
+    openCandidates: number;
+    holdCandidates: number;
+    openRead: number;
+    holdRead: number;
+    excluded: string[];
+    baskets: BudgetPlanBasket[];
+}
+
+export interface BudgetPlanStatus {
+    id: string;
+    state: 'running' | 'done' | 'failed';
+    done: number;
+    total: number;
+    startedAt: string;
+    error?: string;
+    result?: BudgetPlanResult;
 }
