@@ -142,7 +142,10 @@ eCommerce.Inventory/
 - `PriceRefreshQueue.cs`: Coda in memoria dei blueprint da riprezzare. In memoria è sufficiente, perché una richiesta persa per un riavvio viene comunque recuperata dall'esecuzione notturna
 - `MarketplaceOfferCache.cs`: Implementa `IMarketplaceOfferCache`. **Singleton**, in memoria, età massima 10 minuti nel giro della maschera; due richieste contemporanee per la stessa carta condividono la lettura, una lettura vuota (anche un errore del client) non si conserva
 - `ListingPriceSuggestionService.cs`: Prezzo delle regole per la maschera "Nuovo Prodotto": profilo attivo, offerte dalla cache, `PricingEngine.SuggestNewListingPrice`
-- `AuthService.cs`, `BackupService.cs`, `ExpansionAnalyticsService.cs`, `RedisCacheService.cs`, `XimilarGradingService.cs`
+- `AuthService.cs`, `BackupService.cs`, `ExpansionAnalyticsService.cs`, `RedisCacheService.cs`, `XimilarGradingService.cs` (alternativa a Claude per la stima, lettura della risposta non scritta)
+- App per smartphone (feature 006):
+  - `CardScanService.cs`: dalla foto alle carte del database (la corrispondenza è nostra, mai dell'IA), scheda di valutazione, elenco del set per lo scorrimento
+  - `ClaudeCardImageReader.cs`: lettura della carta dalla foto con Claude (JSON vincolato a uno schema); `ClaudeGradingService.cs`: stima della condizione (`IGradingService`, `Grading:Provider`); `AnthropicClientProvider.cs`: client Anthropic condiviso
 - Analisi acquisti:
   - `CardmarketPriceImportService.cs`: import del listino CM nello storico e negli ultimi prezzi
   - `SealedCatalogImportService.cs`, `MtgjsonSetDetailImportService.cs`: catalogo sigillati e dati delle buste da MTGJSON
@@ -316,6 +319,24 @@ pubblicazione (POST /api/pending-listings/sync)
 > Trader non si può ricavare e vale il minimo noto (0,09 €). Sulle carte oltre 0,25 € il prezzo delle
 > regole nella maschera può risultare di qualche centesimo più alto di quello che la notturna
 > calcolerà a carta pubblicata: è lei a correggerlo.
+
+### App per smartphone (sezione `/m`, feature 006)
+
+```
+telefono (PWA, Tailscale Serve: 443 → frontend IIS, 8443 → API)
+  Scansiona: foto ridotta → POST /api/scan/recognize → Claude legge nome, set, numero, lingua, foil
+             → CardScanService cerca i blueprint → al massimo 5 candidati
+  Cerca:     GET /api/cardtrader/blueprints/search (la ricerca della maschera)
+  Scheda:    GET /api/scan/card/{id}  → prezzo delle regole, mercato CT (cache 10 min, priorità
+                                         interattiva), listino CM, mie inserzioni
+             GET /api/scan/set/{expansionId} → carte del set per ‹ ›, swipe, "Vai al numero"
+             POST /api/grading/analyze-multi → stima della condizione (solo proposta)
+             POST /api/pending-listings      → stessa coda della maschera, con stima e motivazioni
+  Coda:      GET/PUT/DELETE /api/pending-listings, POST /api/pending-listings/sync (come dal PC)
+```
+
+> Il telefono usa la stessa coda e lo stesso invio della maschera "Nuovo Prodotto": il riprezzo dopo la
+> pubblicazione segue le stesse regole. Riconoscimenti e stime contano nel limite `Scan:DailyLimit`.
 
 > Il Domain non dipende da nulla; l'Application dipende solo dal Domain; Infrastructure e API
 > dipendono da entrambi. Le frecce qui sopra indicano il **flusso dei dati**, non la direzione
