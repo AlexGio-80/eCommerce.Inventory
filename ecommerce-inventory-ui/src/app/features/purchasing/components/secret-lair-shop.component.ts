@@ -100,7 +100,7 @@ type ShopRow = SecretLairShopProduct & { estimate?: SecretLairDropEstimate };
   `]
 })
 export class SecretLairShopComponent implements OnInit {
-  readonly statuses = ['Disponibile', 'Preordine', 'In arrivo', 'Esaurito', 'Tolto dal negozio'];
+  readonly statuses = ['Disponibile', 'Preordine', 'In arrivo', 'Esaurito', 'Vendita chiusa', 'Tolto dal negozio'];
 
   view = signal<SecretLairShopView | null>(null);
   valuation = signal<SecretLairValuation | null>(null);
@@ -110,7 +110,7 @@ export class SecretLairShopComponent implements OnInit {
 
   visible = computed(() => (this.view()?.products ?? []).filter(p =>
     !this.status() ? true
-      : this.status() === 'attivi' ? p.status !== 'Tolto dal negozio'
+      : this.status() === 'attivi' ? p.status !== 'Tolto dal negozio' && p.status !== 'Vendita chiusa'
       : p.status === this.status()));
 
   private estimates = computed(() => new Map((this.valuation()?.products ?? []).map(e => [e.wizardsProductId, e])));

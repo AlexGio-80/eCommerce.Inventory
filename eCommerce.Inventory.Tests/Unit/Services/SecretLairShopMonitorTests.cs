@@ -225,4 +225,15 @@ public class SecretLairShopMonitorTests : IDisposable
         run.Message.Should().Contain("503");
         (await _db.SecretLairShopRuns.SingleAsync()).Outcome.Should().Be(SecretLairShopRunOutcome.Failed);
     }
+
+    [Fact]
+    public void Un_drop_con_la_vendita_finita_non_e_piu_disponibile()
+    {
+        // Prova del 17/10: il Dandân Deck, in vendita il 16/03 per meno di un'ora, risultava disponibile.
+        var ended = new SecretLairShopProduct { Stock = 10, SaleStart = DateTime.Now.AddMonths(-7), SaleEnd = DateTime.Now.AddMonths(-7).AddHours(1) };
+        var open = new SecretLairShopProduct { Stock = 10, SaleStart = DateTime.Now.AddDays(-5) };
+
+        SecretLairShopMonitorService.StatusOf(ended).Should().Be("Vendita chiusa");
+        SecretLairShopMonitorService.StatusOf(open).Should().Be("Disponibile");
+    }
 }

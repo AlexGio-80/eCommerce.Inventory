@@ -260,9 +260,15 @@ public class SecretLairShopMonitorService
             _configuration.GetValue("SecretLair:Monitor:Enabled", false));
     }
 
+    /// <summary>
+    /// Stato di un prodotto del negozio. "Vendita chiusa": il catalogo di Wizards tiene anche i drop finiti (es. nella
+    /// sezione Chaos Vault) con una scorta di comodo, e la pagina dice "No longer available"; conta la data di fine
+    /// vendita. Il 17/10 erano 212 dei 247 prodotti che risultavano disponibili, proposti anche dal pianificatore.
+    /// </summary>
     public static string StatusOf(SecretLairShopProduct p) =>
         p.RemovedAt != null ? "Tolto dal negozio"
         : p.Stock is <= 0 ? "Esaurito"
+        : p.SaleEnd < DateTime.Now ? "Vendita chiusa"
         : p.IsPreorder ? "Preordine"
         : p.SaleStart > DateTime.Now ? "In arrivo"
         : "Disponibile";

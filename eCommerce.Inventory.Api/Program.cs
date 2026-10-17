@@ -288,6 +288,8 @@ builder.Services.AddScoped<PurchasePlanService>();
 builder.Services.AddScoped<BudgetPlanService>();
 builder.Services.AddScoped<CardmarketSellerOfferService>();
 builder.Services.AddSingleton<BudgetPlanRunner>();
+builder.Services.AddScoped<SellerPlanService>();
+builder.Services.AddSingleton<SellerPlanRunner>();
 builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJobs.CardmarketImportWorker>();
 
 // Register Scryfall API Client

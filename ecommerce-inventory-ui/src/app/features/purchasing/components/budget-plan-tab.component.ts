@@ -12,11 +12,14 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import {
   BudgetPlanBasket, BudgetPlanLine, BudgetPlanResult, BudgetPlanStatus, BudgetShipping, PastedSeller, PlanCartItem, PurchasingService,
-  SellerPasteResult
+  SellerBasket, SellerBasketLine, SellerPasteResult, SellerPlanRequest, SellerPlanResult, SellerPlanStatus, SellerRules
 } from '../services/purchasing.service';
 
 const LAST_PLAN_KEY = 'budget_plan_last';
 const LAST_REQUEST_KEY = 'budget_plan_request';
+const LAST_SELLER_KEY = 'budget_plan_last_seller';
+const MODE_KEY = 'budget_plan_mode';
+const SELLER_REQUEST_KEY = 'budget_plan_seller_request';
 
 /**
  * Pianificatore del budget (feature 007, Fase 0): dato quanto si può spendere, quali sigillati comprare, da chi
@@ -33,6 +36,79 @@ const LAST_REQUEST_KEY = 'budget_plan_request';
     MatInputModule, MatProgressBarModule, MatTooltipModule, MatSnackBarModule],
   template: `
     <div class="container">
+      <div class="modes">
+        <button mat-button [class.active]="mode() === 'sellers'" (click)="setMode('sellers')"><mat-icon>storefront</mat-icon> Per venditore</button>
+        <button mat-button [class.active]="mode() === 'plan'" (click)="setMode('plan')"><mat-icon>calculate</mat-icon> Piano automatico</button>
+      </div>
+
+      @if (mode() === 'sellers') {
+        <mat-card>
+          <mat-card-content>
+            <div class="toolbar">
+              <mat-form-field appearance="outline" class="budget">
+                <mat-label>Budget venditori €</mat-label>
+                <input matInput type="number" min="1" step="10" [(ngModel)]="budget">
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="small">
+                <mat-label>Traino ≥ %</mat-label>
+                <input matInput type="number" min="0" step="5" [(ngModel)]="rules.anchorRoiPercent">
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="small">
+                <mat-label>Altri ≥ %</mat-label>
+                <input matInput type="number" min="0" step="5" [(ngModel)]="rules.addOnRoiPercent">
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="small">
+                <mat-label>Netto ≥ %</mat-label>
+                <input matInput type="number" min="0" step="5" [(ngModel)]="rules.minNetPercent">
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="small">
+                <mat-label>Wizards €</mat-label>
+                <input matInput type="number" min="0" step="50" [(ngModel)]="wizardsBudget">
+              </mat-form-field>
+              <div class="stores">
+                <span class="label">Compro su</span>
+                @for (s of storeOptions; track s.key) {
+                  <mat-checkbox [checked]="!excludedStores.includes(s.key)" (change)="toggleStore(s.key, $event.checked)">{{ s.label }}</mat-checkbox>
+                }
+              </div>
+              <button mat-stroked-button (click)="showShipping.set(!showShipping())"><mat-icon>local_shipping</mat-icon> Spedizioni</button>
+              <span class="spacer"></span>
+              @if (sellerResult()) {
+                <button mat-stroked-button [disabled]="sellerRunning()" (click)="recomputeSellers()">Aggiorna</button>
+              }
+              <button mat-raised-button color="primary" [disabled]="sellerRunning()" (click)="startSellers()">
+                <mat-icon>search</mat-icon> Cerca i venditori
+              </button>
+            </div>
+            <div class="muted">Un venditore entra se ha un prodotto da aprire con resa ≥ traino; poi si aggiungono le sue altre aperture ≥ "altri"
+              e i suoi prodotti da tenere a non oltre il trend +{{ rules.maxHoldPremiumPercent }}%. Conviene se il guadagno delle aperture,
+              tolta la spedizione, è almeno il "netto" della spesa per aprirle. Una copia per prodotto.</div>
+            @if (showShipping() && shipping) {
+              <div class="shipping">
+                <mat-form-field appearance="outline"><mat-label>Card Trader, per venditore €</mat-label>
+                  <input matInput type="number" min="0" step="0.5" [(ngModel)]="shipping.cardTrader"></mat-form-field>
+                <mat-form-field appearance="outline"><mat-label>Card Trader Zero, una volta €</mat-label>
+                  <input matInput type="number" min="0" step="0.5" [(ngModel)]="shipping.cardTraderZero"></mat-form-field>
+                <mat-form-field appearance="outline"><mat-label>Cardmarket, per venditore €</mat-label>
+                  <input matInput type="number" min="0" step="0.5" [(ngModel)]="shipping.cardmarket"></mat-form-field>
+                <mat-form-field appearance="outline"><mat-label>Wizards €</mat-label>
+                  <input matInput type="number" min="0" step="0.5" [(ngModel)]="shipping.wizards"></mat-form-field>
+              </div>
+            }
+            @if (sellerRunning()) {
+              <div class="progress">
+                <div>Leggo le offerte Card Trader: espansione {{ sellerStatus()?.done ?? 0 }} di {{ sellerStatus()?.total || '…' }}
+                  (20 richieste al minuto: circa 5 minuti; puoi cambiare scheda, la lettura continua)</div>
+                <mat-progress-bar [mode]="sellerStatus()?.total ? 'determinate' : 'indeterminate'"
+                  [value]="sellerStatus()?.total ? (sellerStatus()!.done / sellerStatus()!.total) * 100 : 0"></mat-progress-bar>
+              </div>
+            }
+            @if (error()) { <div class="error">{{ error() }}</div> }
+          </mat-card-content>
+        </mat-card>
+      }
+
+      @if (mode() === 'plan') {
       <mat-card>
         <mat-card-content>
           <div class="toolbar">
@@ -88,6 +164,8 @@ const LAST_REQUEST_KEY = 'budget_plan_request';
         </mat-card-content>
       </mat-card>
 
+      }
+
       <mat-card>
         <mat-card-content>
           <div class="sellers-head" (click)="showSellers.set(!showSellers())">
@@ -96,19 +174,25 @@ const LAST_REQUEST_KEY = 'budget_plan_request';
             <span class="muted">· {{ sellers().length ? sellers().length + ' incollati negli ultimi giorni' : 'incolla le pagine delle offerte di un venditore' }}</span>
           </div>
           @if (showSellers()) {
-            <p class="muted">Su Cardmarket apri la pagina delle offerte del venditore (es. Users › venditore › Offers › Preconstructed Decks),
-              filtra <b>Language: English</b>, poi Ctrl+A, Ctrl+C e incolla qui. Una pagina alla volta: pagina 2 e altre categorie si aggiungono.
-              Le offerte valgono 3 giorni; poi ricalcola il piano.</p>
+            <div class="open-seller">
+              <mat-form-field appearance="outline">
+                <mat-label>Venditore Cardmarket da aprire</mat-label>
+                <input matInput [(ngModel)]="pasteSeller" (keydown.enter)="openSellerPage('Preconstructed-Decks')">
+              </mat-form-field>
+              <span class="muted">Apri le sue offerte in inglese:</span>
+              @for (cat of sellerCategories; track cat.slug) {
+                <button mat-stroked-button [disabled]="!pasteSeller.trim()" (click)="openSellerPage(cat.slug)">{{ cat.label }}</button>
+              }
+            </div>
+            <p class="muted">Sulla pagina che si apre premi Ctrl+A, Ctrl+C e incolla qui sotto. Una pagina alla volta: pagina 2 e altre categorie
+              si aggiungono; reincollando la pagina 1 di una categoria la sostituisci (i prodotti venduti spariscono). I venditori restano
+              nell'analisi finché non li togli: tocca il nome per rivederli, la data dice quando li hai incollati.</p>
             <div class="paste">
               <mat-form-field appearance="outline" class="paste-text">
                 <mat-label>Testo della pagina</mat-label>
                 <textarea matInput rows="4" [(ngModel)]="pasteText"></textarea>
               </mat-form-field>
               <div class="paste-side">
-                <mat-form-field appearance="outline">
-                  <mat-label>Venditore (se non lo trovo)</mat-label>
-                  <input matInput [(ngModel)]="pasteSeller">
-                </mat-form-field>
                 <button mat-raised-button color="primary" [disabled]="pasting() || !pasteText.trim()" (click)="paste()">
                   {{ pasting() ? 'Leggo…' : 'Leggi le offerte' }}
                 </button>
@@ -117,26 +201,28 @@ const LAST_REQUEST_KEY = 'budget_plan_request';
             @if (pasteResult(); as p) {
               <div class="paste-result">
                 <div><b>{{ p.seller }}</b>@if (p.category) { · {{ p.category }} }: {{ p.offers.length }} offerte abbinate su {{ p.offersRead }}</div>
-                @if (sellerBasket(); as sb) {
-                  <div class="seller-basket">
-                    @if (sb.count > 0) {
+                @if (sellerBasketOf(p); as sb) {
+                  <div class="seller-basket" [class.no]="!sb.ok">
+                    @if (sb.ok) {
                       <b>Da {{ p.seller }} ti conviene:</b> {{ sb.count }} {{ sb.count === 1 ? 'prodotto' : 'prodotti' }}
                       ({{ sb.names }}) · {{ eur(sb.items) }} + spedizione {{ eur(sb.shipping) }} = <b>{{ eur(sb.items + sb.shipping) }}</b>
-                      @if (sb.openCount) { · guadagno atteso delle aperture <b [class.gain]="sb.gain > 0">{{ eur(sb.gain) }}</b> }
-                      @if (sb.openCount && sb.gain <= 0) { <div class="muted">Con una sola spedizione per queste aperture il guadagno non la copre: conviene solo insieme ad altro.</div> }
+                      · guadagno atteso netto <b class="gain">{{ eur(sb.gain) }}</b> ({{ sb.netPercent.toFixed(0) }}%)
                     } @else {
-                      Da {{ p.seller }} oggi non conviene niente.
+                      <b>Da {{ p.seller }}, con le tue regole, non conviene un ordine:</b> {{ sb.reason }}
                     }
+                    <div class="muted">Regole della schermata: traino ≥ {{ rules.anchorRoiPercent }}%, altri ≥ {{ rules.addOnRoiPercent }}%,
+                      netto ≥ {{ rules.minNetPercent }}%, budget {{ eur(budget) }}. Le righe verdi sono i prodotti convenienti uno per uno.</div>
                   </div>
                 }
                 @if (!p.englishFilter) { <div class="error">Non vedo il filtro Language: English nel testo: le offerte potrebbero essere in altre lingue.</div> }
                 <table>
-                  <thead><tr><th>Prodotto</th><th class="num">Prezzo</th><th class="num">Q.tà</th><th class="num">Trend CM</th><th class="num">Resa</th><th>Valutazione</th></tr></thead>
+                  <thead><tr><th>Prodotto</th><th class="num">Prezzo</th><th class="num">Spedizione</th><th class="num">Q.tà</th><th class="num">Trend CM</th><th class="num">Resa</th><th>Valutazione</th></tr></thead>
                   <tbody>
                     @for (o of p.offers; track o.offerId) {
                       <tr [class.good]="o.verdict.startsWith('Da aprire') || o.verdict.startsWith('Da tenere:')">
                         <td>{{ o.name }}@if (o.comment) { <div class="muted">{{ o.comment }}</div> }</td>
                         <td class="num">{{ eur(o.price) }}</td>
+                        <td class="num">{{ eur(o.shipping) }}</td>
                         <td class="num">{{ o.quantity }}</td>
                         <td class="num">{{ eur(o.cmTrend) }}</td>
                         <td class="num">{{ o.roiPercent != null ? o.roiPercent.toFixed(0) + '%' : '—' }}</td>
@@ -154,8 +240,10 @@ const LAST_REQUEST_KEY = 'budget_plan_request';
               <div class="sellers">
                 @for (s of sellers(); track s.seller) {
                   <span class="seller-chip">
-                    <a [href]="sellerUrl(s.seller)" target="_blank" rel="noopener">{{ s.seller }}</a>
-                    · {{ s.offers }} offerte · {{ s.pastedAt | date:'dd/MM HH:mm' }}
+                    <a href="" [class.current]="pasteResult()?.seller === s.seller" (click)="$event.preventDefault(); showSeller(s.seller)"
+                       matTooltip="Rivedi le sue offerte">{{ s.seller }}</a>
+                    <a [href]="sellerUrl(s.seller)" target="_blank" rel="noopener" matTooltip="Apri su Cardmarket"><mat-icon class="tiny">open_in_new</mat-icon></a>
+                    · {{ s.offers }} offerte · <span [class.stale]="isStale(s.pastedAt)" [matTooltip]="isStale(s.pastedAt) ? 'Incollato più di 7 giorni fa: reincolla le sue pagine per aggiornare prezzi e disponibilità' : ''">{{ s.pastedAt | date:'dd/MM HH:mm' }}</span>
                     <button mat-icon-button matTooltip="Togli le offerte di questo venditore" (click)="deleteSeller(s)"><mat-icon>close</mat-icon></button>
                   </span>
                 }
@@ -165,7 +253,123 @@ const LAST_REQUEST_KEY = 'budget_plan_request';
         </mat-card-content>
       </mat-card>
 
-      @if (result(); as r) {
+      @if (mode() === 'sellers' && sellerResult(); as sr) {
+        <mat-card class="summary">
+          <mat-card-content>
+            <div class="numbers">
+              <div><span class="label">Venditori convenienti</span><span class="big">{{ sr.sellers.length }}</span>
+                <span class="label">{{ sr.inBudgetCount }} nel budget</span></div>
+              <div><span class="label">Nel budget</span><span class="big">{{ eur(sr.inBudgetTotal) }}</span><span class="label">di {{ eur(sr.request.budget) }}</span></div>
+              <div><span class="label">Guadagno atteso netto</span><span class="big gain">{{ eur(sr.inBudgetGain) }}</span></div>
+              <div><span class="label">Wizards</span><span class="big">{{ eur(sr.wizardsTotal) }}</span>
+                <span class="label">guadagno {{ eur(sr.wizardsGain) }}</span></div>
+            </div>
+            <div class="muted">{{ sr.products }} prodotti considerati; {{ sr.expansionsRead }} espansioni Card Trader lette
+              @if (sr.expansionFailures) { ({{ sr.expansionFailures }} non riuscite) }; {{ sr.cardmarketSellers }} venditori Cardmarket incollati.
+              Offerte Card Trader lette il <b [class.stale]="isStale(sr.collectedAt)">{{ sr.collectedAt | date:'dd/MM HH:mm' }}</b>:
+              per offerte fresche, "Cerca i venditori".</div>
+          </mat-card-content>
+        </mat-card>
+
+        @if (choice(sr); as ch) {
+          <div class="choice-bar">
+            <span><b>La tua scelta:</b> {{ ch.count }} {{ ch.count === 1 ? 'ordine' : 'ordini' }}</span>
+            <span>spesa <b [class.over]="ch.total > sr.request.budget">{{ eur(ch.total) }}</b> di {{ eur(sr.request.budget) }}
+              @if (ch.total > sr.request.budget) { <span class="over">(oltre il budget di {{ eur(ch.total - sr.request.budget) }})</span> }</span>
+            <span>spedizioni {{ eur(ch.shipping) }}</span>
+            <span>guadagno atteso netto <b class="gain">{{ eur(ch.gain) }}</b></span>
+            @if (ch.duplicates) { <span class="over">{{ ch.duplicates }} prodotti in più di un ordine scelto: li compreresti due volte</span> }
+            <button mat-button (click)="clearChoice()">Azzera la scelta</button>
+          </div>
+        }
+
+        @if (!excludedStores.includes('Wizards') && sr.wizards.length) {
+          <mat-card class="basket">
+            <mat-card-content>
+              <div class="basket-head">
+                <div><span class="store">Wizards</span><span class="muted"> · drop acquistabili con verdetto "Compra", il margine migliore per primo</span></div>
+                <div class="basket-totals">scelti {{ chosenDrops(sr) }} · totale <b>{{ eur(sr.wizardsTotal) }}</b> · guadagno <b class="gain">{{ eur(sr.wizardsGain) }}</b></div>
+              </div>
+              <table>
+                <thead><tr><th></th><th>Drop</th><th class="num">Prezzo</th><th class="num">Valore netto</th><th class="num">Margine</th><th>Avvisi</th></tr></thead>
+                <tbody>
+                  @for (w of sr.wizards; track w.drop.wizardsProductId) {
+                    <tr [class.good]="w.chosen">
+                      <td>@if (w.chosen) { <mat-icon class="tiny">check</mat-icon> }</td>
+                      <td><a [href]="w.drop.url" target="_blank" rel="noopener">{{ w.drop.title }}</a></td>
+                      <td class="num">{{ eur(w.drop.price) }}</td>
+                      <td class="num">{{ eur(w.drop.netValue) }}</td>
+                      <td class="num">{{ w.drop.marginPercent != null ? w.drop.marginPercent.toFixed(0) + '%' : '—' }}</td>
+                      <td class="flags">@for (f of w.drop.flags; track f) { <div>{{ f }}</div> }</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </mat-card-content>
+          </mat-card>
+        }
+
+        @for (b of visibleSellers(sr); track b.key) {
+          <mat-card class="basket" [class.in-budget]="b.inBudget">
+            <mat-card-content>
+              <div class="basket-head">
+                <div>
+                  <mat-checkbox class="choose" [checked]="chosen().has(b.key)" (change)="toggleChoice(b.key, $event.checked)"
+                    matTooltip="Scelgo questo ordine: in cima vedi il totale della tua combinazione">Scelgo questo</mat-checkbox>
+                  @if (b.inBudget) { <span class="badge-in">nel budget</span> }
+                  <span class="store">{{ b.store }}</span> <span class="seller">· {{ b.seller }}</span>
+                  @if (b.country) { <span class="muted"> ({{ b.country }})</span> }
+                  @if (b.store === 'Cardmarket') {
+                    <a class="muted" [href]="sellerUrl(b.seller)" target="_blank" rel="noopener"> · offerte del venditore</a>
+                    @if (pastedAt(b); as at) { <span class="muted" [class.stale]="isStale(at)"> · incollato il {{ at | date:'dd/MM' }}</span> }
+                  }
+                </div>
+                <div class="basket-totals">
+                  aperture {{ eur(b.openCost) }}@if (b.holdCost) { · da tenere {{ eur(b.holdCost) }} } · spedizione {{ eur(b.shipping) }} ·
+                  totale <b>{{ eur(b.total) }}</b> · guadagno netto <b class="gain">{{ eur(b.openGain) }}</b> ({{ b.netPercent.toFixed(0) }}%)
+                </div>
+              </div>
+              <table>
+                <thead><tr><th>Tipo</th><th>Prodotto</th>@if (b.key === 'ctzero') { <th>Venditore</th> }<th class="num">Prezzo</th>
+                  <th class="num">Trend CM</th><th class="num">Resa / sul trend</th><th class="num">Guadagno / punteggio</th></tr></thead>
+                <tbody>
+                  @for (l of b.lines; track l.offer.productId + l.offer.seller) {
+                    <tr>
+                      <td><span [class]="'kind ' + (l.kind === 'Open' ? 'Open' : 'Hold')">{{ l.kind === 'Open' ? 'Apri' : 'Tieni' }}</span></td>
+                      <td><a [href]="sellerLineUrl(b, l)" target="_blank" rel="noopener">{{ l.product.name }}</a>
+                        <span class="muted"> · {{ l.product.setCode }}</span>
+                        @if (alsoIn(sr, b, l); as others) { <div class="also">anche in: {{ others }}</div> }</td>
+                      @if (b.key === 'ctzero') { <td>{{ l.offer.seller }}@if (l.offer.country) { ({{ l.offer.country }}) }</td> }
+                      <td class="num">{{ eur(l.offer.price) }}</td>
+                      <td class="num">{{ eur(l.product.cmTrend) }}</td>
+                      <td class="num" [matTooltip]="l.kind === 'Hold' ? 'Prezzo rispetto al trend Cardmarket: per un prodotto da tenere conta comprarlo vicino al suo valore di mercato' : 'Resa dell’apertura al prezzo di questo venditore'">
+                        {{ l.kind === 'Open' ? (l.roiPercent != null ? l.roiPercent.toFixed(0) + '%' : '—') : vsTrend(l) }}</td>
+                      <td class="num" [class.gain]="l.kind === 'Open'">{{ l.kind === 'Open' ? eur(l.gain) : (l.product.holdScore?.toFixed(0) + ' punti') }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+              @if (b.store !== 'Cardmarket') {
+                <div class="actions">
+                  <button mat-stroked-button color="primary" [disabled]="addingCart() === b.key" (click)="sellerAddToCart(b)">
+                    <mat-icon>add_shopping_cart</mat-icon> {{ addingCart() === b.key ? 'Aggiungo…' : 'Metti nel carrello Card Trader' }}
+                  </button>
+                  <a mat-button href="https://www.cardtrader.com/cart/edit" target="_blank" rel="noopener">Apri il carrello</a>
+                </div>
+              }
+            </mat-card-content>
+          </mat-card>
+        }
+        @if (sr.sellers.length > visibleSellers(sr).length) {
+          <button mat-button (click)="showAllSellers.set(true)">Mostra tutti i {{ sr.sellers.length }} venditori</button>
+        }
+        @if (sr.sellers.length === 0) {
+          <mat-card><mat-card-content>Nessun venditore con un carrello conveniente secondo queste regole. Prova ad abbassare le soglie,
+            o incolla le pagine di qualche venditore Cardmarket.</mat-card-content></mat-card>
+        }
+      }
+
+      @if (mode() === 'plan' && result(); as r) {
         <mat-card class="summary">
           <mat-card-content>
             <div class="numbers">
@@ -277,16 +481,30 @@ const LAST_REQUEST_KEY = 'budget_plan_request';
     .kind.Hold { background: #e3f2fd; color: #1565c0; }
     .kind.SecretLair { background: #f3e5f5; color: #6a1b9a; }
     .actions { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+    .modes { display: flex; gap: 8px; }
+    .modes button.active { background: #e8eaf6; color: #283593; font-weight: 600; }
+    .small { width: 110px; }
+    .basket.in-budget { border-left: 4px solid #43a047; }
+    .stale { color: #e65100; font-weight: 600; }
+    .badge-in { background: #43a047; color: #fff; font-size: 11px; border-radius: 3px; padding: 2px 6px; margin-right: 6px; }
     .sellers-head { display: flex; align-items: center; gap: 6px; cursor: pointer; }
     .paste { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
     .paste-text { flex: 1 1 500px; }
     .paste-side { display: flex; flex-direction: column; gap: 4px; }
     .paste-result { margin: 4px 0 8px; display: flex; flex-direction: column; gap: 6px; }
+    .seller-basket.no { background: #fff3e0; border-left-color: #fb8c00; }
+    .also { color: #e65100; font-size: 11px; }
+    .choose { margin-right: 6px; }
+    .choice-bar { background: #e8eaf6; border-radius: 6px; padding: 8px 12px; display: flex; gap: 24px; flex-wrap: wrap; align-items: baseline; }
+    .over { color: #c62828; font-weight: 600; }
     .seller-basket { background: #e8f5e9; border-left: 4px solid #43a047; padding: 8px 12px; border-radius: 4px; font-size: 14px; }
     tr.good td { background: #dcedc8; }
     tr.good td:first-child { box-shadow: inset 4px 0 0 #43a047; }
     tr.good .verdict { color: #1b5e20; font-weight: 600; }
     .sellers { display: flex; gap: 8px; flex-wrap: wrap; }
+    .open-seller { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .seller-chip a.current { font-weight: 600; }
+    .tiny { font-size: 14px; height: 14px; width: 14px; vertical-align: middle; }
     .seller-chip { display: inline-flex; align-items: center; gap: 4px; background: #f5f5f5; border-radius: 16px; padding: 0 0 0 12px; font-size: 13px; }
   `]
 })
@@ -314,6 +532,159 @@ export class BudgetPlanTabComponent implements OnInit, OnDestroy {
   result = computed<BudgetPlanResult | null>(() => this.status()?.result ?? null);
   private poll?: ReturnType<typeof setInterval>;
 
+  // --- Per venditore ---
+  mode = signal<'sellers' | 'plan'>((localStorage.getItem(MODE_KEY) as 'sellers' | 'plan') || 'sellers');
+  wizardsBudget = 500;
+  rules: SellerRules = { anchorRoiPercent: 50, addOnRoiPercent: 33, minNetPercent: 20, maxHoldPremiumPercent: 10 };
+  sellerStatus = signal<SellerPlanStatus | null>(null);
+  sellerRunning = computed(() => this.sellerStatus()?.state === 'running');
+  sellerResult = computed<SellerPlanResult | null>(() => this.sellerStatus()?.result ?? null);
+  showAllSellers = signal(false);
+  private sellerPoll?: ReturnType<typeof setInterval>;
+
+  setMode(mode: 'sellers' | 'plan'): void {
+    this.mode.set(mode);
+    localStorage.setItem(MODE_KEY, mode);
+  }
+
+  private sellerRequest(): SellerPlanRequest {
+    const request: SellerPlanRequest = {
+      budget: this.budget, wizardsBudget: this.wizardsBudget, rules: this.rules,
+      shipping: this.shipping ?? { cardTrader: 7, cardTraderZero: 8, cardmarket: 7, wizards: 10 },
+      excludedStores: this.excludedStores
+    };
+    localStorage.setItem(SELLER_REQUEST_KEY, JSON.stringify(request));
+    return request;
+  }
+
+  startSellers(): void {
+    this.error.set(null);
+    this.showAllSellers.set(false);
+    this.purchasing.startSellerPlan(this.sellerRequest()).subscribe({
+      next: s => this.followSellers(s.id, s),
+      error: err => this.error.set(err?.error?.message || 'Non riesco ad avviare la ricerca dei venditori')
+    });
+  }
+
+  recomputeSellers(): void {
+    const id = this.sellerStatus()?.id;
+    if (!id) return;
+    this.purchasing.recomputeSellerPlan(id, this.sellerRequest()).subscribe({
+      next: s => this.sellerStatus.set(s),
+      error: err => this.error.set(err?.error?.message || 'Ricalcolo non riuscito')
+    });
+  }
+
+  private followSellers(id: string, first?: SellerPlanStatus): void {
+    if (first) this.sellerStatus.set(first);
+    clearInterval(this.sellerPoll);
+    const check = () => this.purchasing.getSellerPlan(id).subscribe({
+      next: s => {
+        this.sellerStatus.set(s);
+        if (s.state !== 'running') clearInterval(this.sellerPoll);
+        if (s.state === 'failed') this.error.set(s.error ?? 'Lettura non riuscita');
+      },
+      error: () => clearInterval(this.sellerPoll)
+    });
+    check();
+
+    this.sellerPoll = setInterval(check, 3000);
+  }
+
+  /** Incollato più di 7 giorni fa: prezzi e disponibilità del venditore vanno ricontrollati. */
+  isStale(at?: string | null): boolean {
+    return !!at && Date.now() - new Date(at).getTime() > 7 * 24 * 3600 * 1000;
+  }
+
+  /** Data dell'incolla più vecchia fra le righe di un venditore Cardmarket. */
+  pastedAt(b: SellerBasket): string | null {
+    const dates = b.lines.map(l => l.offer.pastedAt).filter((d): d is string => !!d).sort();
+    return dates[0] ?? null;
+  }
+
+  /** Prezzo di un prodotto da tenere rispetto al trend Cardmarket, la misura che conta per comprarlo. */
+  vsTrend(l: SellerBasketLine): string {
+    const trend = l.product.cmTrend;
+    if (!trend) return '—';
+    const diff = Math.round((l.offer.price - trend) / trend * 100);
+    return diff === 0 ? 'al trend' : diff < 0 ? `${-diff}% sotto` : `${diff}% sopra`;
+  }
+
+  // --- Scelta degli ordini ---
+  chosen = signal(new Set<string>());
+
+  toggleChoice(key: string, on: boolean): void {
+    this.chosen.update(s => {
+      const n = new Set(s);
+      if (on) n.add(key); else n.delete(key);
+      return n;
+    });
+  }
+
+  clearChoice(): void {
+    this.chosen.set(new Set());
+  }
+
+  /** Totali degli ordini scelti; null se non ne è scelto nessuno. */
+  choice(sr: SellerPlanResult) {
+    const picked = sr.sellers.filter(b => this.chosen().has(b.key));
+    if (!picked.length) return null;
+    const seen = new Map<number, number>();
+    for (const b of picked) for (const l of b.lines) seen.set(l.product.productId, (seen.get(l.product.productId) ?? 0) + 1);
+    return {
+      count: picked.length,
+      total: picked.reduce((t, b) => t + b.total, 0),
+      shipping: picked.reduce((t, b) => t + b.shipping, 0),
+      gain: picked.reduce((t, b) => t + b.openGain, 0),
+      duplicates: [...seen.values()].filter(n => n > 1).length
+    };
+  }
+
+  /** Gli altri ordini della lista in cui c'è lo stesso prodotto: facendoli tutti lo si comprerebbe più volte. */
+  alsoIn(sr: SellerPlanResult, b: SellerBasket, l: SellerBasketLine): string | null {
+    const others = sr.sellers
+      .filter(x => x.key !== b.key && x.lines.some(y => y.product.productId === l.product.productId))
+      .map(x => x.key === 'ctzero' ? 'Card Trader Zero' : x.seller);
+    if (!others.length) return null;
+    return others.length > 3 ? `${others.slice(0, 3).join(', ')} e altri ${others.length - 3}` : others.join(', ');
+  }
+
+  visibleSellers(sr: SellerPlanResult): SellerBasket[] {
+    return this.showAllSellers() ? sr.sellers : sr.sellers.slice(0, 25);
+  }
+
+  chosenDrops(sr: SellerPlanResult): number {
+    return sr.wizards.filter(w => w.chosen).length;
+  }
+
+  sellerLineUrl(b: SellerBasket, l: SellerBasketLine): string {
+    if (b.store === 'Cardmarket') {
+      return 'https://www.cardmarket.com/en/Magic/Products/Search?searchString=' + encodeURIComponent(l.product.cardmarketName ?? l.product.name);
+    }
+    return l.product.cardTraderBlueprintId ? 'https://www.cardtrader.com/cards/' + l.product.cardTraderBlueprintId : '#';
+  }
+
+  sellerAddToCart(b: SellerBasket): void {
+    const items: PlanCartItem[] = b.lines
+      .filter(l => l.offer.cardTraderProductId)
+      .map(l => ({ cardTraderProductId: l.offer.cardTraderProductId!, viaCardTraderZero: b.key === 'ctzero', productName: l.product.name }));
+    if (items.length === 0) return;
+    this.addingCart.set(b.key);
+    this.purchasing.addPlanToCart(items).subscribe({
+      next: res => {
+        this.addingCart.set(null);
+        const parts = [`${res.added} aggiunte`];
+        if (res.alreadyInCart) parts.push(`${res.alreadyInCart} già nel carrello`);
+        if (res.failed.length) parts.push(`${res.failed.length} rifiutate (vendute o cambiate)`);
+        this.snackBar.open('Carrello Card Trader: ' + parts.join(', '), 'OK', { duration: 6000 });
+      },
+      error: err => {
+        this.addingCart.set(null);
+        this.snackBar.open(err?.error?.message || 'Carrello non aggiornato', 'OK', { duration: 6000 });
+      }
+    });
+  }
+
   // --- Venditori Cardmarket incollati (Fase 1) ---
   showSellers = signal(false);
   sellers = signal<PastedSeller[]>([]);
@@ -326,24 +697,66 @@ export class BudgetPlanTabComponent implements OnInit, OnDestroy {
    * Il carrello consigliato del solo venditore incollato: un'unità di ogni offerta da aprire o da tenere, una
    * spedizione (quella impostata per Cardmarket: il testo della pagina non la contiene).
    */
-  sellerBasket = computed(() => {
-    const p = this.pasteResult();
-    if (!p) return null;
-    const good = p.offers.filter(o => o.verdict.startsWith('Da aprire') || o.verdict.startsWith('Da tenere:'));
-    const open = good.filter(o => o.verdict.startsWith('Da aprire'));
-    const shipping = good.length ? (this.shipping?.cardmarket ?? 0) : 0;
+  /**
+   * Il carrello consigliato del solo venditore incollato, con le stesse regole della lista "Per venditore" (quelle della
+   * schermata): un traino, le altre aperture sopra la loro soglia, i tenuti a buon prezzo, dentro il budget; conviene se
+   * il guadagno netto delle aperture è almeno il "netto" della loro spesa. Se no, dice perché.
+   */
+  sellerBasketOf(p: SellerPasteResult) {
+    const r = this.rules;
+    const ship = (o: { shipping?: number }) => o.shipping ?? this.shipping?.cardmarket ?? 0;
+    const opens = p.offers
+      .filter(o => o.verdict.startsWith('Da aprire') && (o.roiPercent ?? 0) >= r.addOnRoiPercent)
+      .sort((x, y) => (y.roiPercent ?? 0) - (x.roiPercent ?? 0));
+    const holds = p.offers
+      .filter(o => o.verdict.startsWith('Da tenere:'))
+      .sort((x, y) => (y.holdScore ?? 0) - (x.holdScore ?? 0));
+    const best = Math.max(0, ...p.offers.filter(o => o.verdict.startsWith('Da aprire')).map(o => o.roiPercent ?? 0));
+    const anchor = opens.find(o => (o.roiPercent ?? 0) >= r.anchorRoiPercent && o.price + ship(o) <= this.budget);
+    if (!anchor) {
+      return { ok: false, reason: best >= r.anchorRoiPercent
+        ? `il traino da solo supera il budget di ${this.eur(this.budget)}.`
+        : `manca un traino: l'apertura che rende di più rende il ${best.toFixed(0)}%, la soglia è il ${r.anchorRoiPercent}%.`,
+        count: 0, names: '', items: 0, shipping: 0, gain: 0, netPercent: 0 };
+    }
+    const chosen = [anchor];
+    let items = anchor.price;
+    let shipping = ship(anchor);
+    for (const o of [...opens.filter(x => x !== anchor), ...holds]) {
+      const withShipping = Math.max(shipping, ship(o));
+      if (items + o.price + withShipping > this.budget) continue;
+      chosen.push(o);
+      items += o.price;
+      shipping = withShipping;
+    }
+    const opened = chosen.filter(o => o.verdict.startsWith('Da aprire'));
+    const openCost = opened.reduce((t, o) => t + o.price, 0);
+    const gain = opened.reduce((t, o) => t + ((o.openValueNet ?? o.price) - o.price), 0) - shipping;
+    const netPercent = openCost > 0 ? gain / openCost * 100 : 0;
+    const ok = gain >= openCost * r.minNetPercent / 100;
     return {
-      count: good.length,
-      openCount: open.length,
-      names: good.map(o => o.name.replace(/^Commander:\s*/, '').replace(/ Commander Deck$/, '')).join(', '),
-      items: good.reduce((t, o) => t + o.price, 0),
-      shipping,
-      gain: open.reduce((t, o) => t + ((o.openValueNet ?? o.price) - o.price), 0) - (open.length ? shipping : 0)
+      ok,
+      reason: `il guadagno netto delle aperture, tolta la spedizione, è ${this.eur(gain)}: il ${netPercent.toFixed(0)}% della spesa, sotto il ${r.minNetPercent}%.`,
+      count: chosen.length,
+      names: chosen.map(o => o.name.replace(/^Commander:\s*/, '').replace(/ Commander Deck$/, '')).join(', '),
+      items, shipping, gain, netPercent
     };
-  });
+  }
 
   ngOnInit(): void {
     this.loadSellers();
+    const savedSellers = localStorage.getItem(SELLER_REQUEST_KEY);
+    if (savedSellers) {
+      try {
+        const r = JSON.parse(savedSellers);
+        this.wizardsBudget = r.wizardsBudget ?? this.wizardsBudget;
+        this.rules = r.rules ?? this.rules;
+      } catch { /* richiesta salvata illeggibile: valori predefiniti */ }
+    } else {
+      this.purchasing.getSellerPlanSettings().subscribe({ next: r => this.rules = r, error: () => { } });
+    }
+    // L'ultima lettura per venditore, se il servizio l'ha ancora: si riapre senza rileggere Card Trader.
+    this.purchasing.getLatestSellerPlan().subscribe({ next: s => { if (!this.sellerStatus()) this.followSellers(s.id, s); }, error: () => { } });
     const saved = localStorage.getItem(LAST_REQUEST_KEY);
     if (saved) {
       try {
@@ -365,6 +778,7 @@ export class BudgetPlanTabComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     clearInterval(this.poll);
+    clearInterval(this.sellerPoll);
   }
 
   start(): void {
@@ -405,8 +819,44 @@ export class BudgetPlanTabComponent implements OnInit, OnDestroy {
     this.poll = setInterval(check, 2000);
   }
 
+  /** Categorie delle offerte di un venditore con prodotti sigillati (indirizzi delle pagine di Cardmarket). */
+  readonly sellerCategories = [
+    { slug: 'Preconstructed-Decks', label: 'Mazzi' },
+    { slug: 'Sets', label: 'Set' },
+    { slug: 'Booster-Boxes', label: 'Box di buste' },
+    { slug: 'Boosters', label: 'Buste' },
+    { slug: '', label: 'Tutte le categorie' }
+  ];
+
   loadSellers(): void {
-    this.purchasing.getCardmarketSellers().subscribe({ next: s => this.sellers.set(s), error: () => { } });
+    this.purchasing.getCardmarketSellers().subscribe({
+      next: s => {
+        this.sellers.set(s);
+        // Tornando sulla scheda si riapre l'ultimo venditore guardato, se le sue offerte valgono ancora.
+        const last = localStorage.getItem(LAST_SELLER_KEY);
+        if (!this.pasteResult() && last && s.some(x => x.seller === last)) this.showSeller(last);
+      },
+      error: () => { }
+    });
+  }
+
+  showSeller(seller: string): void {
+    this.purchasing.getCardmarketSeller(seller).subscribe({
+      next: r => {
+        this.pasteResult.set(r);
+        this.showSellers.set(true);
+        localStorage.setItem(LAST_SELLER_KEY, seller);
+      },
+      error: err => this.error.set(err?.error?.message || 'Non riesco a leggere le offerte del venditore')
+    });
+  }
+
+  /** Pagina delle offerte del venditore su Cardmarket, in inglese e per nome: è quella da copiare. */
+  openSellerPage(slug: string): void {
+    const seller = this.pasteSeller.trim();
+    if (!seller) return;
+    const base = `https://www.cardmarket.com/en/Magic/Users/${encodeURIComponent(seller)}/Offers`;
+    window.open(slug ? `${base}/${slug}?idLanguages=1&sortBy=name_asc` : base, '_blank', 'noopener');
   }
 
   paste(): void {
@@ -417,7 +867,8 @@ export class BudgetPlanTabComponent implements OnInit, OnDestroy {
         this.pasting.set(false);
         this.pasteResult.set(r);
         this.pasteText = '';
-        this.pasteSeller = '';
+        this.pasteSeller = r.seller;
+        localStorage.setItem(LAST_SELLER_KEY, r.seller);
         this.loadSellers();
       },
       error: err => {
@@ -428,7 +879,13 @@ export class BudgetPlanTabComponent implements OnInit, OnDestroy {
   }
 
   deleteSeller(s: PastedSeller): void {
-    this.purchasing.deleteCardmarketSeller(s.seller).subscribe({ next: () => this.loadSellers(), error: () => { } });
+    this.purchasing.deleteCardmarketSeller(s.seller).subscribe({
+      next: () => {
+        if (this.pasteResult()?.seller === s.seller) this.pasteResult.set(null);
+        this.loadSellers();
+      },
+      error: () => { }
+    });
   }
 
   sellerUrl(seller: string): string {
@@ -438,7 +895,8 @@ export class BudgetPlanTabComponent implements OnInit, OnDestroy {
   /** Un negozio acceso o spento: con un piano già calcolato si ricalcola subito, senza rileggere Card Trader. */
   toggleStore(key: string, on: boolean): void {
     this.excludedStores = on ? this.excludedStores.filter(s => s !== key) : [...this.excludedStores, key];
-    if (this.result()) this.recompute();
+    if (this.mode() === 'plan' && this.result()) this.recompute();
+    if (this.mode() === 'sellers' && this.sellerResult()) this.recomputeSellers();
   }
 
   exclude(line: BudgetPlanLine): void {

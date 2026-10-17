@@ -35,6 +35,9 @@ public static partial class CardmarketSellerPageParser
     [GeneratedRegex(@"English\s*\(\d+\)")]
     private static partial Regex EnglishFilterCount();
 
+    [GeneratedRegex(@"^Page\s+(\d+)\s+of\s+\d+$", RegexOptions.IgnoreCase)]
+    private static partial Regex PageOf();
+
     public static CardmarketSellerPage Parse(string text)
     {
         var lines = (text ?? string.Empty)
@@ -68,21 +71,44 @@ public static partial class CardmarketSellerPageParser
                 if (Hits().IsMatch(line)) break;
                 if (line.Length == 0) continue;
 
+                // Prezzo, poi la quantità; da utente collegato Cardmarket mostra fra i due la spedizione dell'articolo
+                // ("248,69 €", "13,69 €", "1"). Prima prova del 17/10: senza questo la spedizione finiva come prezzo.
                 var price = ParsePrice(line);
-                if (price != null && i + 1 < lines.Count && Quantity().IsMatch(lines[i + 1]) && block.Count > 0)
+                if (price != null && block.Count > 0)
                 {
-                    var comment = block.Count > 1 ? string.Join(" ", block.Skip(1)) : null;
-                    offers.Add(new CardmarketPageOffer(block[0], price.Value, int.Parse(lines[i + 1], CultureInfo.InvariantCulture),
-                        comment, IsDamaged(comment)));
-                    block.Clear();
-                    i++;
-                    continue;
+                    var next = NextNonEmpty(lines, i + 1);
+                    decimal? shipping = null;
+                    if (next >= 0 && ParsePrice(lines[next]) is { } ship)
+                    {
+                        var afterShipping = NextNonEmpty(lines, next + 1);
+                        if (afterShipping >= 0 && Quantity().IsMatch(lines[afterShipping]))
+                        {
+                            shipping = ship;
+                            next = afterShipping;
+                        }
+                    }
+                    if (next >= 0 && Quantity().IsMatch(lines[next]))
+                    {
+                        var comment = block.Count > 1 ? string.Join(" ", block.Skip(1)) : null;
+                        offers.Add(new CardmarketPageOffer(block[0], price.Value, int.Parse(lines[next], CultureInfo.InvariantCulture),
+                            comment, IsDamaged(comment), shipping));
+                        block.Clear();
+                        i = next;
+                        continue;
+                    }
                 }
+                // Da utente collegato accanto a ogni offerta c'è il menu della quantità da mettere nel carrello ("1"), che
+                // finisce nel testo copiato: una riga fatta solo di un numero non è mai il nome di un prodotto.
+                if (Quantity().IsMatch(line)) continue;
                 block.Add(line);
             }
         }
 
-        return new CardmarketSellerPage(seller, category, EnglishFilterCount().IsMatch(text ?? string.Empty), offers);
+        var pageNumber = lines.Select(l => PageOf().Match(l)).FirstOrDefault(m => m.Success) is { } pm
+            ? int.Parse(pm.Groups[1].Value, CultureInfo.InvariantCulture)
+            : (int?)null;
+
+        return new CardmarketSellerPage(seller, category, EnglishFilterCount().IsMatch(text ?? string.Empty), offers, pageNumber);
     }
 
     /// <summary>Nome del catalogo e nome della pagina a confronto: virgolette raddoppiate dall'import, curve, spazi.</summary>
@@ -96,6 +122,13 @@ public static partial class CardmarketSellerPageParser
     {
         var l = MarkdownLink().Replace(line.Trim(), "$1").Trim();
         return ListMarker().Replace(l, string.Empty).Trim();
+    }
+
+    private static int NextNonEmpty(List<string> lines, int from)
+    {
+        for (var i = from; i < lines.Count; i++)
+            if (lines[i].Length > 0) return i;
+        return -1;
     }
 
     private static decimal? ParsePrice(string line)
@@ -124,6 +157,8 @@ public static partial class CardmarketSellerPageParser
 }
 
 /// <param name="EnglishFilter">Il testo mostra il filtro "English (N)": le offerte sono in inglese.</param>
-public record CardmarketSellerPage(string? Seller, string? Category, bool EnglishFilter, List<CardmarketPageOffer> Offers);
+/// <param name="Page">Numero di pagina ("Page 1 of 2"), se il testo lo contiene.</param>
+public record CardmarketSellerPage(string? Seller, string? Category, bool EnglishFilter, List<CardmarketPageOffer> Offers, int? Page = null);
 
-public record CardmarketPageOffer(string Name, decimal Price, int Quantity, string? Comment, bool IsDamaged);
+/// <param name="Shipping">Spedizione dell'articolo verso l'utente, se la pagina la mostra.</param>
+public record CardmarketPageOffer(string Name, decimal Price, int Quantity, string? Comment, bool IsDamaged, decimal? Shipping = null);

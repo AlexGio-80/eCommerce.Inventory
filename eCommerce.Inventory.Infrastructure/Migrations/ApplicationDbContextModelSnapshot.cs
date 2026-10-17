@@ -606,6 +606,10 @@ namespace eCommerce.Inventory.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<decimal?>("Shipping")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("PastedAt");
@@ -2002,6 +2006,35 @@ namespace eCommerce.Inventory.Infrastructure.Migrations
                     b.HasIndex("StartedAt");
 
                     b.ToTable("SecretLairShopRuns");
+                });
+
+            modelBuilder.Entity("eCommerce.Inventory.Domain.Entities.SellerPlanSnapshot", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CollectedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DataJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RequestJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RunId")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SellerPlanSnapshots");
                 });
 
             modelBuilder.Entity("eCommerce.Inventory.Domain.Entities.User", b =>

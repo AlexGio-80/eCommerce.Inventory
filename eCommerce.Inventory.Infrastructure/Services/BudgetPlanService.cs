@@ -77,16 +77,7 @@ public class BudgetPlanService
         var maxHoldPremium = Setting("MaxHoldPremiumPercent", 10m) / 100m;
         var openShare = Math.Clamp(request.OpenSharePercent, 0, 100) / 100m;
 
-        var lastDate = await _db.SealedOpportunities.Select(o => (DateOnly?)o.Date).MaxAsync(cancellationToken);
-        var rows = lastDate == null
-            ? new List<OpportunityRow>()
-            : await _db.SealedOpportunities.AsNoTracking()
-                .Where(o => o.Date == lastDate)
-                .Select(o => new OpportunityRow(
-                    o.SealedProductId, o.SealedProduct!.Name, o.MainSetCode, o.SealedProduct.CardTraderBlueprintId,
-                    o.SealedProduct.CardmarketId, o.CmTrend, o.CmLow, o.OpenValueCm, o.OpeningRoiPercent, o.Decision,
-                    o.HoldScore, o.FloorPercent, o.ReleaseAgeMonths, o.HistoryPosition, o.IsHoldCandidate))
-                .ToListAsync(cancellationToken);
+        var rows = await LoadOpportunityRowsAsync(cancellationToken);
 
         var open = rows
             .Where(r => r.Decision == "Apri" && r.OpenValueCm > 0 && r.RoiPercent >= minRoi && r.RoiPercent <= maxRoi)
@@ -215,10 +206,55 @@ public class BudgetPlanService
             Setting("MaxHoldProductSharePercent", 40m));
     }
 
+    /// <summary>Righe della classifica di oggi, con i dati del prodotto che servono ai piani.</summary>
+    public async Task<List<OpportunityRow>> LoadOpportunityRowsAsync(CancellationToken cancellationToken)
+    {
+        var lastDate = await _db.SealedOpportunities.Select(o => (DateOnly?)o.Date).MaxAsync(cancellationToken);
+        var rows = lastDate == null
+            ? new List<OpportunityRow>()
+            : await _db.SealedOpportunities.AsNoTracking()
+                .Where(o => o.Date == lastDate)
+                .Select(o => new OpportunityRow(
+                    o.SealedProductId, o.SealedProduct!.Name, o.MainSetCode, o.SealedProduct.CardTraderBlueprintId,
+                    o.SealedProduct.CardmarketId, o.CmTrend, o.CmLow, o.OpenValueCm, o.OpeningRoiPercent, o.Decision,
+                    o.HoldScore, o.FloorPercent, o.ReleaseAgeMonths, o.HistoryPosition, o.IsHoldCandidate))
+                .ToListAsync(cancellationToken);
+        return rows;
+    }
+
+    /// <summary>
+    /// Drop Secret Lair acquistabili su Wizards (disponibili o in preordine, vendita non chiusa) con verdetto "Compra",
+    /// e "Al limite" se richiesto: valore netto stimato, margine e avvisi sul tempo.
+    /// </summary>
+    public async Task<List<WizardsDrop>> GetBuyableSecretLairAsync(bool includeBorderline, CancellationToken cancellationToken)
+    {
+        var shop = await _secretLairShop.GetAsync(cancellationToken);
+        var buyable = shop.Products.Where(p => p.Status is "Disponibile" or "Preordine").ToDictionary(p => p.WizardsProductId);
+        var drops = new List<WizardsDrop>();
+        if (buyable.Count == 0) return drops;
+
+        var valuation = await _secretLairValuation.GetAsync(cancellationToken);
+        foreach (var estimate in valuation.Products)
+        {
+            if (!buyable.TryGetValue(estimate.WizardsProductId, out var product)) continue;
+            if (estimate.Verdict != "Compra" && !(includeBorderline && estimate.Verdict == "Al limite")) continue;
+            var value = estimate.RealNetValue ?? estimate.EstimatedNetValue;
+            if (value is not > 0) continue;
+
+            var flags = new List<string>();
+            if (product.SaleEnd is { } end && end > DateTime.Now)
+                flags.Add($"In vendita su Wizards ancora {(int)Math.Ceiling((end - DateTime.Now).TotalDays)} giorni");
+            if (product.Status == "Preordine") flags.Add("Preordine");
+            drops.Add(new WizardsDrop(product.WizardsProductId, product.Title, product.Price, value.Value, estimate.MarginPercent,
+                estimate.Verdict, product.Url, flags));
+        }
+        return drops;
+    }
+
     /// <summary>Un prodotto che c'è solo fra le offerte incollate: da aprire se conviene al prezzo del venditore, da tenere se è candidato.</summary>
     public static BudgetKind? PastedKind(OpportunityRow row, decimal price, decimal minRoi, decimal maxRoi)
     {
-        if (row.Decision == "Apri" && row.OpenValueCm is > 0 && price > 0)
+        if (SellerBasketBuilder.IsOpenable(row.Decision) && row.OpenValueCm is > 0 && price > 0)
         {
             var roi = (row.OpenValueCm.Value - price) / price * 100;
             if (roi >= minRoi && roi <= maxRoi) return BudgetKind.Open;
@@ -387,27 +423,12 @@ public class BudgetPlanService
     private async Task AddSecretLairAsync(
         bool includeBorderline, List<BudgetOffer> offers, Dictionary<string, BudgetOfferInfo> infos, CancellationToken cancellationToken)
     {
-        var shop = await _secretLairShop.GetAsync(cancellationToken);
-        var buyable = shop.Products.Where(p => p.Status is "Disponibile" or "Preordine").ToDictionary(p => p.WizardsProductId);
-        if (buyable.Count == 0) return;
-
-        var valuation = await _secretLairValuation.GetAsync(cancellationToken);
-        foreach (var estimate in valuation.Products)
+        foreach (var drop in await GetBuyableSecretLairAsync(includeBorderline, cancellationToken))
         {
-            if (!buyable.TryGetValue(estimate.WizardsProductId, out var product)) continue;
-            if (estimate.Verdict != "Compra" && !(includeBorderline && estimate.Verdict == "Al limite")) continue;
-            var value = estimate.RealNetValue ?? estimate.EstimatedNetValue;
-            if (value is not > 0) continue;
-
-            var key = $"wz:{product.WizardsProductId}";
-            var flags = new List<string>();
-            if (product.SaleEnd is { } end && end > DateTime.Now)
-                flags.Add($"In vendita su Wizards ancora {(int)Math.Ceiling((end - DateTime.Now).TotalDays)} giorni");
-            if (product.Status == "Preordine") flags.Add("Preordine");
-
-            offers.Add(new BudgetOffer(key, key, "wizards", BudgetKind.SecretLair, product.Price, value.Value, 1, 1));
-            infos[key] = new BudgetOfferInfo(null, product.Title, null, BudgetKind.SecretLair, "Wizards", null, null,
-                value, estimate.MarginPercent, null, null, flags, null, null, product.Url, null, estimate.Verdict);
+            var key = $"wz:{drop.WizardsProductId}";
+            offers.Add(new BudgetOffer(key, key, "wizards", BudgetKind.SecretLair, drop.Price, drop.NetValue, 1, 1));
+            infos[key] = new BudgetOfferInfo(null, drop.Title, null, BudgetKind.SecretLair, "Wizards", null, null,
+                drop.NetValue, drop.MarginPercent, null, null, drop.Flags, null, null, drop.Url, null, drop.Verdict);
         }
     }
 
@@ -464,3 +485,7 @@ public record BudgetPlanResult(
 
 /// <summary>Termini comuni a tutte le offerte di un prodotto nel piano.</summary>
 public record ProductTerms(string ProductKey, int MaxCopies, decimal UnitValue, decimal? MaxCost, List<string> Flags, string? CardmarketName);
+
+/// <summary>Drop Secret Lair acquistabile su Wizards, con la sua stima.</summary>
+public record WizardsDrop(string WizardsProductId, string Title, decimal Price, decimal NetValue, decimal? MarginPercent,
+    string Verdict, string Url, List<string> Flags);

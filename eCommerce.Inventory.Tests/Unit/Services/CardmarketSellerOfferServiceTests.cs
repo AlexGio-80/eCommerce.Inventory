@@ -70,4 +70,32 @@ public class CardmarketSellerOfferServiceTests
         // Le danneggiate restano visibili ma non vanno al pianificatore.
         (await service.GetValidOffersAsync(CancellationToken.None)).Should().ContainSingle().Which.SealedProductId.Should().Be(2);
     }
+
+    [Fact]
+    public async Task Page_one_replaces_the_whole_category_so_sold_products_disappear()
+    {
+        await using var db = await DatabaseAsync();
+        var service = Service(db);
+        await service.ImportAsync(null, Page(
+            ("Commander: Aetherdrift: \"Living Energy\" Commander Deck", "", "33,00 €", 11),
+            ("Commander: Bloomburrow: \"Family Matters\" Commander Deck", "", "40,00 €", 2)) + "Page 1 of 1\n", CancellationToken.None);
+
+        // Il venditore ha venduto il mazzo Bloomburrow: la pagina 1 reincollata non lo contiene più.
+        await service.ImportAsync(null, Page(("Commander: Aetherdrift: \"Living Energy\" Commander Deck", "", "31,00 €", 10)) + "Page 1 of 1\n",
+            CancellationToken.None);
+
+        (await db.CardmarketSellerOffers.ToListAsync()).Should().ContainSingle().Which.Price.Should().Be(31m);
+    }
+
+    [Fact]
+    public async Task The_seller_written_in_the_page_wins_over_the_field()
+    {
+        await using var db = await DatabaseAsync();
+
+        var result = await Service(db).ImportAsync("VenditoreDiPrima",
+            Page(("Commander: Aetherdrift: \"Living Energy\" Commander Deck", "", "33,00 €", 11)), CancellationToken.None);
+
+        result.Seller.Should().Be("VenditoreProva");
+        (await db.CardmarketSellerOffers.SingleAsync()).Seller.Should().Be("VenditoreProva");
+    }
 }

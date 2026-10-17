@@ -168,4 +168,12 @@ public class CardmarketPriceImportServiceTests
 
         file.GetCreatedAt().Should().Be(new DateTimeOffset(2026, 10, 7, 2, 49, 35, TimeSpan.FromHours(2)));
     }
+
+    [Theory]
+    [InlineData("Commander: Aetherdrift: \"\"Living Energy\"\" Commander Deck", "Commander: Aetherdrift: \"Living Energy\" Commander Deck")]
+    [InlineData("Bloomburrow Play Booster Box", "Bloomburrow Play Booster Box")]
+    public void CleanName_removes_the_doubled_quotes_of_the_catalog(string raw, string expected)
+    {
+        CardmarketPriceImportService.CleanName(raw).Should().Be(expected);
+    }
 }

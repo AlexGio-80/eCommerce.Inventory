@@ -9,6 +9,42 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-17] Feature — Pianificatore del budget: vista "Per venditore"
+
+#### Problema
+
+- Il piano automatico sceglie i prodotti migliori e i venditori ne sono la conseguenza: con tanti prodotti da venditori
+  diversi le spedizioni si mangiano il guadagno. L'utente compra per venditore.
+
+#### Soluzione Implementata
+
+- Nella scheda Budget, prima, la vista **"Per venditore"**: per ogni venditore il carrello da comprare con una spedizione
+  sola (un traino con resa alta, le altre aperture sopra una soglia minore, i prodotti da tenere a buon prezzo), i
+  venditori in ordine di guadagno netto con quelli che stanno nel budget, e Wizards in un riquadro a parte con il suo
+  importo. Soglie modificabili e ricalcolo immediato.
+
+#### Note Tecniche
+
+- `SellerBasketBuilder`, `SellerPlanService`, `SellerPlanRunner`; Card Trader letto per espansione; endpoint
+  `api/purchasing/budget-plan/sellers`. `BudgetPlanService.LoadOpportunityRowsAsync` e `GetBuyableSecretLairAsync`
+  condivisi fra le due viste.
+
+### [2026-10-17] Fix — Secret Lair a vendita chiusa, venditori Cardmarket riapribili, nomi del listino
+
+#### Problema
+
+- Il pianificatore proponeva drop Secret Lair non più in vendita (es. Dandân Deck): lo stato guardava scorta e
+  rimozione, non la data di fine vendita. 212 prodotti su 247 "disponibili" lo erano solo per noi.
+- Lasciando la scheda Budget si perdeva la valutazione del venditore incollato, e la pagina andava reincollata.
+- I nomi del listino Cardmarket avevano le virgolette raddoppiate.
+
+#### Soluzione Implementata
+
+- Stato "Vendita chiusa" per i prodotti del negozio con la vendita finita: fuori dal piano e dal filtro "In negozio".
+- Campo "Venditore Cardmarket" con i pulsanti che aprono le sue pagine delle offerte in inglese; venditori incollati
+  riapribili dal nome, l'ultimo si riapre da solo.
+- Virgolette tolte all'import del listino.
+
 ### [2026-10-17] Feature — Pianificatore del budget, Fase 1: venditori Cardmarket incollati *(pubblicata e verificata il 2026-10-17)*
 
 #### Problema

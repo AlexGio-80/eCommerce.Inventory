@@ -247,7 +247,7 @@ export interface SecretLairShopProduct {
     lastSeenAt: string;
     soldOutAt?: string;
     removedAt?: string;
-    status: 'Disponibile' | 'Preordine' | 'In arrivo' | 'Esaurito' | 'Tolto dal negozio';
+    status: 'Disponibile' | 'Preordine' | 'In arrivo' | 'Esaurito' | 'Vendita chiusa' | 'Tolto dal negozio';
     contentsKnown: boolean;
     cards: SecretLairShopCard[];
     url: string;
@@ -715,8 +715,34 @@ export class PurchasingService {
         return this.http.get<ApiResponse<PastedSeller[]>>(`${this.apiUrl}/cardmarket-sellers`).pipe(map(r => r.data ?? []));
     }
 
+    getCardmarketSeller(seller: string): Observable<SellerPasteResult> {
+        return this.http.get<ApiResponse<SellerPasteResult>>(`${this.apiUrl}/cardmarket-sellers/${encodeURIComponent(seller)}`)
+            .pipe(map(r => r.data!));
+    }
+
     deleteCardmarketSeller(seller: string): Observable<unknown> {
         return this.http.delete(`${this.apiUrl}/cardmarket-sellers/${encodeURIComponent(seller)}`);
+    }
+
+    // --- Per venditore (feature 007) ---
+    getSellerPlanSettings(): Observable<SellerRules> {
+        return this.http.get<ApiResponse<SellerRules>>(`${this.apiUrl}/budget-plan/sellers/settings`).pipe(map(r => r.data!));
+    }
+
+    startSellerPlan(request: SellerPlanRequest): Observable<SellerPlanStatus> {
+        return this.http.post<ApiResponse<SellerPlanStatus>>(`${this.apiUrl}/budget-plan/sellers`, request).pipe(map(r => r.data!));
+    }
+
+    getLatestSellerPlan(): Observable<SellerPlanStatus> {
+        return this.http.get<ApiResponse<SellerPlanStatus>>(`${this.apiUrl}/budget-plan/sellers/latest`).pipe(map(r => r.data!));
+    }
+
+    getSellerPlan(id: string): Observable<SellerPlanStatus> {
+        return this.http.get<ApiResponse<SellerPlanStatus>>(`${this.apiUrl}/budget-plan/sellers/${id}`).pipe(map(r => r.data!));
+    }
+
+    recomputeSellerPlan(id: string, request: SellerPlanRequest): Observable<SellerPlanStatus> {
+        return this.http.post<ApiResponse<SellerPlanStatus>>(`${this.apiUrl}/budget-plan/sellers/${id}/recompute`, request).pipe(map(r => r.data!));
     }
 
     // --- Pianificatore del budget (feature 007) ---
@@ -916,6 +942,8 @@ export interface SellerOfferEvaluation {
     roiPercent?: number;
     holdScore?: number;
     verdict: string;
+    /** Spedizione letta dalla pagina del venditore, se c'era. */
+    shipping?: number;
 }
 
 export interface SellerPasteResult {
@@ -931,4 +959,106 @@ export interface PastedSeller {
     seller: string;
     offers: number;
     pastedAt: string;
+}
+
+// --- Per venditore (feature 007) ---
+export interface SellerRules {
+    anchorRoiPercent: number;
+    addOnRoiPercent: number;
+    minNetPercent: number;
+    maxHoldPremiumPercent: number;
+}
+
+export interface SellerPlanRequest {
+    budget: number;
+    wizardsBudget: number;
+    rules: SellerRules;
+    shipping: BudgetShipping;
+    excludedStores?: string[];
+}
+
+export interface SellerOffer {
+    store: string;
+    seller: string;
+    country?: string;
+    productId: number;
+    price: number;
+    available: number;
+    ctZero: boolean;
+    cardTraderProductId?: number;
+    pastedAt?: string;
+}
+
+export interface SellerProduct {
+    productId: number;
+    name: string;
+    setCode: string;
+    decision?: string;
+    openValueNet?: number;
+    cmTrend?: number;
+    holdScore?: number;
+    isHoldCandidate: boolean;
+    cardTraderBlueprintId?: number;
+    cardmarketName?: string;
+}
+
+export interface SellerBasketLine {
+    offer: SellerOffer;
+    product: SellerProduct;
+    kind: 'Open' | 'Hold';
+    roiPercent?: number;
+    gain?: number;
+}
+
+export interface SellerBasket {
+    key: string;
+    store: string;
+    seller: string;
+    country?: string;
+    shipping: number;
+    openCost: number;
+    holdCost: number;
+    openGain: number;
+    netPercent: number;
+    holdValue: number;
+    lines: SellerBasketLine[];
+    inBudget: boolean;
+    total: number;
+}
+
+export interface WizardsDrop {
+    wizardsProductId: string;
+    title: string;
+    price: number;
+    netValue: number;
+    marginPercent?: number;
+    verdict: string;
+    url: string;
+    flags: string[];
+}
+
+export interface SellerPlanResult {
+    collectedAt: string;
+    request: SellerPlanRequest;
+    sellers: SellerBasket[];
+    inBudgetCount: number;
+    inBudgetTotal: number;
+    inBudgetGain: number;
+    wizards: { drop: WizardsDrop; chosen: boolean }[];
+    wizardsTotal: number;
+    wizardsGain: number;
+    products: number;
+    expansionsRead: number;
+    expansionFailures: number;
+    cardmarketSellers: number;
+}
+
+export interface SellerPlanStatus {
+    id: string;
+    state: 'running' | 'done' | 'failed';
+    done: number;
+    total: number;
+    startedAt: string;
+    error?: string;
+    result?: SellerPlanResult;
 }

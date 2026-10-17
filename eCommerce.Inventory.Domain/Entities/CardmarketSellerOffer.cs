@@ -27,6 +27,9 @@ public class CardmarketSellerOffer
 
     public int Quantity { get; set; }
 
+    /// <summary>Spedizione dell'articolo verso l'utente, come la mostra la pagina (null se non c'era).</summary>
+    public decimal? Shipping { get; set; }
+
     /// <summary>Commento del venditore; "DAMAGED!" o simili escludono l'offerta dal piano.</summary>
     public string? Comment { get; set; }
 

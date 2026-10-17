@@ -250,7 +250,7 @@ public class CardmarketPriceImportService
             }
 
             // I nomi dei preordini cambiano (es. le virgolette dei titoli): si tiene l'ultimo.
-            product.Name = entry.Name;
+            product.Name = CleanName(entry.Name);
             product.IdCategory = entry.IdCategory;
             product.CategoryName = entry.CategoryName;
             product.IdExpansion = entry.IdExpansion;
@@ -377,6 +377,13 @@ public class CardmarketPriceImportService
         LowFoil = includeFoil ? price.LowFoil : null,
         TrendFoil = includeFoil ? price.TrendFoil : null
     };
+
+    /// <summary>
+    /// Il catalogo JSON di Cardmarket riporta le virgolette dei titoli raddoppiate, come in un CSV
+    /// (<c>Commander: Aetherdrift: ""Living Energy"" Commander Deck</c>), mentre il sito le mostra semplici: con il
+    /// nome pulito funzionano la ricerca sul sito e l'abbinamento delle pagine dei venditori incollate.
+    /// </summary>
+    public static string CleanName(string name) => name.Replace("\"\"", "\"").Trim();
 
     private static DateTime? ParseDateAdded(string? value) =>
         DateTime.TryParseExact(value, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture,

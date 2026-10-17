@@ -30,6 +30,8 @@ public class PurchasingController : ControllerBase
     private readonly BudgetPlanService _budgetPlans;
     private readonly BudgetPlanRunner _budgetRunner;
     private readonly CardmarketSellerOfferService _sellerOffers;
+    private readonly SellerPlanService _sellerPlans;
+    private readonly SellerPlanRunner _sellerRunner;
     private readonly IConfiguration _configuration;
     private readonly ILogger<PurchasingController> _logger;
 
@@ -48,6 +50,8 @@ public class PurchasingController : ControllerBase
         BudgetPlanService budgetPlans,
         BudgetPlanRunner budgetRunner,
         CardmarketSellerOfferService sellerOffers,
+        SellerPlanService sellerPlans,
+        SellerPlanRunner sellerRunner,
         IConfiguration configuration,
         ILogger<PurchasingController> logger)
     {
@@ -58,6 +62,8 @@ public class PurchasingController : ControllerBase
         _budgetPlans = budgetPlans;
         _budgetRunner = budgetRunner;
         _sellerOffers = sellerOffers;
+        _sellerPlans = sellerPlans;
+        _sellerRunner = sellerRunner;
         _alerts = alerts;
         _opportunities = opportunities;
         _openingBalance = openingBalance;
@@ -266,6 +272,48 @@ public class PurchasingController : ControllerBase
         }
     }
 
+    /// <summary>Regole predefinite del carrello per venditore (traino, aggiunte, netto minimo, tetto dei tenuti).</summary>
+    [HttpGet("budget-plan/sellers/settings")]
+    public IActionResult GetSellerPlanSettings() => Ok(ApiResponse<SellerRules>.SuccessResult(_sellerPlans.DefaultRules));
+
+    /// <summary>
+    /// Avvia la lettura per venditore: offerte Card Trader di tutte le espansioni dei prodotti che interessano (alcuni
+    /// minuti, in background), venditori Cardmarket incollati, drop Wizards. Se una lettura è in corso restituisce quella.
+    /// </summary>
+    [HttpPost("budget-plan/sellers")]
+    public IActionResult StartSellerPlan([FromBody] SellerPlanRequest request)
+    {
+        _logger.LogInformation("Venditori migliori richiesti: {Budget} € per i venditori, {Wizards} € per Wizards", request.Budget, request.WizardsBudget);
+        return Ok(ApiResponse<SellerPlanStatus>.SuccessResult(_sellerRunner.Start(request)));
+    }
+
+    /// <summary>L'ultima lettura per venditore riuscita, anche dopo un riavvio: la scheda la riapre senza rileggere Card Trader.</summary>
+    [HttpGet("budget-plan/sellers/latest")]
+    public async Task<IActionResult> GetLatestSellerPlan(CancellationToken cancellationToken)
+    {
+        var status = await _sellerRunner.LatestAsync(cancellationToken);
+        return status == null ? NotFound(ApiResponse<object>.ErrorResult("Nessuna lettura per venditore salvata")) : Ok(ApiResponse<SellerPlanStatus>.SuccessResult(status));
+    }
+
+    [HttpGet("budget-plan/sellers/{id}")]
+    public IActionResult GetSellerPlan(string id)
+    {
+        var status = _sellerRunner.Get(id);
+        return status == null
+            ? NotFound(ApiResponse<object>.ErrorResult("Lettura non trovata: è scaduta o il servizio è ripartito, rifalla"))
+            : Ok(ApiResponse<SellerPlanStatus>.SuccessResult(status));
+    }
+
+    /// <summary>Ricalcola i carrelli per venditore con altre soglie, budget o negozi, sulle offerte già lette.</summary>
+    [HttpPost("budget-plan/sellers/{id}/recompute")]
+    public async Task<IActionResult> RecomputeSellerPlan(string id, [FromBody] SellerPlanRequest request, CancellationToken cancellationToken)
+    {
+        var status = await _sellerRunner.RecomputeAsync(id, request, cancellationToken);
+        return status == null
+            ? NotFound(ApiResponse<object>.ErrorResult("Lettura non trovata: è scaduta o il servizio è ripartito, rifalla"))
+            : Ok(ApiResponse<SellerPlanStatus>.SuccessResult(status));
+    }
+
     /// <summary>Spedizioni predefinite del pianificatore del budget, da mostrare nella scheda.</summary>
     [HttpGet("budget-plan/settings")]
     public IActionResult GetBudgetPlanSettings() =>
@@ -325,6 +373,16 @@ public class PurchasingController : ControllerBase
     [HttpGet("cardmarket-sellers")]
     public async Task<IActionResult> GetCardmarketSellers(CancellationToken cancellationToken) =>
         Ok(ApiResponse<List<PastedSeller>>.SuccessResult(await _sellerOffers.GetSellersAsync(cancellationToken)));
+
+    /// <summary>Le offerte valide di un venditore già incollato, valutate con la classifica di oggi.</summary>
+    [HttpGet("cardmarket-sellers/{seller}")]
+    public async Task<IActionResult> GetCardmarketSeller(string seller, CancellationToken cancellationToken)
+    {
+        var result = await _sellerOffers.GetSellerAsync(seller, cancellationToken);
+        return result == null
+            ? NotFound(ApiResponse<object>.ErrorResult($"Nessuna offerta valida di {seller}: incolla di nuovo le sue pagine"))
+            : Ok(ApiResponse<SellerPasteResult>.SuccessResult(result));
+    }
 
     [HttpDelete("cardmarket-sellers/{seller}")]
     public async Task<IActionResult> DeleteCardmarketSeller(string seller, CancellationToken cancellationToken) =>

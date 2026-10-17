@@ -163,7 +163,8 @@ prodotto oltre il limite di copie; budget rimasto spiegato.
 - Il testo si legge riga per riga: nome del prodotto, prezzo, spedizione, quantità disponibile, nota
   ("DAMAGED!" esclude l'offerta). Il nome si abbina al catalogo del listino (`CardmarketProducts`) e da lì al
   prodotto sigillato e alla sua riga della classifica. Le righe non abbinate si mostrano, per controllo.
-- Le offerte si salvano con venditore e data (tabella nuova, migration) e valgono 3 giorni; il piano le usa
+- Le offerte si salvano con venditore e data (tabella nuova, migration) e restano finché il venditore non si toglie
+  (all'inizio valevano 3 giorni; cambiato il 17/10 su richiesta dell'utente); il piano le usa
   come carrelli veri di quel venditore, con la sua spedizione, al posto del "venditore da cercare".
 - Dopo l'incolla, subito: "di questo venditore ti conviene anche …", cioè il piano ristretto a quel venditore.
 
@@ -206,6 +207,100 @@ valutazione in grassetto, su richiesta dell'utente).
 **Verifica:** le pagine di un venditore della mattina del 17/10 (28 mazzi Commander, 5 "Sets") danno le stesse
 righe che vede l'utente, con prezzi e quantità giusti; il piano propone più prodotti dello stesso venditore nello
 stesso carrello quando convengono.
+
+### Ritocchi dopo l'uso (pubblicati e verificati il 2026-10-17)
+
+- **Secret Lair a vendita chiusa:** il pianificatore proponeva il Dandân Deck, che sul sito è "No longer
+  available". Il catalogo di Wizards tiene anche i drop finiti (sezione Chaos Vault) con una scorta di comodo:
+  212 dei 247 prodotti che risultavano disponibili avevano la data di fine vendita passata. Nuovo stato **"Vendita
+  chiusa"** (`SecretLairShopMonitorService.StatusOf`), escluso dal piano e dal filtro "In negozio" della scheda
+  Secret Lair.
+- **Campo "Venditore Cardmarket"** con i pulsanti che aprono le sue pagine delle offerte in inglese e per nome
+  (`.../Users/{venditore}/Offers/{categoria}?idLanguages=1&sortBy=name_asc`: Mazzi, Set, Box di buste, Buste, tutte).
+- **Venditori incollati riapribili:** toccando il nome si rivedono offerte, valutazione e carrello consigliato dal
+  database (`GET /api/purchasing/cardmarket-sellers/{venditore}`), e la scheda riapre da sola l'ultimo guardato:
+  cambiando scheda non si reincolla più.
+- **Virgolette raddoppiate nel listino:** vengono dal catalogo JSON di Cardmarket; tolte all'import
+  (`CardmarketPriceImportService.CleanName`). Nessuna migration: l'import del mattino riscrive tutti i nomi.
+
+### Per venditore (pubblicata e verificata il 2026-10-17)
+
+L'utente, dopo le prove: "io ragiono per venditore cercando di ridurre le spese di spedizione, che in caso di acquisti da
+più venditori spesso si mangiano il guadagno". Il piano automatico ragiona per prodotto (il miglior insieme di
+acquisti, i venditori ne sono la conseguenza); questa vista ragiona per venditore, ed è il fulcro del blocco Acquisti.
+Regole scelte dall'utente:
+
+| Regola | Valore predefinito (modificabile nella schermata) |
+|---|---|
+| **Traino:** almeno un prodotto da aprire con resa, al prezzo del venditore, di almeno | 50% (`Purchasing:Budget:Sellers:AnchorRoiPercent`) |
+| **Aggiunte:** le altre aperture dello stesso venditore con resa di almeno | 33% (`Sellers:AddOnRoiPercent`) |
+| **Magazzino:** i suoi prodotti da tenere, solo se c'è già un'apertura, a non oltre il trend + | 10% (`MaxHoldPremiumPercent`) |
+| **Vale la spedizione** se il guadagno delle aperture, tolta la spedizione, è almeno questa quota della spesa per aprirle | 20% (`Sellers:MinNetPercent`) |
+| Copie | una per prodotto, all'offerta più economica del venditore |
+
+- **Fonti:** Card Trader con tutte le offerte delle espansioni dei prodotti che interessano (da aprire con resa al trend
+  almeno del 5%, o candidati da tenere: 405 prodotti in 110 espansioni il 17/10, una chiamata per espansione, circa 5
+  minuti); ogni venditore Card Trader col suo carrello, più **Card Trader Zero** come carrello unico fra più venditori
+  con una spedizione (lo stesso venditore CT Zero può comparire anche da solo). Cardmarket: i venditori incollati.
+- **Ordine:** venditori per guadagno netto; si segnano "nel budget" quelli che ci stanno presi in quell'ordine.
+- **Wizards a parte**, con il suo importo (predefinito 500 €, l'abitudine dell'utente ogni due settimane): i drop
+  "Compra" acquistabili, il margine migliore per primo.
+- La lettura resta in memoria qualche ora (`SellerPlanRunner`); soglie, budget, negozi e spedizioni si cambiano e si
+  ricalcola con "Aggiorna", senza rileggere. Codice: `SellerBasketBuilder` (regole, testato), `SellerPlanService`,
+  endpoint `api/purchasing/budget-plan/sellers`. Nella scheda Budget la vista "Per venditore" è la prima; il piano
+  automatico resta come "Piano automatico".
+
+**Prima prova (17/10, 500 €):** 429 prodotti, 110 espansioni lette in circa 7 minuti, 2.758 offerte, 60 venditori
+convenienti, 3 nel budget. Corretti subito:
+- **Carrelli dentro il budget:** il carrello Card Trader Zero prendeva tutto (6.783 € con 500 di budget). Ora ogni
+  carrello si riempie col traino che rende di più fra quelli che ci stanno, poi con le aperture che rendono di più,
+  poi con i tenuti dal punteggio più alto, finché il totale con la spedizione sta nel budget; un venditore il cui
+  traino da solo non ci sta non compare.
+- **"Aggiorna" rilegge i venditori Cardmarket incollati** dal database: un venditore incollato dopo la ricerca entra
+  subito, senza rileggere Card Trader.
+- **Tieni:** al posto della resa dell'apertura (numeri come "-3%"), il prezzo rispetto al trend ("3% sotto").
+
+**Seconda prova (17/10, 900 €):** un solo carrello nel budget, Card Trader Zero (894 €, guadagno netto 622 €); l'utente
+trova sensati anche i venditori successivi e vuole usare Cardmarket così: dai prodotti interessanti cerca i venditori,
+incolla le loro pagine e confronta. Correzioni chieste:
+- **Tutti i prodotti dei venditori incollati:** la vista considerava solo i prodotti che al trend rendono almeno il 5%,
+  e solo con decisione "Apri". Ora i venditori Cardmarket si valutano su tutto quello che hanno, al loro prezzo, anche i
+  prodotti "Tieni sigillato" (al trend conviene rivenderli chiusi, ma comprati sotto il trend aprirli può rendere bene:
+  esempio dell'utente, un box del Signore degli Anelli a buon prezzo). Esclusi dati incompleti, prezzi dubbi, non
+  giocabili, senza offerte (`SellerBasketBuilder.IsOpenable`). Vale anche per la valutazione subito dopo l'incolla e
+  per il piano automatico.
+- **I venditori incollati non scadono più** (`CardmarketOfferDays` predefinito 0): restano finché l'utente non li
+  toglie. La data dell'incolla si vede sul nome e sulla scheda del venditore, in arancione dopo 7 giorni.
+- **La pagina 1 reincollata sostituisce la categoria** ("Page 1 of N" letto dal testo): i prodotti venduti spariscono;
+  le pagine successive si aggiungono.
+
+**Terza prova (17/10, un venditore con 514 offerte):** prezzi sbagliati (un Fallout Deck Set a 13,69 € con resa del
+1968%). Da utente collegato Cardmarket mostra sotto il prezzo la **spedizione dell'articolo** ("248,69 €", "13,69 €",
+"1"), e la spedizione veniva letta come prezzo. Corretto: il parser legge prezzo e spedizione; la spedizione si salva con
+l'offerta (migration `AddCardmarketSellerOfferShipping`) e il carrello di quel venditore usa la più alta fra gli articoli
+scelti, al posto della stima fissa per Cardmarket. Rese oltre il 300% nella tabella dell'incolla: "Prezzo da controllare".
+
+**Quarta prova (17/10, secondo venditore):** la pagina di un altro venditore è finita salvata sotto il primo, perché il
+campo del venditore (rimasto sul primo) prevaleva sul nome della pagina; e da utente collegato il menu della quantità
+("1") accanto a ogni offerta veniva preso per il nome del prodotto dopo (2 abbinate su 8). Corretti: vale il venditore
+della pagina, il campo serve solo ad aprire le pagine; le righe fatte solo di un numero si ignorano. Le 2 offerte
+salvate sotto il venditore sbagliato tolte dal database.
+
+**Quinta prova (17/10, 900 €):** dati giusti (un venditore con 508 offerte, un altro con 47 su 47). Le due proposte migliori: Card
+Trader Zero (894 €, guadagno netto 625 €) e il venditore Cardmarket da 508 offerte (898 €, 484 €). Ritocchi chiesti dall'utente:
+- **"Da X ti conviene" con le regole della schermata** (traino, altri, netto, budget): prima usava le aperture sopra il
+  10% e diceva "7 prodotti" per un venditore che nella lista non c'era; ora dice anche perché un venditore resta fuori
+  (es. "manca un traino: l'apertura che rende di più rende il 49%").
+- **"anche in: …"** sulle righe dei prodotti presenti in più ordini della lista.
+- **"Scelgo questo"** su ogni ordine e, in cima, il totale della propria combinazione: spesa rispetto al budget,
+  spedizioni, guadagno netto, prodotti che si comprerebbero due volte.
+- **Ultima lettura salvata** (tabella `SellerPlanSnapshots`, migration `AddSellerPlanSnapshots`): a fine ricerca la
+  lettura Card Trader si salva al posto della precedente; dopo un riavvio o una pubblicazione la scheda la riapre,
+  ricalcolata con i venditori Cardmarket incollati di adesso, e mostra la data delle offerte (in arancione dopo 7
+  giorni). "Cerca i venditori" solo quando si vogliono offerte fresche.
+
+**Esito (2026-10-17):** verificato dall'utente ("direi ci sia tutto"): riquadro del venditore con le regole e il motivo
+dell'esclusione, "anche in", "Scelgo questo" con il totale e gli avvisi di budget e doppioni, lettura salvata (1,4 MB).
 
 ### Fase 2 — Dopo l'acquisto (facoltativa, da rivalutare dopo l'uso)
 

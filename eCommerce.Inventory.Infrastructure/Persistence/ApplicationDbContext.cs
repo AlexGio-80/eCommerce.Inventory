@@ -29,6 +29,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<PriceHistoryEntry> PriceHistoryEntries { get; set; }
     public DbSet<CardmarketProduct> CardmarketProducts { get; set; }
     public DbSet<CardmarketSellerOffer> CardmarketSellerOffers { get; set; }
+    public DbSet<SellerPlanSnapshot> SellerPlanSnapshots { get; set; }
     public DbSet<CardmarketPriceSnapshot> CardmarketPriceSnapshots { get; set; }
     public DbSet<CardmarketImportLog> CardmarketImportLogs { get; set; }
     public DbSet<MtgjsonSet> MtgjsonSets { get; set; }
@@ -173,6 +174,8 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
         modelBuilder.Entity<OrderItem>()
             .HasIndex(oi => oi.HubOrderItemId);
 
+        modelBuilder.Entity<SellerPlanSnapshot>(e => e.Property(s => s.RunId).HasMaxLength(20));
+
         modelBuilder.Entity<CardmarketSellerOffer>(e =>
         {
             e.Property(o => o.Seller).HasMaxLength(100);
@@ -180,6 +183,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             e.Property(o => o.Category).HasMaxLength(100);
             e.Property(o => o.Comment).HasMaxLength(500);
             e.Property(o => o.Price).HasPrecision(18, 2);
+            e.Property(o => o.Shipping).HasPrecision(18, 2);
             e.HasIndex(o => new { o.Seller, o.IdProduct });
             e.HasIndex(o => o.PastedAt);
         });
