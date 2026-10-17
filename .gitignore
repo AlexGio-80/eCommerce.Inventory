@@ -178,6 +178,8 @@ DocProject/Help/html
 
 # Click-Once directory
 publish/
+# Log messi da parte da publish.ps1 durante la pubblicazione
+Publish.logs-keep/
 
 # Publish Web Output
 *.[Pp]ublish.xml

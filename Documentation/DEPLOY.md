@@ -21,8 +21,10 @@
 ```
 
 Lo script esegue in sequenza:
-1. Stop IIS site e Windows Service
-2. Pulizia directory `Publish/`
+1. Stop IIS site e Windows Service (da qui il servizio non risponde fino alla fine, qualche minuto: prima di
+   provare qualcosa aspettare la fine dello script)
+2. Pulizia directory `Publish/`, conservando `Publish/api/logs` e `serilog-selflog.txt` (spostati in
+   `Publish.logs-keep` e rimessi subito al loro posto)
 3. Build backend (`dotnet publish` Release)
 4. Build frontend (`ng build --configuration production`)
 5. Preserva `appsettings.Production.json` esistente

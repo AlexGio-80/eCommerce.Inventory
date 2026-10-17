@@ -9,6 +9,20 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-17] Deploy — `publish.ps1` conserva i log
+
+#### Problema
+
+- La pulizia di `Publish/` cancellava anche `Publish/api/logs`: del giorno restava solo quello scritto dopo la
+  pubblicazione. Il 17/10 due serie di scansioni di prova sono sparite così, e i giorni passati si leggevano
+  solo dagli zip di backup.
+
+#### Soluzione Implementata
+
+- Prima della pulizia `logs` e `serilog-selflog.txt` vanno in `Publish.logs-keep` (ignorata da git) e tornano
+  al loro posto subito dopo aver ricreato le cartelle, prima delle compilazioni: restano anche se una
+  compilazione fallisce.
+
 ### [2026-10-17] App per smartphone: prova dei modelli, riconoscimento con Sonnet 5.5
 
 #### Problema

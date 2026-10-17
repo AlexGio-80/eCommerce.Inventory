@@ -47,12 +47,34 @@ else {
 }
 
 # 1. Clean Publish Directory
+# I log si conservano: prima la pulizia li cancellava tutti, e del giorno restava solo quello che il
+# servizio scriveva dopo la pubblicazione (righe di confronto dei modelli, errori della notte...).
+# Si spostano fuori da Publish e tornano al loro posto subito, prima delle compilazioni, cosi' restano
+# anche se una compilazione fallisce. Con il servizio fermo nessun file e' bloccato.
+$logsDir = Join-Path $apiPublishDir "logs"
+$selfLog = Join-Path $apiPublishDir "serilog-selflog.txt"
+$keepDir = Join-Path $root "Publish.logs-keep"
+if (Test-Path $logsDir) {
+    if (Test-Path $keepDir) { Remove-Item $keepDir -Recurse -Force }
+    New-Item -ItemType Directory -Path $keepDir -Force | Out-Null
+    Move-Item $logsDir (Join-Path $keepDir "logs")
+    if (Test-Path $selfLog) { Move-Item $selfLog $keepDir }
+}
+
 if (Test-Path $publishDir) {
-    Write-Host "[*] Cleaning publish directory..." -ForegroundColor Yellow
+    Write-Host "[*] Cleaning publish directory (logs kept)..." -ForegroundColor Yellow
     Remove-Item $publishDir -Recurse -Force
 }
 New-Item -ItemType Directory -Path $apiPublishDir -Force | Out-Null
 New-Item -ItemType Directory -Path $uiPublishDir -Force | Out-Null
+
+if (Test-Path $keepDir) {
+    Move-Item (Join-Path $keepDir "logs") $logsDir
+    $keptSelfLog = Join-Path $keepDir "serilog-selflog.txt"
+    if (Test-Path $keptSelfLog) { Move-Item $keptSelfLog $apiPublishDir }
+    Remove-Item $keepDir -Recurse -Force
+    Write-Host "[+] Logs restored to $logsDir" -ForegroundColor Green
+}
 
 # 2. Build Backend
 Write-Host "[*] Building Backend (Release)..." -ForegroundColor Cyan
@@ -127,8 +149,7 @@ Pop-Location
 
 # 4. Configure & Start Services
 
-# Ensure logs directory exists
-$logsDir = Join-Path $apiPublishDir "logs"
+# Ensure logs directory exists (prima pubblicazione)
 if (-not (Test-Path $logsDir)) {
     Write-Host "[*] Creating logs directory..." -ForegroundColor Yellow
     New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
