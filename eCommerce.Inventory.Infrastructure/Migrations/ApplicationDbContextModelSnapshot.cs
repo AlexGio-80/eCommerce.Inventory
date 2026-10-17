@@ -564,6 +564,57 @@ namespace eCommerce.Inventory.Infrastructure.Migrations
                     b.ToTable("CardmarketProducts");
                 });
 
+            modelBuilder.Entity("eCommerce.Inventory.Domain.Entities.CardmarketSellerOffer", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("IdProduct")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDamaged")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("PastedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ProductName")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Seller")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PastedAt");
+
+                    b.HasIndex("Seller", "IdProduct");
+
+                    b.ToTable("CardmarketSellerOffers");
+                });
+
             modelBuilder.Entity("eCommerce.Inventory.Domain.Entities.Category", b =>
                 {
                     b.Property<int>("Id")

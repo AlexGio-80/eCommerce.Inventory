@@ -705,6 +705,20 @@ export class PurchasingService {
         return this.http.post<ApiResponse<PlanCartResult>>(`${this.apiUrl}/purchase-plan/cart/remove`, cardTraderProductIds).pipe(map(r => r.data!));
     }
 
+    // --- Venditori Cardmarket incollati (feature 007, Fase 1) ---
+    pasteCardmarketSeller(text: string, seller?: string): Observable<SellerPasteResult> {
+        return this.http.post<ApiResponse<SellerPasteResult>>(`${this.apiUrl}/cardmarket-sellers/paste`, { text, seller: seller || null })
+            .pipe(map(r => r.data!));
+    }
+
+    getCardmarketSellers(): Observable<PastedSeller[]> {
+        return this.http.get<ApiResponse<PastedSeller[]>>(`${this.apiUrl}/cardmarket-sellers`).pipe(map(r => r.data ?? []));
+    }
+
+    deleteCardmarketSeller(seller: string): Observable<unknown> {
+        return this.http.delete(`${this.apiUrl}/cardmarket-sellers/${encodeURIComponent(seller)}`);
+    }
+
     // --- Pianificatore del budget (feature 007) ---
     getBudgetPlanSettings(): Observable<BudgetShipping> {
         return this.http.get<ApiResponse<BudgetShipping>>(`${this.apiUrl}/budget-plan/settings`).pipe(map(r => r.data!));
@@ -720,8 +734,8 @@ export class PurchasingService {
     }
 
     /** Ricalcola sulle offerte già lette: righe tolte, spedizioni cambiate. */
-    recomputeBudgetPlan(id: string, shipping: BudgetShipping, excluded: string[]): Observable<BudgetPlanStatus> {
-        return this.http.post<ApiResponse<BudgetPlanStatus>>(`${this.apiUrl}/budget-plan/${id}/recompute`, { shipping, excluded })
+    recomputeBudgetPlan(id: string, shipping: BudgetShipping, excluded: string[], excludedStores: string[]): Observable<BudgetPlanStatus> {
+        return this.http.post<ApiResponse<BudgetPlanStatus>>(`${this.apiUrl}/budget-plan/${id}/recompute`, { shipping, excluded, excludedStores })
             .pipe(map(r => r.data!));
     }
 
@@ -811,6 +825,8 @@ export interface BudgetPlanRequest {
     openSharePercent: number;
     includeSecretLairBorderline: boolean;
     shipping?: BudgetShipping;
+    /** Negozi su cui oggi non si compra: 'CardTrader', 'Cardmarket', 'Wizards'. */
+    excludedStores?: string[];
 }
 
 export type BudgetKind = 'Open' | 'Hold' | 'SecretLair';
@@ -872,6 +888,7 @@ export interface BudgetPlanResult {
     openRead: number;
     holdRead: number;
     excluded: string[];
+    excludedStores: string[];
     baskets: BudgetPlanBasket[];
 }
 
@@ -883,4 +900,35 @@ export interface BudgetPlanStatus {
     startedAt: string;
     error?: string;
     result?: BudgetPlanResult;
+}
+
+// --- Venditori Cardmarket incollati (feature 007, Fase 1) ---
+export interface SellerOfferEvaluation {
+    offerId: number;
+    name: string;
+    price: number;
+    quantity: number;
+    comment?: string;
+    isDamaged: boolean;
+    sealedProductId?: number;
+    cmTrend?: number;
+    openValueNet?: number;
+    roiPercent?: number;
+    holdScore?: number;
+    verdict: string;
+}
+
+export interface SellerPasteResult {
+    seller: string;
+    category?: string;
+    englishFilter: boolean;
+    offersRead: number;
+    offers: SellerOfferEvaluation[];
+    unmatched: string[];
+}
+
+export interface PastedSeller {
+    seller: string;
+    offers: number;
+    pastedAt: string;
 }

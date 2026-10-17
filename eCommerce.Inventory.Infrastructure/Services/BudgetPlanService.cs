@@ -34,6 +34,7 @@ public class BudgetPlanService
     private readonly IMarketplaceOfferCache _offerCache;
     private readonly SecretLairShopMonitorService _secretLairShop;
     private readonly SecretLairDropValuationService _secretLairValuation;
+    private readonly CardmarketSellerOfferService _sellerOffers;
     private readonly IConfiguration _configuration;
     private readonly ILogger<BudgetPlanService> _logger;
 
@@ -43,6 +44,7 @@ public class BudgetPlanService
         IMarketplaceOfferCache offerCache,
         SecretLairShopMonitorService secretLairShop,
         SecretLairDropValuationService secretLairValuation,
+        CardmarketSellerOfferService sellerOffers,
         IConfiguration configuration,
         ILogger<BudgetPlanService> logger)
     {
@@ -51,6 +53,7 @@ public class BudgetPlanService
         _offerCache = offerCache;
         _secretLairShop = secretLairShop;
         _secretLairValuation = secretLairValuation;
+        _sellerOffers = sellerOffers;
         _configuration = configuration;
         _logger = logger;
     }
@@ -104,14 +107,30 @@ public class BudgetPlanService
             .Concat(hold.Take(holdSlots).Select(r => (Row: r, Kind: BudgetKind.Hold)))
             .ToList();
 
-        var copyLimits = await CopyLimitsAsync(chosen.Select(c => c.Row.SetCode).Distinct().ToList(), cancellationToken);
+        // Offerte dei venditori Cardmarket incollate (Fase 1): il prodotto entra anche se non è fra i migliori della
+        // classifica, purché al prezzo del venditore convenga aprirlo o sia un candidato da tenere.
+        var rowById = rows.GroupBy(r => r.ProductId).ToDictionary(g => g.Key, g => g.First());
+        var chosenKind = chosen.ToDictionary(c => c.Row.ProductId, c => c.Kind);
+        var pasted = (await _sellerOffers.GetValidOffersAsync(cancellationToken))
+            .Where(o => rowById.ContainsKey(o.SealedProductId))
+            .Select(o =>
+            {
+                var row = rowById[o.SealedProductId];
+                var kind = chosenKind.TryGetValue(row.ProductId, out var k) ? k : PastedKind(row, o.Price, minRoi, maxRoi);
+                return (Offer: o, Row: row, Kind: kind);
+            })
+            .Where(x => x.Kind != null)
+            .ToList();
+        var allRows = chosen.Select(c => c.Row).Concat(pasted.Select(p => p.Row)).DistinctBy(r => r.ProductId).ToList();
+
+        var copyLimits = await CopyLimitsAsync(allRows.Select(r => r.SetCode).Distinct().ToList(), cancellationToken);
         var held = await _db.ProductPurchases.AsNoTracking()
             .Where(p => p.HoldForResale && p.OpenedAt == null)
             .GroupBy(p => p.SealedProductId)
             .Select(g => new { g.Key, Quantity = g.Sum(p => p.Quantity) })
             .ToDictionaryAsync(x => x.Key, x => x.Quantity, cancellationToken);
-        var trendChanges = await TrendChangesAsync(chosen.Select(c => c.Row.CardmarketId).OfType<int>().ToList(), cancellationToken);
-        var cardmarketNames = await CardmarketNamesAsync(chosen.Select(c => c.Row.CardmarketId).OfType<int>().ToList(), cancellationToken);
+        var trendChanges = await TrendChangesAsync(allRows.Select(r => r.CardmarketId).OfType<int>().ToList(), cancellationToken);
+        var cardmarketNames = await CardmarketNamesAsync(allRows.Select(r => r.CardmarketId).OfType<int>().ToList(), cancellationToken);
 
         var offers = new List<BudgetOffer>();
         var infos = new Dictionary<string, BudgetOfferInfo>();
@@ -119,22 +138,29 @@ public class BudgetPlanService
         var done = 0;
         progress?.Report((0, withCardTrader));
 
-        foreach (var (row, kind) in chosen)
+        // Quello che vale per tutte le offerte di un prodotto: copie, valore, tetto dei tenuti, avvisi, nome Cardmarket.
+        ProductTerms Terms(OpportunityRow row, BudgetKind kind)
         {
-            var productKey = $"p:{row.ProductId}";
-            var maxCopies = copyLimits.GetValueOrDefault(row.SetCode, 2);
-            if (kind == BudgetKind.Hold) maxCopies = Math.Max(0, maxCopies - held.GetValueOrDefault(row.ProductId));
-            if (maxCopies == 0) continue;
-
-            var unitValue = kind == BudgetKind.Hold ? row.HoldScore!.Value : row.OpenValueCm!.Value;
+            var copies = copyLimits.GetValueOrDefault(row.SetCode, 2);
+            if (kind == BudgetKind.Hold) copies = Math.Max(0, copies - held.GetValueOrDefault(row.ProductId));
+            var value = kind == BudgetKind.Hold ? row.HoldScore!.Value : row.OpenValueCm!.Value;
             // Da tenere si compra al valore di mercato, non molto sopra: il tetto comprende la spedizione da pagare.
-            decimal? maxCost = kind == BudgetKind.Hold && row.CmTrend is > 0 ? Math.Round(row.CmTrend.Value * (1 + maxHoldPremium), 2) : null;
+            decimal? cap = kind == BudgetKind.Hold && row.CmTrend is > 0 ? Math.Round(row.CmTrend.Value * (1 + maxHoldPremium), 2) : null;
             var flags = Flags(row, trendChanges.GetValueOrDefault(row.CardmarketId ?? 0));
             var cmName = row.CardmarketId is { } cmId ? cardmarketNames.GetValueOrDefault(cmId) : null;
+            return new ProductTerms($"p:{row.ProductId}", copies, value, cap, flags, cmName);
+        }
 
-            BudgetOfferInfo Info(string store, string? seller, string? country) => new(
-                row.ProductId, row.Name, row.SetCode, kind, store, seller, country, row.OpenValueCm, row.RoiPercent,
-                row.HoldScore, row.FloorPercent, flags, row.CardTraderBlueprintId, cmName, null, null, null);
+        BudgetOfferInfo InfoOf(OpportunityRow row, BudgetKind kind, ProductTerms t, string store, string? seller, string? country) => new(
+            row.ProductId, row.Name, row.SetCode, kind, store, seller, country, row.OpenValueCm, row.RoiPercent,
+            row.HoldScore, row.FloorPercent, t.Flags, row.CardTraderBlueprintId, t.CardmarketName, null, null, null);
+
+        foreach (var (row, kind) in chosen)
+        {
+            var terms = Terms(row, kind);
+            if (terms.MaxCopies == 0) continue;
+            var (productKey, maxCopies, unitValue, maxCost) = (terms.ProductKey, terms.MaxCopies, terms.UnitValue, terms.MaxCost);
+            BudgetOfferInfo Info(string store, string? seller, string? country) => InfoOf(row, kind, terms, store, seller, country);
 
             if (row.CardTraderBlueprintId is { } blueprintId)
             {
@@ -168,6 +194,17 @@ public class BudgetPlanService
             }
         }
 
+        foreach (var (offer, row, kind) in pasted)
+        {
+            var terms = Terms(row, kind!.Value);
+            if (terms.MaxCopies == 0) continue;
+            var key = $"cms:{offer.OfferId}";
+            offers.Add(new BudgetOffer(key, terms.ProductKey, $"cms:{offer.Seller.ToLowerInvariant()}", kind.Value,
+                offer.Price, terms.UnitValue, offer.Quantity, terms.MaxCopies, terms.MaxCost));
+            var info = InfoOf(row, kind.Value, terms, "Cardmarket", offer.Seller, null);
+            infos[key] = info with { Flags = info.Flags.Append($"Offerta incollata il {offer.PastedAt.ToLocalTime():dd/MM HH:mm}").ToList() };
+        }
+
         await AddSecretLairAsync(request.IncludeSecretLairBorderline, offers, infos, cancellationToken);
 
         _logger.LogInformation(
@@ -178,6 +215,17 @@ public class BudgetPlanService
             Setting("MaxHoldProductSharePercent", 40m));
     }
 
+    /// <summary>Un prodotto che c'è solo fra le offerte incollate: da aprire se conviene al prezzo del venditore, da tenere se è candidato.</summary>
+    public static BudgetKind? PastedKind(OpportunityRow row, decimal price, decimal minRoi, decimal maxRoi)
+    {
+        if (row.Decision == "Apri" && row.OpenValueCm is > 0 && price > 0)
+        {
+            var roi = (row.OpenValueCm.Value - price) / price * 100;
+            if (roi >= minRoi && roi <= maxRoi) return BudgetKind.Open;
+        }
+        return row.IsHoldCandidate && row.HoldScore != null ? BudgetKind.Hold : null;
+    }
+
     /// <summary>Prezzo d'acquisto su Cardmarket senza venditore: trend, o prezzo più basso se è più alto.</summary>
     public static decimal? CardmarketBuyPrice(OpportunityRow row)
     {
@@ -185,9 +233,17 @@ public class BudgetPlanService
         return price > 0 ? price : null;
     }
 
+    /// <summary>Negozio di un'offerta, per le caselle Card Trader / Cardmarket / Wizards della scheda.</summary>
+    public static string StoreGroupOf(string offerKey) =>
+        offerKey.StartsWith("ct:") ? "CardTrader" : offerKey.StartsWith("cm") ? "Cardmarket" : "Wizards";
+
     /// <summary>Il piano sulle offerte già lette: in millisecondi, senza Card Trader.</summary>
-    public static BudgetPlanResult Compose(BudgetPlanData data, BudgetShipping shipping, IReadOnlyCollection<string> excluded)
+    /// <param name="excludedStores">Negozi su cui oggi non si compra ("CardTrader", "Cardmarket", "Wizards").</param>
+    public static BudgetPlanResult Compose(
+        BudgetPlanData data, BudgetShipping shipping, IReadOnlyCollection<string> excluded, IReadOnlyCollection<string>? excludedStores = null)
     {
+        var stores = excludedStores?.ToHashSet(StringComparer.OrdinalIgnoreCase) ?? new HashSet<string>();
+        var allExcluded = excluded.Concat(data.Offers.Where(o => stores.Contains(StoreGroupOf(o.OfferKey))).Select(o => o.OfferKey)).ToList();
         var maxHoldProductShare = data.MaxHoldProductSharePercent / 100m;
         var shippingByKey = data.Offers.Select(o => o.ShippingKey).Distinct().ToDictionary(k => k, k =>
             k == "ctzero" ? shipping.CardTraderZero
@@ -197,7 +253,7 @@ public class BudgetPlanService
 
         var request = data.Request;
         var choice = BudgetPlanner.Choose(data.Offers, request.Budget, Math.Clamp(request.OpenSharePercent, 0, 100) / 100m,
-            shippingByKey, excluded, maxHoldProductShare);
+            shippingByKey, allExcluded, maxHoldProductShare);
 
         var baskets = choice.Lines
             .GroupBy(l => l.Offer.ShippingKey)
@@ -215,7 +271,7 @@ public class BudgetPlanService
                 var total = lines.Sum(l => l.UnitPrice * l.Quantity) + ship;
                 var basketGain = lines.Sum(l => l.Gain ?? 0) - (lines.Any(l => l.Gain != null) ? ship : 0);
                 return new BudgetPlanBasket(g.Key, first.Store,
-                    g.Key == "ctzero" || first.Store != "Card Trader" ? null : first.Seller,
+                    g.Key == "ctzero" || first.Store == "Wizards" ? null : first.Seller,
                     g.Key == "ctzero" ? null : first.Country, Math.Round(ship, 2), Math.Round(total, 2), Math.Round(basketGain, 2), lines);
             })
             .OrderBy(b => StoreOrder(b.Store)).ThenByDescending(b => b.Total)
@@ -231,7 +287,7 @@ public class BudgetPlanService
             data.CollectedAt, request.Budget, request.OpenSharePercent, spent,
             Math.Round(choice.ShippingPaid.Values.Sum(), 2), Math.Round(openGain, 2), Math.Round(holdSpent, 2), Math.Round(holdFloor, 2),
             Math.Round(request.Budget - spent, 2), RemainingReason(data, choice, request.Budget - spent),
-            shipping, data.OpenCandidates, data.HoldCandidates, data.OpenRead, data.HoldRead, excluded.ToList(), baskets);
+            shipping, data.OpenCandidates, data.HoldCandidates, data.OpenRead, data.HoldRead, excluded.ToList(), stores.ToList(), baskets);
     }
 
     private static int StoreOrder(string store) => store switch
@@ -365,7 +421,9 @@ public class BudgetPlanService
 /// <param name="OpenSharePercent">Parte del budget per i prodotti da aprire (0–100); il resto per quelli da tenere.</param>
 /// <param name="IncludeSecretLairBorderline">Anche i Secret Lair "Al limite", oltre ai "Compra".</param>
 /// <param name="Shipping">Spedizioni da usare al posto delle predefinite.</param>
-public record BudgetPlanRequest(decimal Budget, int OpenSharePercent, bool IncludeSecretLairBorderline, BudgetShipping? Shipping);
+/// <param name="ExcludedStores">Negozi su cui oggi non si compra ("CardTrader", "Cardmarket", "Wizards").</param>
+public record BudgetPlanRequest(
+    decimal Budget, int OpenSharePercent, bool IncludeSecretLairBorderline, BudgetShipping? Shipping, List<string>? ExcludedStores = null);
 
 public record BudgetShipping(decimal CardTrader, decimal CardTraderZero, decimal Cardmarket, decimal Wizards);
 
@@ -401,4 +459,8 @@ public record BudgetPlanBasket(
 public record BudgetPlanResult(
     DateTime CollectedAt, decimal Budget, int OpenSharePercent, decimal Spent, decimal Shipping, decimal OpenGain,
     decimal HoldSpent, decimal HoldFloor, decimal Remaining, string? RemainingReason, BudgetShipping ShippingUsed,
-    int OpenCandidates, int HoldCandidates, int OpenRead, int HoldRead, List<string> Excluded, List<BudgetPlanBasket> Baskets);
+    int OpenCandidates, int HoldCandidates, int OpenRead, int HoldRead, List<string> Excluded, List<string> ExcludedStores,
+    List<BudgetPlanBasket> Baskets);
+
+/// <summary>Termini comuni a tutte le offerte di un prodotto nel piano.</summary>
+public record ProductTerms(string ProductKey, int MaxCopies, decimal UnitValue, decimal? MaxCost, List<string> Flags, string? CardmarketName);

@@ -9,6 +9,27 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-17] Feature — Pianificatore del budget, Fase 1: venditori Cardmarket incollati *(pubblicata e verificata il 2026-10-17)*
+
+#### Problema
+
+- Su Cardmarket il pianificatore non conosceva i venditori: proponeva il prodotto al prezzo del listino con "venditore
+  da cercare". La lettura automatica delle pagine è bloccata (verifica anti-bot) e vietata.
+
+#### Soluzione Implementata
+
+- Riquadro **"Venditori Cardmarket"** nella scheda Budget: si incolla il testo della pagina delle offerte di un venditore
+  (filtro Language: English), e subito si vede per ogni offerta se conviene aprirla, tenerla o no, più le righe non
+  abbinate al catalogo.
+- Le offerte valgono 3 giorni e diventano carrelli veri di quel venditore nel piano, con una spedizione sola.
+- "Da questo venditore ti conviene": il carrello consigliato del solo venditore incollato, con totale e guadagno.
+- Caselle "Compro su: Card Trader / Cardmarket / Wizards": un negozio spento esce dal piano, ricalcolato subito.
+
+#### Note Tecniche
+
+- Migration `AddCardmarketSellerOffers`; `CardmarketSellerPageParser`, `CardmarketSellerOfferService`; endpoint
+  `api/purchasing/cardmarket-sellers`. I nomi del listino hanno le virgolette raddoppiate: l'abbinamento le normalizza.
+
 ### [2026-10-17] Feature — Pianificatore del budget, Fase 0 *(pubblicata e verificata il 2026-10-17)*
 
 #### Problema

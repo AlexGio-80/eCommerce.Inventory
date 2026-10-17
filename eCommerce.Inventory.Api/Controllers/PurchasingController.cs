@@ -29,6 +29,7 @@ public class PurchasingController : ControllerBase
     private readonly PurchasePlanService _plans;
     private readonly BudgetPlanService _budgetPlans;
     private readonly BudgetPlanRunner _budgetRunner;
+    private readonly CardmarketSellerOfferService _sellerOffers;
     private readonly IConfiguration _configuration;
     private readonly ILogger<PurchasingController> _logger;
 
@@ -46,6 +47,7 @@ public class PurchasingController : ControllerBase
         PurchasePlanService plans,
         BudgetPlanService budgetPlans,
         BudgetPlanRunner budgetRunner,
+        CardmarketSellerOfferService sellerOffers,
         IConfiguration configuration,
         ILogger<PurchasingController> logger)
     {
@@ -55,6 +57,7 @@ public class PurchasingController : ControllerBase
         _plans = plans;
         _budgetPlans = budgetPlans;
         _budgetRunner = budgetRunner;
+        _sellerOffers = sellerOffers;
         _alerts = alerts;
         _opportunities = opportunities;
         _openingBalance = openingBalance;
@@ -293,11 +296,39 @@ public class PurchasingController : ControllerBase
     [HttpPost("budget-plan/{id}/recompute")]
     public IActionResult RecomputeBudgetPlan(string id, [FromBody] BudgetRecomputeRequest request)
     {
-        var status = _budgetRunner.Recompute(id, request.Shipping, request.Excluded ?? new List<string>());
+        var status = _budgetRunner.Recompute(id, request.Shipping, request.Excluded ?? new List<string>(), request.ExcludedStores);
         return status == null
             ? NotFound(ApiResponse<object>.ErrorResult("Piano non trovato: è scaduto o il servizio è ripartito, ricalcolalo"))
             : Ok(ApiResponse<BudgetPlanStatus>.SuccessResult(status));
     }
+
+    /// <summary>
+    /// Legge una pagina delle offerte di un venditore Cardmarket incollata dall'utente (feature 007, Fase 1):
+    /// abbina le offerte al listino, le salva per il pianificatore e le valuta con la classifica di oggi.
+    /// </summary>
+    [HttpPost("cardmarket-sellers/paste")]
+    [RequestSizeLimit(2 * 1024 * 1024)]
+    public async Task<IActionResult> PasteCardmarketSellerPage([FromBody] SellerPasteRequest request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _sellerOffers.ImportAsync(request.Seller, request.Text ?? string.Empty, cancellationToken);
+            return Ok(ApiResponse<SellerPasteResult>.SuccessResult(result));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ApiResponse<object>.ErrorResult(ex.Message));
+        }
+    }
+
+    /// <summary>Venditori Cardmarket incollati negli ultimi giorni.</summary>
+    [HttpGet("cardmarket-sellers")]
+    public async Task<IActionResult> GetCardmarketSellers(CancellationToken cancellationToken) =>
+        Ok(ApiResponse<List<PastedSeller>>.SuccessResult(await _sellerOffers.GetSellersAsync(cancellationToken)));
+
+    [HttpDelete("cardmarket-sellers/{seller}")]
+    public async Task<IActionResult> DeleteCardmarketSeller(string seller, CancellationToken cancellationToken) =>
+        Ok(ApiResponse<object>.SuccessResult(new { deleted = await _sellerOffers.DeleteSellerAsync(seller, cancellationToken) }));
 
     [HttpGet("alerts")]
     public async Task<IActionResult> GetAlertRules(CancellationToken cancellationToken) =>
@@ -446,4 +477,8 @@ public class PurchasingController : ControllerBase
 }
 
 /// <param name="Excluded">Offerte tolte dall'utente (chiavi delle righe del piano).</param>
-public record BudgetRecomputeRequest(BudgetShipping? Shipping, List<string>? Excluded);
+/// <param name="ExcludedStores">Negozi su cui oggi non si compra ("CardTrader", "Cardmarket", "Wizards").</param>
+public record BudgetRecomputeRequest(BudgetShipping? Shipping, List<string>? Excluded, List<string>? ExcludedStores);
+
+/// <param name="Seller">Venditore; vuoto = quello letto dalla pagina.</param>
+public record SellerPasteRequest(string? Seller, string? Text);

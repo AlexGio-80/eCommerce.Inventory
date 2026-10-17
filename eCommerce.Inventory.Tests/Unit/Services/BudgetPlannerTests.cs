@@ -183,4 +183,41 @@ public class BudgetPlannerTests
 
         choice.Lines.Select(l => l.Offer.OfferKey).Should().BeEquivalentTo("m1", "m2", "m3");
     }
+
+    [Fact]
+    public void PastedKind_opens_at_the_seller_price_or_holds_a_candidate()
+    {
+        var open = new OpportunityRow(1, "Deck", "DFT", null, 1, 37m, 33m, 50m, 5m, "Apri", null, null, 12, 50m, false);
+        var hold = open with { Decision = "Tieni sigillato", OpenValueCm = 42m, HoldScore = 87m, IsHoldCandidate = true };
+
+        // In classifica rende il 5% al trend; al prezzo del venditore, 40 euro, il 25%.
+        BudgetPlanService.PastedKind(open, 40m, 10m, 300m).Should().Be(BudgetKind.Open);
+        BudgetPlanService.PastedKind(open, 48m, 10m, 300m).Should().BeNull();
+        BudgetPlanService.PastedKind(hold, 40m, 10m, 300m).Should().Be(BudgetKind.Hold);
+    }
+
+    [Fact]
+    public void Compose_leaves_out_the_stores_switched_off()
+    {
+        BudgetOfferInfo Info(string name, BudgetKind kind, string store) =>
+            new(1, name, null, kind, store, null, null, 100m, 50m, null, null, new List<string>(), null, null, null, null, null);
+        var data = new BudgetPlanData(DateTime.UtcNow, new BudgetPlanRequest(500m, 100, false, null),
+            new List<BudgetOffer>
+            {
+                new("wz:1", "wz:1", "wizards", BudgetKind.SecretLair, 35m, 120m, 1, 1),
+                new("cms:7", "p:2", "cms:venditore", BudgetKind.Open, 40m, 60m, 3, 3)
+            },
+            new Dictionary<string, BudgetOfferInfo>
+            {
+                ["wz:1"] = Info("Drop", BudgetKind.SecretLair, "Wizards"),
+                ["cms:7"] = Info("Deck", BudgetKind.Open, "Cardmarket")
+            },
+            1, 0, 1, 0, 40m);
+        var shipping = new BudgetShipping(7m, 8m, 7m, 10m);
+
+        BudgetPlanService.Compose(data, shipping, Array.Empty<string>()).Baskets.Select(b => b.Store)
+            .Should().BeEquivalentTo("Wizards", "Cardmarket");
+        BudgetPlanService.Compose(data, shipping, Array.Empty<string>(), new[] { "Wizards" }).Baskets
+            .Should().ContainSingle().Which.Lines.Single().Quantity.Should().Be(3);
+    }
 }

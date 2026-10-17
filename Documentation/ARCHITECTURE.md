@@ -153,6 +153,7 @@ eCommerce.Inventory/
   - `BulkSellThroughService.cs`, `PriceRealizationService.cs`: quota di bulk venduto e prezzo realizzato rispetto al trend CM, misurati sulle vendite
   - `SealedOpportunityService.cs`: classifica giornaliera; `PurchasePlanService.cs`: piano d'acquisto su Card Trader per venditore
   - `BudgetPlanService.cs`, `BudgetPlanner.cs`, `BudgetPlanRunner.cs`: pianificatore del budget (feature 007): candidati e offerte, scelta dentro il budget con le spedizioni, calcolo in background
+  - `CardmarketSellerPageParser.cs`, `CardmarketSellerOfferService.cs`: pagine delle offerte dei venditori Cardmarket incollate dall'utente, abbinate al listino e salvate in `CardmarketSellerOffers`
   - `OpeningBalanceService.cs`, `ProductPurchaseService.cs`: bilancio delle aperture e registro acquisti
   - `AlertService.cs`, `EmailSender.cs` (`IEmailSender`/`SmtpEmailSender`): avvisi ed email di riepilogo
   - `PurchaseCostService.cs`: **unica fonte del costo d'acquisto** (pagina Espansioni, report di redditività, bilancio aperture)

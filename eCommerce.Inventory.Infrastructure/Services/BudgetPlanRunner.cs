@@ -45,11 +45,12 @@ public class BudgetPlanRunner
     public BudgetPlanStatus? Get(string id) => _runs.TryGetValue(id, out var run) ? run.Status() : null;
 
     /// <summary>Ricalcola sulle offerte già lette, con righe tolte e spedizioni cambiate. Null se il piano non c'è più.</summary>
-    public BudgetPlanStatus? Recompute(string id, BudgetShipping? shipping, IReadOnlyCollection<string> excluded)
+    public BudgetPlanStatus? Recompute(
+        string id, BudgetShipping? shipping, IReadOnlyCollection<string> excluded, IReadOnlyCollection<string>? excludedStores)
     {
         if (!_runs.TryGetValue(id, out var run) || run.Data == null) return null;
         run.Shipping = shipping ?? run.Shipping;
-        run.Result = BudgetPlanService.Compose(run.Data, run.Shipping!, excluded);
+        run.Result = BudgetPlanService.Compose(run.Data, run.Shipping!, excluded, excludedStores);
         return run.Status();
     }
 
@@ -62,7 +63,7 @@ public class BudgetPlanRunner
             var progress = new Progress<(int Done, int Total)>(p => { run.Done = p.Done; run.Total = p.Total; });
             run.Data = await service.CollectAsync(run.Request, progress, CancellationToken.None);
             run.Shipping = run.Request.Shipping ?? service.DefaultShipping;
-            run.Result = BudgetPlanService.Compose(run.Data, run.Shipping, Array.Empty<string>());
+            run.Result = BudgetPlanService.Compose(run.Data, run.Shipping, Array.Empty<string>(), run.Request.ExcludedStores);
             run.State = "done";
             _logger.LogInformation("Pianificatore del budget {Id}: {Budget} € di budget, spesi {Spent} €, {Baskets} carrelli",
                 run.Id, run.Request.Budget, run.Result.Spent, run.Result.Baskets.Count);

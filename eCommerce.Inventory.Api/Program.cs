@@ -286,6 +286,7 @@ builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<AlertService>();
 builder.Services.AddScoped<PurchasePlanService>();
 builder.Services.AddScoped<BudgetPlanService>();
+builder.Services.AddScoped<CardmarketSellerOfferService>();
 builder.Services.AddSingleton<BudgetPlanRunner>();
 builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJobs.CardmarketImportWorker>();
 

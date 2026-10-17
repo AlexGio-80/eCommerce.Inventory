@@ -10,7 +10,7 @@
 
 **Titolo feature:** `Pianificatore del budget`
 **Priorità:** alta (la schermata che l'utente userebbe di più per gli acquisti)
-**Stato (2026-10-17):** progetto approvato dall'utente; Fase 0 pubblicata e verificata dall'utente il 2026-10-17; prossima la Fase 1 (pagine dei venditori Cardmarket incollate).
+**Stato (2026-10-17):** progetto approvato dall'utente; Fase 0 pubblicata e verificata dall'utente il 2026-10-17; Fase 1 (pagine dei venditori Cardmarket incollate) pubblicata e verificata il 2026-10-17. Resta la Fase 2, facoltativa.
 
 L'utente oggi parte da "questa settimana posso spendere X": guarda le proposte della classifica e degli
 avvisi, le apre una per una su Card Trader, Cardmarket e sul negozio Wizards, poi compone i carrelli a mano
@@ -154,7 +154,7 @@ copia. Il 17/10 in cima alle aperture ci sono soprattutto drop Secret Lair sul m
 Card Trader coincidono con il sito; lo stesso venditore compare con più prodotti quando conviene; nessun
 prodotto oltre il limite di copie; budget rimasto spiegato.
 
-### Fase 1 — Pagine dei venditori Cardmarket incollate
+### Fase 1 — Pagine dei venditori Cardmarket incollate *(pubblicata e verificata il 2026-10-17)*
 
 - Nella scheda "Budget", riquadro **"Incolla le pagine di un venditore Cardmarket"**: l'utente apre le pagine
   delle offerte del venditore (es. `.../Users/ManaMarket/Offers/Preconstructed-Decks`, `.../Offers/Sets`,
@@ -171,6 +171,37 @@ prodotto oltre il limite di copie; budget rimasto spiegato.
 (un'immagine), che nel testo copiato non c'è: per questo il filtro Lingua: Inglese prima di copiare. Se il
 testo copiato non basta (righe spezzate, prezzi senza separatori), si valuta di salvare la pagina (Ctrl+S) e
 caricare il file.
+
+**Testo copiato, provato il 17/10** su una pagina vera (18 mazzi Commander in inglese): per ogni offerta nome,
+commento, prezzo ("37,98 €") e quantità su righe separate; il venditore e la categoria nel percorso in alto; il
+filtro lingua si vede come "English (18)". **La spedizione non c'è nel testo**: si usa quella impostata per
+Cardmarket. Nel listino importato i nomi hanno le virgolette raddoppiate (`""Counter Blitz""`, difetto dell'import
+del CSV): l'abbinamento normalizza virgolette e spazi.
+
+**Come è fatto:** tabella `CardmarketSellerOffers` (migration `AddCardmarketSellerOffers`), `CardmarketSellerPageParser`
+(testo semplice, con tabulazioni o con link Markdown), `CardmarketSellerOfferService` (abbinamento ai soli
+sigillati del listino, sostituzione delle offerte dello stesso venditore per i prodotti incollati, valutazione con la
+classifica di oggi), endpoint `POST /api/purchasing/cardmarket-sellers/paste`, `GET /api/purchasing/cardmarket-sellers`,
+`DELETE /api/purchasing/cardmarket-sellers/{venditore}`. Nel pianificatore ogni offerta valida (3 giorni,
+`Purchasing:Budget:CardmarketOfferDays`, non danneggiata) è una riga del venditore, con una spedizione per
+venditore; un prodotto incollato entra anche se non è fra i 40 migliori, se al prezzo del venditore conviene
+aprirlo (resa fra 10% e 300%) o è un candidato da tenere. Il riquadro "Venditori Cardmarket" della scheda Budget
+mostra subito la valutazione di ogni offerta e le righe non abbinate.
+
+**Prova del 17/10:** la pagina Preconstructed Decks di un venditore: 18 offerte abbinate su 18, venditore e categoria
+riconosciuti, prezzi e quantità giusti, l'offerta "DAMAGED!" esclusa; 4 offerte convenienti da aprire (resa 10–40%
+al prezzo del venditore). Nel piano però non comparivano: anche con 3.000 € il budget finiva prima, sui 38 Secret
+Lair del negozio Wizards (circa 2.000 €) e su quelli del mercato secondario, che rendono il 100–200% secondo il
+modello. Aggiunte le caselle **"Compro su: Card Trader / Cardmarket / Wizards"**: un negozio spento esce dal piano,
+che si ricalcola subito sulle offerte già lette (richiesta `ExcludedStores`).
+Anche con Card Trader e Wizards spenti i mazzi del venditore restavano fuori: ogni prodotto Cardmarket "da cercare"
+paga la sua spedizione (26 carrelli, 312 €) e il budget finiva sui Secret Lair. Aggiunto il pezzo previsto e
+mancante, **"Da questo venditore ti conviene"**: sotto la tabella delle offerte incollate, i prodotti consigliati del
+solo venditore con una spedizione (quella impostata per Cardmarket), totale e guadagno atteso, sopra la tabella.
+
+**Esito (2026-10-17):** sulla pagina di un venditore, "ti conviene: 4 prodotti, 165,35 € + 12 € di spedizione =
+177,35 €, guadagno atteso 24,27 €", come i conti fatti a mano; righe convenienti in evidenza (sfondo, barra e
+valutazione in grassetto, su richiesta dell'utente).
 
 **Verifica:** le pagine di ManaMarket della mattina del 17/10 (28 mazzi Commander, 5 "Sets") danno le stesse
 righe che vede l'utente, con prezzi e quantità giusti; il piano propone più prodotti di ManaMarket nello
