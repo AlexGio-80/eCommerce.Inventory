@@ -28,7 +28,7 @@ L'utente vuole usare il gestionale dal telefono, in quest'ordine di importanza:
 | Accesso da fuori casa | **Tailscale** (VPN privata, nessuna porta aperta sul router) con HTTPS di Tailscale Serve | Cloudflare Tunnel con Cloudflare Access |
 | Riconoscimento della carta | **Claude (API Anthropic) con visione**: legge nome, sigla del set, numero di raccolta e lingua dalla foto; la carta si trova poi con la ricerca dei blueprint che c'è già | Ximilar (riconoscimento carte TCG, a pagamento) |
 | Stima della condizione | **Claude, come suggerimento** da confermare a mano | Ximilar Grading (abbonamento a pagamento, già predisposto nel codice) |
-| Modello Claude | **Claude Opus 5.5**, il più capace della serie corrente | Claude Sonnet 5.5 o Claude Haiku 5.5, più economici: si decide dopo averli provati sulle stesse foto (vedi §6) |
+| Modello Claude | **Claude Opus 5.5**, il più capace della serie corrente; dal 2026-10-17 il riconoscimento usa **Claude Sonnet 5.5** (prova dei modelli, §6) | Claude Sonnet 5.5 o Claude Haiku 5.5, più economici: si decide dopo averli provati sulle stesse foto (vedi §6) |
 | Telefono | **Android**: PWA installabile da Chrome; se un giorno servisse Capacitor, basta un APK installato a mano, senza store né account sviluppatore | — |
 
 ---
@@ -356,6 +356,44 @@ La stima della condizione con due foto costa circa il doppio di un riconosciment
 vero si legge dal consumo restituito da ogni chiamata, che si scrive nel log. La scelta del modello è
 dell'utente: la proposta è partire da Opus 5.5 e provare sulle stesse 20 foto della verifica della
 Fase 1 anche Sonnet e Haiku, poi tenere il più economico che riconosce altrettanto bene.
+
+### Prova dei modelli sul riconoscimento (2026-10-17)
+
+Le foto non si salvano, quindi la prova si è fatta su scansioni nuove: con `Scan:CompareModels` ogni foto va
+anche agli altri modelli, in background (`ScanModelComparison`), e il log scrive per ognuno lettura, primo
+candidato e tempo (righe `Confronto modelli [id] modello: ...`). La risposta giusta è la carta aperta subito
+dopo dal telefono. Il telefono riceve solo la risposta del modello principale.
+
+Esito su 9 carte (Ravnica e Mondo di Ravnica in italiano, Secret Lair foil e non, Modern Horizons 3 Commander
+foil, Quarta Edizione senza sigla, Ritorno a Ravnica):
+
+| Modello | Carta giusta per prima | Tempo mediano (massimo) | Costo a carta |
+|---|---|---|---|
+| Opus 5.5 | 9 su 9 | 3,7 s (8,4 s) | ~1,3 centesimi |
+| Sonnet 5.5 | 9 su 9 | 2,8 s (6,1 s) | ~0,65 centesimi |
+| Haiku 5.5 | 8 su 9 | 2,1 s (5,4 s) | ~0,04 centesimi |
+
+Haiku ha mancato il set della Quarta Edizione (senza sigla, riconoscibile solo dal simbolo), ha letto foil un
+Secret Lair non foil (il foil letto passa alla scheda) e ha sbagliato il nome inglese di una carta italiana.
+Sonnet ha letto tutto come Opus. **Scelta dell'utente: riconoscimento con Sonnet 5.5** (`Scan:Model`), con
+Opus ancora in confronto per qualche giorno come controllo su foto più difficili; poi il confronto si spegne
+togliendo `Scan:CompareModels`. La **stima della condizione resta su Opus 5.5**: ha un'impostazione sua
+(`Grading:Model`, predefinito `claude-opus-5-5`), e su un modello più economico non è stata provata.
+
+Subito dopo, sulle prime scansioni con Sonnet principale, due carte vecchie senza sigla (Death Ward e Iron
+Star italiana, Foreign White Bordered): Sonnet non ha letto il set, e la ricerca ha messo in cima la ristampa
+30th Anniversary, sbagliata; Opus ha letto 4ed (giusto per Death Ward, vicino per Iron Star). Correzioni
+approvate dall'utente:
+
+- **Opus di riserva:** se Sonnet non legge il set o dice sicurezza bassa, la stessa foto si rilegge con
+  `Scan:FallbackModel` (predefinito `claude-opus-5-5`; vuoto = nessuna riserva). Log: "Riconoscimento ripetuto
+  con ...". Sulle carte vecchie si paga Opus, sulle moderne Sonnet.
+- **Ristampe da collezione dopo le edizioni vecchie:** a set non letto, 30th Anniversary e Collectors' Edition
+  (`30a`, `ced`, `cei`) vanno dopo le altre stampe con lo stesso nome; con la sigla letta valgono come le altre.
+
+Verificato lo stesso giorno: Death Ward riletta da Opus come Quarta Edizione. La Iron Star italiana (Foreign
+White Bordered, su Card Trader `3ed3`) resta difficile: Sonnet ha letto `fbb` (la sorella a bordo nero),
+Opus `4ed`; la carta giusta era nell'elenco. Da rivedere solo se le carte vecchie italiane diventano frequenti.
 
 ---
 

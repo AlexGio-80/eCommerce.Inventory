@@ -19,11 +19,16 @@ public class CardScanController : ControllerBase
     private static readonly string[] AllowedMediaTypes = { "image/jpeg", "image/png", "image/webp" };
 
     private readonly CardScanService _scan;
+    private readonly ScanModelComparison _comparison;
     private readonly ILogger<CardScanController> _logger;
 
-    public CardScanController(CardScanService scan, ILogger<CardScanController> logger)
+    public CardScanController(
+        CardScanService scan,
+        ScanModelComparison comparison,
+        ILogger<CardScanController> logger)
     {
         _scan = scan;
+        _comparison = comparison;
         _logger = logger;
     }
 
@@ -50,8 +55,14 @@ public class CardScanController : ControllerBase
 
         try
         {
-            // Le foto non si salvano: servono solo per la risposta.
-            var result = await _scan.RecognizeAsync(buffer.ToArray(), mediaType, cancellationToken);
+            // Le foto non si salvano: servono solo per la risposta (e per la prova dei modelli, se accesa).
+            var photo = buffer.ToArray();
+            var scanId = Guid.NewGuid().ToString("N")[..8];
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            _comparison.Start(scanId, photo, mediaType);
+
+            var result = await _scan.RecognizeAsync(photo, mediaType, cancellationToken);
+            _comparison.LogMain(scanId, result.Model, result, watch.ElapsedMilliseconds);
             return Ok(ApiResponse<object>.SuccessResult(result));
         }
         catch (ScanLimitReachedException ex)
@@ -65,12 +76,12 @@ public class CardScanController : ControllerBase
         }
     }
 
-    /// <summary>Scheda di valutazione di una carta per condizione, lingua e foil.</summary>
     /// <summary>Carte del set in ordine di numero di raccolta, per scorrere la scheda (‹ ›, swipe, "Vai al numero").</summary>
     [HttpGet("set/{expansionId:int}")]
     public async Task<IActionResult> SetCards(int expansionId, CancellationToken cancellationToken)
         => Ok(ApiResponse<object>.SuccessResult(await _scan.GetSetCardsAsync(expansionId, cancellationToken)));
 
+    /// <summary>Scheda di valutazione di una carta per condizione, lingua e foil.</summary>
     [HttpGet("card/{blueprintId:int}")]
     public async Task<IActionResult> Valuate(
         int blueprintId,

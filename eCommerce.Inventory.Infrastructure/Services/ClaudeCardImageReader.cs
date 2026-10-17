@@ -44,10 +44,10 @@ public class ClaudeCardImageReader : ICardImageReader
 
     public bool IsConfigured => _anthropic.IsConfigured;
 
-    public async Task<CardReading> ReadAsync(byte[] image, string mediaType, CancellationToken cancellationToken = default)
+    public async Task<CardReading> ReadAsync(byte[] image, string mediaType, string? model = null, CancellationToken cancellationToken = default)
     {
         var client = _anthropic.Client;
-        var model = _anthropic.Model;
+        model ??= _anthropic.Model;
 
         var response = await client.Messages.Create(new MessageCreateParams
         {

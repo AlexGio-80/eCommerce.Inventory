@@ -9,6 +9,30 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-17] App per smartphone: prova dei modelli, riconoscimento con Sonnet 5.5
+
+#### Problema
+
+- Il riconoscimento usava Opus 5.5 senza che fosse mai stato provato un modello più economico sulle stesse
+  foto, e il modello era lo stesso della stima della condizione.
+
+#### Soluzione Implementata
+
+- Modalità confronto (`Scan:CompareModels`): ogni foto va anche ad altri modelli in background, e il log
+  scrive cosa ha letto ciascuno. Su 9 carte Sonnet 5.5 ha letto come Opus, più veloce e a metà costo; Haiku 5.5
+  ha sbagliato una Quarta Edizione e un foil.
+- Riconoscimento con Sonnet 5.5; la stima della condizione resta su Opus 5.5 con un'impostazione sua.
+- Sulle carte vecchie senza sigla Sonnet non legge il set: in quei casi (o con sicurezza bassa) la foto si
+  rilegge con Opus. A set non letto le ristampe 30th Anniversary e Collectors' Edition vanno dopo le edizioni
+  vecchie, invece di finire in cima perché più recenti.
+
+#### Note Tecniche
+
+- `ScanModelComparison` (singleton, scope proprio per la ricerca dei candidati), `ICardImageReader.ReadAsync`
+  con il modello facoltativo, `AnthropicClientProvider.GradingModel` (`Grading:Model`).
+- `CardScanService.NeedsFallback` e `Scan:FallbackModel`; `CardScanResultDto.Model` dice chi ha letto;
+  penalità in `Rank` per `30a`, `ced`, `cei` quando il set letto è un altro o manca.
+
 ### [2026-10-17] Feature — App per smartphone: scorrimento del set nella scheda *(pubblicata e verificata il 2026-10-17)*
 
 #### Problema

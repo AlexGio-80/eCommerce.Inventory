@@ -117,6 +117,7 @@ builder.Services.AddSingleton<AnthropicClientProvider>();
 builder.Services.AddSingleton<ICardImageReader, ClaudeCardImageReader>();
 builder.Services.AddSingleton<ScanDailyCounter>();
 builder.Services.AddScoped<CardScanService>();
+builder.Services.AddSingleton<ScanModelComparison>();
 
 // Coda condivisa fra i produttori (webhook delle vendite, sincronizzazione delle
 // inserzioni) e il worker che la consuma: dev'essere singleton

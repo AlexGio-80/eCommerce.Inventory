@@ -72,7 +72,7 @@ public class ClaudeGradingService : IGradingService
     public async Task<GradingResultDto> GradeCardFromMultipleImagesAsync(List<(Stream ImageStream, string FileName)> images)
     {
         var client = _anthropic.Client;
-        var model = _anthropic.Model;
+        var model = _anthropic.GradingModel;
 
         var content = new List<ContentBlockParam>();
         var roles = PhotoRoles(images.Select(i => i.FileName).ToList());

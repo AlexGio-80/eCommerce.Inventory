@@ -10,5 +10,6 @@ public interface ICardImageReader
 
     /// <param name="image">Foto già ridotta dal telefono.</param>
     /// <param name="mediaType">"image/jpeg", "image/png" o "image/webp".</param>
-    Task<CardReading> ReadAsync(byte[] image, string mediaType, CancellationToken cancellationToken = default);
+    /// <param name="model">Modello da usare al posto di quello configurato (prova dei modelli); null = configurato.</param>
+    Task<CardReading> ReadAsync(byte[] image, string mediaType, string? model = null, CancellationToken cancellationToken = default);
 }

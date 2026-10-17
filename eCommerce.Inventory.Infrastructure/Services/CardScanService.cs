@@ -6,6 +6,7 @@ using eCommerce.Inventory.Domain.Entities;
 using eCommerce.Inventory.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace eCommerce.Inventory.Infrastructure.Services;
 
@@ -23,6 +24,13 @@ public class CardScanService
 
     private const int MaxCandidates = 5;
 
+    /// <summary>
+    /// Ristampe da collezione con le stesse carte delle edizioni vecchie (30th Anniversary, Collectors'
+    /// Edition): a set non letto, a parità di nome sarebbero in cima perché più recenti, ed è quasi sempre
+    /// la stampa sbagliata. Restano nell'elenco, dopo le altre; con la sigla letta valgono come le altre.
+    /// </summary>
+    private static readonly HashSet<string> CollectorReprintCodes = new(StringComparer.OrdinalIgnoreCase) { "30a", "ced", "cei" };
+
     private readonly ApplicationDbContext _db;
     private readonly ICardImageReader _reader;
     private readonly ScanDailyCounter _counter;
@@ -30,6 +38,7 @@ public class CardScanService
     private readonly IMarketplaceOfferCache _offerCache;
     private readonly ICardTraderApiService _cardTraderApi;
     private readonly IConfiguration _configuration;
+    private readonly ILogger<CardScanService> _logger;
 
     public CardScanService(
         ApplicationDbContext db,
@@ -38,7 +47,8 @@ public class CardScanService
         ListingPriceSuggestionService suggestions,
         IMarketplaceOfferCache offerCache,
         ICardTraderApiService cardTraderApi,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        ILogger<CardScanService> logger)
     {
         _db = db;
         _reader = reader;
@@ -47,6 +57,7 @@ public class CardScanService
         _offerCache = offerCache;
         _cardTraderApi = cardTraderApi;
         _configuration = configuration;
+        _logger = logger;
     }
 
     public bool IsConfigured => _reader.IsConfigured;
@@ -59,17 +70,46 @@ public class CardScanService
         if (!_counter.TryTake(DailyLimit, out var usedToday))
             throw new ScanLimitReachedException(DailyLimit);
 
-        var reading = await _reader.ReadAsync(image, mediaType, cancellationToken);
+        var model = _configuration["Scan:Model"] ?? AnthropicClientProvider.DefaultModel;
+        var reading = await _reader.ReadAsync(image, mediaType, model, cancellationToken);
+
+        // Prova del 17/10: Sonnet legge le carte moderne come Opus, ma sulle vecchie senza sigla rinuncia al
+        // set, mentre Opus lo riconosce dal simbolo. Solo in quei casi la foto passa al modello di riserva.
+        var fallback = FallbackModel;
+        if (NeedsFallback(reading) && fallback != null && !fallback.Equals(model, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogInformation(
+                "Riconoscimento ripetuto con {Fallback}: {Model} ha letto set {SetCode}, sicurezza {Confidence}",
+                fallback, model, reading.SetCode, reading.Confidence);
+            reading = await _reader.ReadAsync(image, mediaType, fallback, cancellationToken);
+            model = fallback;
+        }
+
         var candidates = await FindCandidatesAsync(reading, cancellationToken);
 
         return new CardScanResultDto
         {
             Reading = reading,
+            Model = model,
             Candidates = candidates,
             UsedToday = usedToday,
             DailyLimit = DailyLimit
         };
     }
+
+    /// <summary>Modello di riserva (<c>Scan:FallbackModel</c>, predefinito Opus 5.5); vuoto = nessuna riserva.</summary>
+    private string? FallbackModel
+    {
+        get
+        {
+            var value = _configuration["Scan:FallbackModel"];
+            return value == null ? AnthropicClientProvider.DefaultModel : string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        }
+    }
+
+    /// <summary>Set non letto o lettura poco sicura: vale la pena di rileggere la foto col modello di riserva.</summary>
+    public static bool NeedsFallback(CardReading reading)
+        => reading.SetCode == null || string.Equals(reading.Confidence, "low", StringComparison.OrdinalIgnoreCase);
 
     public async Task<List<ScanCandidateDto>> FindCandidatesAsync(CardReading reading, CancellationToken cancellationToken)
     {
@@ -134,7 +174,8 @@ public class CardScanService
 
                 // A parità, la sigla identica a quella stampata (il set base) prima di Collectors e promo.
                 var score = (nameMatch ? 4 : 0) + (setMatch ? 2 : 0) + (setMatch && numberMatch ? 3 : 0)
-                            + (code == reading.SetCode ? 1 : 0);
+                            + (code == reading.SetCode ? 1 : 0)
+                            - (!setMatch && code != null && CollectorReprintCodes.Contains(code) ? 2 : 0);
                 return new { Blueprint = b, Score = score, Exact = setMatch && numberMatch, Collector = collector, NameMatch = nameMatch, SetMatch = setMatch };
             })
             .Where(x => x.NameMatch || x.Exact)

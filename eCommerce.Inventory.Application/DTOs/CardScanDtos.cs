@@ -60,6 +60,9 @@ public class SetCardDto
 
 public class CardScanResultDto
 {
+    /// <summary>Modello che ha fatto la lettura: quello configurato o, se ha dovuto rileggerla, la riserva.</summary>
+    public string Model { get; set; } = string.Empty;
+
     public CardReading Reading { get; set; } = new();
     public List<ScanCandidateDto> Candidates { get; set; } = new();
 

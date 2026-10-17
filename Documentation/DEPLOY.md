@@ -318,7 +318,14 @@ funzionare, ping compreso: dopo il salvataggio il ping dall'app del telefono al 
 4. Pubblicare con `publish.ps1`. La chiave **non va mai** in chat, in un file versionato o in uno screenshot.
 
 Ogni riconoscimento scrive nel log i token consumati (`Riconoscimento carta con ...`): da lì si ricava il
-costo vero per carta. Per cambiare modello basta `Scan:Model` e un riavvio del servizio.
+costo vero per carta. Per cambiare modello basta `Scan:Model` e un riavvio del servizio. In produzione dal
+2026-10-17 il riconoscimento usa `claude-sonnet-5-5`, con Opus di riserva quando il set non si legge
+(`Scan:FallbackModel`); la stima della condizione ha un'impostazione sua,
+`Grading:Model` (predefinito `claude-opus-5-5`).
+
+Per confrontare altri modelli sulle stesse foto: `"Scan": { "CompareModels": [ "claude-opus-5-5" ] }`. Ogni
+foto va anche a quei modelli, in background, e il log scrive le righe `Confronto modelli [...]`. Costa quanto
+un riconoscimento in più per modello: va spento togliendo la riga, a prova finita.
 
 ---
 
@@ -335,7 +342,10 @@ costo vero per carta. Per cambiare modello basta `Scan:Model` e un riavvio del s
 | `Email:*` | SMTP per le email degli avvisi (password solo qui) |
 | `Anthropic:ApiKey` | Chiave API per il riconoscimento delle carte dal telefono (vedi "Riconoscimento delle carte") |
 | `Grading:Provider` | Stima della condizione dalle foto: `Claude` (predefinito, usa la stessa chiave Anthropic) o `Ximilar` (serve `Ximilar:ApiKey`; lettura della risposta non ancora scritta) |
-| `Scan:Model` / `Scan:DailyLimit` | Modello Claude del riconoscimento (predefinito `claude-opus-5-5`) e riconoscimenti al giorno (predefinito 200) |
+| `Scan:Model` / `Scan:DailyLimit` | Modello Claude del riconoscimento (predefinito `claude-opus-5-5`, in produzione `claude-sonnet-5-5` dal 2026-10-17) e riconoscimenti al giorno (predefinito 200) |
+| `Scan:FallbackModel` | Modello che rilegge la foto quando il principale non legge il set o è poco sicuro (predefinito `claude-opus-5-5`; stringa vuota = nessuna riserva) |
+| `Scan:CompareModels` | Modelli da provare in background su ogni foto, solo nel log (vuoto = prova spenta) |
+| `Grading:Model` | Modello Claude della stima della condizione (predefinito `claude-opus-5-5`) |
 | `Cors:ExtraOrigins` | Origini in più accettate dall'API, oltre a `localhost:4200` e `inventory.local`: l'indirizzo Tailscale del PC per il telefono (vedi "Accesso dal telefono") |
 
 > In produzione: usare `appsettings.Production.json` (non committato) o variabili d'ambiente di sistema.

@@ -6,7 +6,7 @@ namespace eCommerce.Inventory.Infrastructure.Services;
 
 /// <summary>
 /// Client Anthropic condiviso da riconoscimento e stima della condizione (feature 006). La chiave sta in
-/// <c>Anthropic:ApiKey</c>, solo nella configurazione di produzione; il modello in <c>Scan:Model</c>.
+/// <c>Anthropic:ApiKey</c>, solo nella configurazione di produzione; i modelli in <c>Scan:Model</c> (riconoscimento) e <c>Grading:Model</c> (stima).
 /// </summary>
 public class AnthropicClientProvider
 {
@@ -25,7 +25,14 @@ public class AnthropicClientProvider
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(ApiKey);
 
+    /// <summary>Modello del riconoscimento della carta.</summary>
     public string Model => _configuration["Scan:Model"] ?? DefaultModel;
+
+    /// <summary>
+    /// Modello della stima della condizione, separato dal riconoscimento: la prova del 17/10 ha messo il
+    /// riconoscimento su Sonnet, mentre la stima su un modello più economico non è stata provata.
+    /// </summary>
+    public string GradingModel => _configuration["Grading:Model"] ?? DefaultModel;
 
     /// <exception cref="InvalidOperationException">Chiave non configurata.</exception>
     public AnthropicClient Client

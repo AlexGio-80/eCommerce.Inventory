@@ -147,7 +147,8 @@ public class CardScanServiceTests
         await db.SaveChangesAsync();
 
         var service = new CardScanService(db, null!, new ScanDailyCounter(), null!, null!, null!,
-            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<CardScanService>.Instance);
 
         var candidates = await service.FindCandidatesAsync(
             new CardReading { Name = "Lightning Bolt", SetCode = "2x2", CollectorNumber = "117" }, CancellationToken.None);
@@ -218,5 +219,38 @@ public class CardScanServiceTests
 
         CardScanService.OrderSetCards(cards).Select(c => c.CollectorNumber)
             .Should().Equal("9", "10", "12", "12a", "100", "S1");
+    }
+
+    [Theory]
+    [InlineData("4ed", "high", false)]
+    [InlineData(null, "medium", true)]
+    [InlineData("rav", "low", true)]
+    public void NeedsFallback_when_the_set_is_missing_or_the_reading_is_unsure(string? set, string confidence, bool expected)
+    {
+        CardScanService.NeedsFallback(new CardReading { SetCode = set, Confidence = confidence }).Should().Be(expected);
+    }
+
+    [Fact]
+    public void Rank_without_a_set_puts_collector_reprints_after_the_old_editions()
+    {
+        var fourth = new Expansion { Id = 10, Name = "Fourth Edition", Code = "4ed", ReleaseDate = new DateTime(1995, 4, 1) };
+        var anniversary = new Expansion { Id = 11, Name = "30th Anniversary Edition", Code = "30a", ReleaseDate = new DateTime(2022, 11, 28) };
+        var pool = new[] { Card(1, "Death Ward", anniversary, "17"), Card(2, "Death Ward", fourth, "21") };
+
+        var ranked = CardScanService.Rank(new CardReading { Name = "Death Ward" }, pool);
+
+        ranked.Select(c => c.ExpansionCode).Should().Equal("4ed", "30a");
+    }
+
+    [Fact]
+    public void Rank_keeps_a_collector_reprint_first_when_its_code_was_read()
+    {
+        var fourth = new Expansion { Id = 10, Name = "Fourth Edition", Code = "4ed", ReleaseDate = new DateTime(1995, 4, 1) };
+        var anniversary = new Expansion { Id = 11, Name = "30th Anniversary Edition", Code = "30a", ReleaseDate = new DateTime(2022, 11, 28) };
+        var pool = new[] { Card(1, "Death Ward", anniversary, "17"), Card(2, "Death Ward", fourth, "21") };
+
+        var ranked = CardScanService.Rank(new CardReading { Name = "Death Ward", SetCode = "30a", CollectorNumber = "17" }, pool);
+
+        ranked.First().ExpansionCode.Should().Be("30a");
     }
 }
