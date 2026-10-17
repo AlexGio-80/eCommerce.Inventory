@@ -66,6 +66,11 @@ public class CardScanController : ControllerBase
     }
 
     /// <summary>Scheda di valutazione di una carta per condizione, lingua e foil.</summary>
+    /// <summary>Carte del set in ordine di numero di raccolta, per scorrere la scheda (‹ ›, swipe, "Vai al numero").</summary>
+    [HttpGet("set/{expansionId:int}")]
+    public async Task<IActionResult> SetCards(int expansionId, CancellationToken cancellationToken)
+        => Ok(ApiResponse<object>.SuccessResult(await _scan.GetSetCardsAsync(expansionId, cancellationToken)));
+
     [HttpGet("card/{blueprintId:int}")]
     public async Task<IActionResult> Valuate(
         int blueprintId,

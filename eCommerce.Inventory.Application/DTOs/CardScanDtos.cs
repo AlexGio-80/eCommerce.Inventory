@@ -39,6 +39,7 @@ public class ScanCandidateDto
     public string Name { get; set; } = string.Empty;
     public string? ItalianName { get; set; }
     public string? Version { get; set; }
+    public int ExpansionId { get; set; }
     public string ExpansionName { get; set; } = string.Empty;
     public string ExpansionCode { get; set; } = string.Empty;
     public string? CollectorNumber { get; set; }
@@ -47,6 +48,14 @@ public class ScanCandidateDto
 
     /// <summary>Corrispondono set e numero di raccolta: è quasi certamente la stampa giusta.</summary>
     public bool ExactPrint { get; set; }
+}
+
+/// <summary>Una carta del set, per scorrere la scheda per numero di raccolta.</summary>
+public class SetCardDto
+{
+    public int BlueprintId { get; set; }
+    public string CollectorNumber { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
 }
 
 public class CardScanResultDto

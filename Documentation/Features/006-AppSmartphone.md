@@ -295,6 +295,26 @@ giusti, e la copia locale creata subito; la stessa coda nella maschera del PC; m
 per la carta a un prezzo diverso. La stima salvata con le motivazioni si è vista sulla prima prova (proposta SP,
 scelta NM).
 
+### Scorrimento del set nella scheda *(pubblicato e verificato il 2026-10-17)*
+
+Richiesta dell'utente del 2026-10-17, dopo la Fase 3: caricare una serie di carte dello stesso set (un set
+nuovo, per esempio) senza fotografarle una per una, come con i pulsanti ‹ › della maschera "Nuovo Prodotto".
+Scelte approvate: pulsanti, swipe e "Vai al numero".
+
+- In cima alla scheda **‹ #123 · 45 di 281 ›**; swipe orizzontale sulla parte alta (a sinistra la successiva);
+  toccando il numero, **"Vai al numero"** ("54", "054" e "54/281" valgono uguale; con più stampe dello stesso
+  numero si va alla prima).
+- L'elenco del set arriva una volta per set (`GET /api/scan/set/{expansionId}`, carte senza numero escluse,
+  ordine della maschera: i numeri contano come numeri, "12a" dopo "12"), quindi lo scorrimento è immediato.
+- Passando di carta **restano** condizione, lingua, foil, Tag e prezzo d'acquisto; **ripartono** quantità (1),
+  prezzo (quello delle regole della carta nuova) e stima. I prezzi si leggono 400 ms dopo l'ultimo tocco:
+  scorrendo veloce si legge il mercato solo della carta su cui ci si ferma (limite di 20 richieste al minuto).
+  Una risposta arrivata tardi per la carta di prima viene scartata. Lo scorrimento sostituisce la pagina nella
+  cronologia: "indietro" torna a Scansiona o Cerca.
+
+**Esito (2026-10-17):** verificato dall'utente su Modern Horizons 3 Collectors (272 carte, #320–521): ‹ ›, swipe,
+tocchi rapidi, "Vai al numero" con un numero esistente e uno assente; elenco del set letto una sola volta.
+
 ### Fuori da queste fasi, da rivalutare dopo l'uso
 
 - **Stima che impara dalle correzioni** (idea dell'utente del 16/10). Con la Fase 3 ogni inserzione caricata dal
@@ -306,7 +326,7 @@ scelta NM).
   sulle carte vecchie e di poco valore) restano fuori: sono regole di vendita, non di stima.
 
 - **Capacitor**, se la fotocamera del browser si rivela scomoda (messa a fuoco, flash).
-- **Scansione a raffica** (più carte di fila senza tornare alla scheda) per i lotti.
+- **Scansione a raffica** (più carte di fila senza tornare alla scheda) per i lotti misti; per le carte dello stesso set c'è lo scorrimento del 17/10.
 - **Ximilar**, se la stima della condizione di Claude non basta.
 - **Lavoro senza rete** (coda salvata sul telefono e inviata al rientro): complica molto, e i prezzi
   senza rete sarebbero comunque vecchi.

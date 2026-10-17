@@ -209,4 +209,14 @@ public class CardScanServiceTests
         reading.IsFoil.Should().BeTrue();
         reading.Notes.Should().BeNull();
     }
+
+    [Fact]
+    public void OrderSetCards_sorts_collector_numbers_as_numbers_and_drops_cards_without_one()
+    {
+        var cards = new[] { "10", "9", "12a", "12", "", "S1", "100" }
+            .Select((n, i) => new SetCardDto { BlueprintId = i + 1, CollectorNumber = n, Name = $"Carta {n}" });
+
+        CardScanService.OrderSetCards(cards).Select(c => c.CollectorNumber)
+            .Should().Equal("9", "10", "12", "12a", "100", "S1");
+    }
 }

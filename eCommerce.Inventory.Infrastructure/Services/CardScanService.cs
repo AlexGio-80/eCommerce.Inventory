@@ -153,6 +153,7 @@ public class CardScanService
         Name = b.Name,
         ItalianName = b.ItalianName,
         Version = string.IsNullOrWhiteSpace(b.Version) ? null : b.Version,
+        ExpansionId = b.ExpansionId,
         ExpansionName = b.Expansion?.Name ?? string.Empty,
         ExpansionCode = b.Expansion?.Code ?? string.Empty,
         CollectorNumber = collector,
@@ -160,6 +161,37 @@ public class CardScanService
         ImageUrl = b.ImageUrl,
         ExactPrint = exact
     };
+
+    /// <summary>
+    /// Carte del set in ordine di numero di raccolta, per passare dalla scheda alla carta vicina senza
+    /// un'altra foto (caricamento di un set intero). Le carte senza numero restano fuori, come nei
+    /// pulsanti ‹ › della maschera "Nuovo Prodotto".
+    /// </summary>
+    public async Task<List<SetCardDto>> GetSetCardsAsync(int expansionId, CancellationToken cancellationToken)
+    {
+        var rows = await _db.Blueprints.AsNoTracking()
+            .Where(b => b.ExpansionId == expansionId)
+            .Select(b => new { b.Id, b.Name, b.FixedProperties })
+            .ToListAsync(cancellationToken);
+
+        return OrderSetCards(rows.Select(r => new SetCardDto
+        {
+            BlueprintId = r.Id,
+            Name = r.Name,
+            CollectorNumber = CollectorNumber(r.FixedProperties) ?? string.Empty
+        }));
+    }
+
+    /// <summary>
+    /// Ordine della maschera: i numeri dentro il numero di raccolta contano come numeri ("9" prima di
+    /// "10", "12a" dopo "12"), a parità vale il nome.
+    /// </summary>
+    public static List<SetCardDto> OrderSetCards(IEnumerable<SetCardDto> cards) => cards
+        .Where(c => !string.IsNullOrWhiteSpace(c.CollectorNumber))
+        .OrderBy(c => System.Text.RegularExpressions.Regex.Replace(c.CollectorNumber.ToLowerInvariant(), "[0-9]+", m => m.Value.PadLeft(10, '0')), StringComparer.Ordinal)
+        .ThenBy(c => c.Name, StringComparer.Ordinal)
+        .ThenBy(c => c.BlueprintId)
+        .ToList();
 
     /// <summary>Scheda di valutazione: prezzo delle regole, mercato Card Trader, listino Cardmarket, mie copie.</summary>
     /// <returns>Null se il blueprint non esiste.</returns>

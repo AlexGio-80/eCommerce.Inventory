@@ -1,5 +1,5 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatSelectModule } from '@angular/material/select';
@@ -13,7 +13,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { GradingResult, GradingService, gradingNotes } from '../../core/services/grading.service';
 import { PendingListingsService } from '../products/services/pending-listings.service';
 import { PurchasingService } from '../purchasing/services/purchasing.service';
-import { CONDITIONS, CardValuation, LANGUAGES, MobileService, errorMessage, normalizeTag, shrinkPhoto } from './mobile.service';
+import { CONDITIONS, CardValuation, LANGUAGES, MobileService, SetCard, errorMessage, normalizeTag, shrinkPhoto } from './mobile.service';
 
 const LAST_TAG_KEY = 'mobile_last_tag';
 
@@ -23,6 +23,8 @@ const LAST_TAG_KEY = 'mobile_last_tag';
  * "Stima condizione" (Fase 2) propone una condizione dalle foto: si applica solo col tocco dell'utente.
  * "Aggiungi alla coda" (Fase 3) mette la carta nella stessa coda della maschera "Nuovo Prodotto", con
  * la stima di Claude accanto alla condizione scelta.
+ * ‹ ›, swipe e "Vai al numero" passano alle altre carte del set senza un'altra foto: condizione, lingua,
+ * foil, Tag e prezzo d'acquisto restano, quantità, prezzo e stima ripartono per la carta nuova.
  */
 @Component({
   selector: 'app-mobile-card',
@@ -30,6 +32,23 @@ const LAST_TAG_KEY = 'mobile_last_tag';
   imports: [FormsModule, DecimalPipe, DatePipe, MatSelectModule, MatSlideToggleModule, MatProgressSpinnerModule, MatButtonModule, MatIconModule,
     MatInputModule, MatAutocompleteModule, MatSnackBarModule],
   template: `
+    <div class="swipe" (touchstart)="onTouchStart($event)" (touchend)="onTouchEnd($event)">
+    @if (setPosition() >= 0) {
+      <div class="setnav">
+        <button mat-icon-button [disabled]="setPosition() <= 0" (click)="goRelative(-1)" aria-label="Carta precedente"><mat-icon>chevron_left</mat-icon></button>
+        @if (!jumpOpen()) {
+          <button class="pos" (click)="openJump()">#{{ setList()[setPosition()].collectorNumber }} · {{ setPosition() + 1 }} di {{ setList().length }}</button>
+        } @else {
+          <span class="jump">
+            <input #jumpInput type="text" inputmode="numeric" placeholder="N° di raccolta" [(ngModel)]="jumpNumber"
+                   (keydown.enter)="jump()" autofocus>
+            <button mat-button color="primary" (click)="jump()">Vai</button>
+            <button mat-icon-button (click)="jumpOpen.set(false)" aria-label="Chiudi"><mat-icon>close</mat-icon></button>
+          </span>
+        }
+        <button mat-icon-button [disabled]="setPosition() >= setList().length - 1" (click)="goRelative(1)" aria-label="Carta successiva"><mat-icon>chevron_right</mat-icon></button>
+      </div>
+    }
     @if (valuation(); as v) {
       <div class="head">
         @if (v.card.imageUrl) { <img [src]="v.card.imageUrl" alt=""> }
@@ -40,7 +59,10 @@ const LAST_TAG_KEY = 'mobile_last_tag';
           @if (v.card.version) { <div class="sub">{{ v.card.version }}</div> }
         </div>
       </div>
+    } @else if (setPosition() >= 0) {
+      <div class="head"><div class="name">{{ setList()[setPosition()].name }}</div></div>
     }
+    </div>
 
     <div class="filters">
       <mat-form-field appearance="outline" class="cond">
@@ -216,6 +238,11 @@ const LAST_TAG_KEY = 'mobile_last_tag';
     .cond { font-size: 20px; font-weight: 500; }
     .note { text-align: right; color: #444; }
     .nm { width: 100%; margin-top: 8px; }
+    .setnav { display: flex; align-items: center; justify-content: space-between; margin: -4px 0 6px;
+              background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; }
+    .pos { flex: 1; border: none; background: none; font: inherit; font-size: 14px; color: #3f51b5; padding: 8px 0; }
+    .jump { flex: 1; display: flex; align-items: center; gap: 4px; }
+    .jump input { flex: 1; min-width: 0; font: inherit; font-size: 16px; padding: 6px 8px; border: 1px solid #9fa8da; border-radius: 4px; }
     .queue { border: 1px solid #c5cae9; border-radius: 8px; padding: 2px 10px 10px; margin-bottom: 4px; background: #fff; }
     .section.first { margin-top: 8px; }
     .qty { display: flex; align-items: center; gap: 4px; font-size: 14px; margin-bottom: 4px; }
@@ -230,6 +257,7 @@ export class MobileCardComponent implements OnInit {
   private mobile = inject(MobileService);
   private gradingService = inject(GradingService);
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private pendingListings = inject(PendingListingsService);
   private purchasing = inject(PurchasingService);
   private snackBar = inject(MatSnackBar);
@@ -250,28 +278,117 @@ export class MobileCardComponent implements OnInit {
     this.loadPurchaseCosts();
     this.route.paramMap.subscribe(p => {
       this.blueprintId = Number(p.get('id'));
+      this.currentId.set(this.blueprintId);
       this.quantity = 1;
       this.priceManual = false;
       this.lastGrading.set(null);
+      this.closeGrading();
+      this.jumpOpen.set(false);
       const q = this.route.snapshot.queryParamMap;
       this.language = q.get('language') && LANGUAGES.includes(q.get('language')!) ? q.get('language')! : 'English';
       this.isFoil = q.get('foil') === '1';
       this.valuation.set(null);
-      this.load();
+      this.error.set(null);
+      // Scorrendo veloce si leggono i prezzi solo della carta su cui ci si ferma: ogni scheda costa una
+      // lettura del mercato Card Trader, nel limite di 20 al minuto.
+      clearTimeout(this.loadTimer);
+      if (this.setPosition() >= 0) {
+        this.loading.set(true);
+        this.loadTimer = setTimeout(() => this.load(), 400);
+      } else {
+        this.load();
+      }
     });
   }
 
+  // --- Scorrimento del set ---
+  setList = signal<SetCard[]>([]);
+  private setExpansionId: number | null = null;
+  private currentId = signal(0);
+  setPosition = computed(() => this.setList().findIndex(c => c.blueprintId === this.currentId()));
+  jumpOpen = signal(false);
+  jumpNumber = '';
+  private loadTimer?: ReturnType<typeof setTimeout>;
+  private touchX = 0;
+  private touchY = 0;
+
+  private loadSet(expansionId: number): void {
+    if (this.setExpansionId === expansionId) return;
+    this.setExpansionId = expansionId;
+    this.mobile.setCards(expansionId).subscribe({
+      next: list => this.setList.set(list),
+      error: () => {
+        this.setExpansionId = null;
+        this.setList.set([]);
+      }
+    });
+  }
+
+  goRelative(step: number): void {
+    const target = this.setList()[this.setPosition() + step];
+    if (target) this.goTo(target.blueprintId);
+  }
+
+  private goTo(blueprintId: number): void {
+    this.router.navigate(['/m/card', blueprintId], {
+      queryParams: { language: this.language, foil: this.isFoil ? 1 : null },
+      replaceUrl: true
+    });
+  }
+
+  openJump(): void {
+    this.jumpNumber = '';
+    this.jumpOpen.set(true);
+  }
+
+  /** "54", "054" e "54/281" sono lo stesso numero; con più stampe dello stesso numero si va alla prima. */
+  jump(): void {
+    const norm = (n: string) => {
+      const t = n.trim().toLowerCase().split('/')[0].replace(/^0+(?=.)/, '');
+      return t;
+    };
+    const wanted = norm(this.jumpNumber);
+    if (!wanted) return;
+    const target = this.setList().find(c => norm(c.collectorNumber) === wanted);
+    if (target) {
+      this.jumpOpen.set(false);
+      this.goTo(target.blueprintId);
+    } else {
+      this.snackBar.open(`Nessuna carta n° ${this.jumpNumber.trim()} in questo set`, 'OK', { duration: 3000 });
+    }
+  }
+
+  onTouchStart(e: TouchEvent): void {
+    this.touchX = e.changedTouches[0].clientX;
+    this.touchY = e.changedTouches[0].clientY;
+  }
+
+  /** Swipe orizzontale deciso sulla parte alta: a sinistra la carta successiva, a destra la precedente. */
+  onTouchEnd(e: TouchEvent): void {
+    if (this.jumpOpen()) return;
+    const dx = e.changedTouches[0].clientX - this.touchX;
+    const dy = e.changedTouches[0].clientY - this.touchY;
+    if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx) / 2) return;
+    this.goRelative(dx < 0 ? 1 : -1);
+  }
+
   load(): void {
+    const id = this.blueprintId;
     this.loading.set(true);
     this.error.set(null);
     this.mobile.valuate(this.blueprintId, this.condition, this.language, this.isFoil).subscribe({
       next: v => {
+        // Una risposta arrivata tardi, per la carta o i filtri di prima, non deve coprire quella attuale.
+        if (v.card.blueprintId !== this.blueprintId || v.condition !== this.condition
+          || v.language !== this.language || v.isFoil !== this.isFoil) return;
         this.valuation.set(v);
         this.loading.set(false);
+        this.loadSet(v.card.expansionId);
         // Il prezzo segue quello delle regole finché non lo si cambia a mano.
         if (!this.priceManual) this.price = v.rulesPrice?.suggestedPrice ?? null;
       },
       error: err => {
+        if (id !== this.blueprintId) return;
         this.loading.set(false);
         this.error.set(errorMessage(err, 'Non riesco a leggere i prezzi. Riprova.'));
       }

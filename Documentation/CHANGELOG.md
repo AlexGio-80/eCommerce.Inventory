@@ -9,6 +9,24 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-17] Feature — App per smartphone: scorrimento del set nella scheda *(pubblicata e verificata il 2026-10-17)*
+
+#### Problema
+
+- Per caricare dal telefono più carte dello stesso set bisognava fotografarle una per una; dal PC ci sono i
+  pulsanti ‹ › della maschera "Nuovo Prodotto".
+
+#### Soluzione Implementata
+
+- Nella scheda **‹ #numero · posizione di totale ›**, swipe sulla parte alta e **"Vai al numero"**.
+- Restano condizione, lingua, foil, Tag e prezzo d'acquisto; quantità, prezzo delle regole e stima ripartono.
+
+#### Note Tecniche
+
+- `GET /api/scan/set/{expansionId}` (`CardScanService.GetSetCardsAsync`, ordine in `OrderSetCards`), letto una
+  volta per set; `ExpansionId` aggiunto a `ScanCandidateDto`. Prezzi letti 400 ms dopo l'ultimo tocco; risposte
+  tardive scartate.
+
 ### [2026-10-17] Feature — App per smartphone, Fase 3: pending list dal telefono *(pubblicata e verificata il 2026-10-17)*
 
 #### Problema

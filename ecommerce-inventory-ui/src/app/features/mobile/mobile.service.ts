@@ -1,6 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable, catchError, map, of, tap } from 'rxjs';
+import { Observable, catchError, map, of, shareReplay, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../../core/models/api-response';
 import { Blueprint } from '../../core/models/blueprint';
@@ -23,6 +23,7 @@ export interface ScanCandidate {
   name: string;
   italianName?: string;
   version?: string;
+  expansionId: number;
   expansionName: string;
   expansionCode: string;
   collectorNumber?: string;
@@ -36,6 +37,12 @@ export interface CardScanResult {
   candidates: ScanCandidate[];
   usedToday: number;
   dailyLimit: number;
+}
+
+export interface SetCard {
+  blueprintId: number;
+  collectorNumber: string;
+  name: string;
 }
 
 export interface RulesPrice {
@@ -104,6 +111,24 @@ export class MobileService {
       .set('isFoil', isFoil);
     return this.http.get<ApiResponse<CardValuation>>(`${this.apiUrl}/scan/card/${blueprintId}`, { params })
       .pipe(map(r => r.data!));
+  }
+
+  private setCache = new Map<number, Observable<SetCard[]>>();
+
+  /** Carte del set in ordine di numero di raccolta, lette una volta per set: lo scorrimento resta immediato. */
+  setCards(expansionId: number): Observable<SetCard[]> {
+    let cached = this.setCache.get(expansionId);
+    if (!cached) {
+      cached = this.http.get<ApiResponse<SetCard[]>>(`${this.apiUrl}/scan/set/${expansionId}`).pipe(
+        map(r => r.data ?? []),
+        catchError(err => {
+          this.setCache.delete(expansionId);
+          throw err;
+        }),
+        shareReplay(1));
+      this.setCache.set(expansionId, cached);
+    }
+    return cached;
   }
 
   /** Stessa ricerca della maschera "Nuovo Prodotto", solo carte Magic. */
