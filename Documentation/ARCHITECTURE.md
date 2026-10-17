@@ -153,6 +153,7 @@ eCommerce.Inventory/
   - `BulkSellThroughService.cs`, `PriceRealizationService.cs`: quota di bulk venduto e prezzo realizzato rispetto al trend CM, misurati sulle vendite
   - `SealedOpportunityService.cs`: classifica giornaliera; `PurchasePlanService.cs`: piano d'acquisto su Card Trader per venditore
   - `BudgetPlanService.cs`, `BudgetPlanner.cs`, `BudgetPlanRunner.cs`: pianificatore del budget (feature 007): candidati e offerte, scelta dentro il budget con le spedizioni, calcolo in background
+  - `SellerBasketBuilder.cs`, `SellerPlanService.cs` (con `SellerPlanRunner`): vista "Per venditore": offerte Card Trader lette per espansione, carrello di ogni venditore con le regole traino/aggiunte/tenuti/netto dentro il budget, ultima lettura salvata in `SellerPlanSnapshots`
   - `CardmarketSellerPageParser.cs`, `CardmarketSellerOfferService.cs`: pagine delle offerte dei venditori Cardmarket incollate dall'utente, abbinate al listino e salvate in `CardmarketSellerOffers`
   - `OpeningBalanceService.cs`, `ProductPurchaseService.cs`: bilancio delle aperture e registro acquisti
   - `AlertService.cs`, `EmailSender.cs` (`IEmailSender`/`SmtpEmailSender`): avvisi ed email di riepilogo
@@ -505,6 +506,8 @@ PriceHistoryEntries               -- serie storica del prezzo esposto
 | `CardmarketPriceSnapshots` | Prezzi CM per prodotto e giorno di listino: sigillati ogni giorno, singole recenti solo a variazione | ~5.100 sigillati al giorno |
 | `CardmarketLatestPrices` | Ultimo prezzo di ogni prodotto del listino, aggiornato solo se cambia | ~128.000 righe |
 | `CardmarketProducts`, `CardmarketImportLogs` | Catalogo dei prodotti seguiti, esito di ogni import | |
+| `CardmarketSellerOffers` | Offerte dei venditori Cardmarket incollati dall'utente (prezzo, spedizione, quantità, categoria), finché non si tolgono | |
+| `SellerPlanSnapshots` | Ultima lettura della vista "Per venditore" (JSON), ripresa dopo i riavvii | 1 riga |
 | `MtgjsonSets`, `SealedProducts`, `SealedProductContents` | Catalogo sigillati MTGJSON con contenuto | ~4.200 prodotti |
 | `MtgjsonCards`, `BoosterConfigs`/`Slots`, `BoosterSheets`/`Cards`, `MtgjsonDecks`/`Cards` | Carte, composizione delle buste, mazzi delle uscite scaricate | qualche migliaio di righe per uscita |
 | `CardTraderCardPrices` | Prezzo CT delle singole (media delle 3 offerte EN NM più basse), a richiesta | |

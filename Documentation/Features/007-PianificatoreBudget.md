@@ -10,7 +10,7 @@
 
 **Titolo feature:** `Pianificatore del budget`
 **Priorità:** alta (la schermata che l'utente userebbe di più per gli acquisti)
-**Stato (2026-10-17):** progetto approvato dall'utente; Fase 0 pubblicata e verificata dall'utente il 2026-10-17; Fase 1 (pagine dei venditori Cardmarket incollate) pubblicata e verificata il 2026-10-17. Resta la Fase 2, facoltativa.
+**Stato (2026-10-17):** in produzione e verificate dall'utente la Fase 0 (piano automatico), la Fase 1 (venditori Cardmarket incollati) e la vista "Per venditore", che è la principale; l'utente lo prova qualche giorno, poi si rivedono soglie e migliorie. Fase 2 facoltativa.
 
 L'utente oggi parte da "questa settimana posso spendere X": guarda le proposte della classifica e degli
 avvisi, le apre una per una su Card Trader, Cardmarket e sul negozio Wizards, poi compone i carrelli a mano
