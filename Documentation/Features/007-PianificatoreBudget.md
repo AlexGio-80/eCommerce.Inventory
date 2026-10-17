@@ -157,7 +157,7 @@ prodotto oltre il limite di copie; budget rimasto spiegato.
 ### Fase 1 — Pagine dei venditori Cardmarket incollate *(pubblicata e verificata il 2026-10-17)*
 
 - Nella scheda "Budget", riquadro **"Incolla le pagine di un venditore Cardmarket"**: l'utente apre le pagine
-  delle offerte del venditore (es. `.../Users/ManaMarket/Offers/Preconstructed-Decks`, `.../Offers/Sets`,
+  delle offerte del venditore (es. `.../Users/{venditore}/Offers/Preconstructed-Decks`, `.../Offers/Sets`,
   pagina 2 compresa), con il filtro **Lingua: Inglese**, seleziona tutto, copia e incolla. Il gestionale non
   apre mai Cardmarket da solo.
 - Il testo si legge riga per riga: nome del prodotto, prezzo, spedizione, quantità disponibile, nota
@@ -203,8 +203,8 @@ solo venditore con una spedizione (quella impostata per Cardmarket), totale e gu
 177,35 €, guadagno atteso 24,27 €", come i conti fatti a mano; righe convenienti in evidenza (sfondo, barra e
 valutazione in grassetto, su richiesta dell'utente).
 
-**Verifica:** le pagine di ManaMarket della mattina del 17/10 (28 mazzi Commander, 5 "Sets") danno le stesse
-righe che vede l'utente, con prezzi e quantità giusti; il piano propone più prodotti di ManaMarket nello
+**Verifica:** le pagine di un venditore della mattina del 17/10 (28 mazzi Commander, 5 "Sets") danno le stesse
+righe che vede l'utente, con prezzi e quantità giusti; il piano propone più prodotti dello stesso venditore nello
 stesso carrello quando convengono.
 
 ### Fase 2 — Dopo l'acquisto (facoltativa, da rivalutare dopo l'uso)
