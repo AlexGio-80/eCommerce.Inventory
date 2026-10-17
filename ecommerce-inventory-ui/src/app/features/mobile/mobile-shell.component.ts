@@ -1,6 +1,7 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
+import { MobileService } from './mobile.service';
 
 /** Cornice della sezione per il telefono: barra in alto, pagina, barra di navigazione in basso. */
 @Component({
@@ -23,6 +24,11 @@ import { MatIconModule } from '@angular/material/icon';
         <a routerLink="search" routerLinkActive="active">
           <mat-icon>search</mat-icon><span>Cerca</span>
         </a>
+        <a routerLink="queue" routerLinkActive="active">
+          <span class="icon"><mat-icon>playlist_add_check</mat-icon>
+            @if (mobile.queueCount()) { <span class="count">{{ mobile.queueCount() }}</span> }
+          </span><span>Coda</span>
+        </a>
       </nav>
     </div>
   `,
@@ -37,6 +43,15 @@ import { MatIconModule } from '@angular/material/icon';
     .bottom a { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 6px 0 8px;
                 color: #666; text-decoration: none; font-size: 12px; }
     .bottom a.active { color: #3f51b5; }
+    .icon { position: relative; display: inline-flex; }
+    .count { position: absolute; top: -4px; right: -12px; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box;
+             border-radius: 8px; background: #e53935; color: #fff; font-size: 10px; line-height: 16px; text-align: center; }
   `]
 })
-export class MobileShellComponent { }
+export class MobileShellComponent implements OnInit {
+  mobile = inject(MobileService);
+
+  ngOnInit(): void {
+    this.mobile.refreshQueueCount().subscribe();
+  }
+}

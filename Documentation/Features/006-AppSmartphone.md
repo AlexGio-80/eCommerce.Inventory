@@ -9,7 +9,7 @@
 
 **Titolo feature:** `App per smartphone`
 **Priorità:** ultima grande feature in programma
-**Stato (2026-10-16):** progetto approvato; Fasi 0, 1 e 2 pubblicate e verificate (accesso con la guida in `DEPLOY.md`, "Accesso dal telefono"); resta la Fase 3 (pending list dal telefono).
+**Stato (2026-10-16):** progetto approvato; Fasi 0, 1 e 2 pubblicate e verificate (accesso con la guida in `DEPLOY.md`, "Accesso dal telefono"); Fase 3 (pending list dal telefono) pubblicata e verificata il 2026-10-17: tutte le fasi sono in produzione.
 
 L'utente vuole usare il gestionale dal telefono, in quest'ordine di importanza:
 
@@ -255,7 +255,27 @@ Schermate e proposte approvate dall'utente il 2026-10-16.
 coincidono e, soprattutto, quante volte la stima è *migliore* della realtà (l'errore che costa). Se
 quell'errore è frequente, si valuta Ximilar su quelle stesse foto.
 
-### Fase 3 — Pending list dal telefono (bisogno 2)
+### Fase 3 — Pending list dal telefono (bisogno 2) *(pubblicata e verificata il 2026-10-17)*
+
+Schermate approvate dall'utente il 2026-10-17, con due scelte: le motivazioni della stima si salvano
+(migration `AddPendingListingGradingNotes`, colonna `GradingNotes`), e dopo l'aggiunta si resta sulla
+scheda (per aggiungere la stessa carta in un'altra condizione).
+
+- **"Aggiungi alla coda"** nella scheda, sotto il prezzo delle regole: condizione, lingua e foil sono quelli
+  della scheda; quantità con − e +; prezzo di vendita già quello delle regole, che segue i filtri finché non
+  lo si cambia a mano; Tag con l'elenco dei Tag del registro acquisti (i più recenti prima) e l'ultimo usato
+  ricordato dal telefono (`localStorage`); prezzo d'acquisto dal costo per carta del registro, con la regola
+  della maschera (mai su un prezzo scritto a mano, non se il Tag ha più costi). `SuggestedPrice` si manda
+  solo se il prezzo è quello delle regole per i filtri inviati: allora la pubblicazione non accoda il riprezzo.
+- La **stima di Claude** fatta sulla carta va con l'inserzione: condizione proposta, voti, sicurezza, numero di
+  foto e motivazioni (`gradingNotes()` in `grading.service.ts`, usata anche dalla maschera del PC). Resta
+  anche dopo "Usa questa condizione", e si azzera dopo l'aggiunta: riguarda la copia appena messa in coda.
+- **Pagina Coda** (`/m/queue`, terza voce della barra con il numero delle inserzioni in attesa): carte, numero
+  di inserzioni e totale in euro; righe con "Modifica" per gli aggiornamenti di inserzioni già su Card Trader
+  ed errori dell'ultimo invio in rosso; tocco sulla riga per cambiare quantità, prezzi, condizione, lingua e
+  Tag (cambiando condizione o lingua il prezzo delle regole salvato non vale più e si toglie); "Elimina" toglie
+  la riga subito e la cancella solo se non si tocca "Annulla" entro 4 secondi (nel frattempo l'invio è
+  bloccato); **"Invia a Card Trader"** chiede conferma e usa `POST /api/pending-listings/sync`.
 
 - Dalla scheda di valutazione, "Aggiungi alla coda": quantità, condizione, lingua, foil, prezzo (già
   quello delle regole, come nella maschera), prezzo d'acquisto e Tag (anche dal registro acquisti,
@@ -268,6 +288,12 @@ quell'errore è frequente, si valuta Ximilar su quelle stesse foto.
 **Verifica:** 10 carte caricate dal telefono finiscono su Card Trader con condizione, lingua, prezzo e
 Tag giusti; nella maschera del PC la coda è la stessa; nel log, "pubblicati al prezzo delle regole" per
 quelle lasciate al prezzo proposto.
+
+**Esito (2026-10-17):** 4 inserzioni (5 carte) dal telefono su Card Trader con condizione, lingua, prezzo e Tag
+giusti, e la copia locale creata subito; la stessa coda nella maschera del PC; modifica della quantità,
+"Elimina" e "Annulla" come previsto. Nel log "3 blueprint pubblicati al prezzo delle regole" e un solo riprezzo,
+per la carta a un prezzo diverso. La stima salvata con le motivazioni si è vista sulla prima prova (proposta SP,
+scelta NM).
 
 ### Fuori da queste fasi, da rivalutare dopo l'uso
 

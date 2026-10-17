@@ -1082,6 +1082,9 @@ namespace eCommerce.Inventory.Infrastructure.Migrations
                     b.Property<int?>("GradingImagesCount")
                         .HasColumnType("int");
 
+                    b.Property<string>("GradingNotes")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<decimal?>("GradingScore")
                         .HasColumnType("decimal(18,2)");
 

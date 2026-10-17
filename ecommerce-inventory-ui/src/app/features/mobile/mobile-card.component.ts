@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -7,18 +7,28 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { GradingResult, GradingService } from '../../core/services/grading.service';
-import { CONDITIONS, CardValuation, LANGUAGES, MobileService, errorMessage, shrinkPhoto } from './mobile.service';
+import { MatInputModule } from '@angular/material/input';
+import { MatAutocompleteModule } from '@angular/material/autocomplete';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { GradingResult, GradingService, gradingNotes } from '../../core/services/grading.service';
+import { PendingListingsService } from '../products/services/pending-listings.service';
+import { PurchasingService } from '../purchasing/services/purchasing.service';
+import { CONDITIONS, CardValuation, LANGUAGES, MobileService, errorMessage, normalizeTag, shrinkPhoto } from './mobile.service';
+
+const LAST_TAG_KEY = 'mobile_last_tag';
 
 /**
  * Scheda di valutazione: prezzo delle regole dell'autopricer in evidenza, poi mercato Card Trader,
  * listino Cardmarket e le mie inserzioni. Condizione, lingua e foil ricalcolano tutto.
  * "Stima condizione" (Fase 2) propone una condizione dalle foto: si applica solo col tocco dell'utente.
+ * "Aggiungi alla coda" (Fase 3) mette la carta nella stessa coda della maschera "Nuovo Prodotto", con
+ * la stima di Claude accanto alla condizione scelta.
  */
 @Component({
   selector: 'app-mobile-card',
   standalone: true,
-  imports: [FormsModule, DecimalPipe, DatePipe, MatSelectModule, MatSlideToggleModule, MatProgressSpinnerModule, MatButtonModule, MatIconModule],
+  imports: [FormsModule, DecimalPipe, DatePipe, MatSelectModule, MatSlideToggleModule, MatProgressSpinnerModule, MatButtonModule, MatIconModule,
+    MatInputModule, MatAutocompleteModule, MatSnackBarModule],
   template: `
     @if (valuation(); as v) {
       <div class="head">
@@ -112,6 +122,41 @@ import { CONDITIONS, CardValuation, LANGUAGES, MobileService, errorMessage, shri
         }
       </div>
 
+      <div class="queue">
+        <div class="section first">Aggiungi alla coda <span class="muted">({{ condition }}, {{ language }}@if (isFoil) {, foil })</span></div>
+        <div class="qty">
+          <span>Quantità</span>
+          <button mat-icon-button (click)="quantity = quantity > 1 ? quantity - 1 : 1"><mat-icon>remove</mat-icon></button>
+          <span class="n">{{ quantity }}</span>
+          <button mat-icon-button (click)="quantity = quantity + 1"><mat-icon>add</mat-icon></button>
+        </div>
+        <div class="fields">
+          <mat-form-field appearance="outline">
+            <mat-label>Prezzo di vendita €</mat-label>
+            <input matInput type="number" inputmode="decimal" min="0" step="0.01" [(ngModel)]="price" (ngModelChange)="priceManual = true">
+            @if (atRulesPrice()) { <mat-hint>Prezzo delle regole</mat-hint> }
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Prezzo d'acquisto €</mat-label>
+            <input matInput type="number" inputmode="decimal" min="0" step="0.01" [(ngModel)]="purchasePrice">
+          </mat-form-field>
+        </div>
+        <mat-form-field appearance="outline" class="tag">
+          <mat-label>Tag</mat-label>
+          <input matInput [(ngModel)]="tag" (ngModelChange)="onTagChange()" [matAutocomplete]="tagAuto" autocapitalize="characters">
+          <mat-autocomplete #tagAuto="matAutocomplete" (optionSelected)="onTagChange()">
+            @for (t of tagOptions(); track t) { <mat-option [value]="t">{{ t }}</mat-option> }
+          </mat-autocomplete>
+          @if (purchaseCostInfo()) { <mat-hint>{{ purchaseCostInfo() }}</mat-hint> }
+        </mat-form-field>
+        @if (lastGrading(); as g) {
+          <div class="muted">Con la stima di Claude: {{ g.conditionName }}</div>
+        }
+        <button mat-raised-button color="primary" class="add" [disabled]="adding() || loading() || !((price ?? 0) > 0)" (click)="addToQueue()">
+          {{ adding() ? 'Aggiungo…' : 'Aggiungi alla coda' }}
+        </button>
+      </div>
+
       <div class="section">Card Trader <span class="muted">(prezzi in vetrina, escluse le mie)</span></div>
       <div class="row"><span>Più bassa</span><span>{{ money(v.ctLowest) }}</span></div>
       <div class="row"><span>Più bassa CT Zero</span><span>{{ money(v.ctZeroLowest) }}</span></div>
@@ -171,12 +216,23 @@ import { CONDITIONS, CardValuation, LANGUAGES, MobileService, errorMessage, shri
     .cond { font-size: 20px; font-weight: 500; }
     .note { text-align: right; color: #444; }
     .nm { width: 100%; margin-top: 8px; }
+    .queue { border: 1px solid #c5cae9; border-radius: 8px; padding: 2px 10px 10px; margin-bottom: 4px; background: #fff; }
+    .section.first { margin-top: 8px; }
+    .qty { display: flex; align-items: center; gap: 4px; font-size: 14px; margin-bottom: 4px; }
+    .qty .n { min-width: 24px; text-align: center; font-size: 18px; font-weight: 500; }
+    .fields { display: flex; gap: 8px; }
+    .fields mat-form-field { flex: 1 1 0; min-width: 0; }
+    .tag { width: 100%; }
+    .add { width: 100%; margin-top: 6px; }
   `]
 })
 export class MobileCardComponent implements OnInit {
   private mobile = inject(MobileService);
   private gradingService = inject(GradingService);
   private route = inject(ActivatedRoute);
+  private pendingListings = inject(PendingListingsService);
+  private purchasing = inject(PurchasingService);
+  private snackBar = inject(MatSnackBar);
 
   conditions = CONDITIONS;
   languages = LANGUAGES;
@@ -191,8 +247,12 @@ export class MobileCardComponent implements OnInit {
   error = signal<string | null>(null);
 
   ngOnInit(): void {
+    this.loadPurchaseCosts();
     this.route.paramMap.subscribe(p => {
       this.blueprintId = Number(p.get('id'));
+      this.quantity = 1;
+      this.priceManual = false;
+      this.lastGrading.set(null);
       const q = this.route.snapshot.queryParamMap;
       this.language = q.get('language') && LANGUAGES.includes(q.get('language')!) ? q.get('language')! : 'English';
       this.isFoil = q.get('foil') === '1';
@@ -208,6 +268,8 @@ export class MobileCardComponent implements OnInit {
       next: v => {
         this.valuation.set(v);
         this.loading.set(false);
+        // Il prezzo segue quello delle regole finché non lo si cambia a mano.
+        if (!this.priceManual) this.price = v.rulesPrice?.suggestedPrice ?? null;
       },
       error: err => {
         this.loading.set(false);
@@ -285,6 +347,7 @@ export class MobileCardComponent implements OnInit {
       next: r => {
         this.grading.set(false);
         this.gradingResult.set(r);
+        this.lastGrading.set(r);
       },
       error: err => {
         this.grading.set(false);
@@ -304,6 +367,134 @@ export class MobileCardComponent implements OnInit {
       this.load();
     }
     this.closeGrading();
+  }
+
+  // --- Aggiungi alla coda (Fase 3) ---
+  quantity = 1;
+  price: number | null = null;
+  priceManual = false;
+  purchasePrice = 0;
+  /** Ultimo Tag usato dal telefono: di solito si caricano di fila le carte della stessa apertura. */
+  tag = localStorage.getItem(LAST_TAG_KEY) ?? '';
+  adding = signal(false);
+  /** Ultima stima fatta su questa carta: resta anche dopo "Usa questa condizione", e va con l'inserzione. */
+  lastGrading = signal<GradingResult | null>(null);
+  purchaseCostInfo = signal<string | null>(null);
+  private tagText = signal(this.tag);
+  private registryTags = signal<string[]>([]);
+  /** Costi per carta del registro acquisti, per Tag normalizzato (un acquisto può condividere il Tag con altri). */
+  private purchaseCosts = new Map<string, { cost: number; product: string }[]>();
+  /** Ultimo prezzo d'acquisto messo dal registro: si sostituisce cambiando Tag, uno scritto a mano no. */
+  private autoFilledPrice: number | null = null;
+
+  tagOptions = computed(() => {
+    const text = normalizeTag(this.tagText()).replace('#', '');
+    return this.registryTags().filter(t => t.includes(text)).slice(0, 8);
+  });
+
+  /** Il prezzo è quello delle regole per la condizione, la lingua e il foil che si stanno inviando. */
+  atRulesPrice(): boolean {
+    const v = this.valuation();
+    return !!v && !this.loading() && v.condition === this.condition && v.language === this.language && v.isFoil === this.isFoil
+      && v.rulesPrice?.suggestedPrice != null && v.rulesPrice.suggestedPrice === this.price;
+  }
+
+  private loadPurchaseCosts(): void {
+    this.purchasing.getPurchases().subscribe({
+      next: purchases => {
+        this.purchaseCosts.clear();
+        const tags = new Set<string>();
+        for (const p of purchases) {
+          const key = normalizeTag(p.tag);
+          if (!key) continue;
+          tags.add(key);
+          if (p.effectiveCostPerCard == null) continue;
+          const list = this.purchaseCosts.get(key) ?? [];
+          list.push({ cost: p.effectiveCostPerCard, product: p.productName });
+          this.purchaseCosts.set(key, list);
+        }
+        // I Tag finiscono con la data AAAAMMGG: in ordine inverso le aperture recenti vengono prima.
+        this.registryTags.set([...tags].sort().reverse());
+        this.applyPurchaseCost();
+      },
+      error: () => this.purchaseCosts.clear()
+    });
+  }
+
+  onTagChange(): void {
+    this.tagText.set(this.tag);
+    this.applyPurchaseCost();
+  }
+
+  /** Stessa regola della maschera "Nuovo Prodotto": mai su un prezzo scritto a mano, e non se il Tag ha più costi. */
+  private applyPurchaseCost(): void {
+    const matches = this.purchaseCosts.get(normalizeTag(this.tag)) ?? [];
+    const costs = [...new Set(matches.map(m => m.cost))];
+    const current = Number(this.purchasePrice) || 0;
+    const replaceable = current === 0 || (this.autoFilledPrice != null && current === this.autoFilledPrice);
+
+    if (matches.length === 0) {
+      // Il prezzo messo per il Tag di prima non vale per questo: meglio uno 0 evidente che un costo sbagliato.
+      if (this.autoFilledPrice != null && current === this.autoFilledPrice) this.purchasePrice = 0;
+      this.autoFilledPrice = null;
+      this.purchaseCostInfo.set(null);
+      return;
+    }
+    if (costs.length > 1) {
+      this.purchaseCostInfo.set(`Più acquisti con questo Tag a costi diversi (${costs.map(c => c.toFixed(2)).join(' / ')}): scegli tu`);
+      return;
+    }
+    if (!replaceable) {
+      this.purchaseCostInfo.set(current === costs[0] ? `Dal registro acquisti: ${matches[0].product}` : `Registro acquisti: ${costs[0].toFixed(2)} € per carta`);
+      return;
+    }
+    this.purchasePrice = costs[0];
+    this.autoFilledPrice = costs[0];
+    this.purchaseCostInfo.set(`Dal registro acquisti: ${matches[0].product}`);
+  }
+
+  addToQueue(): void {
+    const price = this.price;
+    if (price == null || !(price > 0)) return;
+    const g = this.lastGrading();
+    const tag = this.tag.trim();
+    this.adding.set(true);
+    this.pendingListings.createPendingListing({
+      blueprintId: this.blueprintId,
+      quantity: this.quantity,
+      price,
+      // Solo se è il prezzo delle regole per i filtri che si inviano: allora niente riprezzo dopo la pubblicazione.
+      suggestedPrice: this.atRulesPrice() ? price : undefined,
+      purchasePrice: Number(this.purchasePrice) || 0,
+      condition: this.condition,
+      language: this.language,
+      isFoil: this.isFoil,
+      isSigned: false,
+      tag: tag || undefined,
+      gradingScore: g?.overallGrade,
+      gradingConditionCode: g?.conditionCode,
+      gradingCentering: g?.centering,
+      gradingCorners: g?.corners,
+      gradingEdges: g?.edges,
+      gradingSurface: g?.surface,
+      gradingConfidence: g?.confidence,
+      gradingImagesCount: g?.imagesAnalyzed,
+      gradingNotes: gradingNotes(g)
+    }).subscribe({
+      next: () => {
+        this.adding.set(false);
+        if (tag) localStorage.setItem(LAST_TAG_KEY, tag); else localStorage.removeItem(LAST_TAG_KEY);
+        // La stima riguarda la copia appena aggiunta, non la prossima.
+        this.lastGrading.set(null);
+        this.quantity = 1;
+        this.mobile.refreshQueueCount().subscribe(n =>
+          this.snackBar.open(n != null ? `Aggiunta alla coda (${n} in coda)` : 'Aggiunta alla coda', 'OK', { duration: 3000 }));
+      },
+      error: err => {
+        this.adding.set(false);
+        this.snackBar.open(errorMessage(err, 'Non riesco ad aggiungerla alla coda. Riprova.'), 'OK', { duration: 5000 });
+      }
+    });
   }
 
   confidenceLabel(confidence: number): string {

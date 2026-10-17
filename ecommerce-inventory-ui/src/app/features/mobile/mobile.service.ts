@@ -1,9 +1,10 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable, map } from 'rxjs';
+import { Observable, catchError, map, of, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../../core/models/api-response';
 import { Blueprint } from '../../core/models/blueprint';
+import { PendingListingsService } from '../products/services/pending-listings.service';
 
 export interface CardReading {
   name?: string;
@@ -76,7 +77,18 @@ export const LANGUAGES = ['English', 'Italian', 'Japanese', 'French', 'German', 
 @Injectable({ providedIn: 'root' })
 export class MobileService {
   private http = inject(HttpClient);
+  private pendingListings = inject(PendingListingsService);
   private apiUrl = `${environment.apiUrl}/api`;
+
+  /** Inserzioni in coda non ancora inviate, per il numero sulla voce "Coda" della barra. */
+  readonly queueCount = signal<number | null>(null);
+
+  refreshQueueCount(): Observable<number | null> {
+    return this.pendingListings.getPendingListings(1, 1, false).pipe(
+      map(r => (r?.data?.totalCount ?? null) as number | null),
+      tap(n => this.queueCount.set(n)),
+      catchError(() => of(null)));
+  }
 
   recognize(photo: Blob): Observable<CardScanResult> {
     const form = new FormData();
@@ -100,6 +112,12 @@ export class MobileService {
     return this.http.get<Blueprint[]>(`${this.apiUrl}/cardtrader/blueprints/search`, { params })
       .pipe(map(list => list.filter(b => !b.game || b.game.name === 'Magic')));
   }
+}
+
+/** Tag come lo scrive il registro acquisti, per confrontarli: maiuscolo, con il #. */
+export function normalizeTag(tag: string | null | undefined): string {
+  const t = (tag ?? '').trim().toUpperCase();
+  return !t ? '' : t.startsWith('#') ? t : `#${t}`;
 }
 
 /** Errore dell'API in una frase, per la pagina. */

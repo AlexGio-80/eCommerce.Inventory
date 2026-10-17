@@ -9,6 +9,7 @@ export interface PendingListing {
     blueprint?: any;
     quantity: number;
     sellingPrice: number;
+    suggestedPrice?: number;
     purchasePrice: number;
     condition: string;
     language: string;
@@ -32,6 +33,7 @@ export interface PendingListing {
     gradingSurface?: number;
     gradingConfidence?: number;
     gradingImagesCount?: number;
+    gradingNotes?: string;
 }
 
 export interface CreatePendingListingDto {
@@ -59,6 +61,7 @@ export interface CreatePendingListingDto {
     gradingSurface?: number;
     gradingConfidence?: number;
     gradingImagesCount?: number;
+    gradingNotes?: string;
 }
 
 export interface BlueprintListingInfo {

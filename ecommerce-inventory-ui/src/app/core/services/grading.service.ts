@@ -46,3 +46,20 @@ export class GradingService {
         return this.http.post<GradingResult>(`${this.apiUrl}/analyze-multi`, formData);
     }
 }
+
+/**
+ * Motivazioni della stima in un testo, da salvare con l'inserzione accanto alla condizione proposta:
+ * quando la condizione scelta è diversa, dicono perché la stima si è sbagliata.
+ */
+export function gradingNotes(g: GradingResult | null | undefined): string | undefined {
+    if (!g) return undefined;
+    const lines = [
+        g.cornersNote && `Angoli: ${g.cornersNote}`,
+        g.edgesNote && `Bordi: ${g.edgesNote}`,
+        g.surfaceNote && `Superficie: ${g.surfaceNote}`,
+        g.centeringNote && `Centratura: ${g.centeringNote}`,
+        g.summary && `Sintesi: ${g.summary}`,
+        g.nearMintPossible && 'Claude ha detto Near Mint, la regola prudente ha proposto Slightly Played'
+    ].filter(Boolean);
+    return lines.length ? lines.join('\n') : undefined;
+}

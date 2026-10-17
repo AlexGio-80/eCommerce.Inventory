@@ -55,4 +55,11 @@ public class PendingListing
     public decimal? GradingSurface { get; set; }
     public decimal? GradingConfidence { get; set; }
     public int? GradingImagesCount { get; set; }
+
+    /// <summary>
+    /// Motivazioni della stima per aspetto (angoli, bordi, superficie, centratura) e sintesi, in italiano.
+    /// Accanto a <see cref="GradingConditionCode"/> (la proposta) e a <see cref="Condition"/> (la scelta)
+    /// dice perché la stima si è sbagliata, quando proposta e scelta non coincidono.
+    /// </summary>
+    public string? GradingNotes { get; set; }
 }

@@ -49,4 +49,5 @@ public class CreatePendingListingDto
     public decimal? GradingSurface { get; set; }
     public decimal? GradingConfidence { get; set; }
     public int? GradingImagesCount { get; set; }
+    public string? GradingNotes { get; set; }
 }

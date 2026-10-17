@@ -248,6 +248,7 @@ public class PendingListingsController : ControllerBase
                     existingItem.GradingSurface = dto.GradingSurface;
                     existingItem.GradingConfidence = dto.GradingConfidence;
                     existingItem.GradingImagesCount = dto.GradingImagesCount;
+                    existingItem.GradingNotes = dto.GradingNotes;
                 }
 
                 await _dbContext.SaveChangesAsync(cancellationToken);
@@ -282,7 +283,8 @@ public class PendingListingsController : ControllerBase
             GradingEdges = dto.GradingEdges,
             GradingSurface = dto.GradingSurface,
             GradingConfidence = dto.GradingConfidence,
-            GradingImagesCount = dto.GradingImagesCount
+            GradingImagesCount = dto.GradingImagesCount,
+            GradingNotes = dto.GradingNotes
         };
 
         _dbContext.PendingListings.Add(pendingListing);

@@ -25,7 +25,7 @@ import { BlueprintSelectorComponent } from '../../../../shared/components/bluepr
 import { ProductsService } from '../../services/products.service';
 import { PendingListingsService, PendingListing, CreatePendingListingDto, BlueprintListingInfo } from '../../services/pending-listings.service';
 import { Blueprint, PriceHistorySeries, PriceHistoryResponse } from '../../../../core/models';
-import { GradingService, GradingResult } from '../../../../core/services/grading.service';
+import { GradingService, GradingResult, gradingNotes } from '../../../../core/services/grading.service';
 import { PurchasingService } from '../../../purchasing/services/purchasing.service';
 import { PricingService, ListingPriceSuggestion } from '../../../pricing/services/pricing.service';
 
@@ -911,7 +911,8 @@ export class CreateListingComponent {
       gradingEdges: this.gradingResult()?.edges,
       gradingSurface: this.gradingResult()?.surface,
       gradingConfidence: this.gradingResult()?.confidence,
-      gradingImagesCount: this.gradingResult()?.imagesAnalyzed
+      gradingImagesCount: this.gradingResult()?.imagesAnalyzed,
+      gradingNotes: gradingNotes(this.gradingResult())
     };
 
     if (this.editingId()) {

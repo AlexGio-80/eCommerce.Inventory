@@ -9,6 +9,28 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-17] Feature — App per smartphone, Fase 3: pending list dal telefono *(pubblicata e verificata il 2026-10-17)*
+
+#### Problema
+
+- Dal telefono si riconosceva e si valutava una carta, ma per metterla in vendita bisognava rifare tutto
+  dalla maschera "Nuovo Prodotto" del PC. La stima della condizione non si salvava da nessuna parte.
+
+#### Soluzione Implementata
+
+- **"Aggiungi alla coda"** nella scheda di valutazione: quantità, prezzo delle regole già nel campo, prezzo
+  d'acquisto dal Tag del registro acquisti, ultimo Tag ricordato. La coda è la stessa del PC.
+- **Pagina Coda** sul telefono: totale, modifica e cancellazione con "Annulla", "Invia a Card Trader" con
+  conferma.
+- La stima di Claude va con l'inserzione, motivazioni comprese: proposta e condizione scelta affiancate sono
+  l'archivio per far imparare la stima.
+
+#### Note Tecniche
+
+- Migration `AddPendingListingGradingNotes`: colonna `PendingListings.GradingNotes` (testo, nullable).
+- Nessun endpoint nuovo: il telefono usa `api/pending-listings` come la maschera. `SuggestedPrice` solo se il
+  prezzo è quello delle regole per condizione, lingua e foil inviati.
+
 ### [2026-10-16] Feature — App per smartphone, Fase 2: stima della condizione dalle foto
 
 #### Problema
