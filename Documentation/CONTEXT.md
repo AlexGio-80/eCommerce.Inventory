@@ -9,7 +9,7 @@
 ## Stato Attuale
 
 **Branch principale:** `master`
-**Ultimo aggiornamento:** 2026-10-17 (sera)
+**Ultimo aggiornamento:** 2026-10-19
 **Fase:** In produzione (uso quotidiano attivo)
 
 ### Cosa funziona adesso
@@ -42,7 +42,7 @@
 - Opportunità: classifica giornaliera di tutte le uscite, filtro "Resa massima %", piano d'acquisto su Card Trader per venditore, con "Metti nel carrello Card Trader" (via API, non compra) e "Apri tutti" su Card Trader o Cardmarket
 - Aperture (bilancio reale per Tag) e Registro acquisti (ricerca su tutto il catalogo per nome Cardmarket, costo per carta, previsione salvata all'apertura)
 - Avvisi: regole per prodotto o per gruppo, campanella ed email di riepilogo (SMTP configurato) con i link Card Trader e Cardmarket di ogni prodotto. Gli avvisi di apertura ignorano le rese oltre il 300%
-- Secret Lair: retrospettiva dei drop comprati; negozio Wizards letto alle 8, 14 e 20 con avviso per ogni superdrop nuovo; valutazione del drop prima dell'acquisto (Compra / Al limite / Lascia). I drop con la vendita finita sono "Vendita chiusa" (il catalogo Wizards li tiene con una scorta di comodo)
+- Secret Lair: retrospettiva dei drop comprati; negozio Wizards letto alle 8, 14 e 20 con avviso per ogni superdrop nuovo; valutazione del drop prima dell'acquisto (Compra / Al limite / Lascia). I drop con la vendita finita sono "Vendita chiusa" (il catalogo Wizards li tiene con una scorta di comodo); "In negozio" mostra solo i drop acquistabili, e per gli altri la stima dice "Non acquistabile"
 - Magazzino: sigillati segnati "Da tenere" nel registro, con valore di oggi e guadagno latente (feature 005)
 
 **Pianificatore del budget** (scheda "Budget" della pagina Acquisti, il fulcro del blocco Acquisti per l'utente). Dettaglio in `Documentation/Features/007-PianificatoreBudget.md`
@@ -72,8 +72,10 @@
 - **Secret Lair, stima congelata:** dopo l'uscita dei Masters of the Universe (03/11) confrontare la stima con i prezzi reali, colonna "Scarto stima"
 - **Box Star Trek (uscita 13/11):** MTGJSON non ha ancora la composizione delle buste TRK/TRC, quindi niente previsione. All'apertura l'utente segna la data sull'acquisto e usa il Tag `#TRK_PB_AAAAMMGG` / `#TRK_CB_AAAAMMGG`, anche sulle inserzioni
 - **Revisione settimanale degli avvisi:** il lunedì alle 08:00 un'attività di Claude scrive il rapporto in `Revisioni-avvisi/` (locale, fuori da git). Le regole nuove si creano solo dopo l'ok dell'utente. Da seguire:
-  - la regola 4 è a 30 giorni in via temporanea: riportarla a 90 a gennaio 2027
-  - l'abbinamento Cardmarket dei prodotti di Mystery Booster Commander (MBC, 09/11)
+  - la regola 4 è a 30 giorni in via temporanea: riportarla a 90 a gennaio 2027; i primi segnali sono attesi verso il 06/11
+  - dal 19/10: Mazzi Commander sulle uscite degli ultimi 3 anni, Da tenere a punteggio 80, email attiva sui Secret Lair. Alla revisione del 26/10 controllare il rumore della regola Da tenere: i prodotti al confine con "da aprire" (resa intorno a 0) entrano ed escono e vengono rinotificati; se resta fastidioso, valutare con l'utente di non rinotificare un prodotto segnalato negli ultimi 7 giorni
+  - l'abbinamento Cardmarket dei prodotti di Mystery Booster Commander (MBC, uscito il 19/10): senza, nessuna valutazione né avviso
+  - il listino Cardmarket del 13/10 manca (non pubblicato): il 20/10 la regola sui cali a 7 giorni non ha il riferimento, atteso
 - **Riserva dell'utente sul grafico in "Le mie inserzioni":** sulle carte con molte inserzioni diverse la colonna è affollata. Nessuna modifica programmata
 - **Webhook Card Trader in stand-by:** esporlo richiederebbe di aprire una porta sul router di casa. Non vale il rischio finché il polling basta. Come riprenderlo è in ROADMAP
 - **Redis non installato** (`Redis:Enabled = false`): il codice di caching è intatto, si riattiva installando Redis e rimettendo il flag
@@ -88,6 +90,8 @@
 
 | Data | Decisione | Perché |
 |------|-----------|--------|
+| 2026-10-19 | Negozio Wizards: niente "Compra" sui drop non acquistabili, "In negozio" = Disponibile, Preordine, In arrivo | Un suggerimento d'acquisto su un drop esaurito è rumore; gli esauriti restano consultabili scegliendo lo stato |
+| 2026-10-19 | Regole di avviso: Mazzi Commander a 3 anni, Da tenere a 80, email sui Secret Lair | Proposte della revisione settimanale approvate dall'utente: il prezzo realizzato aveva ammutolito la regola dei mazzi, Da tenere mandava un'email al giorno |
 | 2026-10-17 | Acquisti "per venditore": traino ≥ 50% che paga la spedizione, altre aperture ≥ 33%, tenuti al trend +10% solo con un'apertura, netto ≥ 20%, dentro il budget; Wizards a parte | L'utente compra per venditore: con più venditori le spedizioni si mangiano il guadagno. Soglie scelte dall'utente, modificabili |
 | 2026-10-17 | Venditori Cardmarket da pagine copiate e incollate dall'utente, senza scadenza | La lettura automatica è bloccata dalla verifica di Cloudflare (provato) e vietata; dal Chrome dell'utente si rischierebbe l'account da venditore. L'utente preferisce tenerli finché non li toglie, con la data in vista |
 | 2026-10-17 | Riconoscimento della carta con Sonnet 5.5, Opus 5.5 di riserva quando il set non si legge | Prova su 9 carte: Sonnet come Opus, più veloce e a metà costo; sulle carte vecchie senza sigla Sonnet rinuncia al set. Stima della condizione su Opus |

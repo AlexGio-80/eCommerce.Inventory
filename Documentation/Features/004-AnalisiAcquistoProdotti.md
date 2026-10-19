@@ -545,7 +545,9 @@ conviene", più che "quando comprare".
    fascia, costo per carta, costi 15%); "Compra" sopra il 30% di margine sul prezzo Wizards. I bundle valgono
    i drop contenuti. Sui 701 drop passati lo scarto tipico è del 34% (sottostima del 9%): usare il prezzo
    delle versioni SL precedenti della stessa carta non migliora. La stima prima dell'uscita si congela nel
-   prodotto (`EstimatedNetValue`)
+   prodotto (`EstimatedNetValue`). Dal 2026-10-19 il suggerimento vale solo per i drop acquistabili
+   (Disponibile, Preordine, In arrivo): per gli esauriti, a vendita chiusa o tolti la scheda mostra
+   "Non acquistabile", e il filtro "In negozio" li nasconde
 
 > **Correzione del 09/10/2026**: la quota venduta del bulk (~35%) e quella per fascia contavano anche gli ordini
 > `hub_pending` di Card Trader Zero, doppioni degli ordini "Ct connect" pagati. Solo sugli ordini pagati il bulk

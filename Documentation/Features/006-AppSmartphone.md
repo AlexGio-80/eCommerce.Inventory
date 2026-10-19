@@ -178,7 +178,7 @@ Schermate approvate dall'utente il 2026-10-16, con tre scelte: dall'indirizzo Ta
 direttamente nella sezione per il telefono (link "Versione completa" per le pagine di sempre); le foto
 non si salvano; al massimo 200 riconoscimenti al giorno.
 
-- **PWA:** `manifest.webmanifest`, icone in `public/icons`, `sw.js` che non mette in cache niente (né file
+- **PWA:** `manifest.webmanifest`, icone in `public/icons` (dal 2026-10-19 anche `favicon.ico` del PC è ricavato da `icon-512.png`), `sw.js` che non mette in cache niente (né file
   né dati: i prezzi sono sempre quelli di adesso, e a ogni pubblicazione il telefono vede la versione
   nuova). Il service worker si registra solo da un indirizzo `*.ts.net`.
 - **Sezione `/m`** (`features/mobile`), barra in basso con **Scansiona** e **Cerca** (la **Coda** arriva con

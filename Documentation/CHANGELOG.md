@@ -9,6 +9,40 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-19] Fix — Icona dell'app e Secret Lair esauriti senza "Compra" *(pubblicato e verificato il 2026-10-19)*
+
+#### Problema
+
+- Nella scheda del browser e nei preferiti l'applicazione aveva ancora l'icona di Angular.
+- Nella scheda Secret Lair → Negozio Wizards, con il filtro "In negozio", i drop esauriti restavano in elenco
+  con il suggerimento "Compra" (es. un drop foil con scorta 0 e pagina Wizards "No longer available").
+
+#### Soluzione Implementata
+
+- `favicon.ico` rigenerato dall'icona dell'app per smartphone (carte con lente), con gli angoli arrotondati e
+  le dimensioni da 16 a 256 px.
+- "In negozio" mostra solo i drop acquistabili: Disponibile, Preordine, In arrivo. Esauriti, a vendita chiusa e
+  tolti dal negozio si vedono scegliendo il loro stato o "Tutti".
+- Per i drop non acquistabili la colonna Stima dice **"Non acquistabile"** (in grigio, con il verdetto originale
+  nel tooltip); valore netto e margine restano per confronto.
+
+#### Note Tecniche
+
+- Solo frontend: `SecretLairShopComponent.purchasable()`; link al favicon con `?v=2` per superare la cache del
+  browser. Il pianificatore del budget filtrava già i drop acquistabili lato server (`GetBuyableSecretLairAsync`).
+
+### [2026-10-19] Avvisi — Regole riviste dopo la revisione settimanale
+
+- Approvate in chat dall'utente le proposte della revisione del 19/10 (rapporto in `Revisioni-avvisi/`, fuori da
+  git) e applicate a database:
+  - **Mazzi Commander da aprire**: uscite degli ultimi 3 anni invece di 2 (resa ≥ 30%). Dal 16/10 il prezzo
+    realizzato ha abbassato le rese dei mazzi di circa 18 punti e la regola era quasi muta; così rientrano i
+    mazzi Collectors Edition di Modern Horizons 3.
+  - **Da tenere**: punteggio minimo 80 invece di 70. Era la regola più rumorosa (un'email al giorno).
+  - **Secret Lair da aprire** (resa ≥ 100%): email attivata, dopo una settimana con due sole notifiche.
+- I prodotti già segnalati delle due regole con condizione cambiata sono stati azzerati, come fa la maschera:
+  alla valutazione successiva arriva una notifica con l'elenco completo.
+
 ### [2026-10-17] Feature — Pianificatore del budget: vista "Per venditore"
 
 #### Problema
