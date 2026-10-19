@@ -110,8 +110,13 @@ export class SecretLairShopComponent implements OnInit {
 
   visible = computed(() => (this.view()?.products ?? []).filter(p =>
     !this.status() ? true
-      : this.status() === 'attivi' ? p.status !== 'Tolto dal negozio' && p.status !== 'Vendita chiusa'
+      : this.status() === 'attivi' ? SecretLairShopComponent.purchasable(p.status)
       : p.status === this.status()));
+
+  /** Si può comprare adesso o a breve: gli esauriti, i chiusi e i tolti restano visibili solo scegliendo il loro stato. */
+  private static purchasable(status?: string | null): boolean {
+    return status === 'Disponibile' || status === 'Preordine' || status === 'In arrivo';
+  }
 
   private estimates = computed(() => new Map((this.valuation()?.products ?? []).map(e => [e.wizardsProductId, e])));
   rows = computed<ShopRow[]>(() => this.visible().map(p => ({ ...p, estimate: this.estimates().get(p.wizardsProductId) })));
@@ -163,10 +168,14 @@ export class SecretLairShopComponent implements OnInit {
     { headerName: 'Foil', field: 'isFoil', width: 80, valueFormatter: p => p.value ? 'Foil' : '' },
     { headerName: 'Prezzo', field: 'price', width: 95, type: 'numericColumn',
       valueFormatter: p => p.value == null ? '' : SecretLairShopComponent.euroFormat.format(p.value) },
-    { headerName: 'Stima', colId: 'verdict', width: 115, valueGetter: p => p.data?.estimate?.verdict ?? '',
+    // Un drop esaurito o chiuso non si può comprare: niente "Compra", resta il margine per confronto.
+    { headerName: 'Stima', colId: 'verdict', width: 130,
+      valueGetter: p => !p.data?.estimate ? ''
+        : SecretLairShopComponent.purchasable(p.data.status) ? p.data.estimate.verdict : 'Non acquistabile',
       cellClass: (p: CellClassParams) => p.value === 'Compra' ? 'verdict-buy' : p.value === 'Al limite' ? 'verdict-edge'
         : p.value === 'Lascia' ? 'verdict-skip' : 'verdict-none',
-      headerTooltip: 'Suggerimento dal valore netto contro il prezzo Wizards: Compra sopra la soglia di margine, Al limite fra 0 e la soglia, Lascia sotto zero' },
+      tooltipValueGetter: p => p.value === 'Non acquistabile' ? `${p.data?.status}: la stima era "${p.data?.estimate?.verdict}"` : '',
+      headerTooltip: 'Suggerimento dal valore netto contro il prezzo Wizards: Compra sopra la soglia di margine, Al limite fra 0 e la soglia, Lascia sotto zero. Non acquistabile se il drop è esaurito, chiuso o tolto dal negozio' },
     { headerName: 'Valore netto', colId: 'netValue', width: 120, type: 'numericColumn',
       valueGetter: p => p.data?.estimate?.realNetValue ?? p.data?.estimate?.estimatedNetValue ?? null,
       valueFormatter: p => SecretLairShopComponent.euro(p.value),
