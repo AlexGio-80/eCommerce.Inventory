@@ -19,6 +19,7 @@ import {
   CatalogProduct, ProductPurchase, ProductPurchaseInput, PurchasingService, SealedProductAnalysis
 } from '../services/purchasing.service';
 import { GridStateDirective } from '../../../shared/directives/grid-state.directive';
+import { suggestPurchaseTag } from '../purchase-tag';
 
 interface PurchaseForm {
   id?: number;
@@ -223,6 +224,7 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
       switchMap(q => q.trim().length < 2 ? of(null) : this.purchasing.searchCatalog(q).pipe(catchError(() => of([])))),
       takeUntilDestroyed(this.destroyRef)
     ).subscribe(found => this.productOptions.set(found ?? this.releaseProducts()));
+    this.purchasing.purchasesChanged.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.load());
   }
 
   ngOnChanges(changes: SimpleChanges) {
@@ -272,37 +274,14 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
     });
   }
 
-  /** CODICE_TIPO_AAAAMMGG: tipo PB/CB per i box Play/Collector, altrimenti dalla categoria. */
+  /** CODICE_TIPO_AAAAMMGG con la data di apertura, o di oggi se non è ancora aperto. */
   suggestTag() {
     const product = this.selectedProduct;
     if (!product || product.id !== this.form.sealedProductId) {
       this.snackBar.open('Scegli prima il prodotto', 'Chiudi', { duration: 3000 });
       return;
     }
-    const date = (this.form.openedAt || new Date().toISOString().slice(0, 10)).replace(/-/g, '');
-    if (product.subtype?.startsWith('secret_lair')) {
-      this.form.tag = `#SLD_${this.secretLairCode(product.name)}_${date}`;
-      return;
-    }
-    const type = product.subtype === 'play' ? 'PB'
-      : product.subtype === 'collector' ? 'CB'
-      : (product.subtype || product.category || 'X').slice(0, 3).toUpperCase();
-    this.form.tag = `#${product.setCode}_${type}_${date}`;
-  }
-
-  /**
-   * Codice breve di un drop Secret Lair: iniziali delle parole del nome (al massimo 5), più F se
-   * foil. "Secret Lair x Marvel Earth's Mightiest Pets Foil Edition" → MEMPF. Un tag per drop tiene
-   * separato il bilancio di ciascuno nella scheda Secret Lair.
-   */
-  private secretLairCode(name: string): string {
-    const foil = /\b(foil|etched)\b/i.test(name);
-    const words = name
-      .replace(/^Secret Lair( Drop)?( x)?\s*/i, '')
-      .replace(/\b(Foil|Rainbow|Etched|Edition|Bundle)\b/gi, '')
-      .split(/[^A-Za-z0-9]+/)
-      .filter(w => w.length > 1 && !/^(the|of|and|an|in|to)$/i.test(w));
-    return (words.slice(0, 5).map(w => w[0].toUpperCase()).join('') || 'SL') + (foil ? 'F' : '');
+    this.form.tag = suggestPurchaseTag(product, this.form.openedAt || new Date().toISOString().slice(0, 10));
   }
 
   save() {

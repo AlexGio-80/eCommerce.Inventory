@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { Observable, Subject } from 'rxjs';
+import { map, tap } from 'rxjs/operators';
 import { environment } from '../../../../environments/environment';
 import { ApiResponse } from '../../../core/models/api-response';
 
@@ -626,6 +626,9 @@ export interface SealedCatalogImportResult {
 export class PurchasingService {
     private readonly apiUrl = `${environment.apiUrl}/api/purchasing`;
 
+    /** Il registro acquisti è cambiato da un'altra scheda (registrazione da un ordine): chi lo mostra lo rilegge. */
+    readonly purchasesChanged = new Subject<void>();
+
     constructor(private http: HttpClient) { }
 
     getSets(): Observable<SealedSetOption[]> {
@@ -825,6 +828,17 @@ export class PurchasingService {
             ? this.http.put<ApiResponse<ProductPurchase>>(`${this.apiUrl}/purchases/${id}`, input)
             : this.http.post<ApiResponse<ProductPurchase>>(`${this.apiUrl}/purchases`, input);
         return request.pipe(map(response => response.data!));
+    }
+
+    /** Registra più acquisti insieme, tutti o nessuno; restituisce quanti. */
+    savePurchases(inputs: ProductPurchaseInput[]): Observable<number> {
+        return this.http.post<ApiResponse<number>>(`${this.apiUrl}/purchases/batch`, inputs)
+            .pipe(map(response => response.data ?? 0), tap(() => this.purchasesChanged.next()));
+    }
+
+    getCatalogProducts(ids: number[]): Observable<CatalogProduct[]> {
+        return this.http.post<ApiResponse<CatalogProduct[]>>(`${this.apiUrl}/catalog/products`, ids)
+            .pipe(map(response => response.data ?? []));
     }
 
     deletePurchase(id: number): Observable<unknown> {

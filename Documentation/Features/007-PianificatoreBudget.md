@@ -10,7 +10,7 @@
 
 **Titolo feature:** `Pianificatore del budget`
 **Priorità:** alta (la schermata che l'utente userebbe di più per gli acquisti)
-**Stato (2026-10-17):** in produzione e verificate dall'utente la Fase 0 (piano automatico), la Fase 1 (venditori Cardmarket incollati) e la vista "Per venditore", che è la principale; l'utente lo prova qualche giorno, poi si rivedono soglie e migliorie. Fase 2 facoltativa.
+**Stato (2026-10-17):** in produzione e verificate dall'utente la Fase 0 (piano automatico), la Fase 1 (venditori Cardmarket incollati) e la vista "Per venditore", che è la principale; l'utente lo prova qualche giorno, poi si rivedono soglie e migliorie. Fase 2: "Registra l'acquisto" in produzione e verificata dall'utente con un ordine vero il 2026-10-21; il budget che si scala resta da fare.
 
 L'utente oggi parte da "questa settimana posso spendere X": guarda le proposte della classifica e degli
 avvisi, le apre una per una su Card Trader, Cardmarket e sul negozio Wizards, poi compone i carrelli a mano
@@ -304,9 +304,22 @@ dell'esclusione, "anche in", "Scelgo questo" con il totale e gli avvisi di budge
 
 ### Fase 2 — Dopo l'acquisto (facoltativa, da rivalutare dopo l'uso)
 
-- "Segna come comprato" su un carrello: crea le righe del registro acquisti con prodotto, quantità, prezzo
-  pagato, negozio e il segno "Da tenere" per i tenuti. Oggi il registro si compila a mano.
-- Budget della settimana che si scala con gli acquisti segnati.
+- **"Registra l'acquisto" (fatto il 2026-10-21, chiesto dall'utente dopo il primo ordine fatto col Budget).**
+  Pulsante su ogni ordine e icona su ogni riga, in "Per venditore", nel piano automatico e nel piano d'acquisto
+  della scheda Opportunità. Apre una finestra con le righe dell'ordine (dalla testata tutte spuntate, dalla riga
+  solo quella): quantità, prezzo, negozio, venditore, data d'acquisto (oggi), Tag e "Da tenere" già compilati e
+  modificabili; si registra tutto insieme nel registro acquisti, tutto o niente.
+  - **Spedizione ripartita sulle righe spuntate in proporzione al prezzo** e sommata al prezzo unitario, quindi
+    al costo per carta; nelle note della riga resta "Prezzo X + spedizione Y per unità". Comprando una riga sola
+    prende tutta la spedizione. Nel piano d'acquisto di Opportunità la spedizione non è nota: si scrive nella finestra.
+  - **Tag con la data d'acquisto** per i prodotti da aprire, con le stesse regole della maschera del registro
+    (`purchase-tag.ts`, unica per i due punti). I "Tieni" non hanno Tag finché non si aprono.
+  - Un prodotto già nel registro con la stessa data arriva senza spunta, con un avviso: niente doppioni da un
+    doppio clic.
+  - **Wizards escluso, per scelta dell'utente:** i drop del negozio non sono nel catalogo finché MTGJSON non li
+    pubblica; si registrano a mano come prima.
+  - Il Registro acquisti e il Magazzino si rileggono da soli dopo la registrazione.
+- Budget della settimana che si scala con gli acquisti segnati (da fare, se servirà).
 
 ---
 

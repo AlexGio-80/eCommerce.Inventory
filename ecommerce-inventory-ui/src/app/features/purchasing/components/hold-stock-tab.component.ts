@@ -1,4 +1,5 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { AgGridAngular } from 'ag-grid-angular';
 import { CellClassParams, ColDef, ValueFormatterParams } from 'ag-grid-community';
@@ -116,8 +117,12 @@ export class HoldStockTabComponent implements OnInit {
 
   constructor(private purchasing: PurchasingService, private snackBar: MatSnackBar) { }
 
+  private destroyRef = inject(DestroyRef);
+
   ngOnInit() {
     this.load();
+    // Un acquisto "da tenere" registrato da un ordine del Budget entra subito nel magazzino.
+    this.purchasing.purchasesChanged.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.load());
   }
 
   load() {

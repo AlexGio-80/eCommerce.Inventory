@@ -9,6 +9,32 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-21] Feature — "Registra l'acquisto" dagli ordini proposti (feature 007, Fase 2) *(pubblicato e verificato il 2026-10-21)*
+
+#### Problema
+
+- Dopo aver comprato un ordine proposto dal Budget (carrello Card Trader fatto da solo), il registro acquisti
+  andava compilato a mano riga per riga: prodotto, prezzo, venditore, data, Tag.
+
+#### Soluzione Implementata
+
+- Pulsante "Registra l'acquisto" su ogni ordine e icona su ogni riga in Budget → Per venditore, Budget → Piano
+  automatico e nel piano d'acquisto della scheda Opportunità.
+- Finestra con le righe dell'ordine (dalla testata tutte spuntate, dalla riga solo quella), già compilate e
+  modificabili: quantità, prezzo, negozio, venditore, data d'acquisto, Tag, "Da tenere". La spedizione si
+  ripartisce sulle righe spuntate in proporzione al prezzo ed entra nel prezzo registrato. Un prodotto già
+  registrato con la stessa data arriva senza spunta, con un avviso.
+- Tag proposto con la data d'acquisto per le aperture, nessun Tag per i "Tieni". Wizards escluso.
+
+#### Note Tecniche
+
+- `POST /api/purchasing/purchases/batch` (`ProductPurchaseService.SaveManyAsync`): validazione di tutte le
+  righe prima di scrivere, un solo `SaveChanges`; l'analisi dell'uscita per la previsione si calcola una volta
+  per uscita. `POST /api/purchasing/catalog/products` dà sottotipo e categoria per proporre il Tag.
+- Regole del Tag spostate in `purchase-tag.ts`, usate anche dalla maschera del registro. Dopo una registrazione
+  `PurchasingService.purchasesChanged` fa rileggere Registro acquisti e Magazzino.
+- Componente `RegisterPurchaseDialogComponent`; test `SaveMany_RegistersAWholeOrderOrNothing`.
+
 ### [2026-10-19] Fix — Icona dell'app e Secret Lair esauriti senza "Compra" *(pubblicato e verificato il 2026-10-19)*
 
 #### Problema

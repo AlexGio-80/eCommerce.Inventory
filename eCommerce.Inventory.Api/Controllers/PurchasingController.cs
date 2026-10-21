@@ -495,6 +495,29 @@ public class PurchasingController : ControllerBase
     public Task<IActionResult> CreatePurchase([FromBody] ProductPurchaseInput input, CancellationToken cancellationToken) =>
         SavePurchaseAsync(null, input, cancellationToken);
 
+    /// <summary>Registra più acquisti insieme (da un ordine del Budget o del piano d'acquisto): tutti o nessuno.</summary>
+    [HttpPost("purchases/batch")]
+    public async Task<IActionResult> CreatePurchases([FromBody] List<ProductPurchaseInput> inputs, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var saved = await _purchases.SaveManyAsync(inputs, cancellationToken);
+            return Ok(ApiResponse<int>.SuccessResult(saved));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ApiResponse<object>.ErrorResult(ex.Message));
+        }
+    }
+
+    /// <summary>Dati di catalogo di alcuni prodotti sigillati, per proporre il Tag nella registrazione da un ordine.</summary>
+    [HttpPost("catalog/products")]
+    public async Task<IActionResult> GetCatalogProducts([FromBody] List<int> ids, CancellationToken cancellationToken)
+    {
+        var products = await _purchases.GetCatalogProductsAsync(ids, cancellationToken);
+        return Ok(ApiResponse<List<CatalogProductDto>>.SuccessResult(products));
+    }
+
     [HttpPut("purchases/{id:int}")]
     public Task<IActionResult> UpdatePurchase(int id, [FromBody] ProductPurchaseInput input, CancellationToken cancellationToken) =>
         SavePurchaseAsync(id, input, cancellationToken);

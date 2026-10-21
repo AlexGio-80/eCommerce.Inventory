@@ -9,7 +9,7 @@
 ## Stato Attuale
 
 **Branch principale:** `master`
-**Ultimo aggiornamento:** 2026-10-19
+**Ultimo aggiornamento:** 2026-10-21
 **Fase:** In produzione (uso quotidiano attivo)
 
 ### Cosa funziona adesso
@@ -49,6 +49,7 @@
 - **Per venditore** (vista principale): per ogni venditore Card Trader (offerte di 110 espansioni lette in circa 7 minuti), il carrello Card Trader Zero e ogni venditore Cardmarket incollato, l'ordine da fare con una sola spedizione: traino ≥ 50%, altre aperture ≥ 33%, tenuti a non oltre il trend +10% solo insieme a un'apertura, guadagno netto ≥ 20% della spesa per aprire, dentro il budget. Venditori per guadagno netto, "nel budget" quelli che ci stanno in quell'ordine; Wizards a parte con il suo importo (500 €). Soglie, budget, negozi e spedizioni modificabili con ricalcolo immediato ("Aggiorna"). "Scelgo questo" con il totale della combinazione e i prodotti che si comprerebbero due volte ("anche in"). L'ultima lettura è salvata nel database e si riapre dopo i riavvii, con la sua data
 - **Venditori Cardmarket incollati**: dal campo si aprono le pagine delle offerte del venditore in inglese; l'utente copia e incolla (la lettura automatica è bloccata da Cloudflare e vietata). Si leggono prezzo, spedizione dell'articolo, quantità, commento; il venditore resta finché non lo si toglie, la pagina 1 reincollata sostituisce la sua categoria. Il riquadro "Da X ti conviene" usa le stesse regole e dice perché un venditore resta fuori
 - **Piano automatico**: il miglior insieme di prodotti per il budget (per prodotto, non per venditore), con cursore aprire/tenere e carrelli per negozio
+- **"Registra l'acquisto"** (dal 21/10, verificato con un ordine vero): su ogni ordine e su ogni riga, anche nel piano d'acquisto di Opportunità. Una finestra con le righe dell'ordine, già compilate e modificabili, scrive il registro acquisti in un colpo solo: spedizione ripartita sui prezzi, Tag con la data d'acquisto (non per i "Tieni"), "Da tenere" per i tenuti. Wizards escluso
 
 **App per smartphone** (sezione `/m`, PWA su Android, da fuori casa con Tailscale Serve). Dettaglio in `Documentation/Features/006-AppSmartphone.md`, guida d'accesso in `DEPLOY.md`
 - Scansiona (riconoscimento della carta dalla foto con Claude Sonnet 5.5 dal 17/10, circa 0,65 centesimi a carta; Opus 5.5 di riserva quando il set non si legge, cioè sulle carte vecchie, e ancora in confronto nel log per qualche giorno) e Cerca
@@ -90,6 +91,7 @@
 
 | Data | Decisione | Perché |
 |------|-----------|--------|
+| 2026-10-21 | "Registra l'acquisto" dagli ordini proposti: spedizione ripartita sui prezzi, Tag con la data d'acquisto solo per le aperture, finestra di conferma, Wizards escluso | Scelte dell'utente: il costo per carta deve comprendere la spedizione; all'acquisto la data d'apertura non si conosce; si compra spesso solo una parte dell'ordine; i drop Wizards non sono ancora nel catalogo quando si comprano |
 | 2026-10-19 | Negozio Wizards: niente "Compra" sui drop non acquistabili, "In negozio" = Disponibile, Preordine, In arrivo | Un suggerimento d'acquisto su un drop esaurito è rumore; gli esauriti restano consultabili scegliendo lo stato |
 | 2026-10-19 | Regole di avviso: Mazzi Commander a 3 anni, Da tenere a 80, email sui Secret Lair | Proposte della revisione settimanale approvate dall'utente: il prezzo realizzato aveva ammutolito la regola dei mazzi, Da tenere mandava un'email al giorno |
 | 2026-10-17 | Acquisti "per venditore": traino ≥ 50% che paga la spedizione, altre aperture ≥ 33%, tenuti al trend +10% solo con un'apertura, netto ≥ 20%, dentro il budget; Wizards a parte | L'utente compra per venditore: con più venditori le spedizioni si mangiano il guadagno. Soglie scelte dall'utente, modificabili |

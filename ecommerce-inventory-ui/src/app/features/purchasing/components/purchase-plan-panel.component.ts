@@ -5,6 +5,8 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { openRegisterPurchase } from './register-purchase-dialog.component';
 import { CardTraderCartLine, PlanCartItem, PlanCartResult, PlanOffer, PlanProduct, PurchasePlan, PurchasingService } from '../services/purchasing.service';
 
 /** Offerta del piano scelta: la stessa offerta può stare nel carrello CT Zero e nel blocco del venditore. */
@@ -28,7 +30,7 @@ interface OpenLink { label: string; url: string; }
 @Component({
   selector: 'app-purchase-plan-panel',
   standalone: true,
-  imports: [CommonModule, MatButtonModule, MatIconModule, MatTooltipModule, MatCheckboxModule, MatProgressSpinnerModule],
+  imports: [CommonModule, MatButtonModule, MatIconModule, MatTooltipModule, MatCheckboxModule, MatProgressSpinnerModule, MatDialogModule],
   template: `
     <div class="plan">
       <div class="plan-header">
@@ -91,7 +93,9 @@ interface OpenLink { label: string; url: string; }
             <div class="totals">{{ plan.ctZero.productCount }} prodotti · spesa <strong>{{ euro(plan.ctZero.total) }}</strong>
               · valore atteso netto {{ euro(plan.ctZero.openValueNet) }} · margine <strong class="good">{{ euro(plan.ctZero.margin) }}</strong>
               <button mat-icon-button (click)="addToCart(asPicked(plan.ctZero.items, true))" [disabled]="cartBusy()"
-                      matTooltip="Metti tutto il carrello CT Zero nel carrello Card Trader (via Card Trader Zero)"><mat-icon class="link">add_shopping_cart</mat-icon></button></div>
+                      matTooltip="Metti tutto il carrello CT Zero nel carrello Card Trader (via Card Trader Zero)"><mat-icon class="link">add_shopping_cart</mat-icon></button>
+              <button mat-icon-button (click)="register(plan.ctZero.items, true)"
+                      matTooltip="Dopo l'acquisto: registra l'ordine nel registro acquisti"><mat-icon class="link">post_add</mat-icon></button></div>
             <ng-container *ngTemplateOutlet="items; context: { $implicit: plan.ctZero.items, showSeller: true, viaZero: true }"></ng-container>
           </ng-container>
           <ng-template #noZero><div class="muted">Nessuna offerta conveniente spedibile con Card Trader Zero.</div></ng-template>
@@ -107,6 +111,8 @@ interface OpenLink { label: string; url: string; }
               · {{ s.productCount }} prodotti · spesa <strong>{{ euro(s.total) }}</strong> · margine <strong class="good">{{ euro(s.margin) }}</strong>
               <button mat-icon-button (click)="addToCart(asPicked(s.items, false))" [disabled]="cartBusy()"
                       matTooltip="Metti i prodotti di questo venditore nel carrello Card Trader (spedizione diretta dal venditore)"><mat-icon class="link">add_shopping_cart</mat-icon></button>
+              <button mat-icon-button (click)="register(s.items, false)"
+                      matTooltip="Dopo l'acquisto: registra l'ordine nel registro acquisti"><mat-icon class="link">post_add</mat-icon></button>
             </div>
             <ng-container *ngTemplateOutlet="items; context: { $implicit: s.items, showSeller: false, viaZero: false }"></ng-container>
           </div>
@@ -123,7 +129,7 @@ interface OpenLink { label: string; url: string; }
       <ng-template #items let-items let-showSeller="showSeller" let-viaZero="viaZero">
         <table>
           <tr><th></th><th>Prodotto</th><th *ngIf="showSeller">Venditore</th><th>Prezzo</th><th matTooltip="Trend Cardmarket dello stesso prodotto, per confronto">Trend CM</th><th>Disp.</th><th>Valore atteso</th><th>Resa</th><th></th><th></th></tr>
-          <tr *ngFor="let o of items" [class.picked]="isPicked(o, viaZero)" [class.in-cart]="inCart(o)">
+          <tr *ngFor="let o of items; let i = index" [class.picked]="isPicked(o, viaZero)" [class.in-cart]="inCart(o)">
             <td><mat-checkbox [checked]="isPicked(o, viaZero)" (change)="toggle(o, viaZero)"
                               [matTooltip]="viaZero ? 'Spunta (via Card Trader Zero)' : 'Spunta (direttamente dal venditore)'"></mat-checkbox></td>
             <td>{{ o.productName }}</td>
@@ -136,7 +142,8 @@ interface OpenLink { label: string; url: string; }
             <td><a *ngIf="blueprintOf(o) as bp" [href]="'https://www.cardtrader.com/cards/' + bp" target="_blank" rel="noopener"
                    matTooltip="Apri su Card Trader"><mat-icon class="link">open_in_new</mat-icon></a>
                 <a *ngIf="productOf(o)?.cardmarketName as cm" [href]="cardmarketSearch(cm)" target="_blank" rel="noopener"
-                   matTooltip="Cerca su Cardmarket"><span class="cm-link">CM</span></a></td>
+                   matTooltip="Cerca su Cardmarket"><span class="cm-link">CM</span></a>
+                <a class="clickable" (click)="register(items, viaZero, i)" matTooltip="Registra solo questo prodotto nel registro acquisti"><mat-icon class="link">post_add</mat-icon></a></td>
             <td><span class="cart-chip" *ngIf="inCart(o) as q" matTooltip="Questa offerta è nel carrello Card Trader">nel carrello{{ q > 1 ? ' ×' + q : '' }}
                 <button class="chip-remove" (click)="removeFromCart([o.cardTraderProductId])" [disabled]="cartBusy()"
                         matTooltip="Togli dal carrello Card Trader"><mat-icon>close</mat-icon></button></span></td>
@@ -180,6 +187,7 @@ interface OpenLink { label: string; url: string; }
     .muted-cell { color: #616161; }
     .cm-link { font-size: 11px; font-weight: 600; color: #3f51b5; margin-left: 4px; vertical-align: middle; }
     .link { font-size: 16px; height: 16px; width: 16px; vertical-align: middle; color: #3f51b5; }
+    .clickable { cursor: pointer; }
   `]
 })
 export class PurchasePlanPanelComponent implements OnInit {
@@ -210,7 +218,24 @@ export class PurchasePlanPanelComponent implements OnInit {
 
   private static readonly euroFormat = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' });
 
-  constructor(private purchasing: PurchasingService) { }
+  constructor(private purchasing: PurchasingService, private dialog: MatDialog) { }
+
+  /**
+   * Registra nel registro acquisti le offerte di un carrello (CT Zero o un venditore), o solo la riga `index`.
+   * La spedizione qui non è nota: si scrive nella finestra.
+   */
+  register(items: PlanOffer[], viaZero: boolean, index?: number) {
+    if (!items.length) return;
+    const store = viaZero ? 'Card Trader Zero' : 'Card Trader';
+    openRegisterPurchase(this.dialog, {
+      title: viaZero ? store : `${store} · ${items[0].sellerName}`,
+      shipping: 0,
+      lines: items.map(o => ({
+        sealedProductId: o.productId, name: o.productName, quantity: 1, unitPrice: o.price, store, seller: o.sellerName, hold: false
+      })),
+      checked: index != null ? [index] : undefined
+    });
+  }
 
   ngOnInit(): void {
     this.loadCart();

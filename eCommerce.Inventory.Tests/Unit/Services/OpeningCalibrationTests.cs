@@ -326,4 +326,37 @@ public class OpeningCalibrationTests
         saved.CardsEstimated.Should().BeTrue();
         saved.CalculatedCostPerCard.Should().Be(1.00m);
     }
+
+    [Fact]
+    public async Task SaveMany_RegistersAWholeOrderOrNothing()
+    {
+        _db.MtgjsonSets.Add(new MtgjsonSet { Code = "TRK", Name = "Star Trek" });
+        var box = new SealedProduct { Uuid = Guid.NewGuid(), SetCode = "TRK", Name = "Star Trek Play Booster Box", Category = "booster_box" };
+        var deck = new SealedProduct { Uuid = Guid.NewGuid(), SetCode = "TRK", Name = "Star Trek Commander Deck", Category = "deck" };
+        _db.SealedProducts.AddRange(box, deck);
+        await _db.SaveChangesAsync();
+        var service = PurchaseService();
+        var day = new DateOnly(2026, 10, 21);
+
+        var missing = () => service.SaveManyAsync(new[]
+        {
+            new ProductPurchaseInput(box.Id, 1, 100.00m, "Card Trader Zero", "Venditore A", day, null, "#TRK_PB_20261021", null),
+            new ProductPurchaseInput(999, 1, 10.00m, "Card Trader Zero", "Venditore B", day, null, null, null)
+        });
+        await missing.Should().ThrowAsync<ArgumentException>();
+        _db.ChangeTracker.Clear();
+        (await service.ListAsync()).Should().BeEmpty("un prodotto inesistente blocca tutto l'ordine");
+
+        var saved = await service.SaveManyAsync(new[]
+        {
+            new ProductPurchaseInput(box.Id, 1, 100.00m, "Card Trader Zero", "Venditore A", day, null, "#TRK_PB_20261021", null),
+            new ProductPurchaseInput(deck.Id, 2, 40.00m, "Card Trader Zero", "Venditore B", day, null, null, null, HoldForResale: true)
+        });
+
+        saved.Should().Be(2);
+        var list = await service.ListAsync();
+        list.Should().HaveCount(2);
+        list.Single(p => p.SealedProductId == deck.Id).HoldForResale.Should().BeTrue();
+        list.Single(p => p.SealedProductId == box.Id).Tag.Should().Be("#TRK_PB_20261021");
+    }
 }

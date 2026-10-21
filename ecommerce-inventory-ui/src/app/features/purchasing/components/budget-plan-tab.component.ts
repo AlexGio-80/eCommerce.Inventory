@@ -10,6 +10,8 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { RegisterOrderLine, openRegisterPurchase } from './register-purchase-dialog.component';
 import {
   BudgetPlanBasket, BudgetPlanLine, BudgetPlanResult, BudgetPlanStatus, BudgetShipping, PastedSeller, PlanCartItem, PurchasingService,
   SellerBasket, SellerBasketLine, SellerPasteResult, SellerPlanRequest, SellerPlanResult, SellerPlanStatus, SellerRules
@@ -33,7 +35,7 @@ const SELLER_REQUEST_KEY = 'budget_plan_seller_request';
   selector: 'app-budget-plan-tab',
   standalone: true,
   imports: [CommonModule, FormsModule, MatButtonModule, MatCardModule, MatCheckboxModule, MatFormFieldModule, MatIconModule,
-    MatInputModule, MatProgressBarModule, MatTooltipModule, MatSnackBarModule],
+    MatInputModule, MatProgressBarModule, MatTooltipModule, MatSnackBarModule, MatDialogModule],
   template: `
     <div class="container">
       <div class="modes">
@@ -338,6 +340,8 @@ const SELLER_REQUEST_KEY = 'budget_plan_seller_request';
                       <td><span [class]="'kind ' + (l.kind === 'Open' ? 'Open' : 'Hold')">{{ l.kind === 'Open' ? 'Apri' : 'Tieni' }}</span></td>
                       <td><a [href]="sellerLineUrl(b, l)" target="_blank" rel="noopener">{{ l.product.name }}</a>
                         <span class="muted"> · {{ l.product.setCode }}</span>
+                        <button class="reg-line" matTooltip="Registra solo questo prodotto nel registro acquisti" (click)="registerSeller(b, $index)">
+                          <mat-icon>post_add</mat-icon></button>
                         @if (alsoIn(sr, b, l); as others) { <div class="also">anche in: {{ others }}</div> }</td>
                       @if (b.key === 'ctzero') { <td>{{ l.offer.seller }}@if (l.offer.country) { ({{ l.offer.country }}) }</td> }
                       <td class="num">{{ eur(l.offer.price) }}</td>
@@ -349,14 +353,18 @@ const SELLER_REQUEST_KEY = 'budget_plan_seller_request';
                   }
                 </tbody>
               </table>
-              @if (b.store !== 'Cardmarket') {
-                <div class="actions">
+              <div class="actions">
+                @if (b.store !== 'Cardmarket') {
                   <button mat-stroked-button color="primary" [disabled]="addingCart() === b.key" (click)="sellerAddToCart(b)">
                     <mat-icon>add_shopping_cart</mat-icon> {{ addingCart() === b.key ? 'Aggiungo…' : 'Metti nel carrello Card Trader' }}
                   </button>
                   <a mat-button href="https://www.cardtrader.com/cart/edit" target="_blank" rel="noopener">Apri il carrello</a>
-                </div>
-              }
+                }
+                <button mat-stroked-button (click)="registerSeller(b)"
+                  matTooltip="Dopo l'acquisto: registra l'ordine nel registro acquisti, con prezzi, spedizione e Tag">
+                  <mat-icon>post_add</mat-icon> Registra l'acquisto
+                </button>
+              </div>
             </mat-card-content>
           </mat-card>
         }
@@ -420,6 +428,10 @@ const SELLER_REQUEST_KEY = 'budget_plan_seller_request';
                       <td>
                         <a [href]="productUrl(b, l)" target="_blank" rel="noopener">{{ l.info.name }}</a>
                         @if (l.info.setCode) { <span class="muted"> · {{ l.info.setCode }}</span> }
+                        @if (l.info.productId && b.store !== 'Wizards') {
+                          <button class="reg-line" matTooltip="Registra solo questo prodotto nel registro acquisti" (click)="registerPlan(b, l.offerKey)">
+                            <mat-icon>post_add</mat-icon></button>
+                        }
                       </td>
                       <td class="num">{{ l.quantity }}</td>
                       <td class="num">{{ eur(l.unitPrice) }}</td>
@@ -438,6 +450,12 @@ const SELLER_REQUEST_KEY = 'budget_plan_seller_request';
                   </button>
                   <a mat-button href="https://www.cardtrader.com/cart/edit" target="_blank" rel="noopener">Apri il carrello</a>
                   @if (hasMultipleCopies(b)) { <span class="muted">Il carrello prende una copia per offerta: le altre aggiungile sul sito.</span> }
+                }
+                @if (b.store !== 'Wizards') {
+                  <button mat-stroked-button (click)="registerPlan(b)"
+                    matTooltip="Dopo l'acquisto: registra l'ordine nel registro acquisti, con prezzi, spedizione e Tag">
+                    <mat-icon>post_add</mat-icon> Registra l'acquisto
+                  </button>
                 }
               </div>
             </mat-card-content>
@@ -494,6 +512,8 @@ const SELLER_REQUEST_KEY = 'budget_plan_seller_request';
     .paste-result { margin: 4px 0 8px; display: flex; flex-direction: column; gap: 6px; }
     .seller-basket.no { background: #fff3e0; border-left-color: #fb8c00; }
     .also { color: #e65100; font-size: 11px; }
+    .reg-line { background: none; border: none; padding: 0 2px; cursor: pointer; color: #3f51b5; vertical-align: middle; line-height: 1; }
+    .reg-line mat-icon { font-size: 16px; width: 16px; height: 16px; }
     .choose { margin-right: 6px; }
     .choice-bar { background: #e8eaf6; border-radius: 6px; padding: 8px 12px; display: flex; gap: 24px; flex-wrap: wrap; align-items: baseline; }
     .over { color: #c62828; font-weight: 600; }
@@ -511,6 +531,7 @@ const SELLER_REQUEST_KEY = 'budget_plan_seller_request';
 export class BudgetPlanTabComponent implements OnInit, OnDestroy {
   private purchasing = inject(PurchasingService);
   private snackBar = inject(MatSnackBar);
+  private dialog = inject(MatDialog);
 
   budget = 300;
   openShare = 70;
@@ -662,6 +683,32 @@ export class BudgetPlanTabComponent implements OnInit, OnDestroy {
       return 'https://www.cardmarket.com/en/Magic/Products/Search?searchString=' + encodeURIComponent(l.product.cardmarketName ?? l.product.name);
     }
     return l.product.cardTraderBlueprintId ? 'https://www.cardtrader.com/cards/' + l.product.cardTraderBlueprintId : '#';
+  }
+
+  /** Registra nel registro acquisti l'ordine di un venditore, o solo la riga `index` (le altre restano da spuntare). */
+  registerSeller(b: SellerBasket, index?: number): void {
+    const lines: RegisterOrderLine[] = b.lines.map(l => ({
+      sealedProductId: l.product.productId, name: l.product.name, quantity: 1, unitPrice: l.offer.price,
+      store: b.store, seller: l.offer.seller, hold: l.kind === 'Hold'
+    }));
+    openRegisterPurchase(this.dialog, {
+      title: b.key === 'ctzero' ? b.store : `${b.store} · ${b.seller}`,
+      shipping: b.shipping, lines, checked: index != null ? [index] : undefined
+    });
+  }
+
+  /** Come {@link registerSeller} per un carrello del piano automatico; le righe senza prodotto di catalogo restano fuori. */
+  registerPlan(b: BudgetPlanBasket, offerKey?: string): void {
+    const planLines = b.lines.filter(l => l.info.productId);
+    const lines: RegisterOrderLine[] = planLines.map(l => ({
+      sealedProductId: l.info.productId!, name: l.info.name, quantity: l.quantity, unitPrice: l.unitPrice,
+      store: b.store, seller: l.info.seller ?? b.seller, hold: l.info.kind === 'Hold'
+    }));
+    const index = offerKey ? planLines.findIndex(l => l.offerKey === offerKey) : -1;
+    openRegisterPurchase(this.dialog, {
+      title: b.seller ? `${b.store} · ${b.seller}` : b.store,
+      shipping: b.shipping, lines, checked: index >= 0 ? [index] : undefined
+    });
   }
 
   sellerAddToCart(b: SellerBasket): void {

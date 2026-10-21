@@ -185,17 +185,7 @@ public class ProductPurchaseService
             || purchase.OpenedAt != input.OpenedAt
             || purchase.PredictedOpenValueNet == null;
 
-        purchase.SealedProductId = product.Id;
-        purchase.Quantity = input.Quantity;
-        purchase.UnitPrice = input.UnitPrice;
-        purchase.Store = Trim(input.Store, 100);
-        purchase.Seller = Trim(input.Seller, 100);
-        purchase.PurchasedAt = input.PurchasedAt;
-        purchase.OpenedAt = input.OpenedAt;
-        purchase.Tag = Trim(input.Tag, 100);
-        purchase.Notes = Trim(input.Notes, 1000);
-        purchase.CostPerCard = input.CostPerCard is > 0 ? Math.Round(input.CostPerCard.Value, 2) : null;
-        purchase.HoldForResale = input.HoldForResale;
+        Apply(purchase, product, input);
 
         if (refreshPrediction)
         {
@@ -207,6 +197,71 @@ public class ProductPurchaseService
         var cards = await CardsPerUnitAsync(new[] { product.Id }, cancellationToken);
         var cmNames = await CardmarketNamesAsync(new[] { product.CardmarketId }, cancellationToken);
         return Map(purchase, cards.GetValueOrDefault(product.Id), CmName(cmNames, product));
+    }
+
+    private static void Apply(ProductPurchase purchase, SealedProduct product, ProductPurchaseInput input)
+    {
+        purchase.SealedProductId = product.Id;
+        purchase.Quantity = input.Quantity;
+        purchase.UnitPrice = input.UnitPrice;
+        purchase.Store = Trim(input.Store, 100);
+        purchase.Seller = Trim(input.Seller, 100);
+        purchase.PurchasedAt = input.PurchasedAt;
+        purchase.OpenedAt = input.OpenedAt;
+        purchase.Tag = Trim(input.Tag, 100);
+        purchase.Notes = Trim(input.Notes, 1000);
+        purchase.CostPerCard = input.CostPerCard is > 0 ? Math.Round(input.CostPerCard.Value, 2) : null;
+        purchase.HoldForResale = input.HoldForResale;
+    }
+
+    /// <summary>
+    /// Registra più acquisti insieme, tutti o nessuno: è la "Registra acquisto" delle pagine da cui si
+    /// compra (Budget, piano d'acquisto). L'analisi di un'uscita si calcola una volta sola anche se
+    /// l'ordine ha più prodotti della stessa.
+    /// </summary>
+    /// <exception cref="ArgumentException">Elenco vuoto, prodotto inesistente o dati non validi.</exception>
+    public async Task<int> SaveManyAsync(IReadOnlyList<ProductPurchaseInput> inputs, CancellationToken cancellationToken = default)
+    {
+        if (inputs.Count == 0) throw new ArgumentException("Nessun acquisto da registrare");
+        foreach (var input in inputs)
+        {
+            if (input.Quantity <= 0) throw new ArgumentException("La quantità deve essere maggiore di zero");
+            if (input.UnitPrice < 0) throw new ArgumentException("Il prezzo non può essere negativo");
+        }
+
+        var ids = inputs.Select(i => i.SealedProductId).Distinct().ToList();
+        var products = await _db.SealedProducts.Where(p => ids.Contains(p.Id)).ToDictionaryAsync(p => p.Id, cancellationToken);
+        var missing = ids.FirstOrDefault(id => !products.ContainsKey(id));
+        if (missing != 0) throw new ArgumentException($"Prodotto sigillato {missing} inesistente");
+
+        var analyses = new Dictionary<string, SealedSetAnalysis?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var input in inputs)
+        {
+            var product = products[input.SealedProductId];
+            var purchase = new ProductPurchase();
+            Apply(purchase, product, input);
+            await PredictAsync(purchase, product, cancellationToken, analyses);
+            _db.ProductPurchases.Add(purchase);
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return inputs.Count;
+    }
+
+    /// <summary>Dati di catalogo dei prodotti indicati (per proporre il Tag nella registrazione da un ordine).</summary>
+    public async Task<List<CatalogProductDto>> GetCatalogProductsAsync(IReadOnlyCollection<int> ids, CancellationToken cancellationToken = default)
+    {
+        var sets = await _db.MtgjsonSets.AsNoTracking().ToDictionaryAsync(s => s.Code, s => s.Name, cancellationToken);
+        var products = await (
+                from p in _db.SealedProducts.AsNoTracking().Where(p => ids.Contains(p.Id))
+                join c in _db.CardmarketProducts.AsNoTracking() on p.CardmarketId equals (int?)c.IdProduct into cm
+                from c in cm.DefaultIfEmpty()
+                select new { p.Id, p.Name, p.SetCode, p.Category, p.Subtype, CardmarketName = c != null ? c.Name : null })
+            .ToListAsync(cancellationToken);
+        return products
+            .Select(p => new CatalogProductDto(p.Id, p.Name, p.CardmarketName, p.SetCode, sets.GetValueOrDefault(p.SetCode),
+                p.Category, p.Subtype))
+            .ToList();
     }
 
     public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default)
@@ -222,12 +277,18 @@ public class ProductPurchaseService
     /// Valore atteso netto per unità, sui prezzi Cardmarket corretti. Solo se il modello dà una
     /// decisione: con dati incompleti la previsione sarebbe sottostimata e resta vuota.
     /// </summary>
-    private async Task PredictAsync(ProductPurchase purchase, SealedProduct product, CancellationToken cancellationToken)
+    /// <param name="analyses">Analisi già calcolate per uscita, da riusare in una registrazione di più prodotti.</param>
+    private async Task PredictAsync(ProductPurchase purchase, SealedProduct product, CancellationToken cancellationToken,
+        Dictionary<string, SealedSetAnalysis?>? analyses = null)
     {
         var set = await _db.MtgjsonSets.AsNoTracking().FirstOrDefaultAsync(s => s.Code == product.SetCode, cancellationToken);
         var mainCode = set?.ParentCode ?? product.SetCode;
 
-        var analysis = await _analysis.AnalyzeAsync(mainCode, null, cancellationToken);
+        if (analyses == null || !analyses.TryGetValue(mainCode, out var analysis))
+        {
+            analysis = await _analysis.AnalyzeAsync(mainCode, null, cancellationToken);
+            analyses?.Add(mainCode, analysis);
+        }
         var row = analysis?.Products.FirstOrDefault(p => p.Id == product.Id);
 
         var reliable = row is { OpenValueCm: not null } && row.Decision is "Apri" or "Tieni sigillato";
