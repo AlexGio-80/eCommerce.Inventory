@@ -161,6 +161,7 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
 
   private static readonly euroFormat = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' });
   private euro = (p: ValueFormatterParams) => p.value == null ? '' : PurchasesTabComponent.euroFormat.format(p.value);
+  private money = (v?: number) => v == null ? '—' : PurchasesTabComponent.euroFormat.format(v);
   private date = (p: ValueFormatterParams) => p.value ? new Date(p.value).toLocaleDateString('it-IT') : '';
 
   columnDefs: ColDef<ProductPurchase>[] = [
@@ -174,6 +175,14 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
     { headerName: 'Venditore', field: 'seller', width: 130 },
     { headerName: 'Acquistato', field: 'purchasedAt', width: 115, valueFormatter: this.date },
     { headerName: 'Aperto', field: 'openedAt', width: 105, valueFormatter: this.date },
+    {
+      headerName: 'Oggi conviene', field: 'todayDecision', width: 140,
+      headerTooltip: 'Decisione dell\'ultima classifica giornaliera, solo per i prodotti non ancora aperti',
+      cellStyle: p => p.value === 'Apri' ? { color: '#2e7d32', fontWeight: 600 } : p.value === 'Tieni sigillato' ? { color: '#1565c0', fontWeight: 600 } : null,
+      tooltipValueGetter: p => !p.data?.todayDecision ? '' :
+        `Aprendolo: ${this.money(p.data.todayOpenValueNet)} netti per unità; venduto chiuso: ${this.money(p.data.todaySealedNet)}` +
+        ` (classifica del ${new Date(p.data.todayDecisionDate!).toLocaleDateString('it-IT')})`
+    },
     { headerName: 'Tag', field: 'tag', width: 170 },
     { headerName: 'Da tenere', field: 'holdForResale', width: 105, valueFormatter: p => p.value ? 'sì' : '',
       headerTooltip: 'Comprato per tenerlo: finché è sigillato è nella scheda Magazzino' },

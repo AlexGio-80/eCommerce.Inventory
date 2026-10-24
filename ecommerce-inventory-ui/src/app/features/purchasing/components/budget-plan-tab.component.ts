@@ -176,6 +176,19 @@ const SELLER_REQUEST_KEY = 'budget_plan_seller_request';
             <span class="muted">· {{ sellers().length ? sellers().length + ' incollati negli ultimi giorni' : 'incolla le pagine delle offerte di un venditore' }}</span>
           </div>
           @if (showSellers()) {
+            @if (sellers().length) {
+              <div class="sellers">
+                @for (s of sellers(); track s.seller) {
+                  <span class="seller-chip">
+                    <a href="" [class.current]="pasteResult()?.seller === s.seller" (click)="$event.preventDefault(); showSeller(s.seller)"
+                       matTooltip="Rivedi le sue offerte">{{ s.seller }}</a>
+                    <a [href]="sellerUrl(s.seller)" target="_blank" rel="noopener" matTooltip="Apri su Cardmarket"><mat-icon class="tiny">open_in_new</mat-icon></a>
+                    · {{ s.offers }} offerte · <span [class.stale]="isStale(s.pastedAt)" [matTooltip]="isStale(s.pastedAt) ? 'Incollato più di 7 giorni fa: reincolla le sue pagine per aggiornare prezzi e disponibilità' : ''">{{ s.pastedAt | date:'dd/MM HH:mm' }}</span>
+                    <button mat-icon-button matTooltip="Togli le offerte di questo venditore" (click)="deleteSeller(s)"><mat-icon>close</mat-icon></button>
+                  </span>
+                }
+              </div>
+            }
             <div class="open-seller">
               <mat-form-field appearance="outline">
                 <mat-label>Venditore Cardmarket da aprire</mat-label>
@@ -222,7 +235,9 @@ const SELLER_REQUEST_KEY = 'budget_plan_seller_request';
                   <tbody>
                     @for (o of p.offers; track o.offerId) {
                       <tr [class.good]="o.verdict.startsWith('Da aprire') || o.verdict.startsWith('Da tenere:')">
-                        <td>{{ o.name }}@if (o.comment) { <div class="muted">{{ o.comment }}</div> }</td>
+                        <td><a [href]="sellerOfferUrl(p.seller, o.name)" target="_blank" rel="noopener" matTooltip="Questo prodotto fra le offerte di {{ p.seller }}">{{ o.name }}</a>
+                          <a [href]="cmSearchUrl(o.name)" target="_blank" rel="noopener" matTooltip="Cerca il prodotto su tutto Cardmarket"><mat-icon class="tiny">search</mat-icon></a>
+                          @if (o.comment) { <div class="muted">{{ o.comment }}</div> }</td>
                         <td class="num">{{ eur(o.price) }}</td>
                         <td class="num">{{ eur(o.shipping) }}</td>
                         <td class="num">{{ o.quantity }}</td>
@@ -235,19 +250,6 @@ const SELLER_REQUEST_KEY = 'budget_plan_seller_request';
                 </table>
                 @if (p.unmatched.length) {
                   <div class="muted">Non abbinate al catalogo ({{ p.unmatched.length }}): {{ p.unmatched.join(' · ') }}</div>
-                }
-              </div>
-            }
-            @if (sellers().length) {
-              <div class="sellers">
-                @for (s of sellers(); track s.seller) {
-                  <span class="seller-chip">
-                    <a href="" [class.current]="pasteResult()?.seller === s.seller" (click)="$event.preventDefault(); showSeller(s.seller)"
-                       matTooltip="Rivedi le sue offerte">{{ s.seller }}</a>
-                    <a [href]="sellerUrl(s.seller)" target="_blank" rel="noopener" matTooltip="Apri su Cardmarket"><mat-icon class="tiny">open_in_new</mat-icon></a>
-                    · {{ s.offers }} offerte · <span [class.stale]="isStale(s.pastedAt)" [matTooltip]="isStale(s.pastedAt) ? 'Incollato più di 7 giorni fa: reincolla le sue pagine per aggiornare prezzi e disponibilità' : ''">{{ s.pastedAt | date:'dd/MM HH:mm' }}</span>
-                    <button mat-icon-button matTooltip="Togli le offerte di questo venditore" (click)="deleteSeller(s)"><mat-icon>close</mat-icon></button>
-                  </span>
                 }
               </div>
             }
@@ -339,6 +341,9 @@ const SELLER_REQUEST_KEY = 'budget_plan_seller_request';
                     <tr>
                       <td><span [class]="'kind ' + (l.kind === 'Open' ? 'Open' : 'Hold')">{{ l.kind === 'Open' ? 'Apri' : 'Tieni' }}</span></td>
                       <td><a [href]="sellerLineUrl(b, l)" target="_blank" rel="noopener">{{ l.product.name }}</a>
+                        @if (b.store === 'Cardmarket') {
+                          <a [href]="cmSearchUrl(l.product.cardmarketName ?? l.product.name)" target="_blank" rel="noopener" matTooltip="Cerca il prodotto su tutto Cardmarket"><mat-icon class="tiny">search</mat-icon></a>
+                        }
                         <span class="muted"> · {{ l.product.setCode }}</span>
                         <button class="reg-line" matTooltip="Registra solo questo prodotto nel registro acquisti" (click)="registerSeller(b, $index)">
                           <mat-icon>post_add</mat-icon></button>
@@ -427,6 +432,9 @@ const SELLER_REQUEST_KEY = 'budget_plan_seller_request';
                       <td><span [class]="'kind ' + l.info.kind">{{ kindLabel(l) }}</span></td>
                       <td>
                         <a [href]="productUrl(b, l)" target="_blank" rel="noopener">{{ l.info.name }}</a>
+                        @if (b.store === 'Cardmarket' && b.seller) {
+                          <a [href]="cmSearchUrl(l.info.cardmarketName ?? l.info.name)" target="_blank" rel="noopener" matTooltip="Cerca il prodotto su tutto Cardmarket"><mat-icon class="tiny">search</mat-icon></a>
+                        }
                         @if (l.info.setCode) { <span class="muted"> · {{ l.info.setCode }}</span> }
                         @if (l.info.productId && b.store !== 'Wizards') {
                           <button class="reg-line" matTooltip="Registra solo questo prodotto nel registro acquisti" (click)="registerPlan(b, l.offerKey)">
@@ -679,9 +687,7 @@ export class BudgetPlanTabComponent implements OnInit, OnDestroy {
   }
 
   sellerLineUrl(b: SellerBasket, l: SellerBasketLine): string {
-    if (b.store === 'Cardmarket') {
-      return 'https://www.cardmarket.com/en/Magic/Products/Search?searchString=' + encodeURIComponent(l.product.cardmarketName ?? l.product.name);
-    }
+    if (b.store === 'Cardmarket') return this.sellerOfferUrl(b.seller, l.product.cardmarketName ?? l.product.name);
     return l.product.cardTraderBlueprintId ? 'https://www.cardtrader.com/cards/' + l.product.cardTraderBlueprintId : '#';
   }
 
@@ -939,6 +945,16 @@ export class BudgetPlanTabComponent implements OnInit, OnDestroy {
     return `https://www.cardmarket.com/en/Magic/Users/${encodeURIComponent(seller)}/Offers`;
   }
 
+  /** Le offerte del venditore che corrispondono al nome del prodotto (la ricerca della sua pagina). */
+  sellerOfferUrl(seller: string, name: string): string {
+    return `${this.sellerUrl(seller)}/Search?search=${encodeURIComponent(name).replace(/%20/g, '+')}`;
+  }
+
+  /** Il prodotto cercato su tutto Cardmarket, fra tutti i venditori. */
+  cmSearchUrl(name: string): string {
+    return 'https://www.cardmarket.com/en/Magic/Products/Search?searchString=' + encodeURIComponent(name);
+  }
+
   /** Un negozio acceso o spento: con un piano già calcolato si ricalcola subito, senza rileggere Card Trader. */
   toggleStore(key: string, on: boolean): void {
     this.excludedStores = on ? this.excludedStores.filter(s => s !== key) : [...this.excludedStores, key];
@@ -1019,7 +1035,8 @@ export class BudgetPlanTabComponent implements OnInit, OnDestroy {
   productUrl(b: BudgetPlanBasket, l: BudgetPlanLine): string {
     if (l.info.wizardsUrl) return l.info.wizardsUrl;
     if (b.store === 'Cardmarket') {
-      return 'https://www.cardmarket.com/en/Magic/Products/Search?searchString=' + encodeURIComponent(l.info.cardmarketName ?? l.info.name);
+      const name = l.info.cardmarketName ?? l.info.name;
+      return b.seller ? this.sellerOfferUrl(b.seller, name) : this.cmSearchUrl(name);
     }
     return l.info.cardTraderBlueprintId ? 'https://www.cardtrader.com/cards/' + l.info.cardTraderBlueprintId : '#';
   }

@@ -9,7 +9,7 @@
 ## Stato Attuale
 
 **Branch principale:** `master`
-**Ultimo aggiornamento:** 2026-10-21
+**Ultimo aggiornamento:** 2026-10-24
 **Fase:** In produzione (uso quotidiano attivo)
 
 ### Cosa funziona adesso
@@ -40,14 +40,14 @@
 - Dati: listino pubblico Cardmarket ogni mattina alle 07:00 (`CardmarketImportWorker`); catalogo sigillati e composizione delle buste da MTGJSON
 - Analisi uscita: convenienza fra formati, valore atteso dell'apertura (prezzi CM e CT affiancati, fattore "prezzo realizzato", quota venduta per fascia, costo per carta, costi di vendita 15%), decisione Apri / Tieni sigillato / Dati incompleti / Prezzo CM dubbio / Non giocabili. Trend CM fino a 0,05 € = prezzo di riempimento, quindi "Prezzo CM dubbio"
 - Opportunità: classifica giornaliera di tutte le uscite, filtro "Resa massima %", piano d'acquisto su Card Trader per venditore, con "Metti nel carrello Card Trader" (via API, non compra) e "Apri tutti" su Card Trader o Cardmarket
-- Aperture (bilancio reale per Tag) e Registro acquisti (ricerca su tutto il catalogo per nome Cardmarket, costo per carta, previsione salvata all'apertura)
+- Aperture (bilancio reale per Tag) e Registro acquisti (ricerca su tutto il catalogo per nome Cardmarket, costo per carta, previsione salvata all'apertura, colonna "Oggi conviene" Apri / Tieni sigillato dall'ultima classifica, solo per i non aperti)
 - Avvisi: regole per prodotto o per gruppo, campanella ed email di riepilogo (SMTP configurato) con i link Card Trader e Cardmarket di ogni prodotto. Gli avvisi di apertura ignorano le rese oltre il 300%
 - Secret Lair: retrospettiva dei drop comprati; negozio Wizards letto alle 8, 14 e 20 con avviso per ogni superdrop nuovo; valutazione del drop prima dell'acquisto (Compra / Al limite / Lascia). I drop con la vendita finita sono "Vendita chiusa" (il catalogo Wizards li tiene con una scorta di comodo); "In negozio" mostra solo i drop acquistabili, e per gli altri la stima dice "Non acquistabile"
 - Magazzino: sigillati segnati "Da tenere" nel registro, con valore di oggi e guadagno latente (feature 005)
 
 **Pianificatore del budget** (scheda "Budget" della pagina Acquisti, il fulcro del blocco Acquisti per l'utente). Dettaglio in `Documentation/Features/007-PianificatoreBudget.md`
 - **Per venditore** (vista principale): per ogni venditore Card Trader (offerte di 110 espansioni lette in circa 7 minuti), il carrello Card Trader Zero e ogni venditore Cardmarket incollato, l'ordine da fare con una sola spedizione: traino ≥ 50%, altre aperture ≥ 33%, tenuti a non oltre il trend +10% solo insieme a un'apertura, guadagno netto ≥ 20% della spesa per aprire, dentro il budget. Venditori per guadagno netto, "nel budget" quelli che ci stanno in quell'ordine; Wizards a parte con il suo importo (500 €). Soglie, budget, negozi e spedizioni modificabili con ricalcolo immediato ("Aggiorna"). "Scelgo questo" con il totale della combinazione e i prodotti che si comprerebbero due volte ("anche in"). L'ultima lettura è salvata nel database e si riapre dopo i riavvii, con la sua data
-- **Venditori Cardmarket incollati**: dal campo si aprono le pagine delle offerte del venditore in inglese; l'utente copia e incolla (la lettura automatica è bloccata da Cloudflare e vietata). Si leggono prezzo, spedizione dell'articolo, quantità, commento; il venditore resta finché non lo si toglie, la pagina 1 reincollata sostituisce la sua categoria. Il riquadro "Da X ti conviene" usa le stesse regole e dice perché un venditore resta fuori
+- **Venditori Cardmarket incollati**: dal campo si aprono le pagine delle offerte del venditore in inglese; l'utente copia e incolla (la lettura automatica è bloccata da Cloudflare e vietata). Si leggono prezzo, spedizione dell'articolo, quantità, commento; il venditore resta finché non lo si toglie, la pagina 1 reincollata sostituisce la sua categoria. Il riquadro "Da X ti conviene" usa le stesse regole e dice perché un venditore resta fuori. I venditori incollati stanno in cima al riquadro; ovunque un prodotto è mostrato con un venditore Cardmarket, il nome apre la ricerca nelle sue offerte (`/Users/<venditore>/Offers/Search?search=`) e la lente la ricerca su tutto Cardmarket
 - **Piano automatico**: il miglior insieme di prodotti per il budget (per prodotto, non per venditore), con cursore aprire/tenere e carrelli per negozio
 - **"Registra l'acquisto"** (dal 21/10, verificato con un ordine vero): su ogni ordine e su ogni riga, anche nel piano d'acquisto di Opportunità. Una finestra con le righe dell'ordine, già compilate e modificabili, scrive il registro acquisti in un colpo solo: spedizione ripartita sui prezzi, Tag con la data d'acquisto (non per i "Tieni"), "Da tenere" per i tenuti. Wizards escluso
 
@@ -87,6 +87,7 @@
 
 | Data | Decisione | Perché |
 |------|-----------|--------|
+| 2026-10-24 | Link ai prodotti dei venditori Cardmarket sulla ricerca nelle offerte del venditore, ricerca generica come secondo link | L'utente guarda le offerte di un venditore anche fuori dalle soglie; il formato `Offers/Search?search=` è quello verificato dall'utente |
 | 2026-10-21 | "Registra l'acquisto" dagli ordini proposti: spedizione ripartita sui prezzi, Tag con la data d'acquisto solo per le aperture, finestra di conferma, Wizards escluso | Scelte dell'utente: il costo per carta deve comprendere la spedizione; all'acquisto la data d'apertura non si conosce; si compra spesso solo una parte dell'ordine; i drop Wizards non sono ancora nel catalogo quando si comprano |
 | 2026-10-19 | Negozio Wizards: niente "Compra" sui drop non acquistabili, "In negozio" = Disponibile, Preordine, In arrivo | Un suggerimento d'acquisto su un drop esaurito è rumore; gli esauriti restano consultabili scegliendo lo stato |
 | 2026-10-19 | Regole di avviso: Mazzi Commander a 3 anni, Da tenere a 80, email sui Secret Lair | Proposte della revisione settimanale approvate dall'utente: il prezzo realizzato aveva ammutolito la regola dei mazzi, Da tenere mandava un'email al giorno |

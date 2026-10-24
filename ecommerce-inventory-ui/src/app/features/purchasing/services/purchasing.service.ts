@@ -573,6 +573,11 @@ export interface ProductPurchase extends ProductPurchaseInput {
     predictionCoverage?: number;
     predictedAt?: string;
     predictedTotalNet?: number;
+    /** Decisione dell'ultima classifica (Apri, Tieni sigillato...), solo finché non è aperto. */
+    todayDecision?: string;
+    todayOpenValueNet?: number;
+    todaySealedNet?: number;
+    todayDecisionDate?: string;
 }
 
 /** Prodotto del catalogo sigillati trovato dalla ricerca del registro acquisti. */

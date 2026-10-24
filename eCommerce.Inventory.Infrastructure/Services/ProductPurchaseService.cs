@@ -30,7 +30,29 @@ public class ProductPurchaseService
 
         var cards = await CardsPerUnitAsync(purchases.Select(p => p.SealedProductId), cancellationToken);
         var cmNames = await CardmarketNamesAsync(purchases.Select(p => p.SealedProduct?.CardmarketId), cancellationToken);
-        return purchases.Select(p => Map(p, cards.GetValueOrDefault(p.SealedProductId), CmName(cmNames, p.SealedProduct))).ToList();
+        var today = await TodayDecisionsAsync(purchases.Where(p => p.OpenedAt == null).Select(p => p.SealedProductId), cancellationToken);
+        return purchases.Select(p => Map(p, cards.GetValueOrDefault(p.SealedProductId), CmName(cmNames, p.SealedProduct),
+            p.OpenedAt == null ? today.GetValueOrDefault(p.SealedProductId) : null)).ToList();
+    }
+
+    /// <summary>
+    /// Decisione aprire/tenere chiuso dell'ultima classifica giornaliera, per i prodotti non ancora
+    /// aperti: dopo l'apertura non conta più. Si guarda all'ultima settimana, perché un prodotto può
+    /// mancare dalla classifica di oggi (listino non letto).
+    /// </summary>
+    private async Task<Dictionary<int, TodayDecision>> TodayDecisionsAsync(IEnumerable<int> productIds, CancellationToken cancellationToken)
+    {
+        var ids = productIds.Distinct().ToList();
+        if (ids.Count == 0) return new Dictionary<int, TodayDecision>();
+        var since = DateOnly.FromDateTime(DateTime.Today.AddDays(-7));
+        var rows = await _db.SealedOpportunities.AsNoTracking()
+            .Where(o => ids.Contains(o.SealedProductId) && o.Date >= since)
+            .Select(o => new { o.SealedProductId, o.Date, o.Decision, o.OpenValueCm, o.SealedNetCm })
+            .ToListAsync(cancellationToken);
+        return rows
+            .GroupBy(o => o.SealedProductId)
+            .Select(g => g.OrderByDescending(o => o.Date).First())
+            .ToDictionary(o => o.SealedProductId, o => new TodayDecision(o.Decision, o.OpenValueCm, o.SealedNetCm, o.Date));
     }
 
     private const int MaxSearchResults = 40;
@@ -309,7 +331,7 @@ public class ProductPurchaseService
     /// carte che contiene: al 09/10/2026 è il modo in cui l'utente calcolava a mano il prezzo d'acquisto
     /// delle inserzioni (es. Collector Box = prezzo / 12 buste × 15 carte).
     /// </summary>
-    private static ProductPurchaseDto Map(ProductPurchase p, CardsPerUnit? cards, string? cardmarketName)
+    private static ProductPurchaseDto Map(ProductPurchase p, CardsPerUnit? cards, string? cardmarketName, TodayDecision? today = null)
     {
         decimal? calculated = cards is { Cards: > 0 } ? Math.Round(p.UnitPrice / cards.Cards, 2) : null;
         return new ProductPurchaseDto(
@@ -319,9 +341,14 @@ public class ProductPurchaseService
             p.PredictedOpenValueNet, p.PredictionCoverage, p.PredictedAt,
             p.PredictedOpenValueNet.HasValue ? Math.Round(p.Quantity * p.PredictedOpenValueNet.Value, 2) : null,
             p.CostPerCard, calculated, cards?.Cards, cards?.Estimated ?? false,
-            p.CostPerCard ?? calculated, cardmarketName, p.HoldForResale);
+            p.CostPerCard ?? calculated, cardmarketName, p.HoldForResale,
+            today?.Decision, today?.OpenValueNet, today?.SealedNet, today?.Date);
     }
 }
+
+/// <param name="OpenValueNet">Valore atteso netto aprendolo, per unità.</param>
+/// <param name="SealedNet">Ricavato netto rivendendolo chiuso al trend, per unità.</param>
+public record TodayDecision(string? Decision, decimal? OpenValueNet, decimal? SealedNet, DateOnly Date);
 
 public record ProductPurchaseInput(
     int SealedProductId,
@@ -343,6 +370,7 @@ public record CardsPerUnit(int Cards, bool Estimated);
 /// <param name="CostPerCard">Costo per carta scritto a mano; null se si usa quello calcolato.</param>
 /// <param name="CalculatedCostPerCard">Prezzo di un'unità diviso le carte che contiene.</param>
 /// <param name="EffectiveCostPerCard">Quello da usare nelle inserzioni: scritto a mano, altrimenti calcolato.</param>
+/// <param name="TodayDecision">Decisione dell'ultima classifica (Apri / Tieni sigillato / ...), solo per i non aperti.</param>
 public record ProductPurchaseDto(
     int Id,
     int SealedProductId,
@@ -367,7 +395,11 @@ public record ProductPurchaseDto(
     bool CardsEstimated,
     decimal? EffectiveCostPerCard,
     string? CardmarketName,
-    bool HoldForResale);
+    bool HoldForResale,
+    string? TodayDecision = null,
+    decimal? TodayOpenValueNet = null,
+    decimal? TodaySealedNet = null,
+    DateOnly? TodayDecisionDate = null);
 
 /// <param name="Name">Nome MTGJSON (quello del catalogo).</param>
 /// <param name="CardmarketName">Nome dello stesso prodotto su Cardmarket, se abbinato.</param>
