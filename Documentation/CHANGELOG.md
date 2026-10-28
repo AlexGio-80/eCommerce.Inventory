@@ -9,6 +9,33 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-10-28] Fix — Sincronizzazione dell'inventario bloccata da righe doppie *(pubblicato e verificato il 2026-10-28)*
+
+#### Problema
+
+- Dal 18/10 la sezione Inventario della sincronizzazione notturna falliva ogni notte ("An item with the same
+  key has already been added"): 7 righe di magazzino con lo stesso prodotto Card Trader, nate il 17/10 da un
+  secondo invio della coda partito mentre il primo non aveva ancora salvato.
+- Effetto visibile: carte Secret Lair caricate per errore non foil e corrette in foil su Card Trader restavano
+  non foil a database, e ogni notte l'autopricer le riportava al prezzo della non foil, sotto costo.
+
+#### Soluzione Implementata
+
+- Invio della coda protetto da un lock: un secondo invio, dal PC o dal telefono, riceve `409` con un messaggio.
+- Nello stesso invio, un prodotto che Card Trader accorpa a uno appena creato riusa quella riga.
+- La sincronizzazione non si ferma più su un doppione: tiene la riga più recente e toglie le altre, se non hanno
+  ordini collegati, con un avviso nel log.
+- A database: tolti i 7 doppioni, sincronizzazione manuale dell'inventario (499 inserzioni sparite tolte), Kynaios
+  and Tiro foil riprezzata da 5,60 a 5,86 € sulle offerte foil.
+
+#### Note Tecniche
+
+- `PendingListingsController.SyncPendingListings`: `SemaphoreSlim` statico, `WaitAsync(0)`; ricerca della riga
+  esistente prima in `InventoryItems.Local`.
+- `CardTraderSyncOrchestrator`: raggruppamento per `CardTraderProductId` al posto di `ToDictionary`; il controllo
+  degli ordini usa la shadow property `InventoryItemId` di `OrderItem`.
+- Test `SyncAsync_SyncInventory_DoppioneDelloStessoProdotto_NonBloccaETieneLaRigaPiuRecente`.
+
 ### [2026-10-21] Feature — "Registra l'acquisto" dagli ordini proposti (feature 007, Fase 2) *(pubblicato e verificato il 2026-10-21)*
 
 #### Problema
