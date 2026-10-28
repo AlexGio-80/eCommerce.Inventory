@@ -516,9 +516,32 @@ public class CardTraderSyncOrchestrator
             .Where(i => i.Blueprint != null && enabledGameLocalIds.Contains(i.Blueprint.GameId))
             .ToListAsync(cancellationToken);
 
-        var existingItemsMap = existingItems
-            .Where(i => i.CardTraderProductId.HasValue)
-            .ToDictionary(i => i.CardTraderProductId!.Value);
+        // Due righe con lo stesso prodotto Card Trader non devono esistere, ma se capita un
+        // ToDictionary diretto fa fallire l'intera sezione, e con lei ogni aggiornamento
+        // dell'inventario (dal 18 al 28/10/2026 per sette doppioni). Si tiene la riga più recente,
+        // che è quella collegata all'ultimo invio dalla coda, e si tolgono le altre.
+        var existingItemsMap = new Dictionary<int, InventoryItem>();
+        foreach (var group in existingItems
+                     .Where(i => i.CardTraderProductId.HasValue)
+                     .GroupBy(i => i.CardTraderProductId!.Value))
+        {
+            var kept = group.OrderByDescending(i => i.Id).First();
+            existingItemsMap[group.Key] = kept;
+
+            foreach (var duplicate in group.Where(i => i.Id != kept.Id))
+            {
+                var hasOrders = await _dbContext.OrderItems
+                    .AnyAsync(oi => EF.Property<int?>(oi, "InventoryItemId") == duplicate.Id, cancellationToken);
+                _logger.LogWarning(
+                    "Prodotto Card Trader {ProductId} presente due volte a magazzino: tengo l'articolo {KeptId}, {Action} l'articolo {DuplicateId}",
+                    group.Key, kept.Id, hasOrders ? "lascio (ha ordini collegati)" : "tolgo", duplicate.Id);
+                if (!hasOrders)
+                {
+                    _dbContext.InventoryItems.Remove(duplicate);
+                    deleted++;
+                }
+            }
+        }
 
         // Lookup Tag e PurchasePrice da PendingListings per propagarli su InventoryItem (non arrivano dall'API di CT).
         // Lo stesso prodotto di Card Trader può comparire su più PendingListings (ripubblicazioni, riallineamenti

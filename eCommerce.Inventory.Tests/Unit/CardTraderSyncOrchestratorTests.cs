@@ -291,4 +291,47 @@ public class CardTraderSyncOrchestratorTests
         var deletedItem = await _dbContext.InventoryItems.FirstOrDefaultAsync(i => i.CardTraderProductId == 1002);
         Assert.Null(deletedItem);
     }
+
+    /// <summary>
+    /// Caso reale del 17/10/2026: due righe a magazzino per lo stesso prodotto Card Trader
+    /// bloccavano tutta la sincronizzazione dell'inventario, e il foil corretto su Card Trader
+    /// non arrivava mai a database.
+    /// </summary>
+    [Fact]
+    public async Task SyncAsync_SyncInventory_DoppioneDelloStessoProdotto_NonBloccaETieneLaRigaPiuRecente()
+    {
+        var game = new Game { Id = 1, CardTraderId = 100, Name = "Magic", Code = "MTG", IsEnabled = true };
+        var expansion = new Expansion { Id = 1, CardTraderId = 200, GameId = 1, Name = "Secret Lair", Code = "SLD" };
+        var blueprint = new Blueprint { Id = 1, CardTraderId = 301, ExpansionId = 1, GameId = 1, Name = "Food", Version = "Regular" };
+        _dbContext.Games.Add(game);
+        _dbContext.Expansions.Add(expansion);
+        _dbContext.Blueprints.Add(blueprint);
+
+        InventoryItem Item(int id) => new()
+        {
+            Id = id, CardTraderProductId = 1001, BlueprintId = 1, Quantity = 4, ListingPrice = 1m,
+            Condition = "Near Mint", Language = "English", Location = "Unknown", IsFoil = false
+        };
+        _dbContext.InventoryItems.AddRange(Item(1), Item(2));
+        await _dbContext.SaveChangesAsync();
+
+        _apiServiceMock.Setup(x => x.GetProductsExportAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<dynamic>
+            {
+                new CardTraderProductDto
+                {
+                    Id = 1001, BlueprintId = 301, PriceCents = 290, Quantity = 4, GameId = 100,
+                    Properties = new Dictionary<string, object> { { "condition", "Near Mint" }, { "mtg_foil", true } }
+                }
+            });
+
+        var result = await _orchestrator.SyncAsync(new SyncRequestDto { SyncInventory = true });
+
+        Assert.Equal(1, result.Inventory.Updated);
+        var items = await _dbContext.InventoryItems.Where(i => i.CardTraderProductId == 1001).ToListAsync();
+        var item = Assert.Single(items);
+        Assert.Equal(2, item.Id);
+        Assert.True(item.IsFoil);
+        Assert.Equal(2.90m, item.ListingPrice);
+    }
 }

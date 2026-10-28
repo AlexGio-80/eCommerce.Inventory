@@ -384,6 +384,30 @@ public class PendingListingsController : ControllerBase
     [HttpPost("sync")]
     public async Task<ActionResult<Models.ApiResponse<object>>> SyncPendingListings(CancellationToken cancellationToken = default)
     {
+        // Un solo invio alla volta, da qualunque parte arrivi (PC o telefono). Il 17/10 un secondo
+        // invio partito mentre il primo non aveva ancora salvato ha ripubblicato le stesse righe:
+        // Card Trader le ha accorpate ai prodotti appena creati, e a database sono nate due copie
+        // dello stesso prodotto, che hanno bloccato la sincronizzazione dell'inventario per dieci giorni.
+        if (!await SyncLock.WaitAsync(0, cancellationToken))
+        {
+            return Conflict(Models.ApiResponse<object>.ErrorResult(
+                "Un invio a Card Trader è già in corso: aspetta che finisca e ricarica la coda"));
+        }
+
+        try
+        {
+            return await SyncPendingListingsCoreAsync(cancellationToken);
+        }
+        finally
+        {
+            SyncLock.Release();
+        }
+    }
+
+    private static readonly SemaphoreSlim SyncLock = new(1, 1);
+
+    private async Task<ActionResult<Models.ApiResponse<object>>> SyncPendingListingsCoreAsync(CancellationToken cancellationToken)
+    {
         var pendingItems = await _dbContext.PendingListings
             .Include(p => p.Blueprint)
             .Where(p => !p.IsSynced)
@@ -449,8 +473,12 @@ public class PendingListingsController : ControllerBase
                     // La copia locale va creata subito, non attendendo la sincronizzazione notturna:
                     // l'autopricer valuta gli InventoryItem a magazzino, e finché la riga non esiste
                     // la carta appena caricata non è riprezzabile.
-                    var existingItem = await _dbContext.InventoryItems
-                        .FirstOrDefaultAsync(ii => ii.CardTraderProductId == cardTraderId, cancellationToken);
+                    // Prima le righe create da questo stesso invio, non ancora salvate: due righe della
+                    // coda uguali finiscono nello stesso prodotto, e la query sul database non le vede.
+                    var existingItem = _dbContext.InventoryItems.Local
+                        .FirstOrDefault(ii => ii.CardTraderProductId == cardTraderId)
+                        ?? await _dbContext.InventoryItems
+                            .FirstOrDefaultAsync(ii => ii.CardTraderProductId == cardTraderId, cancellationToken);
 
                     if (existingItem != null)
                     {

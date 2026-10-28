@@ -745,9 +745,10 @@ export class CreateListingComponent {
         const bp = this.selectedBlueprint();
         if (bp) this.loadBlueprintListings(bp.id);
       },
-      error: () => {
+      error: (err) => {
         this.isSyncing.set(false);
-        this.snackBar.open('Errore durante la sincronizzazione', 'Chiudi', { duration: 5000 });
+        this.snackBar.open(err?.error?.message || 'Errore durante la sincronizzazione', 'Chiudi', { duration: 5000 });
+        this.loadPendingListings();
       }
     });
   }
