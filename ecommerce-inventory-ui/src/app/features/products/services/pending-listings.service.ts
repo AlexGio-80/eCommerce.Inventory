@@ -112,6 +112,11 @@ export class PendingListingsService {
         return this.http.delete<void>(`${this.apiUrl}/${id}`);
     }
 
+    /** Chiude subito l'inserzione su Card Trader, senza passare dalla coda. */
+    deleteCardTraderListing(cardTraderProductId: number): Observable<any> {
+        return this.http.delete<any>(`${this.apiUrl}/card-trader/${cardTraderProductId}`);
+    }
+
     syncPendingListings(): Observable<any> {
         return this.http.post<any>(`${this.apiUrl}/sync`, {});
     }

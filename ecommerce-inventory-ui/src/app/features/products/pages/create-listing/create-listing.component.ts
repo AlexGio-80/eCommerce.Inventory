@@ -733,6 +733,31 @@ export class CreateListingComponent {
     }
   }
 
+  /**
+   * Chiude un'inserzione da "Le mie inserzioni": su Card Trader subito, oppure, se non c'è
+   * ancora arrivata, togliendola dalla coda.
+   */
+  onDeleteExistingListing(item: BlueprintListingInfo) {
+    if (!item.cardTraderProductId) {
+      if (item.pendingListingId) this.onDeletePending(item.pendingListingId);
+      return;
+    }
+
+    const what = `${item.quantity}x ${item.condition} · ${item.language}${item.isFoil ? ' · Foil' : ''} a €${item.sellingPrice}`;
+    if (!confirm(`Chiudere su Card Trader l'inserzione ${what}?\nL'inserzione sparisce subito dal sito.`)) return;
+
+    this.pendingListingsService.deleteCardTraderListing(item.cardTraderProductId).subscribe({
+      next: () => {
+        this.snackBar.open('Inserzione chiusa su Card Trader', 'Chiudi', { duration: 3000 });
+        if (this.isListingBeingEdited(item)) this.onCancelEdit();
+        this.loadPendingListings();
+        const bp = this.selectedBlueprint();
+        if (bp) this.loadBlueprintListings(bp.id);
+      },
+      error: (err) => this.snackBar.open(err?.error?.message || 'Errore durante la chiusura dell\'inserzione', 'Chiudi', { duration: 5000 })
+    });
+  }
+
   onSyncAll() {
     this.isSyncing.set(true);
     this.pendingListingsService.syncPendingListings().subscribe({

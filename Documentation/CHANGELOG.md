@@ -9,6 +9,27 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-11-02] Feature — Chiudere un'inserzione da "Le mie inserzioni" *(pubblicato e verificato il 2026-11-02)*
+
+#### Problema
+
+- Dalla maschera "Nuovo Prodotto" si potevano modificare le inserzioni esistenti ma non chiuderle. Chi vende
+  copie a mano e vuole togliere un'inserzione intera (es. quella da 3, lasciando l'altra) doveva farlo dal sito.
+
+#### Soluzione Implementata
+
+- Cestino su ogni scheda di "Le mie inserzioni", con conferma. Un'inserzione già su Card Trader si chiude
+  subito, senza passare dalla coda; una non ancora inviata si toglie dalla coda.
+- Insieme all'inserzione spariscono la riga a magazzino e le modifiche in coda per quel prodotto.
+
+#### Note Tecniche
+
+- `DELETE /api/pending-listings/card-trader/{cardTraderProductId}` usa `DeleteProductOnCardTraderAsync`, che
+  esisteva già senza chiamanti. Un `404` da Card Trader (inserzione già chiusa) allinea comunque il database.
+- Prende lo stesso lock dell'invio della coda: una modifica in coda non può partire dopo la chiusura.
+- `OrderItems → InventoryItems` è `NO_ACTION`: la riga con ordini collegati non si cancella, va a quantità 0.
+  Per questo `by-blueprint` mostra solo le righe con quantità maggiore di 0.
+
 ### [2026-10-28] Fix — Sincronizzazione dell'inventario bloccata da righe doppie *(pubblicato e verificato il 2026-10-28)*
 
 #### Problema

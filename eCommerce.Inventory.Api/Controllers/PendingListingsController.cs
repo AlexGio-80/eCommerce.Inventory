@@ -93,7 +93,7 @@ public class PendingListingsController : ControllerBase
         // InventoryItems = what's currently on CT (after last product sync)
         var inventoryItems = await _dbContext.InventoryItems
             .AsNoTracking()
-            .Where(ii => ii.BlueprintId == blueprintId)
+            .Where(ii => ii.BlueprintId == blueprintId && ii.Quantity > 0)
             .ToListAsync(cancellationToken);
 
         // All PendingListings for this blueprint (synced or not)
@@ -375,6 +375,68 @@ public class PendingListingsController : ControllerBase
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return Ok(Models.ApiResponse<object>.SuccessResult(null, "Pending listing deleted successfully"));
+    }
+
+    /// <summary>
+    /// Chiude un'inserzione su Card Trader, subito e non dalla coda: è il caso di chi vende delle
+    /// copie a mano e vuole togliere un'inserzione intera. Toglie anche la riga a magazzino, come
+    /// fa la sincronizzazione con i prodotti spariti, e le modifiche in coda per quel prodotto.
+    /// </summary>
+    [HttpDelete("card-trader/{cardTraderProductId:int}")]
+    public async Task<ActionResult<Models.ApiResponse<object>>> DeleteCardTraderListing(
+        int cardTraderProductId,
+        CancellationToken cancellationToken = default)
+    {
+        // Con l'invio della coda in corso, una modifica allo stesso prodotto potrebbe partire dopo la chiusura.
+        if (!await SyncLock.WaitAsync(0, cancellationToken))
+        {
+            return Conflict(Models.ApiResponse<object>.ErrorResult(
+                "Un invio a Card Trader è in corso: aspetta che finisca e riprova"));
+        }
+
+        try
+        {
+            try
+            {
+                await _cardTraderService.DeleteProductOnCardTraderAsync(cardTraderProductId, cancellationToken);
+            }
+            catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                // Già chiusa su Card Trader (venduta o tolta dal sito): resta da allineare il database.
+                _logger.LogInformation("Prodotto Card Trader {ProductId} già assente: allineo il magazzino", cardTraderProductId);
+            }
+
+            var localItems = await _dbContext.InventoryItems
+                .Where(ii => ii.CardTraderProductId == cardTraderProductId)
+                .ToListAsync(cancellationToken);
+            foreach (var localItem in localItems)
+            {
+                // Le righe di ordine puntano all'articolo senza cascata: con vendite collegate si azzera.
+                var hasOrders = await _dbContext.OrderItems
+                    .AnyAsync(oi => EF.Property<int?>(oi, "InventoryItemId") == localItem.Id, cancellationToken);
+                if (hasOrders)
+                    localItem.Quantity = 0;
+                else
+                    _dbContext.InventoryItems.Remove(localItem);
+            }
+
+            var queuedEdits = await _dbContext.PendingListings
+                .Where(pl => !pl.IsSynced && pl.CardTraderProductId == cardTraderProductId)
+                .ToListAsync(cancellationToken);
+            _dbContext.PendingListings.RemoveRange(queuedEdits);
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Inserzione Card Trader {ProductId} chiusa dalla maschera: {Items} righe a magazzino e {Edits} modifiche in coda tolte",
+                cardTraderProductId, localItems.Count, queuedEdits.Count);
+
+            return Ok(Models.ApiResponse<object>.SuccessResult(null, "Inserzione chiusa su Card Trader"));
+        }
+        finally
+        {
+            SyncLock.Release();
+        }
     }
 
     /// <summary>

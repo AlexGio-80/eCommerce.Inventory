@@ -9,7 +9,7 @@
 ## Stato Attuale
 
 **Branch principale:** `master`
-**Ultimo aggiornamento:** 2026-10-28
+**Ultimo aggiornamento:** 2026-11-02
 **Fase:** In produzione (uso quotidiano attivo)
 
 ### Cosa funziona adesso
@@ -23,7 +23,7 @@
 
 **Card Trader: sincronizzazione, inserzioni, ordini**
 - Sincronizzazione di giochi, espansioni, blueprint, inserzioni e ordini, notturna (`ScheduledProductSyncWorker`) e manuale. Un fallimento di sezione marca l'intera sincronizzazione come fallita
-- "Nuovo Prodotto": ricerca per nome, nome italiano e numero di raccolta; prezzo delle regole dell'autopricer già nel campo quando si sceglie la carta; descrizione Card Trader; pannello "Le mie inserzioni" per modificare quelle esistenti, con grafico dello storico prezzi e riferimento di mercato; link a Card Trader. Il prezzo d'acquisto si riempie dal Tag dell'acquisto
+- "Nuovo Prodotto": ricerca per nome, nome italiano e numero di raccolta; prezzo delle regole dell'autopricer già nel campo quando si sceglie la carta; descrizione Card Trader; pannello "Le mie inserzioni" per modificare quelle esistenti o chiuderle (cestino: su Card Trader subito, senza coda), con grafico dello storico prezzi e riferimento di mercato; link a Card Trader. Il prezzo d'acquisto si riempie dal Tag dell'acquisto
 - Coda della maschera: un invio a Card Trader alla volta (PC o telefono); un secondo invio riceve un avviso
 - Storico prezzi (`PriceHistoryEntries`) alimentato dalla sincronizzazione notturna, solo quando prezzo o quantità cambiano
 - Ordini con griglia "Articoli da preparare". Card Trader Zero: le carte si preparano giorno per giorno dagli ordini `hub_pending`, e l'ordine "Ct connect" raccolto eredita la preparazione riga per riga
@@ -67,7 +67,6 @@
 ### Cosa è in sospeso / da verificare
 
 - **Pianificatore del budget in prova dall'utente (dal 17/10):** l'utente lo usa qualche giorno e poi si rivede: sistemazioni e migliorie, taratura delle soglie (traino 50%, altri 33%, netto 20%). "Registra l'acquisto" fatto il 21/10; resta facoltativo il budget che si scala con gli acquisti. Da sapere: durante "Cerca i venditori" la maschera "Nuovo Prodotto" può aspettare una decina di secondi (17/10: due attese di 12 s), perché la lettura lascia alla maschera solo 5 richieste al minuto; "Metti nel carrello Card Trader" aggiunge una copia per offerta; Cardmarket si compra a mano dal sito; i venditori incollati con più di 7 giorni sono in arancione
-- **Sincronizzazione dell'inventario ferma dal 18 al 28/10:** 7 righe di magazzino doppie (due invii ravvicinati della coda il 17/10) la facevano fallire ogni notte, e l'autopricer prezzava come non foil le carte corrette in foil su Card Trader. Il 28/10 doppioni tolti, fix pubblicato e sincronizzazione manuale riuscita. Il 29/10 controllare che nel log della notturna non ci sia "Sync FAILED"
 - **Avvio del servizio dopo il riavvio del PC (24/10):** Windows l'ha dato due volte per fallito dopo 30 s di attesa (eventi 7009/7000), perché il controllo delle migration in `Program.cs` arriva prima che il servizio risponda. Impostato il riavvio automatico (`sc failure`, 3 tentativi a 1 minuto, `failureflag` attivo). Al prossimo riavvio del PC controllare che riparta da solo; se no, far rispondere il servizio prima delle migration
 - **Confronto Sonnet/Opus sul riconoscimento:** dal 17/10 il riconoscimento usa Sonnet 5.5 e Opus 5.5 gira in confronto (`Scan:CompareModels`, righe `Confronto modelli` nel log). Al 21/10 solo 4 scansioni: 2 uguali e giuste, 1 carta vecchia passata a Opus di riserva come previsto, 1 Iron Star italiana sbagliata da tutti e due in modo diverso (Sonnet FBB, Opus 4ED, era FWB). Opus non ha fatto meglio. Se non ci sono differenze, togliere `Scan:CompareModels` da `appsettings.Production.json` (serve un riavvio)
 - **Secret Lair, stima congelata:** dopo l'uscita dei Masters of the Universe (03/11) confrontare la stima con i prezzi reali, colonna "Scarto stima"
@@ -90,6 +89,7 @@
 
 | Data | Decisione | Perché |
 |------|-----------|--------|
+| 2026-11-02 | Chiusura di un'inserzione dalla maschera immediata, non in coda; riga con ordini collegati azzerata invece che cancellata | Chi la chiude ha appena venduto a mano: l'inserzione deve sparire subito dal sito. Le righe d'ordine puntano al magazzino senza cascata |
 | 2026-10-28 | Un invio della coda alla volta; la sincronizzazione tiene la riga più recente di un prodotto doppio e toglie le altre | Un solo doppione faceva fallire tutta la sezione Inventario: dieci giorni senza foil, condizioni e inserzioni sparite aggiornati a database |
 | 2026-10-24 | Link ai prodotti dei venditori Cardmarket sulla ricerca nelle offerte del venditore, ricerca generica come secondo link | L'utente guarda le offerte di un venditore anche fuori dalle soglie; il formato `Offers/Search?search=` è quello verificato dall'utente |
 | 2026-10-21 | "Registra l'acquisto" dagli ordini proposti: spedizione ripartita sui prezzi, Tag con la data d'acquisto solo per le aperture, finestra di conferma, Wizards escluso | Scelte dell'utente: il costo per carta deve comprendere la spedizione; all'acquisto la data d'apertura non si conosce; si compra spesso solo una parte dell'ordine; i drop Wizards non sono ancora nel catalogo quando si comprano |
