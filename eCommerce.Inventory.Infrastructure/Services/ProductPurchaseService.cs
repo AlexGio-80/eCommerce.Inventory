@@ -31,8 +31,52 @@ public class ProductPurchaseService
         var cards = await CardsPerUnitAsync(purchases.Select(p => p.SealedProductId), cancellationToken);
         var cmNames = await CardmarketNamesAsync(purchases.Select(p => p.SealedProduct?.CardmarketId), cancellationToken);
         var today = await TodayDecisionsAsync(purchases.Where(p => p.OpenedAt == null).Select(p => p.SealedProductId), cancellationToken);
+        var sold = await SoldByPurchaseAsync(purchases, cancellationToken);
         return purchases.Select(p => Map(p, cards.GetValueOrDefault(p.SealedProductId), CmName(cmNames, p.SealedProduct),
-            p.OpenedAt == null ? today.GetValueOrDefault(p.SealedProductId) : null)).ToList();
+            p.OpenedAt == null ? today.GetValueOrDefault(p.SealedProductId) : null, sold.GetValueOrDefault(p.Id))).ToList();
+    }
+
+    /// <summary>
+    /// Incassato delle carte vendute con il Tag di ciascun acquisto, al netto della commissione Card
+    /// Trader. Più acquisti con lo stesso Tag (es. due mazzi aperti insieme) se lo dividono in
+    /// proporzione al costo. Contano le vendite da un giorno prima del primo acquisto del Tag: il
+    /// recupero dei tag sugli ordini storici ne ha attribuiti alcuni a ordini di anni prima.
+    /// </summary>
+    private async Task<Dictionary<int, PurchaseSales>> SoldByPurchaseAsync(List<ProductPurchase> purchases, CancellationToken cancellationToken)
+    {
+        var groups = purchases
+            .Where(p => !string.IsNullOrWhiteSpace(p.Tag))
+            .GroupBy(p => OpeningBalanceService.NormalizeTag(p.Tag!))
+            .ToList();
+        var result = new Dictionary<int, PurchaseSales>();
+        if (groups.Count == 0) return result;
+
+        var keys = groups.Select(g => g.Key).ToList();
+        var sales = (await _db.OrderItems.AsNoTracking()
+                .Where(oi => oi.Tag != null && keys.Contains(oi.Tag.Trim().Replace("#", "").ToUpper()) && oi.Order.PaidAt != null)
+                .Select(oi => new { oi.Tag, oi.Quantity, oi.Price, PaidAt = oi.Order.PaidAt!.Value })
+                .ToListAsync(cancellationToken))
+            .ToLookup(s => OpeningBalanceService.NormalizeTag(s.Tag!));
+        var feeShare = await OpeningBalanceService.FeeShareAsync(_db, cancellationToken);
+
+        foreach (var group in groups)
+        {
+            var since = group.Min(p => p.PurchasedAt?.ToDateTime(TimeOnly.MinValue) ?? p.CreatedAt).AddDays(-1);
+            var tagSales = sales[group.Key].Where(s => s.PaidAt >= since).ToList();
+            var copies = tagSales.Sum(s => s.Quantity);
+            var net = tagSales.Sum(s => s.Quantity * s.Price) * (1 - feeShare);
+
+            var members = group.ToList();
+            var totalCost = members.Sum(p => p.Quantity * p.UnitPrice);
+            foreach (var p in members)
+            {
+                // Senza costi (es. omaggi) si divide in parti uguali.
+                var share = totalCost > 0 ? p.Quantity * p.UnitPrice / totalCost : 1m / members.Count;
+                result[p.Id] = new PurchaseSales(Math.Round(net * share, 2), Math.Round(share * 100m, 1),
+                    copies, Math.Round(net, 2), members.Count);
+            }
+        }
+        return result;
     }
 
     /// <summary>
@@ -331,7 +375,8 @@ public class ProductPurchaseService
     /// carte che contiene: al 09/10/2026 è il modo in cui l'utente calcolava a mano il prezzo d'acquisto
     /// delle inserzioni (es. Collector Box = prezzo / 12 buste × 15 carte).
     /// </summary>
-    private static ProductPurchaseDto Map(ProductPurchase p, CardsPerUnit? cards, string? cardmarketName, TodayDecision? today = null)
+    private static ProductPurchaseDto Map(ProductPurchase p, CardsPerUnit? cards, string? cardmarketName, TodayDecision? today = null,
+        PurchaseSales? sold = null)
     {
         decimal? calculated = cards is { Cards: > 0 } ? Math.Round(p.UnitPrice / cards.Cards, 2) : null;
         return new ProductPurchaseDto(
@@ -342,9 +387,17 @@ public class ProductPurchaseService
             p.PredictedOpenValueNet.HasValue ? Math.Round(p.Quantity * p.PredictedOpenValueNet.Value, 2) : null,
             p.CostPerCard, calculated, cards?.Cards, cards?.Estimated ?? false,
             p.CostPerCard ?? calculated, cardmarketName, p.HoldForResale,
-            today?.Decision, today?.OpenValueNet, today?.SealedNet, today?.Date);
+            today?.Decision, today?.OpenValueNet, today?.SealedNet, today?.Date,
+            sold?.SoldNet, sold?.SharePercent, sold?.TagSoldCopies, sold?.TagSoldNet, sold?.TagPurchases ?? 0);
     }
 }
+
+/// <param name="SoldNet">Quota dell'incassato netto del Tag che spetta a questo acquisto.</param>
+/// <param name="SharePercent">Quota in percentuale (costo di questo acquisto sul costo di tutti quelli del Tag).</param>
+/// <param name="TagSoldCopies">Copie vendute con il Tag, da tutti gli acquisti che lo condividono.</param>
+/// <param name="TagSoldNet">Incassato netto del Tag intero.</param>
+/// <param name="TagPurchases">Acquisti del registro con lo stesso Tag.</param>
+public record PurchaseSales(decimal SoldNet, decimal SharePercent, int TagSoldCopies, decimal TagSoldNet, int TagPurchases);
 
 /// <param name="OpenValueNet">Valore atteso netto aprendolo, per unità.</param>
 /// <param name="SealedNet">Ricavato netto rivendendolo chiuso al trend, per unità.</param>
@@ -399,7 +452,12 @@ public record ProductPurchaseDto(
     string? TodayDecision = null,
     decimal? TodayOpenValueNet = null,
     decimal? TodaySealedNet = null,
-    DateOnly? TodayDecisionDate = null);
+    DateOnly? TodayDecisionDate = null,
+    decimal? SoldNet = null,
+    decimal? SoldSharePercent = null,
+    int? TagSoldCopies = null,
+    decimal? TagSoldNet = null,
+    int TagPurchases = 0);
 
 /// <param name="Name">Nome MTGJSON (quello del catalogo).</param>
 /// <param name="CardmarketName">Nome dello stesso prodotto su Cardmarket, se abbinato.</param>

@@ -206,6 +206,16 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
         : 'Non ancora calcolabile: si calcola quando segni l\'apertura'
     },
     { headerName: 'Previsto totale', field: 'predictedTotalNet', width: 135, type: 'numericColumn', valueFormatter: this.euro },
+    {
+      headerName: 'Venduto', field: 'soldNet', width: 115, type: 'numericColumn', valueFormatter: this.euro,
+      // Verde se ha già ripagato il costo dell'acquisto, rosso se ha incassato qualcosa ma non abbastanza.
+      cellStyle: p => !p.data || !p.value ? null
+        : p.value >= p.data.totalPrice ? { color: '#2e7d32', fontWeight: 600 } : { color: '#c62828', fontWeight: 600 },
+      headerTooltip: 'Incassato netto (commissione Card Trader tolta) delle carte vendute con il Tag. Se più acquisti hanno lo stesso Tag, si divide in proporzione al costo',
+      tooltipValueGetter: p => !p.data || p.data.soldNet == null ? '' :
+        `${p.data.tagSoldCopies} copie vendute col Tag, ${this.money(p.data.tagSoldNet)} netti` +
+        (p.data.tagPurchases > 1 ? `; a questo acquisto il ${p.data.soldSharePercent}% (${p.data.tagPurchases} acquisti con lo stesso Tag)` : '')
+    },
     { headerName: 'Note', field: 'notes', width: 200 },
     {
       headerName: '', width: 90, pinned: 'right', sortable: false, filter: false,

@@ -578,6 +578,12 @@ export interface ProductPurchase extends ProductPurchaseInput {
     todayOpenValueNet?: number;
     todaySealedNet?: number;
     todayDecisionDate?: string;
+    /** Quota dell'incassato netto del Tag che spetta a questo acquisto (diviso in proporzione al costo). */
+    soldNet?: number;
+    soldSharePercent?: number;
+    tagSoldCopies?: number;
+    tagSoldNet?: number;
+    tagPurchases: number;
 }
 
 /** Prodotto del catalogo sigillati trovato dalla ricerca del registro acquisti. */

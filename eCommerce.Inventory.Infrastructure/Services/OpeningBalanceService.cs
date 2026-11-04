@@ -74,12 +74,7 @@ public class OpeningBalanceService
             .Select(p => new { p.Tag, p.Quantity, p.UnitPrice, p.PredictedOpenValueNet })
             .ToListAsync(cancellationToken);
 
-        var fees = await _db.Orders.AsNoTracking()
-            .Where(o => o.PaidAt != null)
-            .GroupBy(o => 1)
-            .Select(g => new { Fee = g.Sum(o => o.SellerFee), Subtotal = g.Sum(o => o.SellerSubtotal) })
-            .FirstOrDefaultAsync(cancellationToken);
-        var feeShare = fees is { Subtotal: > 0 } ? fees.Fee / fees.Subtotal : 0m;
+        var feeShare = await FeeShareAsync(_db, cancellationToken);
 
         var today = DateTime.UtcNow;
 
@@ -122,6 +117,17 @@ public class OpeningBalanceService
             })
             .OrderByDescending(b => b.FirstUpload)
             .ToList();
+    }
+
+    /// <summary>Quota del venduto che Card Trader trattiene come commissione, misurata sugli ordini pagati.</summary>
+    public static async Task<decimal> FeeShareAsync(ApplicationDbContext db, CancellationToken cancellationToken)
+    {
+        var fees = await db.Orders.AsNoTracking()
+            .Where(o => o.PaidAt != null)
+            .GroupBy(o => 1)
+            .Select(g => new { Fee = g.Sum(o => o.SellerFee), Subtotal = g.Sum(o => o.SellerSubtotal) })
+            .FirstOrDefaultAsync(cancellationToken);
+        return fees is { Subtotal: > 0 } ? fees.Fee / fees.Subtotal : 0m;
     }
 
     /// <summary>"#TRK_PB_20261115" e "trk_pb_20261115" sono lo stesso tag.</summary>

@@ -9,7 +9,7 @@
 ## Stato Attuale
 
 **Branch principale:** `master`
-**Ultimo aggiornamento:** 2026-11-02
+**Ultimo aggiornamento:** 2026-11-04
 **Fase:** In produzione (uso quotidiano attivo)
 
 ### Cosa funziona adesso
@@ -41,7 +41,7 @@
 - Dati: listino pubblico Cardmarket ogni mattina alle 07:00 (`CardmarketImportWorker`); catalogo sigillati e composizione delle buste da MTGJSON
 - Analisi uscita: convenienza fra formati, valore atteso dell'apertura (prezzi CM e CT affiancati, fattore "prezzo realizzato", quota venduta per fascia, costo per carta, costi di vendita 15%), decisione Apri / Tieni sigillato / Dati incompleti / Prezzo CM dubbio / Non giocabili. Trend CM fino a 0,05 € = prezzo di riempimento, quindi "Prezzo CM dubbio"
 - Opportunità: classifica giornaliera di tutte le uscite, filtro "Resa massima %", piano d'acquisto su Card Trader per venditore, con "Metti nel carrello Card Trader" (via API, non compra) e "Apri tutti" su Card Trader o Cardmarket
-- Aperture (bilancio reale per Tag) e Registro acquisti (ricerca su tutto il catalogo per nome Cardmarket, costo per carta, previsione salvata all'apertura, colonna "Oggi conviene" Apri / Tieni sigillato dall'ultima classifica, solo per i non aperti)
+- Aperture (bilancio reale per Tag) e Registro acquisti (ricerca su tutto il catalogo per nome Cardmarket, costo per carta, previsione salvata all'apertura, colonna "Oggi conviene" Apri / Tieni sigillato dall'ultima classifica, solo per i non aperti; colonna "Venduto": incassato netto delle carte vendute col Tag, diviso in proporzione al costo fra gli acquisti con lo stesso Tag, verde se ha ripagato il Totale e rosso se no)
 - Avvisi: regole per prodotto o per gruppo, campanella ed email di riepilogo (SMTP configurato) con i link Card Trader e Cardmarket di ogni prodotto. Gli avvisi di apertura ignorano le rese oltre il 300%
 - Secret Lair: retrospettiva dei drop comprati; negozio Wizards letto alle 8, 14 e 20 con avviso per ogni superdrop nuovo; valutazione del drop prima dell'acquisto (Compra / Al limite / Lascia). I drop con la vendita finita sono "Vendita chiusa" (il catalogo Wizards li tiene con una scorta di comodo); "In negozio" mostra solo i drop acquistabili, e per gli altri la stima dice "Non acquistabile"
 - Magazzino: sigillati segnati "Da tenere" nel registro, con valore di oggi e guadagno latente (feature 005)
@@ -89,6 +89,7 @@
 
 | Data | Decisione | Perché |
 |------|-----------|--------|
+| 2026-11-04 | "Venduto" nel registro acquisti: netto della commissione, vendite da un giorno prima dell'acquisto, Tag condiviso diviso in proporzione al costo | Più prodotti aperti insieme hanno lo stesso Tag e le carte vendute non dicono da quale prodotto vengono; il filtro sulla data tiene fuori gli ordini storici dei Tag generici come `_OLD` |
 | 2026-11-02 | Chiusura di un'inserzione dalla maschera immediata, non in coda; riga con ordini collegati azzerata invece che cancellata | Chi la chiude ha appena venduto a mano: l'inserzione deve sparire subito dal sito. Le righe d'ordine puntano al magazzino senza cascata |
 | 2026-10-28 | Un invio della coda alla volta; la sincronizzazione tiene la riga più recente di un prodotto doppio e toglie le altre | Un solo doppione faceva fallire tutta la sezione Inventario: dieci giorni senza foil, condizioni e inserzioni sparite aggiornati a database |
 | 2026-10-24 | Link ai prodotti dei venditori Cardmarket sulla ricerca nelle offerte del venditore, ricerca generica come secondo link | L'utente guarda le offerte di un venditore anche fuori dalle soglie; il formato `Offers/Search?search=` è quello verificato dall'utente |
