@@ -388,7 +388,8 @@ public class ProductPurchaseService
             p.CostPerCard, calculated, cards?.Cards, cards?.Estimated ?? false,
             p.CostPerCard ?? calculated, cardmarketName, p.HoldForResale,
             today?.Decision, today?.OpenValueNet, today?.SealedNet, today?.Date,
-            sold?.SoldNet, sold?.SharePercent, sold?.TagSoldCopies, sold?.TagSoldNet, sold?.TagPurchases ?? 0);
+            sold?.SoldNet, sold?.SharePercent, sold?.TagSoldCopies, sold?.TagSoldNet, sold?.TagPurchases ?? 0,
+            p.SealedProduct?.CardTraderBlueprintId);
     }
 }
 
@@ -457,7 +458,8 @@ public record ProductPurchaseDto(
     decimal? SoldSharePercent = null,
     int? TagSoldCopies = null,
     decimal? TagSoldNet = null,
-    int TagPurchases = 0);
+    int TagPurchases = 0,
+    int? CardTraderBlueprintId = null);
 
 /// <param name="Name">Nome MTGJSON (quello del catalogo).</param>
 /// <param name="CardmarketName">Nome dello stesso prodotto su Cardmarket, se abbinato.</param>

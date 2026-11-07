@@ -584,6 +584,8 @@ export interface ProductPurchase extends ProductPurchaseInput {
     tagSoldCopies?: number;
     tagSoldNet?: number;
     tagPurchases: number;
+    /** Blueprint Card Trader del prodotto, per il link alla sua pagina. */
+    cardTraderBlueprintId?: number;
 }
 
 /** Prodotto del catalogo sigillati trovato dalla ricerca del registro acquisti. */

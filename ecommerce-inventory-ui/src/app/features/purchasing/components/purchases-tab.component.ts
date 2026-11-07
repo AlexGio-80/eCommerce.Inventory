@@ -137,6 +137,8 @@ interface PurchaseForm {
     ::ng-deep .product-panel .mat-mdc-option { line-height: 1.2; padding-top: 6px; padding-bottom: 6px; }
     ::ng-deep .product-panel .option-main { font-size: 14px; }
     ::ng-deep .product-panel .option-sub { font-size: 11px; color: #757575; }
+    :host ::ng-deep .product-links { display: inline-flex; gap: 6px; margin-right: 8px; }
+    :host ::ng-deep .ext-link { color: #3f51b5; text-decoration: none; font-size: 11px; font-weight: 600; }
     :host ::ng-deep .row-action { background: none; border: none; cursor: pointer; color: #3f51b5; padding: 0 4px; }
   `]
 })
@@ -165,7 +167,12 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
   private date = (p: ValueFormatterParams) => p.value ? new Date(p.value).toLocaleDateString('it-IT') : '';
 
   columnDefs: ColDef<ProductPurchase>[] = [
-    { headerName: 'Prodotto', field: 'productName', pinned: 'left', width: 320 },
+    {
+      // I link stanno nella cella del prodotto, fissata a sinistra: una colonna nuova finirebbe in fondo
+      // nelle griglie con le colonne già salvate. Il valore resta il nome, per filtro e doppio clic.
+      headerName: 'Prodotto', field: 'productName', pinned: 'left', width: 320,
+      cellRenderer: (p: { data?: ProductPurchase }) => p.data ? this.productCell(p.data) : ''
+    },
     { headerName: 'Nome Cardmarket', field: 'cardmarketName', width: 300 },
     { headerName: 'Set', field: 'setCode', width: 80 },
     { headerName: 'Q.tà', field: 'quantity', width: 80, type: 'numericColumn' },
@@ -231,6 +238,20 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
   ];
 
   defaultColDef: ColDef = { sortable: true, resizable: true, filter: true };
+
+  /** Nome del prodotto con i link a Card Trader (pagina del blueprint) e Cardmarket (ricerca col nome esatto). */
+  private productCell(p: ProductPurchase): string {
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const icon = '<i class="material-icons" style="font-size:16px;vertical-align:middle">open_in_new</i>';
+    const ct = p.cardTraderBlueprintId
+      ? `<a class="ext-link" target="_blank" rel="noopener" title="Vedi su Card Trader"
+           href="https://www.cardtrader.com/cards/${p.cardTraderBlueprintId}">CT${icon}</a>`
+      : '';
+    // Cardmarket non ha un indirizzo per id prodotto: si apre la ricerca col nome Cardmarket, o col nostro.
+    const cm = `<a class="ext-link" target="_blank" rel="noopener" title="Cerca su Cardmarket"
+           href="https://www.cardmarket.com/en/Magic/Products/Search?searchString=${encodeURIComponent(p.cardmarketName || p.productName)}">CM${icon}</a>`;
+    return `<span class="product-links">${ct}${cm}</span><span>${esc(p.productName)}</span>`;
+  }
 
   constructor(private purchasing: PurchasingService, private snackBar: MatSnackBar) { }
 
