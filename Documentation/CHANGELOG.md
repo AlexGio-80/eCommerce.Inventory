@@ -9,6 +9,32 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-11-08] Feature — Lotti di carte venduti fuori da Card Trader *(da pubblicare)*
+
+#### Problema
+
+- L'utente vende il bulk anche a lotti su altri siti (es. 100 carte FRA su Subito), togliendo le carte da Card
+  Trader a mano. Quelle vendite non comparivano da nessuna parte: report, "Venduto" del registro acquisti e quota
+  venduta del bulk le ignoravano, e un prodotto sembrava rendere meno di quanto rende.
+
+#### Soluzione Implementata
+
+- Pagina Ordini, pulsante "Lotto venduto fuori": sito, data, incasso e, per ogni Tag, quante carte. Il lotto diventa
+  un ordine pagato, già preparato e completato, che conta come una vendita Card Trader. Dalla griglia, il cestino
+  sulla riga del lotto lo toglie se registrato per errore.
+
+#### Note Tecniche
+
+- `ExternalLotService`: ordine con `CardTraderOrderId` negativo e stato `external` (la sincronizzazione lavora per ID
+  Card Trader e non lo tocca), una riga per Tag senza blueprint, `ExpansionName` ricavato dal codice del Tag
+  (`#FRA_OLD` → Reality Fracture). L'incasso si divide al centesimo sulle carte, con i centesimi che avanzano su una
+  riga a parte, così la somma è esatta.
+- Niente commissione sui lotti: la quota di commissione si misura solo sugli ordini con ID ≥ 0
+  (`OpeningBalanceService.FeeShareAsync`, `SealedProductAnalysisService`, `SecretLairRetrospectiveService`) e il
+  netto dei lotti non la paga (`OpeningBalanceService.NetOf`, usato da Aperture e "Venduto").
+- `BulkSellThroughService` conta i lotti nella quota venduta del bulk dell'espansione del Tag. Il prezzo realizzato e
+  la retrospettiva Secret Lair, che lavorano per blueprint, non li vedono.
+
 ### [2026-11-08] Feature — Acquisti già fatti nel Budget "Per venditore" *(pubblicato e verificato il 2026-11-08)*
 
 #### Problema

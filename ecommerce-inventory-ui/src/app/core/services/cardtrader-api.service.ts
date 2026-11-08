@@ -185,6 +185,16 @@ export class CardTraderApiService {
     return this.http.post<ApiResponse<any>>(`${this.apiUrl}/orders/sync`, {}, { params });
   }
 
+  /** Lotto di carte venduto fuori da Card Trader, registrato come ordine pagato. */
+  registerExternalLot(lot: { site: string; date: string; total: number; notes: string | null; lines: { tag: string; quantity: number }[] })
+    : Observable<ApiResponse<{ id: number; code: string }>> {
+    return this.http.post<ApiResponse<{ id: number; code: string }>>(`${this.apiUrl}/orders/external-lot`, lot);
+  }
+
+  deleteExternalLot(orderId: number): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/orders/external-lot/${orderId}`);
+  }
+
   syncSingleOrder(cardTraderOrderId: number): Observable<ApiResponse<any>> {
     return this.http.post<ApiResponse<any>>(`${this.apiUrl}/orders/${cardTraderOrderId}/sync`, {});
   }

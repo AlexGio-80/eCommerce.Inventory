@@ -27,6 +27,7 @@
 - Coda della maschera: un invio a Card Trader alla volta (PC o telefono); un secondo invio riceve un avviso
 - Storico prezzi (`PriceHistoryEntries`) alimentato dalla sincronizzazione notturna, solo quando prezzo o quantità cambiano
 - Ordini con griglia "Articoli da preparare". Card Trader Zero: le carte si preparano giorno per giorno dagli ordini `hub_pending`, e l'ordine "Ct connect" raccolto eredita la preparazione riga per riga
+- **Lotti venduti fuori** (08/11, verificato con un lotto vero): pulsante "Lotto venduto fuori" nella pagina Ordini (sito, data, incasso, carte per Tag). Diventa un ordine pagato con ID negativo e stato `external`, senza commissione, che conta in report, "Venduto", Aperture e quota venduta del bulk
 - Il webhook Card Trader non è raggiungibile dall'esterno (scelta, vedi sotto): l'inventario resta allineato con il giro a polling
 
 **Autopricer** (`/layout/pricing`), in modalità reale. Dettaglio in ARCHITECTURE.md
@@ -90,6 +91,7 @@
 
 | Data | Decisione | Perché |
 |------|-----------|--------|
+| 2026-11-08 | Lotti venduti fuori da Card Trader registrati come ordini (ID negativo, una riga per Tag, incasso diviso sulle carte, senza commissione) | L'utente vende bulk a lotti su Subito: deve contare come una vendita Card Trader per giudicare se un prodotto si può ricomprare. Le carte del lotto non sono note una per una, il Tag sì |
 | 2026-11-08 | "Per venditore" non ripropone da aprire i prodotti già comprati e non ancora ripagati; i ripagati restano, con la nota | Scelta dell'utente: non ricomprare ciò di cui ha ancora carte che non hanno reso; un prodotto che si è ripagato è la conferma che rende |
 | 2026-11-04 | "Venduto" nel registro acquisti: netto della commissione, vendite da un giorno prima dell'acquisto, Tag condiviso diviso in proporzione al costo | Più prodotti aperti insieme hanno lo stesso Tag e le carte vendute non dicono da quale prodotto vengono; il filtro sulla data tiene fuori gli ordini storici dei Tag generici come `_OLD` |
 | 2026-11-02 | Chiusura di un'inserzione dalla maschera immediata, non in coda; riga con ordini collegati azzerata invece che cancellata | Chi la chiude ha appena venduto a mano: l'inserzione deve sparire subito dal sito. Le righe d'ordine puntano al magazzino senza cascata |

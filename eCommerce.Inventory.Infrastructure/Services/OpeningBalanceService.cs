@@ -61,7 +61,7 @@ public class OpeningBalanceService
 
         var sales = await _db.OrderItems.AsNoTracking()
             .Where(oi => oi.Tag != null && keys.Contains(oi.Tag.Trim().Replace("#", "").ToUpper()) && oi.Order.PaidAt != null)
-            .Select(oi => new { oi.Tag, oi.Quantity, oi.Price, PaidAt = oi.Order.PaidAt!.Value })
+            .Select(oi => new { oi.Tag, oi.Quantity, oi.Price, PaidAt = oi.Order.PaidAt!.Value, Lot = oi.Order.CardTraderOrderId < 0 })
             .ToListAsync(cancellationToken);
 
         var stock = await _db.InventoryItems.AsNoTracking()
@@ -85,13 +85,14 @@ public class OpeningBalanceService
                 var tagPurchases = purchases.Where(p => NormalizeTag(p.Tag!) == o.Key).ToList();
 
                 var gross = tagSales.Sum(s => s.Quantity * s.Price);
-                var net = gross * (1 - feeShare);
+                // I lotti venduti fuori da Card Trader sono già netti (ExternalLotService).
+                var net = NetOf(tagSales.Select(s => (s.Quantity * s.Price, s.Lot)), feeShare);
                 var ageDays = (int)(today - o.FirstUpload).TotalDays;
 
                 var curve = CurveDays
                     .Where(days => ageDays >= days)
                     .Select(days => new OpeningCurvePoint(days,
-                        Math.Round(tagSales.Where(s => s.PaidAt <= o.FirstUpload.AddDays(days)).Sum(s => s.Quantity * s.Price) * (1 - feeShare), 2)))
+                        Math.Round(NetOf(tagSales.Where(s => s.PaidAt <= o.FirstUpload.AddDays(days)).Select(s => (s.Quantity * s.Price, s.Lot)), feeShare), 2)))
                     .ToList();
 
                 decimal? predicted = tagPurchases.Count > 0 && tagPurchases.All(p => p.PredictedOpenValueNet.HasValue)
@@ -123,12 +124,16 @@ public class OpeningBalanceService
     public static async Task<decimal> FeeShareAsync(ApplicationDbContext db, CancellationToken cancellationToken)
     {
         var fees = await db.Orders.AsNoTracking()
-            .Where(o => o.PaidAt != null)
+            .Where(o => o.PaidAt != null && o.CardTraderOrderId >= 0) // i lotti venduti fuori non hanno commissione
             .GroupBy(o => 1)
             .Select(g => new { Fee = g.Sum(o => o.SellerFee), Subtotal = g.Sum(o => o.SellerSubtotal) })
             .FirstOrDefaultAsync(cancellationToken);
         return fees is { Subtotal: > 0 } ? fees.Fee / fees.Subtotal : 0m;
     }
+
+    /// <summary>Incassato netto: commissione Card Trader sulle vendite Card Trader, niente sui lotti venduti fuori.</summary>
+    public static decimal NetOf(IEnumerable<(decimal Amount, bool Lot)> sales, decimal feeShare) =>
+        sales.Sum(s => s.Lot ? s.Amount : s.Amount * (1 - feeShare));
 
     /// <summary>"#TRK_PB_20261115" e "trk_pb_20261115" sono lo stesso tag.</summary>
     public static string NormalizeTag(string tag) => tag.Trim().Replace("#", "").ToUpperInvariant();

@@ -78,7 +78,7 @@ public class ProductPurchaseService
         var keys = groups.Select(g => g.Key).ToList();
         var sales = (await _db.OrderItems.AsNoTracking()
                 .Where(oi => oi.Tag != null && keys.Contains(oi.Tag.Trim().Replace("#", "").ToUpper()) && oi.Order.PaidAt != null)
-                .Select(oi => new { oi.Tag, oi.Quantity, oi.Price, PaidAt = oi.Order.PaidAt!.Value })
+                .Select(oi => new { oi.Tag, oi.Quantity, oi.Price, PaidAt = oi.Order.PaidAt!.Value, Lot = oi.Order.CardTraderOrderId < 0 })
                 .ToListAsync(cancellationToken))
             .ToLookup(s => OpeningBalanceService.NormalizeTag(s.Tag!));
         var feeShare = await OpeningBalanceService.FeeShareAsync(_db, cancellationToken);
@@ -88,7 +88,7 @@ public class ProductPurchaseService
             var since = group.Min(p => p.PurchasedAt?.ToDateTime(TimeOnly.MinValue) ?? p.CreatedAt).AddDays(-1);
             var tagSales = sales[group.Key].Where(s => s.PaidAt >= since).ToList();
             var copies = tagSales.Sum(s => s.Quantity);
-            var net = tagSales.Sum(s => s.Quantity * s.Price) * (1 - feeShare);
+            var net = OpeningBalanceService.NetOf(tagSales.Select(s => (s.Quantity * s.Price, s.Lot)), feeShare);
 
             var members = group.ToList();
             var totalCost = members.Sum(p => p.Quantity * p.UnitPrice);

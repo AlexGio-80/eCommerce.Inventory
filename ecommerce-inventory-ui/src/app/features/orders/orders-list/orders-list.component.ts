@@ -21,6 +21,7 @@ import { ExportService } from '../../../core/services/export.service';
 import { Order, OrderItem } from '../../../core/models/order';
 import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialog.component';
 import { OrderStatusMonitorComponent } from '../components/order-status-monitor/order-status-monitor.component';
+import { ExternalLotDialogComponent } from '../components/external-lot-dialog/external-lot-dialog.component';
 
 @Component({
     selector: 'app-orders-list',
@@ -130,6 +131,19 @@ export class OrdersListComponent implements OnInit {
             filter: false,
             width: 100,
             cellRenderer: (params: any) => {
+                // Lotto venduto fuori da Card Trader: non si sincronizza, si può togliere se registrato per errore.
+                if (params.data?.cardTraderOrderId < 0) {
+                    const del = document.createElement('button');
+                    del.title = 'Togli il lotto registrato';
+                    del.style.cssText = 'background:none;border:none;padding:4px;display:flex;align-items:center;cursor:pointer;';
+                    const delIcon = document.createElement('span');
+                    delIcon.className = 'material-icons';
+                    delIcon.textContent = 'delete';
+                    delIcon.style.cssText = 'font-size:18px;color:#c62828;';
+                    del.appendChild(delIcon);
+                    del.addEventListener('click', () => this.deleteLot(params.data));
+                    return del;
+                }
                 const syncing = this.syncingOrderIds.has(params.data?.cardTraderOrderId);
 
                 const btn = document.createElement('button');
@@ -247,6 +261,32 @@ export class OrdersListComponent implements OnInit {
 
     refreshOrders(): void {
         this.loadOrders();
+    }
+
+    /** Lotto di carte venduto fuori da Card Trader (es. bulk su Subito). */
+    openExternalLot(): void {
+        this.dialog.open(ExternalLotDialogComponent, { width: '640px' }).afterClosed().subscribe(result => {
+            if (!result) return;
+            this.snackBar.open(`Lotto ${result.code} registrato`, 'OK', { duration: 3000 });
+            this.loadOrders();
+        });
+    }
+
+    deleteLot(order: Order): void {
+        this.dialog.open(ConfirmDialogComponent, {
+            data: {
+                title: 'Togli il lotto',
+                message: `Togliere il lotto ${order.code} (${order.buyerUsername}, €${order.sellerTotal.toFixed(2)})? Smette di contare come vendita.`,
+                confirmText: 'Togli',
+                cancelText: 'Annulla'
+            }
+        }).afterClosed().subscribe(confirmed => {
+            if (!confirmed) return;
+            this.apiService.deleteExternalLot(order.id).subscribe({
+                next: () => { this.snackBar.open('Lotto tolto', 'OK', { duration: 3000 }); this.loadOrders(); },
+                error: () => this.snackBar.open('Lotto non tolto', 'OK', { duration: 3000 })
+            });
+        });
     }
 
     loadOrders(): void {

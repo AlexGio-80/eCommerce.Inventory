@@ -280,6 +280,7 @@ builder.Services.AddScoped<ISecretLairDropValuation>(sp => sp.GetRequiredService
 builder.Services.AddScoped<SecretLairShopMonitorService>();
 builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJobs.SecretLairMonitorWorker>();
 builder.Services.AddScoped<ProductPurchaseService>();
+builder.Services.AddScoped<ExternalLotService>();
 builder.Services.AddScoped<HoldStockService>();
 builder.Services.AddScoped<SealedOpportunityService>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();

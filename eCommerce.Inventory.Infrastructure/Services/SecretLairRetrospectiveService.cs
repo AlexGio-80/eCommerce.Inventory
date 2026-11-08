@@ -258,7 +258,7 @@ public class SecretLairRetrospectiveService
     private async Task<decimal> MeasureFeeShareAsync(CancellationToken cancellationToken)
     {
         var fees = await _db.Orders.AsNoTracking()
-            .Where(o => o.PaidAt != null)
+            .Where(o => o.PaidAt != null && o.CardTraderOrderId >= 0) // i lotti venduti fuori non hanno commissione
             .GroupBy(o => 1)
             .Select(g => new { Fee = g.Sum(o => o.SellerFee), Subtotal = g.Sum(o => o.SellerSubtotal) })
             .FirstOrDefaultAsync(cancellationToken);

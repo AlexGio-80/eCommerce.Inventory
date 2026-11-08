@@ -40,6 +40,23 @@ public class BulkSellThroughService
             .Select(g => new { ExpansionId = g.Key, Quantity = g.Sum(oi => oi.Quantity) })
             .ToDictionaryAsync(x => x.ExpansionId, x => x.Quantity, cancellationToken);
 
+        // Lotti venduti fuori da Card Trader (ExternalLotService): senza blueprint, l'espansione è quella del Tag.
+        var lots = await _db.OrderItems.AsNoTracking()
+            .Where(oi => oi.Order.CardTraderOrderId < 0 && oi.Blueprint == null && oi.Price <= threshold && oi.ExpansionName != "")
+            .GroupBy(oi => oi.ExpansionName)
+            .Select(g => new { Name = g.Key, Quantity = g.Sum(oi => oi.Quantity) })
+            .ToListAsync(cancellationToken);
+        if (lots.Count > 0)
+        {
+            var names = lots.Select(l => l.Name).ToList();
+            var idsByName = (await _db.Expansions.AsNoTracking().Where(e => names.Contains(e.Name))
+                    .Select(e => new { e.Id, e.Name }).ToListAsync(cancellationToken))
+                .ToLookup(e => e.Name, e => e.Id);
+            foreach (var lot in lots)
+            foreach (var expansionId in idsByName[lot.Name])
+                sold[expansionId] = sold.GetValueOrDefault(expansionId) + lot.Quantity;
+        }
+
         var stock = await _db.InventoryItems.AsNoTracking()
             .Where(i => i.ListingPrice <= threshold)
             .GroupBy(i => i.Blueprint.ExpansionId)

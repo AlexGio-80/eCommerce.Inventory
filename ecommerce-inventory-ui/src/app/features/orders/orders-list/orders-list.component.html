@@ -2,6 +2,9 @@
   <div class="header-section">
     <h1>📦 Ordini</h1>
     <span class="spacer"></span>
+    <button mat-stroked-button color="primary" (click)="openExternalLot()" title="Registra un lotto di carte venduto fuori da Card Trader (es. bulk su Subito)">
+      <mat-icon>inventory_2</mat-icon> Lotto venduto fuori
+    </button>
     <button mat-raised-button color="primary" (click)="refreshOrders()">
       <mat-icon>refresh</mat-icon> Aggiorna
     </button>

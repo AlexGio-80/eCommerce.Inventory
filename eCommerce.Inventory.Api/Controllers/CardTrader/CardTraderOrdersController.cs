@@ -3,6 +3,7 @@ using eCommerce.Inventory.Application.Metrics;
 using eCommerce.Inventory.Domain.Entities;
 using eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Services;
 using eCommerce.Inventory.Application.DTOs;
+using eCommerce.Inventory.Infrastructure.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,6 +19,7 @@ public class CardTraderOrdersController : ControllerBase
     private readonly ILogger<CardTraderOrdersController> _logger;
     private readonly IApplicationDbContext _context;
     private readonly BusinessMetrics _metrics;
+    private readonly ExternalLotService _lots;
 
     public CardTraderOrdersController(
         IOrderRepository orderRepository,
@@ -25,8 +27,10 @@ public class CardTraderOrdersController : ControllerBase
         InventorySyncService inventorySyncService,
         ILogger<CardTraderOrdersController> logger,
         IApplicationDbContext context,
-        BusinessMetrics metrics)
+        BusinessMetrics metrics,
+        ExternalLotService lots)
     {
+        _lots = lots;
         _orderRepository = orderRepository;
         _cardTraderApiService = cardTraderApiService;
         _inventorySyncService = inventorySyncService;
@@ -49,6 +53,28 @@ public class CardTraderOrdersController : ControllerBase
 
         return Ok(Models.ApiResponse<List<Order>>.SuccessResult(orders.ToList()));
     }
+
+    /// <summary>Registra un lotto di carte venduto fuori da Card Trader (es. bulk su Subito) come ordine pagato.</summary>
+    [HttpPost("external-lot")]
+    public async Task<IActionResult> RegisterExternalLot([FromBody] ExternalLotInput input, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var order = await _lots.RegisterAsync(input, cancellationToken);
+            _logger.LogInformation("Lotto {Code} registrato: {Site}, {Total} €, {Cards} carte",
+                order.Code, order.BuyerUsername, order.SellerTotal, order.OrderItems.Sum(i => i.Quantity));
+            return Ok(Models.ApiResponse<object>.SuccessResult(new { order.Id, order.Code }));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(Models.ApiResponse<object>.ErrorResult(ex.Message));
+        }
+    }
+
+    /// <summary>Toglie un lotto registrato per errore (solo i lotti).</summary>
+    [HttpDelete("external-lot/{orderId:int}")]
+    public async Task<IActionResult> DeleteExternalLot(int orderId, CancellationToken cancellationToken) =>
+        await _lots.DeleteAsync(orderId, cancellationToken) ? NoContent() : NotFound();
 
     [HttpGet("unprepared-items")]
     public async Task<ActionResult<Models.ApiResponse<List<UnpreparedItemDto>>>> GetUnpreparedItems(CancellationToken cancellationToken)
