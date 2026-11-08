@@ -1027,6 +1027,19 @@ export interface SellerProduct {
     isHoldCandidate: boolean;
     cardTraderBlueprintId?: number;
     cardmarketName?: string;
+    /** Acquisti già fatti del prodotto, dal registro; assente se mai comprato. */
+    history?: PurchaseHistory;
+}
+
+export interface PurchaseHistory {
+    quantity: number;
+    cost: number;
+    soldNet: number;
+    soldPercent?: number;
+    paidBack: boolean;
+    lastPurchasedAt?: string;
+    lastOpenedAt?: string;
+    unopened: number;
 }
 
 export interface SellerBasketLine {
@@ -1078,6 +1091,8 @@ export interface SellerPlanResult {
     expansionsRead: number;
     expansionFailures: number;
     cardmarketSellers: number;
+    /** Già comprati e non ancora ripagati: lasciati fuori dalle aperture. */
+    notPaidBack?: { productId: number; name: string; setCode: string; soldPercent?: number }[];
 }
 
 export interface SellerPlanStatus {

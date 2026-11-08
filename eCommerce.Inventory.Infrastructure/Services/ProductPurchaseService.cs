@@ -37,6 +37,30 @@ public class ProductPurchaseService
     }
 
     /// <summary>
+    /// Gli acquisti già fatti di ogni prodotto da aprire, per "Per venditore" (feature 007): quanto è costato, quanto
+    /// ha reso finora e se si è ripagato. Contano gli acquisti da aprire e quelli "Da tenere" poi aperti; i tenuti
+    /// ancora chiusi no, li governa già il limite dei tenuti. Un acquisto non ancora aperto non è ripagato.
+    /// </summary>
+    public async Task<Dictionary<int, PurchaseHistory>> HistoryByProductAsync(CancellationToken cancellationToken = default)
+    {
+        var purchases = await _db.ProductPurchases.AsNoTracking()
+            .Where(p => !p.HoldForResale || p.OpenedAt != null)
+            .ToListAsync(cancellationToken);
+        var sold = await SoldByPurchaseAsync(purchases, cancellationToken);
+        return purchases
+            .GroupBy(p => p.SealedProductId)
+            .ToDictionary(g => g.Key, g =>
+            {
+                var cost = g.Sum(p => p.Quantity * p.UnitPrice);
+                var soldNet = g.Sum(p => sold.GetValueOrDefault(p.Id)?.SoldNet ?? 0);
+                var paidBack = g.All(p => (sold.GetValueOrDefault(p.Id)?.SoldNet ?? 0) >= p.Quantity * p.UnitPrice);
+                return new PurchaseHistory(g.Sum(p => p.Quantity), Math.Round(cost, 2), Math.Round(soldNet, 2),
+                    cost > 0 ? Math.Round(soldNet / cost * 100, 0) : null, paidBack,
+                    g.Max(p => p.PurchasedAt), g.Max(p => p.OpenedAt), g.Count(p => p.OpenedAt == null));
+            });
+    }
+
+    /// <summary>
     /// Incassato delle carte vendute con il Tag di ciascun acquisto, al netto della commissione Card
     /// Trader. Più acquisti con lo stesso Tag (es. due mazzi aperti insieme) se lo dividono in
     /// proporzione al costo. Contano le vendite da un giorno prima del primo acquisto del Tag: il
@@ -399,6 +423,16 @@ public class ProductPurchaseService
 /// <param name="TagSoldNet">Incassato netto del Tag intero.</param>
 /// <param name="TagPurchases">Acquisti del registro con lo stesso Tag.</param>
 public record PurchaseSales(decimal SoldNet, decimal SharePercent, int TagSoldCopies, decimal TagSoldNet, int TagPurchases);
+
+/// <summary>Gli acquisti già fatti di un prodotto, dal registro.</summary>
+/// <param name="Quantity">Copie comprate in tutto.</param>
+/// <param name="SoldNet">Incassato netto delle carte vendute, come la colonna "Venduto" del registro.</param>
+/// <param name="SoldPercent">Venduto sul costo.</param>
+/// <param name="PaidBack">Ogni acquisto del prodotto ha incassato almeno quanto è costato.</param>
+/// <param name="Unopened">Acquisti non ancora aperti.</param>
+public record PurchaseHistory(
+    int Quantity, decimal Cost, decimal SoldNet, decimal? SoldPercent, bool PaidBack,
+    DateOnly? LastPurchasedAt, DateOnly? LastOpenedAt, int Unopened);
 
 /// <param name="OpenValueNet">Valore atteso netto aprendolo, per unità.</param>
 /// <param name="SealedNet">Ricavato netto rivendendolo chiuso al trend, per unità.</param>

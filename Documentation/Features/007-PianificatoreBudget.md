@@ -302,6 +302,26 @@ Trader Zero (894 €, guadagno netto 625 €) e il venditore Cardmarket da 508 o
 **Esito (2026-10-17):** verificato dall'utente ("direi ci sia tutto"): riquadro del venditore con le regole e il motivo
 dell'esclusione, "anche in", "Scelgo questo" con il totale e gli avvisi di budget e doppioni, lettura salvata (1,4 MB).
 
+### Acquisti già fatti in "Per venditore" (2026-11-08, pubblicato e verificato)
+
+L'utente cercava a mano, partendo dai prodotti del registro che avevano reso bene e in fretta, chi li vende ancora e
+cos'altro ha. "Per venditore" lo faceva già, ma solo sulla resa prevista: non sapeva cosa era già stato comprato.
+
+- **Nota "già preso"** su ogni riga di un prodotto già nel registro: copie, venduto sul costo (come la colonna
+  "Venduto"), "ripagato" in verde, data dell'ultima apertura, acquisti ancora da aprire.
+- **Esclusione dei non ripagati** (scelta dell'utente: "solo se non ripagato"): un prodotto con almeno un acquisto che
+  non ha ancora incassato quanto è costato non entra fra le aperture, anche con una buona resa prevista; un acquisto
+  non ancora aperto conta come non ripagato. Può ancora entrare come "da tenere". I ripagati restano, con la nota.
+  Nel riepilogo, l'elenco dei prodotti lasciati fuori per questo; nel riquadro "Da X ti conviene" il motivo
+  "Da aprire, ma già comprato e non ancora ripagato".
+- Contano gli acquisti da aprire e i "Da tenere" poi aperti; i tenuti chiusi no (li governa il limite dei tenuti).
+- Lo storico (`ProductPurchaseService.HistoryByProductAsync`) si legge a ogni calcolo, anche su "Aggiorna" e sulla
+  lettura salvata: un acquisto registrato o una vendita contano subito, senza "Cerca i venditori".
+- **Aperture deboli tolte invece del venditore:** se le aperture aggiunte portano il netto del carrello sotto la
+  soglia "Netto", si tolgono dalla più debole finché il carrello torna sopra; prima si scartava il venditore intero.
+  Caso dell'utente: un venditore Card Trader con due mazzi Fallout al 51–56% (netto 37%) spariva perché tre aperture
+  al 16–25% in più portavano il carrello al 27%. Stessa regola nel riquadro "Da X ti conviene".
+
 ### Fase 2 — Dopo l'acquisto (facoltativa, da rivalutare dopo l'uso)
 
 - **"Registra l'acquisto" (fatto il 2026-10-21, chiesto dall'utente dopo il primo ordine fatto col Budget).**

@@ -9,6 +9,27 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-11-08] Feature — Acquisti già fatti nel Budget "Per venditore" *(pubblicato e verificato il 2026-11-08)*
+
+#### Problema
+
+- Per decidere cosa ricomprare l'utente incrociava a mano il registro acquisti (cosa ha reso) con le offerte dei
+  venditori. "Per venditore" non conosceva gli acquisti passati: riproponeva prodotti di cui l'utente aveva ancora
+  le carte in vendita senza che si fossero ripagati.
+
+#### Soluzione Implementata
+
+- Ogni riga di un prodotto già comprato dice copie, venduto sul costo e se è ripagato.
+- I prodotti già comprati e non ancora ripagati non si propongono più da aprire; il riepilogo li elenca e il
+  riquadro di un venditore Cardmarket incollato dice il motivo.
+- Un venditore non sparisce più perché le aperture deboli aggiunte abbassano il netto sotto la soglia: si tolgono
+  quelle, dalla più debole.
+
+#### Note Tecniche
+
+- `ProductPurchaseService.HistoryByProductAsync` riusa il calcolo della colonna "Venduto". `SellerPlanService.Compose`
+  riceve lo storico a parte, letto a ogni calcolo: non è nella lettura salvata. Dettaglio nel documento 007.
+
 ### [2026-11-02] Feature — Chiudere un'inserzione da "Le mie inserzioni" *(pubblicato e verificato il 2026-11-02)*
 
 #### Problema

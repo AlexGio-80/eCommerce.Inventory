@@ -19,12 +19,15 @@ public class CardmarketSellerOfferService
     private readonly ApplicationDbContext _db;
     private readonly IConfiguration _configuration;
     private readonly ILogger<CardmarketSellerOfferService> _logger;
+    private readonly ProductPurchaseService _purchases;
 
-    public CardmarketSellerOfferService(ApplicationDbContext db, IConfiguration configuration, ILogger<CardmarketSellerOfferService> logger)
+    public CardmarketSellerOfferService(ApplicationDbContext db, IConfiguration configuration, ILogger<CardmarketSellerOfferService> logger,
+        ProductPurchaseService purchases)
     {
         _db = db;
         _configuration = configuration;
         _logger = logger;
+        _purchases = purchases;
     }
 
     /// <summary>
@@ -167,6 +170,7 @@ public class CardmarketSellerOfferService
             })
             .ToListAsync(cancellationToken);
         var byCm = sealedProducts.GroupBy(s => s.CardmarketId).ToDictionary(g => g.Key, g => g.First());
+        var history = await _purchases.HistoryByProductAsync(cancellationToken);
 
         return offers.Select(o =>
         {
@@ -178,6 +182,8 @@ public class CardmarketSellerOfferService
             var verdict = o.IsDamaged ? "Danneggiato: escluso"
                 : opp == null ? "Nessuna valutazione oggi"
                 : roi > MaxRealisticRoi ? "Prezzo da controllare: resa troppo alta per essere vera"
+                : SellerBasketBuilder.IsOpenable(opp.Decision) && roi >= minRoi && history.GetValueOrDefault(s.Id) is { PaidBack: false } h
+                    ? string.Format(Italian, "Da aprire, ma già comprato e non ancora ripagato (venduto {0:0}%)", h.SoldPercent ?? 0)
                 : SellerBasketBuilder.IsOpenable(opp.Decision) && roi >= minRoi ? string.Format(Italian, "Da aprire: guadagno {0:0.00} €", opp.OpenValueCm!.Value - o.Price)
                 : opp.IsHoldCandidate && opp.CmTrend is > 0 && o.Price <= opp.CmTrend * (1 + maxHoldPremium / 100)
                     ? string.Format(Italian, "Da tenere: punteggio {0:0}, {1} il trend", opp.HoldScore, o.Price <= opp.CmTrend ? "sotto" : "poco sopra")
@@ -186,7 +192,7 @@ public class CardmarketSellerOfferService
             return new SellerOfferEvaluation(o.Id, o.ProductName, o.Price, o.Quantity, o.Comment, o.IsDamaged,
                 s.Id, opp?.CmTrend, opp?.OpenValueCm, roi, opp?.HoldScore, verdict, o.Shipping);
         })
-        .OrderBy(r => r.Verdict.StartsWith("Da aprire") ? 0 : r.Verdict.StartsWith("Da tenere:") ? 1 : 2)
+        .OrderBy(r => r.Verdict.StartsWith("Da aprire:") ? 0 : r.Verdict.StartsWith("Da tenere:") ? 1 : 2)
         .ThenByDescending(r => r.RoiPercent ?? -999)
         .ToList();
     }

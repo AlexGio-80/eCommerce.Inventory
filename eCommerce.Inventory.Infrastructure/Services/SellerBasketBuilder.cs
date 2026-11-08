@@ -41,7 +41,7 @@ public static class SellerBasketBuilder
         {
             var p = products[offer.ProductId];
             var roi = RoiAt(p, offer.Price);
-            if (roi is { } r && r >= rules.AddOnRoiPercent && r <= MaxRealisticRoi)
+            if (roi is { } r && r >= rules.AddOnRoiPercent && r <= MaxRealisticRoi && !IsNotPaidBack(p))
                 open.Add(new SellerBasketLine(offer, p, SellerLineKind.Open, Math.Round(r, 1), p.OpenValueNet!.Value - offer.Price));
             else if (p.IsHoldCandidate && p.CmTrend is > 0 && offer.Price <= p.CmTrend.Value * (1 + rules.MaxHoldPremiumPercent / 100))
                 hold.Add(new SellerBasketLine(offer, p, SellerLineKind.Hold, roi is { } h ? Math.Round(h, 1) : null, null));
@@ -69,6 +69,20 @@ public static class SellerBasketBuilder
             items += l.Offer.Price;
             basketShipping = withShipping;
         }
+
+        // Le aperture aggiunte che rendono poco abbassano il netto del carrello: se scende sotto la soglia si tolgono,
+        // dalla più debole, invece di scartare il venditore. Caso dell'utente dell'08/11: due mazzi al 51-56% facevano il
+        // 37%, tre aperture al 15-25% in più portavano il carrello al 27% e il venditore spariva con la soglia al 30%.
+        bool NetTooLow(List<SellerBasketLine> lines, decimal ship) =>
+            lines.Sum(l => l.Gain!.Value) - ship < lines.Sum(l => l.Offer.Price) * rules.MinNetPercent / 100;
+        while (chosenOpen.Count > 1 && NetTooLow(chosenOpen, basketShipping))
+        {
+            var weakest = chosenOpen.Skip(1).OrderBy(l => l.RoiPercent).First();
+            chosenOpen.Remove(weakest);
+            items -= weakest.Offer.Price;
+            basketShipping = chosenOpen.Max(ShippingOf);
+        }
+
         var chosenHold = new List<SellerBasketLine>();
         foreach (var l in hold.OrderByDescending(l => l.Product.HoldScore))
         {
@@ -112,6 +126,13 @@ public static class SellerBasketBuilder
             .ToList();
     }
 
+    /// <summary>
+    /// Già comprato e non ancora ripagato: non si ricompra da aprire. Scelta dell'utente dell'08/11: non riprendere i
+    /// prodotti di cui ha ancora le carte in vendita senza che abbiano reso, anche se la resa prevista è buona; quelli
+    /// già ripagati invece sì, sono la conferma che il prodotto rende davvero.
+    /// </summary>
+    public static bool IsNotPaidBack(SellerProduct p) => p.History is { PaidBack: false };
+
     /// <summary>Resa dell'apertura al prezzo dell'offerta; null se il valore atteso non è affidabile.</summary>
     public static decimal? RoiAt(SellerProduct p, decimal price) =>
         IsOpenable(p.Decision) && p.OpenValueNet is > 0 && price > 0 ? (p.OpenValueNet.Value - price) / price * 100 : null;
@@ -132,9 +153,11 @@ public static class SellerBasketBuilder
 public record SellerRules(decimal AnchorRoiPercent, decimal AddOnRoiPercent, decimal MinNetPercent, decimal MaxHoldPremiumPercent);
 
 /// <param name="OpenValueNet">Valore atteso netto dell'apertura (dalla classifica di oggi).</param>
+/// <param name="History">Acquisti già fatti del prodotto, dal registro; null se mai comprato. Si legge a ogni calcolo.</param>
 public record SellerProduct(
     int ProductId, string Name, string SetCode, string? Decision, decimal? OpenValueNet, decimal? CmTrend,
-    decimal? HoldScore, bool IsHoldCandidate, int? CardTraderBlueprintId, string? CardmarketName);
+    decimal? HoldScore, bool IsHoldCandidate, int? CardTraderBlueprintId, string? CardmarketName,
+    PurchaseHistory? History = null);
 
 /// <param name="Store">"Card Trader", "Card Trader Zero" o "Cardmarket".</param>
 /// <param name="CardTraderProductId">Offerta Card Trader, per il carrello via API.</param>

@@ -234,7 +234,7 @@ const SELLER_REQUEST_KEY = 'budget_plan_seller_request';
                   <thead><tr><th>Prodotto</th><th class="num">Prezzo</th><th class="num">Spedizione</th><th class="num">Q.tà</th><th class="num">Trend CM</th><th class="num">Resa</th><th>Valutazione</th></tr></thead>
                   <tbody>
                     @for (o of p.offers; track o.offerId) {
-                      <tr [class.good]="o.verdict.startsWith('Da aprire') || o.verdict.startsWith('Da tenere:')">
+                      <tr [class.good]="o.verdict.startsWith('Da aprire:') || o.verdict.startsWith('Da tenere:')">
                         <td><a [href]="sellerOfferUrl(p.seller, o.name)" target="_blank" rel="noopener" matTooltip="Questo prodotto fra le offerte di {{ p.seller }}">{{ o.name }}</a>
                           <a [href]="cmSearchUrl(o.name)" target="_blank" rel="noopener" matTooltip="Cerca il prodotto su tutto Cardmarket"><mat-icon class="tiny">search</mat-icon></a>
                           @if (o.comment) { <div class="muted">{{ o.comment }}</div> }</td>
@@ -272,6 +272,13 @@ const SELLER_REQUEST_KEY = 'budget_plan_seller_request';
               @if (sr.expansionFailures) { ({{ sr.expansionFailures }} non riuscite) }; {{ sr.cardmarketSellers }} venditori Cardmarket incollati.
               Offerte Card Trader lette il <b [class.stale]="isStale(sr.collectedAt)">{{ sr.collectedAt | date:'dd/MM HH:mm' }}</b>:
               per offerte fresche, "Cerca i venditori".</div>
+            @if (sr.notPaidBack?.length) {
+              <div class="muted not-paid">Lasciati fuori perché già comprati e non ancora ripagati:
+                @for (n of sr.notPaidBack; track n.productId) {
+                  <span class="np">{{ n.name }} ({{ n.setCode }}, venduto {{ (n.soldPercent ?? 0).toFixed(0) }}%)</span>{{ $last ? '.' : ',' }}
+                }
+              </div>
+            }
           </mat-card-content>
         </mat-card>
 
@@ -347,7 +354,12 @@ const SELLER_REQUEST_KEY = 'budget_plan_seller_request';
                         <span class="muted"> · {{ l.product.setCode }}</span>
                         <button class="reg-line" matTooltip="Registra solo questo prodotto nel registro acquisti" (click)="registerSeller(b, $index)">
                           <mat-icon>post_add</mat-icon></button>
-                        @if (alsoIn(sr, b, l); as others) { <div class="also">anche in: {{ others }}</div> }</td>
+                        @if (alsoIn(sr, b, l); as others) { <div class="also">anche in: {{ others }}</div> }
+                        @if (l.product.history; as h) {
+                          <div class="history" [class.paid]="h.paidBack" matTooltip="Dal registro acquisti: incassato netto delle carte vendute col Tag, sul costo">
+                            già preso {{ h.quantity }}× · venduto {{ eur(h.soldNet) }} su {{ eur(h.cost) }} ({{ (h.soldPercent ?? 0).toFixed(0) }}%){{ h.paidBack ? ' · ripagato' : '' }}@if (h.lastOpenedAt) { · aperto il {{ h.lastOpenedAt | date:'dd/MM' }}}@if (h.unopened) { · {{ h.unopened }} ancora da aprire }
+                          </div>
+                        }</td>
                       @if (b.key === 'ctzero') { <td>{{ l.offer.seller }}@if (l.offer.country) { ({{ l.offer.country }}) }</td> }
                       <td class="num">{{ eur(l.offer.price) }}</td>
                       <td class="num">{{ eur(l.product.cmTrend) }}</td>
@@ -520,6 +532,10 @@ const SELLER_REQUEST_KEY = 'budget_plan_seller_request';
     .paste-result { margin: 4px 0 8px; display: flex; flex-direction: column; gap: 6px; }
     .seller-basket.no { background: #fff3e0; border-left-color: #fb8c00; }
     .also { color: #e65100; font-size: 11px; }
+    .history { color: #616161; font-size: 11px; }
+    .history.paid { color: #2e7d32; }
+    .not-paid { margin-top: 4px; }
+    .not-paid .np { white-space: nowrap; }
     .reg-line { background: none; border: none; padding: 0 2px; cursor: pointer; color: #3f51b5; vertical-align: middle; line-height: 1; }
     .reg-line mat-icon { font-size: 16px; width: 16px; height: 16px; }
     .choose { margin-right: 6px; }
@@ -759,12 +775,12 @@ export class BudgetPlanTabComponent implements OnInit, OnDestroy {
     const r = this.rules;
     const ship = (o: { shipping?: number }) => o.shipping ?? this.shipping?.cardmarket ?? 0;
     const opens = p.offers
-      .filter(o => o.verdict.startsWith('Da aprire') && (o.roiPercent ?? 0) >= r.addOnRoiPercent)
+      .filter(o => o.verdict.startsWith('Da aprire:') && (o.roiPercent ?? 0) >= r.addOnRoiPercent)
       .sort((x, y) => (y.roiPercent ?? 0) - (x.roiPercent ?? 0));
     const holds = p.offers
       .filter(o => o.verdict.startsWith('Da tenere:'))
       .sort((x, y) => (y.holdScore ?? 0) - (x.holdScore ?? 0));
-    const best = Math.max(0, ...p.offers.filter(o => o.verdict.startsWith('Da aprire')).map(o => o.roiPercent ?? 0));
+    const best = Math.max(0, ...p.offers.filter(o => o.verdict.startsWith('Da aprire:')).map(o => o.roiPercent ?? 0));
     const anchor = opens.find(o => (o.roiPercent ?? 0) >= r.anchorRoiPercent && o.price + ship(o) <= this.budget);
     if (!anchor) {
       return { ok: false, reason: best >= r.anchorRoiPercent
@@ -775,14 +791,30 @@ export class BudgetPlanTabComponent implements OnInit, OnDestroy {
     const chosen = [anchor];
     let items = anchor.price;
     let shipping = ship(anchor);
-    for (const o of [...opens.filter(x => x !== anchor), ...holds]) {
+    for (const o of opens.filter(x => x !== anchor)) {
       const withShipping = Math.max(shipping, ship(o));
       if (items + o.price + withShipping > this.budget) continue;
       chosen.push(o);
       items += o.price;
       shipping = withShipping;
     }
-    const opened = chosen.filter(o => o.verdict.startsWith('Da aprire'));
+    // Come nella lista: le aperture deboli che portano il netto sotto la soglia si tolgono, dalla più debole.
+    const netTooLow = () => chosen.reduce((t, o) => t + (o.openValueNet ?? o.price) - o.price, 0) - shipping
+      < chosen.reduce((t, o) => t + o.price, 0) * r.minNetPercent / 100;
+    while (chosen.length > 1 && netTooLow()) {
+      const weakest = chosen.slice(1).reduce((a, b) => (b.roiPercent ?? 0) < (a.roiPercent ?? 0) ? b : a);
+      chosen.splice(chosen.indexOf(weakest), 1);
+      items -= weakest.price;
+      shipping = Math.max(...chosen.map(ship));
+    }
+    for (const o of holds) {
+      const withShipping = Math.max(shipping, ship(o));
+      if (items + o.price + withShipping > this.budget) continue;
+      chosen.push(o);
+      items += o.price;
+      shipping = withShipping;
+    }
+    const opened = chosen.filter(o => o.verdict.startsWith('Da aprire:'));
     const openCost = opened.reduce((t, o) => t + o.price, 0);
     const gain = opened.reduce((t, o) => t + ((o.openValueNet ?? o.price) - o.price), 0) - shipping;
     const netPercent = openCost > 0 ? gain / openCost * 100 : 0;

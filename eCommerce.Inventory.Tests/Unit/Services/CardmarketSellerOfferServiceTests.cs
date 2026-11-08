@@ -34,7 +34,21 @@ public class CardmarketSellerOfferServiceTests
     }
 
     private static CardmarketSellerOfferService Service(ApplicationDbContext db) =>
-        new(db, new ConfigurationBuilder().Build(), NullLogger<CardmarketSellerOfferService>.Instance);
+        // L'analisi non serve allo storico degli acquisti.
+        new(db, new ConfigurationBuilder().Build(), NullLogger<CardmarketSellerOfferService>.Instance, new ProductPurchaseService(db, null!));
+
+    [Fact]
+    public async Task An_offer_of_a_product_bought_and_not_paid_back_is_not_proposed_to_open()
+    {
+        await using var db = await DatabaseAsync();
+        db.ProductPurchases.Add(new ProductPurchase { SealedProductId = 1, Quantity = 1, UnitPrice = 40m, Tag = "#DFT_COM_20261020",
+            PurchasedAt = new DateOnly(2026, 10, 20), OpenedAt = new DateOnly(2026, 10, 22) });
+        await db.SaveChangesAsync();
+
+        var result = await Service(db).ImportAsync(null, Page(("Commander: Aetherdrift: \"Living Energy\" Commander Deck", "", "33,00 €", 1)), CancellationToken.None);
+
+        result.Offers.Single().Verdict.Should().StartWith("Da aprire, ma già comprato e non ancora ripagato");
+    }
 
     [Fact]
     public async Task Import_matches_the_catalog_and_evaluates_each_offer()

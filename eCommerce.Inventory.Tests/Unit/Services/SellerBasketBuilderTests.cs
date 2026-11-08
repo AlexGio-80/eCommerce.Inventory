@@ -68,6 +68,59 @@ public class SellerBasketBuilderTests
     }
 
     [Fact]
+    public void Weak_add_ons_that_pull_the_net_below_the_threshold_are_dropped_instead_of_the_seller()
+    {
+        var rules = Rules with { AnchorRoiPercent = 33m, AddOnRoiPercent = 15m, MinNetPercent = 30m };
+        var products = new Dictionary<int, SellerProduct>
+        {
+            [1] = Open(1, 48m),   // a 31 € rende il 55%: il traino
+            [2] = Open(2, 69m),   // a 46 € rende il 50%
+            [3] = Open(3, 37.5m), // a 30 € rende il 25%
+            [4] = Open(4, 46.8m), // a 40 € rende il 17%
+            [5] = Open(5, 40.6m)  // a 35 € rende il 16%
+        };
+        var offers = new[] { Offer(1, 31m), Offer(2, 46m), Offer(3, 30m), Offer(4, 40m), Offer(5, 35m) };
+
+        // Tutte e cinque: guadagno 49,9 − 12 su 182 € = 21%. Si tolgono la 5 e la 4: 47,5 − 12 su 107 € = 33%.
+        var basket = SellerBasketBuilder.Build("s", offers, products, 12m, rules)!;
+
+        basket.Lines.Select(l => l.Product.ProductId).Should().Equal(1, 2, 3);
+        basket.NetPercent.Should().BeGreaterThanOrEqualTo(30m);
+    }
+
+    [Fact]
+    public void A_product_already_bought_and_not_paid_back_is_not_bought_again_to_open()
+    {
+        var notPaid = new PurchaseHistory(1, 50m, 20m, 40m, false, null, null, 0);
+        var paid = new PurchaseHistory(1, 50m, 60m, 120m, true, null, null, 0);
+        var products = new Dictionary<int, SellerProduct>
+        {
+            [1] = Open(1, 180m) with { History = paid },    // ripagato: resta il traino
+            [2] = Open(2, 70m) with { History = notPaid },  // rende il 40%, ma ne ho ancora le carte
+            [3] = Open(3, 70m)                               // mai comprato: entra
+        };
+
+        var basket = SellerBasketBuilder.Build("s", new[] { Offer(1, 100m), Offer(2, 50m), Offer(3, 50m) }, products, 12m, Rules)!;
+
+        basket.Lines.Select(l => l.Product.ProductId).Should().Equal(1, 3);
+    }
+
+    [Fact]
+    public void Compose_lists_the_products_left_out_because_not_paid_back()
+    {
+        var products = new Dictionary<int, SellerProduct> { [1] = Open(1, 180m), [2] = Open(2, 70m) };
+        var data = new SellerPlanData(DateTime.UtcNow, products, new List<SellerOffer> { Offer(1, 100m), Offer(2, 50m) },
+            new List<WizardsDrop>(), 0, 0);
+        var request = new SellerPlanRequest(300m, 0m, Rules, new BudgetShipping(7m, 7m, 12m, 10m), null);
+        var history = new Dictionary<int, PurchaseHistory> { [2] = new(1, 50m, 10m, 20m, false, null, null, 0) };
+
+        var result = SellerPlanService.Compose(data, request, history);
+
+        result.NotPaidBack.Should().ContainSingle().Which.ProductId.Should().Be(2);
+        result.Sellers.Single().Lines.Should().ContainSingle().Which.Product.ProductId.Should().Be(1);
+    }
+
+    [Fact]
     public void A_product_to_keep_above_the_trend_by_more_than_ten_percent_stays_out()
     {
         var products = new Dictionary<int, SellerProduct> { [1] = Open(1, 200m), [2] = Hold(2, 40m) };

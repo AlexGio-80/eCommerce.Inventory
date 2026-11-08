@@ -140,8 +140,12 @@ public class SellerPlanService
     }
 
     /// <summary>Carrelli per venditore sulle offerte già lette: in millisecondi.</summary>
-    public static SellerPlanResult Compose(SellerPlanData data, SellerPlanRequest request)
+    /// <param name="history">Acquisti già fatti per prodotto (registro): i non ripagati non si ricomprano da aprire.</param>
+    public static SellerPlanResult Compose(SellerPlanData data, SellerPlanRequest request,
+        IReadOnlyDictionary<int, PurchaseHistory>? history = null)
     {
+        if (history != null)
+            data = data with { Products = data.Products.ToDictionary(kv => kv.Key, kv => kv.Value with { History = history.GetValueOrDefault(kv.Key) }) };
         var rules = request.Rules;
         var shipping = request.Shipping;
         var stores = request.ExcludedStores?.ToHashSet(StringComparer.OrdinalIgnoreCase) ?? new HashSet<string>();
@@ -172,6 +176,16 @@ public class SellerPlanService
 
         var ranked = SellerBasketBuilder.RankAndFit(baskets, request.Budget);
 
+        // I prodotti lasciati fuori perché non ripagati, fra quelli che qualcuno vende a una resa da aprire.
+        var notPaidBack = data.Offers
+            .Where(o => data.Products.TryGetValue(o.ProductId, out var p) && SellerBasketBuilder.IsNotPaidBack(p)
+                && SellerBasketBuilder.RoiAt(p, o.Price) >= rules.AddOnRoiPercent)
+            .Select(o => data.Products[o.ProductId])
+            .DistinctBy(p => p.ProductId)
+            .Select(p => new NotPaidBackProduct(p.ProductId, p.Name, p.SetCode, p.History!.SoldPercent))
+            .OrderBy(p => p.Name)
+            .ToList();
+
         // Wizards a parte: i drop col margine migliore finché stanno nell'importo, spedizione una volta.
         var wizardsLeft = request.WizardsBudget - shipping.Wizards;
         var drops = data.Wizards
@@ -190,7 +204,7 @@ public class SellerPlanService
             drops, Math.Round(chosenDrops.Sum(d => d.Drop.Price) + (chosenDrops.Count > 0 ? shipping.Wizards : 0), 2),
             Math.Round(chosenDrops.Sum(d => d.Drop.NetValue - d.Drop.Price) - (chosenDrops.Count > 0 ? shipping.Wizards : 0), 2),
             data.Products.Count, data.ExpansionsRead, data.ExpansionFailures,
-            data.Offers.Where(o => o.Store == "Cardmarket").Select(o => o.Seller).Distinct().Count());
+            data.Offers.Where(o => o.Store == "Cardmarket").Select(o => o.Seller).Distinct().Count(), notPaidBack);
     }
 
     private static bool IsEnglish(string? language) =>
@@ -214,7 +228,10 @@ public record WizardsChoice(WizardsDrop Drop, bool Chosen);
 public record SellerPlanResult(
     DateTime CollectedAt, SellerPlanRequest Request, List<SellerBasket> Sellers, int InBudgetCount, decimal InBudgetTotal,
     decimal InBudgetGain, List<WizardsChoice> Wizards, decimal WizardsTotal, decimal WizardsGain, int Products,
-    int ExpansionsRead, int ExpansionFailures, int CardmarketSellers);
+    int ExpansionsRead, int ExpansionFailures, int CardmarketSellers, List<NotPaidBackProduct>? NotPaidBack = null);
+
+/// <summary>Prodotto già comprato e non ancora ripagato, lasciato fuori dalle aperture.</summary>
+public record NotPaidBackProduct(int ProductId, string Name, string SetCode, decimal? SoldPercent);
 
 /// <summary>
 /// Lettura per venditore in background, come <see cref="BudgetPlanRunner"/>: una alla volta, risultati in memoria
@@ -276,7 +293,7 @@ public class SellerPlanRunner
             var sellerOffers = scope.ServiceProvider.GetRequiredService<CardmarketSellerOfferService>();
             data = SellerPlanService.WithCardmarketOffers(data, await sellerOffers.GetValidOffersAsync(cancellationToken));
             var run = new Run(snapshot.RunId, request, data.CollectedAt) { Data = data, State = "done" };
-            run.Result = SellerPlanService.Compose(data, request);
+            run.Result = SellerPlanService.Compose(data, request, await HistoryAsync(scope, cancellationToken));
             _runs.TryAdd(run.Id, run);
             _logger.LogInformation("Venditori: ripresa la lettura salvata del {CollectedAt}", data.CollectedAt);
             return _runs[run.Id].Status();
@@ -296,12 +313,10 @@ public class SellerPlanRunner
     public async Task<SellerPlanStatus?> RecomputeAsync(string id, SellerPlanRequest request, CancellationToken cancellationToken)
     {
         if (!_runs.TryGetValue(id, out var run) || run.Data == null) return null;
-        using (var scope = _scopeFactory.CreateScope())
-        {
-            var sellerOffers = scope.ServiceProvider.GetRequiredService<CardmarketSellerOfferService>();
-            run.Data = SellerPlanService.WithCardmarketOffers(run.Data, await sellerOffers.GetValidOffersAsync(cancellationToken));
-        }
-        run.Result = SellerPlanService.Compose(run.Data, request);
+        using var scope = _scopeFactory.CreateScope();
+        var sellerOffers = scope.ServiceProvider.GetRequiredService<CardmarketSellerOfferService>();
+        run.Data = SellerPlanService.WithCardmarketOffers(run.Data, await sellerOffers.GetValidOffersAsync(cancellationToken));
+        run.Result = SellerPlanService.Compose(run.Data, request, await HistoryAsync(scope, cancellationToken));
         return run.Status();
     }
 
@@ -313,7 +328,7 @@ public class SellerPlanRunner
             var service = scope.ServiceProvider.GetRequiredService<SellerPlanService>();
             var progress = new Progress<(int Done, int Total)>(p => { run.Done = p.Done; run.Total = p.Total; });
             run.Data = await service.CollectAsync(progress, CancellationToken.None);
-            run.Result = SellerPlanService.Compose(run.Data, run.Request);
+            run.Result = SellerPlanService.Compose(run.Data, run.Request, await HistoryAsync(scope, CancellationToken.None));
             run.State = "done";
             await SaveAsync(scope.ServiceProvider.GetRequiredService<ApplicationDbContext>(), run);
             _logger.LogInformation("Venditori {Id}: {Sellers} venditori convenienti, {InBudget} nel budget", run.Id, run.Result.Sellers.Count, run.Result.InBudgetCount);
@@ -325,6 +340,10 @@ public class SellerPlanRunner
             _logger.LogError(ex, "Venditori {Id}: lettura fallita", run.Id);
         }
     }
+
+    /// <summary>Gli acquisti dal registro, letti a ogni calcolo: un acquisto appena registrato conta subito.</summary>
+    private static Task<Dictionary<int, PurchaseHistory>> HistoryAsync(IServiceScope scope, CancellationToken cancellationToken) =>
+        scope.ServiceProvider.GetRequiredService<ProductPurchaseService>().HistoryByProductAsync(cancellationToken);
 
     /// <summary>Salva la lettura appena finita al posto della precedente; un errore qui non fa fallire la lettura.</summary>
     private async Task SaveAsync(ApplicationDbContext db, Run run)
