@@ -468,6 +468,15 @@ le aperture di mazzi nuovi, ed è per questo che si rimisura ogni giorno.
 - Pagina "Acquisti" a schede: **Analisi uscita** (con il parametro "Prezzo realizzato %" e il
   pulsante per registrare un acquisto dalla riga), **Aperture** (bilancio), **Registro acquisti**
   (con tag proposto nel formato `CODICE_TIPO_AAAAMMGG`).
+- **"Oggi conviene" nel registro (dal 2026-11-09, `ProductPurchaseService.AdviceFor`)**: per ogni
+  acquisto ancora chiuso, sul prezzo pagato. "Apri" o "Vendi sigillato" appena la strada migliore
+  (valore netto dell'apertura o rivendita netta del sigillato, per unità) incassa almeno il prezzo
+  pagato, anche solo in pari (scelta dell'utente); altrimenti "Tieni". Le decisioni senza un valore
+  affidabile ("Dati incompleti", "Prezzo CM dubbio", "Non giocabili") restano come sono. Si aggiorna
+  ogni mattina con la classifica delle 07:00; se un prodotto manca dalla classifica del giorno si usa
+  l'ultima entro 7 giorni, con la data nel tooltip. Prima la colonna riportava la decisione della
+  classifica, che confronta solo apertura e rivendita senza il costo: dava "Apri" anche aprendo in
+  perdita (mazzi Final Fantasy comprati da tenere).
 - **Provato su SQL Server** su una copia ripristinata del backup del 07/10 (poi cancellata): fattore
   120,2% su 246 copie; The Hobbit con il fattore: Collector Box "Apri" (575,58 € netti aprendo contro
   499,25 € rivendendola chiusa), Play Box ancora "Tieni sigillato" (−27,2%); Lorwyn Eclipsed: Commander
