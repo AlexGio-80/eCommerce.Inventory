@@ -184,10 +184,13 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
     { headerName: 'Aperto', field: 'openedAt', width: 105, valueFormatter: this.date },
     {
       headerName: 'Oggi conviene', field: 'todayDecision', width: 140,
-      headerTooltip: 'Decisione dell\'ultima classifica giornaliera, solo per i prodotti non ancora aperti',
-      cellStyle: p => p.value === 'Apri' ? { color: '#2e7d32', fontWeight: 600 } : p.value === 'Tieni sigillato' ? { color: '#1565c0', fontWeight: 600 } : null,
+      headerTooltip: 'Per i prodotti non ancora aperti, sul prezzo pagato: Apri o Vendi sigillato se ripaga il prezzo (la strada migliore), ' +
+        'altrimenti Tieni. Dall\'ultima classifica giornaliera (ore 07:00)',
+      cellStyle: p => p.value === 'Apri' ? { color: '#2e7d32', fontWeight: 600 }
+        : p.value === 'Vendi sigillato' ? { color: '#6a1b9a', fontWeight: 600 }
+        : p.value === 'Tieni' ? { color: '#1565c0', fontWeight: 600 } : null,
       tooltipValueGetter: p => !p.data?.todayDecision ? '' :
-        `Aprendolo: ${this.money(p.data.todayOpenValueNet)} netti per unità; venduto chiuso: ${this.money(p.data.todaySealedNet)}` +
+        `Pagato ${this.money(p.data.unitPrice)} per unità. Aprendolo: ${this.money(p.data.todayOpenValueNet)} netti; venduto chiuso: ${this.money(p.data.todaySealedNet)}` +
         ` (classifica del ${new Date(p.data.todayDecisionDate!).toLocaleDateString('it-IT')})`
     },
     { headerName: 'Tag', field: 'tag', width: 170 },

@@ -395,6 +395,22 @@ public class ProductPurchaseService
     }
 
     /// <summary>
+    /// Cosa fare oggi di un acquisto ancora chiuso, sul prezzo pagato (scelta dell'utente del 09/11/2026):
+    /// "Apri" o "Vendi sigillato" appena una delle due strade incassa netto almeno quanto è costato (la
+    /// migliore delle due), altrimenti "Tieni" finché il valore non sale. La decisione della classifica
+    /// confronta solo apertura e rivendita, senza il costo: dava "Apri" anche aprendo in perdita. Le
+    /// decisioni senza un valore affidabile (Dati incompleti, Prezzo CM dubbio, ...) restano come sono.
+    /// </summary>
+    public static string? AdviceFor(TodayDecision? today, decimal unitPrice)
+    {
+        if (today?.Decision is not ("Apri" or "Tieni sigillato")) return today?.Decision;
+        var open = today.OpenValueNet ?? 0;
+        var closed = today.SealedNet ?? 0;
+        if (Math.Max(open, closed) < unitPrice) return "Tieni";
+        return open >= closed ? "Apri" : "Vendi sigillato";
+    }
+
+    /// <summary>
     /// Il costo per carta da usare è quello scritto a mano, altrimenti il prezzo di un'unità diviso le
     /// carte che contiene: al 09/10/2026 è il modo in cui l'utente calcolava a mano il prezzo d'acquisto
     /// delle inserzioni (es. Collector Box = prezzo / 12 buste × 15 carte).
@@ -411,7 +427,7 @@ public class ProductPurchaseService
             p.PredictedOpenValueNet.HasValue ? Math.Round(p.Quantity * p.PredictedOpenValueNet.Value, 2) : null,
             p.CostPerCard, calculated, cards?.Cards, cards?.Estimated ?? false,
             p.CostPerCard ?? calculated, cardmarketName, p.HoldForResale,
-            today?.Decision, today?.OpenValueNet, today?.SealedNet, today?.Date,
+            AdviceFor(today, p.UnitPrice), today?.OpenValueNet, today?.SealedNet, today?.Date,
             sold?.SoldNet, sold?.SharePercent, sold?.TagSoldCopies, sold?.TagSoldNet, sold?.TagPurchases ?? 0,
             p.SealedProduct?.CardTraderBlueprintId);
     }
@@ -458,7 +474,7 @@ public record CardsPerUnit(int Cards, bool Estimated);
 /// <param name="CostPerCard">Costo per carta scritto a mano; null se si usa quello calcolato.</param>
 /// <param name="CalculatedCostPerCard">Prezzo di un'unità diviso le carte che contiene.</param>
 /// <param name="EffectiveCostPerCard">Quello da usare nelle inserzioni: scritto a mano, altrimenti calcolato.</param>
-/// <param name="TodayDecision">Decisione dell'ultima classifica (Apri / Tieni sigillato / ...), solo per i non aperti.</param>
+/// <param name="TodayDecision">Cosa fare oggi sul prezzo pagato (Apri / Vendi sigillato / Tieni, vedi AdviceFor), dall'ultima classifica, solo per i non aperti.</param>
 public record ProductPurchaseDto(
     int Id,
     int SealedProductId,

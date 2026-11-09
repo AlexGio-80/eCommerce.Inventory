@@ -573,7 +573,7 @@ export interface ProductPurchase extends ProductPurchaseInput {
     predictionCoverage?: number;
     predictedAt?: string;
     predictedTotalNet?: number;
-    /** Decisione dell'ultima classifica (Apri, Tieni sigillato...), solo finché non è aperto. */
+    /** Cosa fare oggi sul prezzo pagato (Apri, Vendi sigillato, Tieni), dall'ultima classifica, solo finché non è aperto. */
     todayDecision?: string;
     todayOpenValueNet?: number;
     todaySealedNet?: number;
