@@ -423,6 +423,23 @@ public class InventorySyncService
     /// </summary>
     public async Task SyncOrdersAsync(List<CardTraderOrderDto> orderDtos, CancellationToken cancellationToken = default)
     {
+        // Il controllo periodico degli ordini, il pulsante e la notturna possono sovrapporsi:
+        // senza un passaggio alla volta lo stesso ordine nuovo verrebbe inserito due volte.
+        await OrdersGate.WaitAsync(cancellationToken);
+        try
+        {
+            await SyncOrdersCoreAsync(orderDtos, cancellationToken);
+        }
+        finally
+        {
+            OrdersGate.Release();
+        }
+    }
+
+    private static readonly SemaphoreSlim OrdersGate = new(1, 1);
+
+    private async Task SyncOrdersCoreAsync(List<CardTraderOrderDto> orderDtos, CancellationToken cancellationToken)
+    {
         try
         {
             if (!orderDtos.Any())

@@ -20,6 +20,7 @@ public class CardTraderOrdersController : ControllerBase
     private readonly IApplicationDbContext _context;
     private readonly BusinessMetrics _metrics;
     private readonly ExternalLotService _lots;
+    private readonly NewOrderIntakeService _intake;
 
     public CardTraderOrdersController(
         IOrderRepository orderRepository,
@@ -28,9 +29,11 @@ public class CardTraderOrdersController : ControllerBase
         ILogger<CardTraderOrdersController> logger,
         IApplicationDbContext context,
         BusinessMetrics metrics,
-        ExternalLotService lots)
+        ExternalLotService lots,
+        NewOrderIntakeService intake)
     {
         _lots = lots;
+        _intake = intake;
         _orderRepository = orderRepository;
         _cardTraderApiService = cardTraderApiService;
         _inventorySyncService = inventorySyncService;
@@ -127,7 +130,9 @@ public class CardTraderOrdersController : ControllerBase
         var concreteDtos = ((IEnumerable<dynamic>)orderDtos)
             .Cast<Infrastructure.ExternalServices.CardTrader.DTOs.CardTraderOrderDto>().ToList();
 
-        await _inventorySyncService.SyncOrdersAsync(concreteDtos);
+        // Le vendite nuove passano dallo stesso percorso del controllo periodico: se il pulsante
+        // le registrasse per primo, il controllo le troverebbe già note e non le riprezzerebbe.
+        await _intake.IngestAsync(concreteDtos, HttpContext.RequestAborted);
 
         stopwatch.Stop();
         _metrics.OrderProcessingDuration.WithLabels("sync_range").Observe(stopwatch.Elapsed.TotalSeconds);

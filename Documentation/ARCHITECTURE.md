@@ -169,6 +169,7 @@ eCommerce.Inventory/
 |----------|-------------|--------------|
 | `ScheduledProductSyncWorker` | Ogni notte all'orario configurato (default 03:00) | `SyncSettings:ProductSyncTime` |
 | `AutoPricingWorker` | Ogni notte dopo la sincronizzazione (default 03:30) | `AutoPricing:Enabled` |
+| `OrderPollingWorker` | Ogni 15 minuti legge gli ordini da ieri; i nuovi passano da `NewOrderIntakeService` come un webhook `order.create` (giacenza scalata, riprezzo) | `CardTraderOrders:PollMinutes` (0 = spento) |
 | `PriceRefreshWorker` | In continuo, consuma `IPriceRefreshQueue` | Decide chi accoda: `AutoPricing:RepriceOnOrder`, `AutoPricing:RepriceOnListingSync` |
 | `PopulateItalianNamesService` | One-shot all'avvio | `SyncSettings:PopulateItalianNamesOnStartup` |
 | `SealedProductPriceService` | One-shot all'avvio | `SyncSettings:PopulateSealedPricesOnStartup` |

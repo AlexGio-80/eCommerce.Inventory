@@ -28,7 +28,7 @@
 - Storico prezzi (`PriceHistoryEntries`) alimentato dalla sincronizzazione notturna, solo quando prezzo o quantità cambiano
 - Ordini con griglia "Articoli da preparare". Card Trader Zero: le carte si preparano giorno per giorno dagli ordini `hub_pending`, e l'ordine "Ct connect" raccolto eredita la preparazione riga per riga
 - **Lotti venduti fuori** (08/11, verificato con un lotto vero): pulsante "Lotto venduto fuori" nella pagina Ordini (sito, data, incasso, carte per Tag). Diventa un ordine pagato con ID negativo e stato `external`, senza commissione, che conta in report, "Venduto", Aperture e quota venduta del bulk
-- Il webhook Card Trader non è raggiungibile dall'esterno (scelta, vedi sotto): l'inventario resta allineato con il giro a polling
+- Il webhook Card Trader non è raggiungibile dall'esterno (scelta, vedi sotto): al suo posto `OrderPollingWorker` legge gli ordini ogni 15 minuti, e le vendite nuove scalano la giacenza e riprezzano le copie rimaste
 
 **Autopricer** (`/layout/pricing`), in modalità reale. Dettaglio in ARCHITECTURE.md
 - Regole per fascia di prezzo con collocazione fra i venditori, scarto delle offerte anomale (MAD e rapporto sulla mediana), conversione fra prezzo di vetrina e incasso (sovrapprezzo Card Trader ricavato come differenza), guardrail asimmetrico con soglia in euro sotto cui non scatta
@@ -68,6 +68,7 @@
 
 ### Cosa è in sospeso / da verificare
 
+- **Riprezzo alla vendita (13/11, da pubblicare):** non era mai partito perché dipendeva solo dal webhook. Dopo la pubblicazione controllare nel log le righe "Vendite nuove registrate dalla lettura degli ordini" e, in Esecuzioni, le righe con origine "Vendita ricevuta"
 - **Pianificatore del budget in prova dall'utente (dal 17/10):** l'utente lo usa qualche giorno e poi si rivede: sistemazioni e migliorie, taratura delle soglie (traino 50%, altri 33%, netto 20%). "Registra l'acquisto" fatto il 21/10; resta facoltativo il budget che si scala con gli acquisti. Da sapere: durante "Cerca i venditori" la maschera "Nuovo Prodotto" può aspettare una decina di secondi (17/10: due attese di 12 s), perché la lettura lascia alla maschera solo 5 richieste al minuto; "Metti nel carrello Card Trader" aggiunge una copia per offerta; Cardmarket si compra a mano dal sito; i venditori incollati con più di 7 giorni sono in arancione
 - **Avvio del servizio dopo il riavvio del PC (24/10):** Windows l'ha dato due volte per fallito dopo 30 s di attesa (eventi 7009/7000), perché il controllo delle migration in `Program.cs` arriva prima che il servizio risponda. Impostato il riavvio automatico (`sc failure`, 3 tentativi a 1 minuto, `failureflag` attivo). Al prossimo riavvio del PC controllare che riparta da solo; se no, far rispondere il servizio prima delle migration
 - **Confronto Sonnet/Opus sul riconoscimento:** dal 17/10 il riconoscimento usa Sonnet 5.5 e Opus 5.5 gira in confronto (`Scan:CompareModels`, righe `Confronto modelli` nel log). Al 21/10 solo 4 scansioni: 2 uguali e giuste, 1 carta vecchia passata a Opus di riserva come previsto, 1 Iron Star italiana sbagliata da tutti e due in modo diverso (Sonnet FBB, Opus 4ED, era FWB). Opus non ha fatto meglio. Se non ci sono differenze, togliere `Scan:CompareModels` da `appsettings.Production.json` (serve un riavvio)

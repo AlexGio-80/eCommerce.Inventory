@@ -95,6 +95,7 @@ builder.Services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<Ap
 // Register Card Trader mappers and sync services
 builder.Services.AddScoped<CardTraderDtoMapper>();
 builder.Services.AddScoped<InventorySyncService>();
+builder.Services.AddScoped<NewOrderIntakeService>();
 builder.Services.AddScoped<WebhookSignatureVerificationService>();
 builder.Services.AddScoped<CardTraderSyncOrchestrator>();
 builder.Services.AddSingleton<CardTraderRateLimiter>(); // Singleton to share rate limit across all scopes
@@ -199,8 +200,11 @@ builder.Services.AddAuthorization(options =>
 });
 
 // Register MediatR for CQRS command handling
-builder.Services.AddMediatR(config =>
-    config.RegisterServicesFromAssembly(typeof(eCommerce.Inventory.Application.Commands.ProcessCardTraderWebhookCommand).Assembly));
+// Il comando sta in Application, ma il suo gestore in Infrastructure: senza la seconda
+// assembly MediatR non lo trova, e ogni ordine nuovo fallisce con "No service for type".
+builder.Services.AddMediatR(config => config.RegisterServicesFromAssemblies(
+    typeof(eCommerce.Inventory.Application.Commands.ProcessCardTraderWebhookCommand).Assembly,
+    typeof(eCommerce.Inventory.Infrastructure.ExternalServices.CardTrader.Handlers.ProcessCardTraderWebhookHandler).Assembly));
 
 // Configure HttpClient for Card Trader API with Bearer Token authentication
 var cardTraderApiConfig = builder.Configuration.GetSection("CardTraderApi");
@@ -227,6 +231,10 @@ builder.Services.AddHttpClient<ICardTraderApiService, CardTraderApiClient>(clien
 // NOTE: Temporarily disabled for development. Enable once Card Trader API is properly configured.
 // builder.Services.AddHostedService<CardTraderSyncWorker>();
 builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJobs.ScheduledProductSyncWorker>();
+
+// Al posto del webhook, non raggiungibile da fuori: legge gli ordini recenti ogni
+// CardTraderOrders:PollMinutes minuti, e le vendite nuove scalano la giacenza e riprezzano.
+builder.Services.AddHostedService<eCommerce.Inventory.Infrastructure.BackgroundJobs.OrderPollingWorker>();
 
 // Register one-shot ItalianName population service
 // Enable via SyncSettings:PopulateItalianNamesOnStartup = true in appsettings.json

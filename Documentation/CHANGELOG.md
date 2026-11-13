@@ -9,6 +9,34 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-11-13] Fix — Riprezzo alla vendita mai partito *(da pubblicare)*
+
+#### Problema
+
+- Dopo una vendita le altre copie della stessa carta dovevano essere riprezzate subito
+  (`AutoPricing:RepriceOnOrder`, acceso in produzione), ma il riprezzo partiva solo dal webhook di Card Trader, che
+  da fuori non è raggiungibile. Gli ordini arrivavano solo con la sincronizzazione notturna o col pulsante, che non
+  accodavano niente: nello storico delle esecuzioni non c'è nessuna riga "Vendita ricevuta" dal 27/08.
+
+#### Soluzione Implementata
+
+- `OrderPollingWorker` legge gli ordini da ieri ogni 15 minuti (`CardTraderOrders:PollMinutes`, 0 lo spegne).
+- `NewOrderIntakeService` manda ogni ordine mai visto nello stesso percorso del webhook `order.create`: giacenza
+  scalata, notifica all'interfaccia, riprezzo delle copie rimaste. Lo usa anche il pulsante di sincronizzazione
+  degli ordini, così una vendita registrata dal pulsante non sfugge al riprezzo.
+
+#### Note Tecniche
+
+- Non contano come vendite nuove l'ordine raccolto di Card Trader Zero ("Ct connect" non più `hub_pending`, le sue
+  righe sono già arrivate come `hub_pending`) e gli ordini pagati da più di 2 giorni (sincronizzare un intervallo
+  vecchio non deve scalare giacenze).
+- `InventorySyncService.SyncOrdersAsync` fa passare una chiamata alla volta: il controllo periodico, il pulsante e
+  la notturna non inseriscono due volte lo stesso ordine.
+- Costo: una richiesta ogni 15 minuti, più una lettura del mercato per ogni carta venduta di cui restano copie.
+- MediatR registrava solo l'assembly Application, mentre `ProcessCardTraderWebhookHandler` sta in Infrastructure: il
+  gestore non veniva trovato ("No service for type"), quindi nemmeno il webhook avrebbe mai funzionato. Ora sono
+  registrate tutte e due (trovato alla verifica in produzione del 13/11).
+
 ### [2026-11-08] Feature — Lotti di carte venduti fuori da Card Trader *(da pubblicare)*
 
 #### Problema
