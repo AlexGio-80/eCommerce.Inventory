@@ -226,6 +226,16 @@ export class PurchasesTabComponent implements OnInit, OnChanges {
         `${p.data.tagSoldCopies} copie vendute col Tag, ${this.money(p.data.tagSoldNet)} netti` +
         (p.data.tagPurchases > 1 ? `; a questo acquisto il ${p.data.soldSharePercent}% (${p.data.tagPurchases} acquisti con lo stesso Tag)` : '')
     },
+    {
+      // Quanto del costo è già rientrato: si ordina e si filtra (≥ 100 = ripagati).
+      headerName: 'Ripagato %', colId: 'paidBackPercent', width: 120, type: 'numericColumn', filter: 'agNumberColumnFilter',
+      valueGetter: p => !p.data || !p.data.soldNet || !p.data.totalPrice ? null
+        : Math.round(p.data.soldNet / p.data.totalPrice * 100),
+      valueFormatter: p => p.value == null ? '' : `${p.value}%`,
+      cellStyle: p => p.value == null ? null
+        : p.value >= 100 ? { color: '#2e7d32', fontWeight: 600 } : { color: '#c62828', fontWeight: 600 },
+      headerTooltip: 'Venduto diviso Totale. Filtra "maggiore o uguale a 100" per vedere solo gli acquisti già ripagati'
+    },
     { headerName: 'Note', field: 'notes', width: 200 },
     {
       headerName: '', width: 90, pinned: 'right', sortable: false, filter: false,

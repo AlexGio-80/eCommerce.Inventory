@@ -9,6 +9,22 @@
 
 > Modifiche in corso, non ancora in produzione.
 
+### [2026-11-15] Feature — "Ripagato %" nel registro acquisti *(pubblicato e verificato il 2026-11-15)*
+
+#### Problema
+
+- Nel registro acquisti non si potevano ordinare o filtrare gli acquisti già ripagati: "Venduto" era solo colorato
+  di verde o rosso rispetto al Totale.
+
+#### Soluzione Implementata
+
+- Colonna "Ripagato %" (Venduto / Totale) accanto a "Venduto", verde da 100% in su, con filtro numerico.
+
+#### Note Tecniche
+
+- Calcolata nella griglia (`valueGetter`), nessuna modifica al backend. Con le colonne già salvate la colonna nuova
+  può comparire in fondo.
+
 ### [2026-11-13] Fix — Riprezzo alla vendita mai partito *(da pubblicare)*
 
 #### Problema

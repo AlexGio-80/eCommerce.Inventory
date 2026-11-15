@@ -9,7 +9,7 @@
 ## Stato Attuale
 
 **Branch principale:** `master`
-**Ultimo aggiornamento:** 2026-11-09
+**Ultimo aggiornamento:** 2026-11-15
 **Fase:** In produzione (uso quotidiano attivo)
 
 ### Cosa funziona adesso
@@ -42,7 +42,7 @@
 - Dati: listino pubblico Cardmarket ogni mattina alle 07:00 (`CardmarketImportWorker`); catalogo sigillati e composizione delle buste da MTGJSON
 - Analisi uscita: convenienza fra formati, valore atteso dell'apertura (prezzi CM e CT affiancati, fattore "prezzo realizzato", quota venduta per fascia, costo per carta, costi di vendita 15%), decisione Apri / Tieni sigillato / Dati incompleti / Prezzo CM dubbio / Non giocabili. Trend CM fino a 0,05 € = prezzo di riempimento, quindi "Prezzo CM dubbio"
 - Opportunità: classifica giornaliera di tutte le uscite, filtro "Resa massima %", piano d'acquisto su Card Trader per venditore, con "Metti nel carrello Card Trader" (via API, non compra) e "Apri tutti" su Card Trader o Cardmarket
-- Aperture (bilancio reale per Tag) e Registro acquisti (ricerca su tutto il catalogo per nome Cardmarket, costo per carta, previsione salvata all'apertura, colonna "Oggi conviene" per i non aperti, sul prezzo pagato e aggiornata ogni mattina con la classifica delle 07:00: Apri o Vendi sigillato appena la strada migliore ripaga il prezzo, altrimenti Tieni; colonna "Venduto": incassato netto delle carte vendute col Tag, diviso in proporzione al costo fra gli acquisti con lo stesso Tag, verde se ha ripagato il Totale e rosso se no; link CT e CM accanto al nome del prodotto)
+- Aperture (bilancio reale per Tag) e Registro acquisti (ricerca su tutto il catalogo per nome Cardmarket, costo per carta, previsione salvata all'apertura, colonna "Oggi conviene" per i non aperti, sul prezzo pagato e aggiornata ogni mattina con la classifica delle 07:00: Apri o Vendi sigillato appena la strada migliore ripaga il prezzo, altrimenti Tieni; colonna "Venduto": incassato netto delle carte vendute col Tag, diviso in proporzione al costo fra gli acquisti con lo stesso Tag, verde se ha ripagato il Totale e rosso se no, con le vendite CT Zero che entrano a settimana con l'ordine "Ct connect" pagato; colonna "Ripagato %" per ordinare e filtrare i ripagati; link CT e CM accanto al nome del prodotto)
 - Avvisi: regole per prodotto o per gruppo, campanella ed email di riepilogo (SMTP configurato) con i link Card Trader e Cardmarket di ogni prodotto. Gli avvisi di apertura ignorano le rese oltre il 300%
 - Secret Lair: retrospettiva dei drop comprati; negozio Wizards letto alle 8, 14 e 20 con avviso per ogni superdrop nuovo; valutazione del drop prima dell'acquisto (Compra / Al limite / Lascia). I drop con la vendita finita sono "Vendita chiusa" (il catalogo Wizards li tiene con una scorta di comodo); "In negozio" mostra solo i drop acquistabili, e per gli altri la stima dice "Non acquistabile"
 - Magazzino: sigillati segnati "Da tenere" nel registro, con valore di oggi e guadagno latente (feature 005)
@@ -68,7 +68,6 @@
 
 ### Cosa è in sospeso / da verificare
 
-- **Riprezzo alla vendita (13/11, da pubblicare):** non era mai partito perché dipendeva solo dal webhook. Dopo la pubblicazione controllare nel log le righe "Vendite nuove registrate dalla lettura degli ordini" e, in Esecuzioni, le righe con origine "Vendita ricevuta"
 - **Pianificatore del budget in prova dall'utente (dal 17/10):** l'utente lo usa qualche giorno e poi si rivede: sistemazioni e migliorie, taratura delle soglie (traino 50%, altri 33%, netto 20%). "Registra l'acquisto" fatto il 21/10; resta facoltativo il budget che si scala con gli acquisti. Da sapere: durante "Cerca i venditori" la maschera "Nuovo Prodotto" può aspettare una decina di secondi (17/10: due attese di 12 s), perché la lettura lascia alla maschera solo 5 richieste al minuto; "Metti nel carrello Card Trader" aggiunge una copia per offerta; Cardmarket si compra a mano dal sito; i venditori incollati con più di 7 giorni sono in arancione
 - **Avvio del servizio dopo il riavvio del PC (24/10):** Windows l'ha dato due volte per fallito dopo 30 s di attesa (eventi 7009/7000), perché il controllo delle migration in `Program.cs` arriva prima che il servizio risponda. Impostato il riavvio automatico (`sc failure`, 3 tentativi a 1 minuto, `failureflag` attivo). Al prossimo riavvio del PC controllare che riparta da solo; se no, far rispondere il servizio prima delle migration
 - **Confronto Sonnet/Opus sul riconoscimento:** dal 17/10 il riconoscimento usa Sonnet 5.5 e Opus 5.5 gira in confronto (`Scan:CompareModels`, righe `Confronto modelli` nel log). Al 21/10 solo 4 scansioni: 2 uguali e giuste, 1 carta vecchia passata a Opus di riserva come previsto, 1 Iron Star italiana sbagliata da tutti e due in modo diverso (Sonnet FBB, Opus 4ED, era FWB). Opus non ha fatto meglio. Se non ci sono differenze, togliere `Scan:CompareModels` da `appsettings.Production.json` (serve un riavvio)

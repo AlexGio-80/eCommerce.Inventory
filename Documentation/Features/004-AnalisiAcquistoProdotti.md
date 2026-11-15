@@ -477,6 +477,10 @@ le aperture di mazzi nuovi, ed è per questo che si rimisura ogni giorno.
   l'ultima entro 7 giorni, con la data nel tooltip. Prima la colonna riportava la decisione della
   classifica, che confronta solo apertura e rivendita senza il costo: dava "Apri" anche aprendo in
   perdita (mazzi Final Fantasy comprati da tenere).
+- **"Ripagato %" nel registro (dal 2026-11-15)**: "Venduto" diviso "Totale", calcolato nella
+  griglia, verde da 100% in su. Serve a ordinare e filtrare gli acquisti già ripagati (filtro numerico
+  "maggiore o uguale a" 100). "Venduto" conta solo ordini pagati: le vendite Card Trader Zero entrano
+  quando l'ordine settimanale "Ct connect" risulta pagato, non giorno per giorno.
 - **Provato su SQL Server** su una copia ripristinata del backup del 07/10 (poi cancellata): fattore
   120,2% su 246 copie; The Hobbit con il fattore: Collector Box "Apri" (575,58 € netti aprendo contro
   499,25 € rivendendola chiusa), Play Box ancora "Tieni sigillato" (−27,2%); Lorwyn Eclipsed: Commander
