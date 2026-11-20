@@ -24,6 +24,8 @@ import { AlertsTabComponent } from '../components/alerts-tab.component';
 import { PurchasesTabComponent } from '../components/purchases-tab.component';
 import { HoldStockTabComponent } from '../components/hold-stock-tab.component';
 import { BudgetPlanTabComponent } from '../components/budget-plan-tab.component';
+import { openProductSellers } from '../components/product-sellers-dialog.component';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import {
   CardKind, OpeningValueParams, PackValue, PurchasingService, SealedProductAnalysis, SealedSetAnalysis, SealedSetOption,
   decisionLabel, isOpenIfOwned
@@ -38,7 +40,7 @@ import { GridStateDirective } from '../../../shared/directives/grid-state.direct
 @Component({
   selector: 'app-purchasing-page',
   standalone: true,
-  imports: [GridStateDirective, 
+  imports: [GridStateDirective, MatDialogModule, 
     CommonModule, FormsModule, AgGridAngular, GridCellCopyDirective, MatCardModule, MatButtonModule, MatFormFieldModule,
     MatSelectModule, MatProgressSpinnerModule, MatSnackBarModule, MatIconModule, MatTooltipModule,
     MatSlideToggleModule, MatInputModule, MatTabsModule, OpeningsTabComponent, SecretLairTabComponent, OpportunitiesTabComponent, PurchasesTabComponent, AlertsTabComponent, HoldStockTabComponent, BudgetPlanTabComponent
@@ -465,9 +467,15 @@ export class PurchasingPageComponent implements OnInit {
       }
     },
     {
-      headerName: '', width: 60, sortable: false, filter: false, pinned: 'right',
-      cellRenderer: () => `<button class="register-btn" title="Registra un acquisto di questo prodotto"><i class="material-icons" style="font-size:18px">add_shopping_cart</i></button>`,
-      onCellClicked: p => { if (p.data) this.registerPurchase(p.data); }
+      headerName: '', width: 80, sortable: false, filter: false, pinned: 'right',
+      cellRenderer: () => `<button class="register-btn sellers-btn" title="Chi lo vende: venditori e cosa prendere insieme"><i class="material-icons" style="font-size:18px">storefront</i></button>`
+        + `<button class="register-btn" title="Registra un acquisto di questo prodotto"><i class="material-icons" style="font-size:18px">add_shopping_cart</i></button>`,
+      onCellClicked: p => {
+        if (!p.data) return;
+        const target = (p.event as MouseEvent | undefined)?.target as HTMLElement | undefined;
+        if (target?.closest('.sellers-btn')) openProductSellers(this.dialog, { productId: p.data.id, name: p.data.name });
+        else if (target?.closest('.register-btn')) this.registerPurchase(p.data);
+      }
     },
     {
       headerName: 'CT', width: 70, sortable: false, filter: false,
@@ -492,6 +500,8 @@ export class PurchasingPageComponent implements OnInit {
 
   private route = inject(ActivatedRoute);
   private destroyRef = inject(DestroyRef);
+
+  private dialog = inject(MatDialog);
 
   constructor(private purchasing: PurchasingService, private snackBar: MatSnackBar) { }
 

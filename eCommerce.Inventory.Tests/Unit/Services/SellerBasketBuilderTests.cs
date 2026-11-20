@@ -310,4 +310,46 @@ public class SellerBasketBuilderTests
         sheet.Offers[0].InBasket.Should().BeTrue();
         SellerPlanService.SellerOffers(data, request, "Nessuno").Should().BeNull();
     }
+
+    [Fact]
+    public void Product_sellers_put_first_the_seller_whose_add_ons_pay_for_a_higher_price()
+    {
+        // Il prodotto voluto (1) rende poco; il venditore A lo ha a 300 €, B a 310 € ma ha anche un box al 60% (100 → 160).
+        var products = new Dictionary<int, SellerProduct>
+        {
+            [1] = new(1, "Commander Decks Set", "SET", "Tieni sigillato", 250m, 311m, null, false, 77, null),
+            [2] = Open(2, 160m),
+            [3] = Open(3, 40m)
+        };
+        SellerOffer Ct(string seller, int id, decimal price) => new("Card Trader", seller, "IT", id, price, 1, false, 1, null);
+        var data = new SellerPlanData(DateTime.UtcNow, products,
+            new List<SellerOffer> { Ct("A", 1, 300m), Ct("B", 1, 310m), Ct("B", 2, 100m), Ct("B", 3, 50m) },
+            new List<WizardsDrop>(), 1, 0);
+        var request = new SellerPlanRequest(500m, 0m, Rules, new BudgetShipping(7m, 8m, 7m, 10m), null);
+
+        var result = SellerPlanService.ForProduct(data, request, 1, freshCardTrader: null)!;
+
+        result.Orders.Select(o => o.Seller).Should().Equal("B", "A");
+        var b = result.Orders[0];
+        b.AddOns.Select(l => l.Product.ProductId).Should().Equal(2);
+        b.EffectiveCost.Should().Be(310m + 7m - 60m);
+        b.Total.Should().Be(417m);
+        b.Others.Single().Product.ProductId.Should().Be(3);
+        result.Orders[1].EffectiveCost.Should().Be(307m);
+    }
+
+    [Fact]
+    public void Product_sellers_use_the_fresh_card_trader_offers_of_the_product()
+    {
+        var products = new Dictionary<int, SellerProduct> { [1] = Open(1, 100m) };
+        var data = new SellerPlanData(DateTime.UtcNow, products,
+            new List<SellerOffer> { new("Card Trader", "Vecchio", null, 1, 80m, 1, false, 1, null) }, new List<WizardsDrop>(), 1, 0);
+        var request = new SellerPlanRequest(500m, 0m, Rules, new BudgetShipping(7m, 8m, 7m, 10m), null);
+
+        var result = SellerPlanService.ForProduct(data, request, 1,
+            new List<SellerOffer> { new("Card Trader", "Nuovo", null, 1, 85m, 1, false, 2, null) })!;
+
+        result.Orders.Select(o => o.Seller).Should().Equal("Nuovo");
+        result.FreshCardTrader.Should().BeTrue();
+    }
 }

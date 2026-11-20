@@ -318,6 +318,19 @@ public class PurchasingController : ControllerBase
             : Ok(ApiResponse<CardTraderSellerOffers>.SuccessResult(result));
     }
 
+    /// <summary>
+    /// Chi vende un prodotto e cosa conviene prendere da ognuno insieme a lui: offerte Card Trader lette adesso, gli altri
+    /// prodotti dei venditori dall'ultima lettura per venditore, i venditori Cardmarket incollati.
+    /// </summary>
+    [HttpGet("budget-plan/product-sellers/{productId:int}")]
+    public async Task<IActionResult> GetProductSellers(int productId, CancellationToken cancellationToken)
+    {
+        var result = await _sellerRunner.ProductSellersAsync(productId, cancellationToken);
+        return result == null
+            ? NotFound(ApiResponse<object>.ErrorResult("Serve una lettura dei venditori che comprenda questo prodotto: nella scheda Budget premi \"Cerca i venditori\""))
+            : Ok(ApiResponse<ProductSellers>.SuccessResult(result));
+    }
+
     [HttpPost("budget-plan/sellers/{id}/recompute")]
     public async Task<IActionResult> RecomputeSellerPlan(string id, [FromBody] SellerPlanRequest request, CancellationToken cancellationToken)
     {

@@ -130,9 +130,7 @@ public class SellerPlanService
                 foreach (var o in marketplace)
                 {
                     if (!productByBlueprint.TryGetValue(o.BlueprintId, out var productId)) continue;
-                    if (o.PriceCents <= 0 || o.Quantity <= 0 || o.OnVacation || !IsEnglish(o.Properties.Language)) continue;
-                    offers.Add(new SellerOffer(o.User.CanSellSealedWithCtZero ? "Card Trader Zero" : "Card Trader", o.User.Username,
-                        o.User.CountryCode, productId, o.PriceCents / 100m, o.Quantity, o.User.CanSellSealedWithCtZero, o.Id, null));
+                    if (ToOffer(o, productId) is { } offer) offers.Add(offer);
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -242,23 +240,15 @@ public class SellerPlanService
                 var p = products[offer.ProductId];
                 var roi = SellerBasketBuilder.RoiAt(p, offer.Price);
                 var gain = roi != null ? p.OpenValueNet!.Value - offer.Price : (decimal?)null;
-                var holdOk = p.IsHoldCandidate && p.CmTrend is > 0 && offer.Price <= p.CmTrend.Value * (1 + rules.MaxHoldPremiumPercent / 100);
                 var (group, verdict) =
                     inBasket.TryGetValue(offer.ProductId, out var kind) ? (0, kind == SellerLineKind.Open ? "Nel carrello: da aprire" : "Nel carrello: da tenere")
-                    : roi > MaxRealisticRoi ? (3, "Prezzo da controllare: resa troppo alta per essere vera")
-                    : roi >= rules.AddOnRoiPercent && SellerBasketBuilder.IsNotPaidBack(p)
-                        ? (2, string.Format(Italian, "Da aprire, ma già comprato e non ancora ripagato (venduto {0:0}%)", p.History!.SoldPercent ?? 0))
-                    : roi >= rules.AddOnRoiPercent ? (1, basket == null
-                        ? "Da aprire, ma senza un traino questo venditore non fa un carrello"
-                        : "Da aprire, fuori dal carrello: non ci sta nel budget o abbassa il netto sotto la soglia")
-                    : holdOk ? (1, basket == null
-                        ? "Da tenere, ma senza un'apertura questo venditore non fa un carrello"
-                        : "Da tenere, fuori dal carrello: non ci sta nel budget")
-                    : p.IsHoldCandidate && p.CmTrend is > 0
-                        ? (2, string.Format(Italian, "Da tenere, ma caro: {0:0}% sopra il trend", (offer.Price / p.CmTrend.Value - 1) * 100))
-                    : roi > 0 ? (2, string.Format(Italian, "Rende il {0:0}%, sotto la soglia \"altri\" ({1:0}%)", roi, rules.AddOnRoiPercent))
-                    : roi != null ? (3, "Aprirlo non rende a questo prezzo")
-                    : (3, p.Decision is { } d ? $"Nessuna resa affidabile: {d}" : "Nessuna valutazione oggi");
+                    : Judge(p, offer.Price, rules,
+                        basket == null
+                            ? "Da aprire, ma senza un traino questo venditore non fa un carrello"
+                            : "Da aprire, fuori dal carrello: non ci sta nel budget o abbassa il netto sotto la soglia",
+                        basket == null
+                            ? "Da tenere, ma senza un'apertura questo venditore non fa un carrello"
+                            : "Da tenere, fuori dal carrello: non ci sta nel budget");
                 return new CardTraderSellerOffer(offer, p, roi is { } r ? Math.Round(r, 1) : null, gain is { } x ? Math.Round(x, 2) : null,
                     group == 0, group, verdict);
             })
@@ -274,6 +264,139 @@ public class SellerPlanService
 
     private static readonly System.Globalization.CultureInfo Italian = System.Globalization.CultureInfo.GetCultureInfo("it-IT");
 
+    /// <summary>Un'offerta Card Trader utilizzabile (in inglese, disponibile, venditore non in vacanza); null se no.</summary>
+    public static SellerOffer? ToOffer(CardTraderMarketplaceProductDto o, int productId) =>
+        o.PriceCents <= 0 || o.Quantity <= 0 || o.OnVacation || !IsEnglish(o.Properties.Language) ? null
+            : new SellerOffer(o.User.CanSellSealedWithCtZero ? "Card Trader Zero" : "Card Trader", o.User.Username,
+                o.User.CountryCode, productId, o.PriceCents / 100m, o.Quantity, o.User.CanSellSealedWithCtZero, o.Id, null);
+
+    /// <summary>
+    /// Valutazione di un'offerta rimasta fuori da un ordine: 1 conveniente, 2 di possibile interesse, 3 il resto.
+    /// </summary>
+    private static (int Group, string Verdict) Judge(SellerProduct p, decimal price, SellerRules rules, string openOutside, string holdOutside)
+    {
+        var roi = SellerBasketBuilder.RoiAt(p, price);
+        var holdOk = p.IsHoldCandidate && p.CmTrend is > 0 && price <= p.CmTrend.Value * (1 + rules.MaxHoldPremiumPercent / 100);
+        return roi > MaxRealisticRoi ? (3, "Prezzo da controllare: resa troppo alta per essere vera")
+            : roi >= rules.AddOnRoiPercent && SellerBasketBuilder.IsNotPaidBack(p)
+                ? (2, string.Format(Italian, "Da aprire, ma già comprato e non ancora ripagato (venduto {0:0}%)", p.History!.SoldPercent ?? 0))
+            : roi >= rules.AddOnRoiPercent ? (1, openOutside)
+            : holdOk ? (1, holdOutside)
+            : p.IsHoldCandidate && p.CmTrend is > 0
+                ? (2, string.Format(Italian, "Da tenere, ma caro: {0:0}% sopra il trend", (price / p.CmTrend.Value - 1) * 100))
+            : roi > 0 ? (2, string.Format(Italian, "Rende il {0:0}%, sotto la soglia \"altri\" ({1:0}%)", roi, rules.AddOnRoiPercent))
+            : roi != null ? (3, "Aprirlo non rende a questo prezzo")
+            : (3, p.Decision is { } d ? $"Nessuna resa affidabile: {d}" : "Nessuna valutazione oggi");
+    }
+
+    /// <summary>
+    /// Chi vende un prodotto che l'utente vuole comprare comunque, qualunque sia la resa (richiesta del 20/11): per ogni
+    /// venditore Card Trader, per il carrello Card Trader Zero e per i venditori Cardmarket incollati, l'ordine con quel
+    /// prodotto più le sue aperture e i suoi tenuti secondo le regole della schermata, dentro il budget (o il solo
+    /// prodotto, se da solo lo supera). In cima chi costa meno contando il guadagno atteso delle aggiunte: un venditore un
+    /// po' più caro con altro da rivendere può convenire di più. Null se il prodotto non è nella lettura.
+    /// </summary>
+    /// <param name="freshCardTrader">Offerte Card Trader del prodotto lette adesso; null = quelle della lettura.</param>
+    public static ProductSellers? ForProduct(SellerPlanData data, SellerPlanRequest request, int productId,
+        IReadOnlyList<SellerOffer>? freshCardTrader, IReadOnlyDictionary<int, PurchaseHistory>? history = null)
+    {
+        var products = history == null ? data.Products
+            : data.Products.ToDictionary(kv => kv.Key, kv => kv.Value with { History = history.GetValueOrDefault(kv.Key) });
+        if (!products.TryGetValue(productId, out var product)) return null;
+
+        var offers = freshCardTrader == null ? data.Offers
+            : data.Offers.Where(o => !(o.Store != "Cardmarket" && o.ProductId == productId)).Concat(freshCardTrader).ToList();
+        var target = offers.Where(o => o.ProductId == productId).ToList();
+        var rules = request.Rules;
+        var orders = new List<ProductSellerOrder>();
+
+        foreach (var seller in target.Where(o => o.Store != "Cardmarket").Select(o => o.Seller).Distinct())
+        {
+            var own = offers.Where(o => o.Store != "Cardmarket" && o.Seller == seller).Select(o => o with { Store = "Card Trader" }).ToList();
+            if (BuildOrder($"ct:{seller}", "Card Trader", seller, own[0].Country, own, productId, products, request.Shipping.CardTrader, rules,
+                    request.Budget, allOthers: true) is { } order) orders.Add(order);
+        }
+        if (target.Any(o => o.CtZero))
+        {
+            var zero = offers.Where(o => o.CtZero).Select(o => o with { Store = "Card Trader Zero" }).ToList();
+            if (BuildOrder("ctzero", "Card Trader Zero", "più venditori, una spedizione", null, zero, productId, products,
+                    request.Shipping.CardTraderZero, rules, request.Budget, allOthers: false) is { } order) orders.Add(order);
+        }
+        foreach (var seller in target.Where(o => o.Store == "Cardmarket").Select(o => o.Seller).Distinct())
+        {
+            var own = offers.Where(o => o.Store == "Cardmarket" && o.Seller == seller).ToList();
+            if (BuildOrder($"cm:{seller}", "Cardmarket", seller, null, own, productId, products, request.Shipping.Cardmarket, rules,
+                    request.Budget, allOthers: true) is { } order) orders.Add(order);
+        }
+
+        return new ProductSellers(product, data.CollectedAt, freshCardTrader != null, rules, request.Budget,
+            orders.OrderBy(o => o.EffectiveCost).ThenBy(o => o.Offer.Price).ToList());
+    }
+
+    /// <param name="allOthers">False per Card Trader Zero: fra tutti i suoi venditori si mostrano solo le altre offerte interessanti.</param>
+    private static ProductSellerOrder? BuildOrder(string key, string store, string seller, string? country, List<SellerOffer> offers,
+        int productId, IReadOnlyDictionary<int, SellerProduct> products, decimal defaultShipping, SellerRules rules, decimal budget,
+        bool allOthers)
+    {
+        var cheapest = offers
+            .Where(o => o.Price > 0 && products.ContainsKey(o.ProductId))
+            .GroupBy(o => o.ProductId)
+            .Select(g => g.OrderBy(o => o.Price).First() with { Available = g.Sum(o => o.Available) })
+            .ToList();
+        var target = cheapest.FirstOrDefault(o => o.ProductId == productId);
+        if (target == null) return null;
+
+        decimal Ship(SellerOffer o) => o.Shipping ?? defaultShipping;
+        var shipping = Ship(target);
+        var items = target.Price;
+        var cap = Math.Max(budget, items + shipping);
+
+        var open = new List<SellerBasketLine>();
+        var hold = new List<SellerBasketLine>();
+        foreach (var o in cheapest.Where(o => o != target))
+        {
+            var p = products[o.ProductId];
+            var roi = SellerBasketBuilder.RoiAt(p, o.Price);
+            if (roi is { } r && r >= rules.AddOnRoiPercent && r <= MaxRealisticRoi && !SellerBasketBuilder.IsNotPaidBack(p))
+                open.Add(new SellerBasketLine(o, p, SellerLineKind.Open, Math.Round(r, 1), Math.Round(p.OpenValueNet!.Value - o.Price, 2)));
+            else if (p.IsHoldCandidate && p.CmTrend is > 0 && o.Price <= p.CmTrend.Value * (1 + rules.MaxHoldPremiumPercent / 100))
+                hold.Add(new SellerBasketLine(o, p, SellerLineKind.Hold, roi is { } h ? Math.Round(h, 1) : null, null));
+        }
+
+        var chosen = new List<SellerBasketLine>();
+        foreach (var l in open.OrderByDescending(l => l.RoiPercent).Concat(hold.OrderByDescending(l => l.Product.HoldScore)))
+        {
+            var withShipping = Math.Max(shipping, Ship(l.Offer));
+            if (items + l.Offer.Price + withShipping > cap) continue;
+            chosen.Add(l);
+            items += l.Offer.Price;
+            shipping = withShipping;
+        }
+
+        var chosenIds = chosen.Select(l => l.Offer.ProductId).ToHashSet();
+        var others = cheapest
+            .Where(o => o != target && !chosenIds.Contains(o.ProductId))
+            .Select(o =>
+            {
+                var p = products[o.ProductId];
+                var (group, verdict) = Judge(p, o.Price, rules,
+                    "Da aprire, fuori dall'ordine: non ci sta nel budget", "Da tenere, fuori dall'ordine: non ci sta nel budget");
+                var roi = SellerBasketBuilder.RoiAt(p, o.Price);
+                return new CardTraderSellerOffer(o, p, roi is { } r ? Math.Round(r, 1) : null,
+                    roi != null ? Math.Round(p.OpenValueNet!.Value - o.Price, 2) : null, false, group, verdict);
+            })
+            .Where(o => allOthers || o.Group <= 2)
+            .OrderBy(o => o.Group)
+            .ThenByDescending(o => o.RoiPercent ?? -999)
+            .ToList();
+
+        var addOnGain = chosen.Sum(l => l.Gain ?? 0);
+        var targetRoi = SellerBasketBuilder.RoiAt(products[productId], target.Price);
+        return new ProductSellerOrder(key, store, seller, country, target, targetRoi is { } t ? Math.Round(t, 1) : null, shipping,
+            chosen, chosen.Sum(l => l.Offer.Price), Math.Round(addOnGain, 2),
+            Math.Round(target.Price + shipping - addOnGain, 2), Math.Round(items + shipping, 2), others);
+    }
+
     private static bool IsEnglish(string? language) =>
         string.IsNullOrEmpty(language)
         || string.Equals(language, "en", StringComparison.OrdinalIgnoreCase)
@@ -288,6 +411,20 @@ public record SellerPlanRequest(decimal Budget, decimal WizardsBudget, SellerRul
 public record SellerPlanData(
     DateTime CollectedAt, Dictionary<int, SellerProduct> Products, List<SellerOffer> Offers, List<WizardsDrop> Wizards,
     int ExpansionsRead, int ExpansionFailures);
+
+/// <summary>Chi vende un prodotto, con l'ordine che conviene fare da ognuno (finestra "Chi lo vende").</summary>
+/// <param name="FreshCardTrader">Le offerte Card Trader del prodotto sono state lette adesso.</param>
+public record ProductSellers(SellerProduct Product, DateTime CollectedAt, bool FreshCardTrader, SellerRules Rules, decimal Budget,
+    List<ProductSellerOrder> Orders);
+
+/// <param name="Offer">L'offerta del prodotto cercato.</param>
+/// <param name="AddOns">Aperture e tenuti dello stesso venditore aggiunti con le regole della schermata.</param>
+/// <param name="EffectiveCost">Prezzo del prodotto + spedizione - guadagno atteso delle aggiunte: quanto costa davvero prenderlo da qui.</param>
+/// <param name="Others">Le altre sue offerte rimaste fuori, valutate (gruppo 1 conveniente, 2 possibile interesse, 3 il resto).</param>
+public record ProductSellerOrder(
+    string Key, string Store, string Seller, string? Country, SellerOffer Offer, decimal? TargetRoiPercent, decimal Shipping,
+    List<SellerBasketLine> AddOns, decimal AddOnCost, decimal AddOnGain, decimal EffectiveCost, decimal Total,
+    List<CardTraderSellerOffer> Others);
 
 /// <summary>Le offerte lette di un venditore Card Trader, valutate (scheda del venditore in "Per venditore").</summary>
 public record CardTraderSellerOffers(string Seller, string? Country, bool CtZero, DateTime CollectedAt, List<CardTraderSellerOffer> Offers);
@@ -392,6 +529,42 @@ public class SellerPlanRunner
         run.Data = SellerPlanService.WithCardmarketOffers(run.Data, await sellerOffers.GetValidOffersAsync(cancellationToken));
         run.Result = SellerPlanService.Compose(run.Data, request, await HistoryAsync(scope, cancellationToken));
         return run.Status();
+    }
+
+    /// <summary>
+    /// Chi vende un prodotto: le sue offerte Card Trader lette adesso (una chiamata), gli altri prodotti di ogni venditore
+    /// dall'ultima lettura, i venditori Cardmarket incollati. Null se non c'è una lettura o il prodotto non vi compare.
+    /// </summary>
+    public async Task<ProductSellers?> ProductSellersAsync(int productId, CancellationToken cancellationToken)
+    {
+        await LatestAsync(cancellationToken);
+        var run = _runs.Values.Where(r => r.State == "done" && r.Data != null).OrderByDescending(r => r.StartedAt).FirstOrDefault();
+        if (run?.Data == null) return null;
+
+        using var scope = _scopeFactory.CreateScope();
+        var sellerOffers = scope.ServiceProvider.GetRequiredService<CardmarketSellerOfferService>();
+        var data = SellerPlanService.WithCardmarketOffers(run.Data, await sellerOffers.GetValidOffersAsync(cancellationToken));
+
+        List<SellerOffer>? fresh = null;
+        if (data.Products.GetValueOrDefault(productId)?.CardTraderBlueprintId is { } blueprintId)
+        {
+            try
+            {
+                var api = scope.ServiceProvider.GetRequiredService<ICardTraderApiService>();
+                fresh = (await api.GetMarketplaceProductsAsync(blueprintId, cancellationToken))
+                    .Where(o => o.BlueprintId == blueprintId)
+                    .Select(o => SellerPlanService.ToOffer(o, productId))
+                    .OfType<SellerOffer>()
+                    .ToList();
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Senza la lettura di adesso restano le offerte della lettura salvata: meglio vecchie che niente.
+                _logger.LogWarning(ex, "Chi lo vende: offerte Card Trader del blueprint {BlueprintId} non lette, uso la lettura salvata", blueprintId);
+            }
+        }
+
+        return SellerPlanService.ForProduct(data, run.Result?.Request ?? run.Request, productId, fresh, await HistoryAsync(scope, cancellationToken));
     }
 
     /// <summary>Tutte le offerte di un venditore Card Trader nella lettura, con le regole dell'ultimo calcolo.</summary>

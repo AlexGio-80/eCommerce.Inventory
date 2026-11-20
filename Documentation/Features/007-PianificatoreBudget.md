@@ -340,6 +340,26 @@ conveniente e cos'altro si potrebbe comprare nella stessa spedizione.
 - La lettura salvata prima di questa versione ha solo le offerte dei prodotti che interessano: dopo la pubblicazione
   serve un "Cerca i venditori".
 
+### "Chi lo vende" (2026-11-20, pubblicato e verificato)
+
+Richiesta dell'utente: un prodotto che vuole comprare comunque, a prescindere dalla resa (esempio: il set dei 4 mazzi
+Commander di Bloomburrow). Vuole vedere chi lo vende e cos'altro hanno quei venditori: uno un po' più caro, ma con altro
+da rivendere, può convenire di più.
+
+- Pulsante con il negozio nella griglia "Analisi uscita", accanto al carrello: apre la finestra **"Chi vende …"**.
+- Offerte Card Trader del prodotto lette subito (una chiamata, in inglese, venditori non in vacanza); gli altri prodotti di
+  ogni venditore dall'ultima lettura di "Cerca i venditori" (solo le espansioni lette); Cardmarket solo dai venditori
+  incollati. Se la chiamata fallisce si usano le offerte della lettura.
+- Per ogni venditore Card Trader, per il carrello Card Trader Zero (una spedizione fra più venditori) e per ogni venditore
+  Cardmarket incollato: il prodotto, sempre, più le sue aperture con resa ≥ "altri" e i tenuti a non oltre il trend +10%,
+  dentro il budget del Budget (o il solo prodotto se da solo lo supera). Niente traino né netto minimo: la spedizione la
+  paga il prodotto che si compra comunque.
+- In cima il **costo effettivo** più basso: prezzo del prodotto + spedizione − guadagno atteso delle aggiunte.
+- Per ogni ordine: "Metti nel carrello Card Trader", "Registra l'acquisto" e le altre sue offerte con la valutazione
+  (giallo convenienti rimaste fuori, azzurro di possibile interesse); per CT Zero solo quelle interessanti.
+- Regole, budget e spedizioni dell'ultimo calcolo di "Per venditore". Codice: `SellerPlanService.ForProduct` (testato),
+  `GET api/purchasing/budget-plan/product-sellers/{productId}`, `product-sellers-dialog.component.ts`.
+
 ### Fase 2 — Dopo l'acquisto (facoltativa, da rivalutare dopo l'uso)
 
 - **"Registra l'acquisto" (fatto il 2026-10-21, chiesto dall'utente dopo il primo ordine fatto col Budget).**

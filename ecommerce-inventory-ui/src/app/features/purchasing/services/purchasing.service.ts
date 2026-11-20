@@ -759,6 +759,10 @@ export class PurchasingService {
         return this.http.get<ApiResponse<SellerPlanStatus>>(`${this.apiUrl}/budget-plan/sellers/${id}`).pipe(map(r => r.data!));
     }
 
+    getProductSellers(productId: number): Observable<ProductSellers> {
+        return this.http.get<ApiResponse<ProductSellers>>(`${this.apiUrl}/budget-plan/product-sellers/${productId}`).pipe(map(r => r.data!));
+    }
+
     getCardTraderSeller(id: string, seller: string): Observable<CardTraderSellerOffers> {
         return this.http.get<ApiResponse<CardTraderSellerOffers>>(`${this.apiUrl}/budget-plan/sellers/${id}/card-trader-seller`,
             { params: { seller } }).pipe(map(r => r.data!));
@@ -1066,6 +1070,33 @@ export interface CardTraderSellerOffer {
     inBasket: boolean;
     group: number;
     verdict: string;
+}
+
+/** "Chi lo vende": l'ordine da un venditore con il prodotto cercato e le aggiunte che convengono. */
+export interface ProductSellerOrder {
+    key: string;
+    store: string;
+    seller: string;
+    country?: string;
+    offer: SellerOffer;
+    targetRoiPercent?: number;
+    shipping: number;
+    addOns: SellerBasketLine[];
+    addOnCost: number;
+    addOnGain: number;
+    /** Prezzo del prodotto + spedizione - guadagno atteso delle aggiunte. */
+    effectiveCost: number;
+    total: number;
+    others: CardTraderSellerOffer[];
+}
+
+export interface ProductSellers {
+    product: SellerProduct;
+    collectedAt: string;
+    freshCardTrader: boolean;
+    rules: SellerRules;
+    budget: number;
+    orders: ProductSellerOrder[];
 }
 
 export interface CardTraderSellerOffers {
