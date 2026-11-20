@@ -283,4 +283,31 @@ public class SellerBasketBuilderTests
         after.Sellers.Select(b => (b.Key, b.Total, b.OpenGain)).Should().Equal(before.Sellers.Select(b => (b.Key, b.Total, b.OpenGain)));
         after.Wizards.Should().HaveCount(1);
     }
+
+    [Fact]
+    public void Card_trader_seller_sheet_shows_basket_left_out_and_possible_interest()
+    {
+        var products = new Dictionary<int, SellerProduct>
+        {
+            [1] = Open(1, 180m),   // a 100 € rende l'80%: il traino, nel carrello
+            [2] = Open(2, 140m),   // a 100 € rende il 40%: conveniente, ma col budget di 120 € non ci sta
+            [3] = Open(3, 60m),    // a 50 € rende il 20%: sotto "altri", di possibile interesse
+            [4] = Open(4, 40m),    // a 50 € non rende
+            [5] = Hold(5, 40m)     // da tenere ma a 60 €, il 50% sopra il trend
+        };
+        SellerOffer Ct(int id, decimal price) => new("Card Trader", "VenditoreCt", "IT", id, price, 1, false, 1000 + id, null);
+        var data = new SellerPlanData(DateTime.UtcNow, products,
+            new List<SellerOffer> { Ct(1, 100m), Ct(2, 100m), Ct(3, 50m), Ct(4, 50m), Ct(5, 60m), Ct(1, 110m),
+                new("Card Trader", "AltroVenditore", null, 3, 40m, 1, false, 2000, null) },
+            new List<WizardsDrop>(), 1, 0);
+        var request = new SellerPlanRequest(120m, 0m, Rules, new BudgetShipping(7m, 8m, 7m, 10m), null);
+
+        var sheet = SellerPlanService.SellerOffers(data, request, "VenditoreCt")!;
+
+        sheet.Offers.Select(o => (o.Product.ProductId, o.Group)).Should().Equal((1, 0), (2, 1), (3, 2), (5, 2), (4, 3));
+        sheet.Offers[0].Offer.Price.Should().Be(100m, "una riga per prodotto, all'offerta più economica");
+        sheet.Offers[0].Offer.Available.Should().Be(2);
+        sheet.Offers[0].InBasket.Should().BeTrue();
+        SellerPlanService.SellerOffers(data, request, "Nessuno").Should().BeNull();
+    }
 }

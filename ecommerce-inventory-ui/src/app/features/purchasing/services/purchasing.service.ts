@@ -757,6 +757,11 @@ export class PurchasingService {
         return this.http.get<ApiResponse<SellerPlanStatus>>(`${this.apiUrl}/budget-plan/sellers/${id}`).pipe(map(r => r.data!));
     }
 
+    getCardTraderSeller(id: string, seller: string): Observable<CardTraderSellerOffers> {
+        return this.http.get<ApiResponse<CardTraderSellerOffers>>(`${this.apiUrl}/budget-plan/sellers/${id}/card-trader-seller`,
+            { params: { seller } }).pipe(map(r => r.data!));
+    }
+
     recomputeSellerPlan(id: string, request: SellerPlanRequest): Observable<SellerPlanStatus> {
         return this.http.post<ApiResponse<SellerPlanStatus>>(`${this.apiUrl}/budget-plan/sellers/${id}/recompute`, request).pipe(map(r => r.data!));
     }
@@ -1048,6 +1053,25 @@ export interface SellerBasketLine {
     kind: 'Open' | 'Hold';
     roiPercent?: number;
     gain?: number;
+}
+
+/** Un'offerta di un venditore Card Trader nella sua scheda: group 0 nel carrello, 1 conveniente ma fuori, 2 di possibile interesse, 3 il resto. */
+export interface CardTraderSellerOffer {
+    offer: SellerOffer;
+    product: SellerProduct;
+    roiPercent?: number;
+    gain?: number;
+    inBasket: boolean;
+    group: number;
+    verdict: string;
+}
+
+export interface CardTraderSellerOffers {
+    seller: string;
+    country?: string;
+    ctZero: boolean;
+    collectedAt: string;
+    offers: CardTraderSellerOffer[];
 }
 
 export interface SellerBasket {

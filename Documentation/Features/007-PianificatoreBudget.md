@@ -322,6 +322,24 @@ cos'altro ha. "Per venditore" lo faceva già, ma solo sulla resa prevista: non s
   Caso dell'utente: un venditore Card Trader con due mazzi Fallout al 51–56% (netto 37%) spariva perché tre aperture
   al 16–25% in più portavano il carrello al 27%. Stessa regola nel riquadro "Da X ti conviene".
 
+### Tutte le offerte di un venditore Card Trader (2026-11-20, pubblicato e verificato)
+
+Richiesta dell'utente: per i venditori Card Trader la stessa vista dei venditori Cardmarket incollati, cioè cosa ha di
+conveniente e cos'altro si potrebbe comprare nella stessa spedizione.
+
+- **Offerte di tutti i sigillati delle espansioni lette:** la lettura di un'espansione restituisce già tutto, ma si
+  tenevano solo i prodotti che interessano (resa al trend ≥ 5% o da tenere). Ora si tengono tutti i prodotti della
+  classifica; le espansioni lette e le chiamate restano le stesse. Come per Cardmarket dal 17/10, il carrello di un
+  venditore Card Trader si valuta su tutto quello che ha, al suo prezzo (anche un "Tieni sigillato" comprato basso).
+  Limite: Card Trader non dà le offerte per venditore, quindi i prodotti di espansioni non lette non si vedono.
+- **"Tutte le sue offerte"** su ogni ordine Card Trader (non sul carrello CT Zero): una riga per prodotto, l'offerta
+  più economica, con resa, guadagno e valutazione secondo le regole dell'ultimo calcolo. In verde il carrello, in
+  giallo i convenienti rimasti fuori (budget o netto), in azzurro quelli di possibile interesse (rendono sotto la
+  soglia "altri", da tenere ma cari, già comprati e non ripagati), poi il resto.
+- Codice: `SellerPlanService.SellerOffers` (testato), `GET api/purchasing/budget-plan/sellers/{id}/card-trader-seller?seller=`.
+- La lettura salvata prima di questa versione ha solo le offerte dei prodotti che interessano: dopo la pubblicazione
+  serve un "Cerca i venditori".
+
 ### Fase 2 — Dopo l'acquisto (facoltativa, da rivalutare dopo l'uso)
 
 - **"Registra l'acquisto" (fatto il 2026-10-21, chiesto dall'utente dopo il primo ordine fatto col Budget).**

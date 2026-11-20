@@ -76,7 +76,7 @@ public class SellerPlanService
         var toRead = relevant.Select(r => products[r.ProductId]).ToList();
 
         var offers = new List<SellerOffer>();
-        var (expansionsRead, failures) = await AddCardTraderAsync(toRead, offers, progress, cancellationToken);
+        var (expansionsRead, failures) = await AddCardTraderAsync(toRead, products.Values.ToList(), offers, progress, cancellationToken);
 
         var wizards = await _budgetPlans.GetBuyableSecretLairAsync(false, cancellationToken);
 
@@ -98,19 +98,26 @@ public class SellerPlanService
                 .ToList()
         };
 
+    /// <param name="toRead">I prodotti che interessano: decidono quali espansioni leggere.</param>
+    /// <param name="all">
+    /// Tutti i prodotti della classifica: di un'espansione letta si tengono le offerte di tutti, perché la risposta li
+    /// contiene già. Così la scheda di un venditore mostra anche cos'altro ha da aggiungere alla stessa spedizione
+    /// (richiesta dell'utente del 20/11), e il suo carrello si valuta su tutto, come per i venditori Cardmarket incollati.
+    /// </param>
     private async Task<(int Read, int Failures)> AddCardTraderAsync(
-        List<SellerProduct> products, List<SellerOffer> offers, IProgress<(int, int)>? progress, CancellationToken cancellationToken)
+        List<SellerProduct> toRead, List<SellerProduct> all, List<SellerOffer> offers, IProgress<(int, int)>? progress,
+        CancellationToken cancellationToken)
     {
-        var productByBlueprint = products
+        var productByBlueprint = all
             .Where(p => p.CardTraderBlueprintId != null)
             .GroupBy(p => p.CardTraderBlueprintId!.Value)
             .ToDictionary(g => g.Key, g => g.First().ProductId);
-        var blueprintIds = productByBlueprint.Keys.ToList();
-        var expansionByBlueprint = await _db.Blueprints.AsNoTracking()
+        var blueprintIds = toRead.Where(p => p.CardTraderBlueprintId != null).Select(p => p.CardTraderBlueprintId!.Value).Distinct().ToList();
+        var expansions = await _db.Blueprints.AsNoTracking()
             .Where(b => blueprintIds.Contains(b.CardTraderId))
-            .Select(b => new { b.CardTraderId, ExpansionCtId = b.Expansion.CardTraderId })
-            .ToDictionaryAsync(b => b.CardTraderId, b => b.ExpansionCtId, cancellationToken);
-        var expansions = expansionByBlueprint.Values.Distinct().ToList();
+            .Select(b => b.Expansion.CardTraderId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
 
         var done = 0;
         var failures = 0;
@@ -207,6 +214,66 @@ public class SellerPlanService
             data.Offers.Where(o => o.Store == "Cardmarket").Select(o => o.Seller).Distinct().Count(), notPaidBack);
     }
 
+    /// <summary>
+    /// Tutte le offerte lette di un venditore Card Trader, una per prodotto (la più economica), valutate con le regole
+    /// della schermata: quelle del suo carrello, quelle convenienti rimaste fuori (budget o netto), quelle di possibile
+    /// interesse (rendono qualcosa, o da tenere ma care) e il resto. Null se il venditore non ha offerte lette.
+    /// </summary>
+    public static CardTraderSellerOffers? SellerOffers(SellerPlanData data, SellerPlanRequest request, string seller,
+        IReadOnlyDictionary<int, PurchaseHistory>? history = null)
+    {
+        var products = history == null ? data.Products
+            : data.Products.ToDictionary(kv => kv.Key, kv => kv.Value with { History = history.GetValueOrDefault(kv.Key) });
+        var direct = data.Offers
+            .Where(o => o.Store != "Cardmarket" && o.Seller == seller && products.ContainsKey(o.ProductId))
+            .Select(o => o with { Store = "Card Trader" })
+            .ToList();
+        if (direct.Count == 0) return null;
+
+        var rules = request.Rules;
+        var basket = SellerBasketBuilder.Build($"ct:{seller}", direct, products, request.Shipping.CardTrader, rules, maxTotal: request.Budget);
+        var inBasket = basket?.Lines.ToDictionary(l => l.Offer.ProductId, l => l.Kind) ?? new Dictionary<int, SellerLineKind>();
+
+        var rows = direct
+            .GroupBy(o => o.ProductId)
+            .Select(g =>
+            {
+                var offer = g.OrderBy(o => o.Price).First() with { Available = g.Sum(o => o.Available) };
+                var p = products[offer.ProductId];
+                var roi = SellerBasketBuilder.RoiAt(p, offer.Price);
+                var gain = roi != null ? p.OpenValueNet!.Value - offer.Price : (decimal?)null;
+                var holdOk = p.IsHoldCandidate && p.CmTrend is > 0 && offer.Price <= p.CmTrend.Value * (1 + rules.MaxHoldPremiumPercent / 100);
+                var (group, verdict) =
+                    inBasket.TryGetValue(offer.ProductId, out var kind) ? (0, kind == SellerLineKind.Open ? "Nel carrello: da aprire" : "Nel carrello: da tenere")
+                    : roi > MaxRealisticRoi ? (3, "Prezzo da controllare: resa troppo alta per essere vera")
+                    : roi >= rules.AddOnRoiPercent && SellerBasketBuilder.IsNotPaidBack(p)
+                        ? (2, string.Format(Italian, "Da aprire, ma già comprato e non ancora ripagato (venduto {0:0}%)", p.History!.SoldPercent ?? 0))
+                    : roi >= rules.AddOnRoiPercent ? (1, basket == null
+                        ? "Da aprire, ma senza un traino questo venditore non fa un carrello"
+                        : "Da aprire, fuori dal carrello: non ci sta nel budget o abbassa il netto sotto la soglia")
+                    : holdOk ? (1, basket == null
+                        ? "Da tenere, ma senza un'apertura questo venditore non fa un carrello"
+                        : "Da tenere, fuori dal carrello: non ci sta nel budget")
+                    : p.IsHoldCandidate && p.CmTrend is > 0
+                        ? (2, string.Format(Italian, "Da tenere, ma caro: {0:0}% sopra il trend", (offer.Price / p.CmTrend.Value - 1) * 100))
+                    : roi > 0 ? (2, string.Format(Italian, "Rende il {0:0}%, sotto la soglia \"altri\" ({1:0}%)", roi, rules.AddOnRoiPercent))
+                    : roi != null ? (3, "Aprirlo non rende a questo prezzo")
+                    : (3, p.Decision is { } d ? $"Nessuna resa affidabile: {d}" : "Nessuna valutazione oggi");
+                return new CardTraderSellerOffer(offer, p, roi is { } r ? Math.Round(r, 1) : null, gain is { } x ? Math.Round(x, 2) : null,
+                    group == 0, group, verdict);
+            })
+            .OrderBy(r => r.Group)
+            .ThenByDescending(r => r.RoiPercent ?? -999)
+            .ToList();
+
+        return new CardTraderSellerOffers(seller, direct[0].Country, data.Offers.Any(o => o.Seller == seller && o.CtZero), data.CollectedAt, rows);
+    }
+
+    /// <summary>Oltre questa resa è quasi sempre un prezzo sbagliato, come negli avvisi.</summary>
+    private const decimal MaxRealisticRoi = 300m;
+
+    private static readonly System.Globalization.CultureInfo Italian = System.Globalization.CultureInfo.GetCultureInfo("it-IT");
+
     private static bool IsEnglish(string? language) =>
         string.IsNullOrEmpty(language)
         || string.Equals(language, "en", StringComparison.OrdinalIgnoreCase)
@@ -221,6 +288,13 @@ public record SellerPlanRequest(decimal Budget, decimal WizardsBudget, SellerRul
 public record SellerPlanData(
     DateTime CollectedAt, Dictionary<int, SellerProduct> Products, List<SellerOffer> Offers, List<WizardsDrop> Wizards,
     int ExpansionsRead, int ExpansionFailures);
+
+/// <summary>Le offerte lette di un venditore Card Trader, valutate (scheda del venditore in "Per venditore").</summary>
+public record CardTraderSellerOffers(string Seller, string? Country, bool CtZero, DateTime CollectedAt, List<CardTraderSellerOffer> Offers);
+
+/// <param name="Group">0 nel carrello, 1 conveniente ma fuori, 2 di possibile interesse, 3 il resto.</param>
+public record CardTraderSellerOffer(
+    SellerOffer Offer, SellerProduct Product, decimal? RoiPercent, decimal? Gain, bool InBasket, int Group, string Verdict);
 
 public record WizardsChoice(WizardsDrop Drop, bool Chosen);
 
@@ -318,6 +392,14 @@ public class SellerPlanRunner
         run.Data = SellerPlanService.WithCardmarketOffers(run.Data, await sellerOffers.GetValidOffersAsync(cancellationToken));
         run.Result = SellerPlanService.Compose(run.Data, request, await HistoryAsync(scope, cancellationToken));
         return run.Status();
+    }
+
+    /// <summary>Tutte le offerte di un venditore Card Trader nella lettura, con le regole dell'ultimo calcolo.</summary>
+    public async Task<CardTraderSellerOffers?> CardTraderSellerAsync(string id, string seller, CancellationToken cancellationToken)
+    {
+        if (!_runs.TryGetValue(id, out var run) || run.Data == null) return null;
+        using var scope = _scopeFactory.CreateScope();
+        return SellerPlanService.SellerOffers(run.Data, run.Result?.Request ?? run.Request, seller, await HistoryAsync(scope, cancellationToken));
     }
 
     private async Task ExecuteAsync(Run run)

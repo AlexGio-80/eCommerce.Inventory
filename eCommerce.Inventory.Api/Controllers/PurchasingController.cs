@@ -305,6 +305,19 @@ public class PurchasingController : ControllerBase
     }
 
     /// <summary>Ricalcola i carrelli per venditore con altre soglie, budget o negozi, sulle offerte già lette.</summary>
+    /// <summary>
+    /// Tutte le offerte lette di un venditore Card Trader, valutate con le regole dell'ultimo calcolo: quelle del suo
+    /// carrello, quelle convenienti rimaste fuori e cos'altro si potrebbe aggiungere alla stessa spedizione.
+    /// </summary>
+    [HttpGet("budget-plan/sellers/{id}/card-trader-seller")]
+    public async Task<IActionResult> GetCardTraderSeller(string id, [FromQuery] string seller, CancellationToken cancellationToken)
+    {
+        var result = await _sellerRunner.CardTraderSellerAsync(id, seller, cancellationToken);
+        return result == null
+            ? NotFound(ApiResponse<object>.ErrorResult($"Nessuna offerta di {seller} in questa lettura: rifai \"Cerca i venditori\""))
+            : Ok(ApiResponse<CardTraderSellerOffers>.SuccessResult(result));
+    }
+
     [HttpPost("budget-plan/sellers/{id}/recompute")]
     public async Task<IActionResult> RecomputeSellerPlan(string id, [FromBody] SellerPlanRequest request, CancellationToken cancellationToken)
     {

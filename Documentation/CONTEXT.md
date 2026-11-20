@@ -9,7 +9,7 @@
 ## Stato Attuale
 
 **Branch principale:** `master`
-**Ultimo aggiornamento:** 2026-11-15
+**Ultimo aggiornamento:** 2026-11-20
 **Fase:** In produzione (uso quotidiano attivo)
 
 ### Cosa funziona adesso
@@ -50,6 +50,7 @@
 **Pianificatore del budget** (scheda "Budget" della pagina Acquisti, il fulcro del blocco Acquisti per l'utente). Dettaglio in `Documentation/Features/007-PianificatoreBudget.md`
 - **Per venditore** (vista principale): per ogni venditore Card Trader (offerte di 110 espansioni lette in circa 7 minuti), il carrello Card Trader Zero e ogni venditore Cardmarket incollato, l'ordine da fare con una sola spedizione: traino ≥ 50%, altre aperture ≥ 33%, tenuti a non oltre il trend +10% solo insieme a un'apertura, guadagno netto ≥ 20% della spesa per aprire, dentro il budget. Venditori per guadagno netto, "nel budget" quelli che ci stanno in quell'ordine; Wizards a parte con il suo importo (500 €). Soglie, budget, negozi e spedizioni modificabili con ricalcolo immediato ("Aggiorna"). "Scelgo questo" con il totale della combinazione e i prodotti che si comprerebbero due volte ("anche in"). L'ultima lettura è salvata nel database e si riapre dopo i riavvii, con la sua data
 - **Venditori Cardmarket incollati**: dal campo si aprono le pagine delle offerte del venditore in inglese; l'utente copia e incolla (la lettura automatica è bloccata da Cloudflare e vietata). Si leggono prezzo, spedizione dell'articolo, quantità, commento; il venditore resta finché non lo si toglie, la pagina 1 reincollata sostituisce la sua categoria. Il riquadro "Da X ti conviene" usa le stesse regole e dice perché un venditore resta fuori. I venditori incollati stanno in cima al riquadro; ovunque un prodotto è mostrato con un venditore Cardmarket, il nome apre la ricerca nelle sue offerte (`/Users/<venditore>/Offers/Search?search=`) e la lente la ricerca su tutto Cardmarket
+- **"Tutte le sue offerte"** (20/11, verificato) su ogni ordine di un venditore Card Trader: tutti i suoi sigillati delle espansioni lette, con il carrello in verde, i convenienti rimasti fuori in giallo e quelli di possibile interesse in azzurro. Il suo carrello si valuta su tutto quello che ha, come per Cardmarket
 - **Piano automatico**: il miglior insieme di prodotti per il budget (per prodotto, non per venditore), con cursore aprire/tenere e carrelli per negozio
 - **Acquisti già fatti** (08/11, verificato): in "Per venditore" ogni prodotto già nel registro mostra venduto sul costo e "ripagato"; quelli già comprati e non ancora ripagati (anche se non ancora aperti) non si propongono da aprire e sono elencati nel riepilogo. Se le aperture deboli portano il netto di un venditore sotto la soglia, si tolgono quelle invece di scartare il venditore
 - **"Registra l'acquisto"** (dal 21/10, verificato con un ordine vero): su ogni ordine e su ogni riga, anche nel piano d'acquisto di Opportunità. Una finestra con le righe dell'ordine, già compilate e modificabili, scrive il registro acquisti in un colpo solo: spedizione ripartita sui prezzi, Tag con la data d'acquisto (non per i "Tieni"), "Da tenere" per i tenuti. Wizards escluso

@@ -13,7 +13,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { RegisterOrderLine, openRegisterPurchase } from './register-purchase-dialog.component';
 import {
-  BudgetPlanBasket, BudgetPlanLine, BudgetPlanResult, BudgetPlanStatus, BudgetShipping, PastedSeller, PlanCartItem, PurchasingService,
+  BudgetPlanBasket, BudgetPlanLine, CardTraderSellerOffers, BudgetPlanResult, BudgetPlanStatus, BudgetShipping, PastedSeller, PlanCartItem, PurchasingService,
   SellerBasket, SellerBasketLine, SellerPasteResult, SellerPlanRequest, SellerPlanResult, SellerPlanStatus, SellerRules
 } from '../services/purchasing.service';
 
@@ -381,7 +381,44 @@ const SELLER_REQUEST_KEY = 'budget_plan_seller_request';
                   matTooltip="Dopo l'acquisto: registra l'ordine nel registro acquisti, con prezzi, spedizione e Tag">
                   <mat-icon>post_add</mat-icon> Registra l'acquisto
                 </button>
+                @if (b.key.startsWith('ct:')) {
+                  <button mat-button (click)="toggleCtSeller(b)"
+                    matTooltip="Tutti i suoi sigillati delle espansioni lette: cos'altro potresti aggiungere alla stessa spedizione">
+                    <mat-icon>{{ ctSellerKey() === b.key ? 'expand_less' : 'list' }}</mat-icon> Tutte le sue offerte
+                  </button>
+                }
               </div>
+              @if (ctSellerKey() === b.key) {
+                @if (ctSellerLoading()) { <mat-progress-bar mode="indeterminate"></mat-progress-bar> }
+                @if (ctSeller(); as cs) {
+                  <div class="ct-seller">
+                    <div class="muted">{{ cs.offers.length }} prodotti di {{ cs.seller }} nelle espansioni lette il {{ cs.collectedAt | date:'dd/MM HH:mm' }}
+                      @if (cs.ctZero) { · vende anche con Card Trader Zero }. Le regole sono quelle dell'ultimo calcolo: dopo averle cambiate premi "Aggiorna".
+                      In verde il carrello, in giallo i convenienti rimasti fuori, in azzurro quelli di possibile interesse.</div>
+                    <table>
+                      <thead><tr><th>Prodotto</th><th class="num">Prezzo</th><th class="num">Q.tà</th><th class="num">Trend CM</th>
+                        <th class="num">Resa</th><th class="num">Guadagno</th><th>Valutazione</th></tr></thead>
+                      <tbody>
+                        @for (o of cs.offers; track o.product.productId) {
+                          <tr [class.good]="o.group === 0" [class.near]="o.group === 1" [class.maybe]="o.group === 2">
+                            <td><a [href]="ctProductUrl(o.product.cardTraderBlueprintId)" target="_blank" rel="noopener">{{ o.product.name }}</a>
+                              <span class="muted"> · {{ o.product.setCode }}</span>
+                              @if (o.product.history; as h) {
+                                <div class="history" [class.paid]="h.paidBack">già preso {{ h.quantity }}× · venduto {{ (h.soldPercent ?? 0).toFixed(0) }}%{{ h.paidBack ? ' · ripagato' : '' }}</div>
+                              }</td>
+                            <td class="num">{{ eur(o.offer.price) }}</td>
+                            <td class="num">{{ o.offer.available }}</td>
+                            <td class="num">{{ eur(o.product.cmTrend) }}</td>
+                            <td class="num">{{ o.roiPercent != null ? o.roiPercent.toFixed(0) + '%' : '—' }}</td>
+                            <td class="num">{{ o.gain != null ? eur(o.gain) : '—' }}</td>
+                            <td class="verdict">{{ o.verdict }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+              }
             </mat-card-content>
           </mat-card>
         }
@@ -545,6 +582,10 @@ const SELLER_REQUEST_KEY = 'budget_plan_seller_request';
     tr.good td { background: #dcedc8; }
     tr.good td:first-child { box-shadow: inset 4px 0 0 #43a047; }
     tr.good .verdict { color: #1b5e20; font-weight: 600; }
+    tr.near td { background: #fff8e1; }
+    tr.near td:first-child { box-shadow: inset 4px 0 0 #ffa000; }
+    tr.maybe td { background: #e3f2fd; }
+    .ct-seller { margin-top: 8px; }
     .sellers { display: flex; gap: 8px; flex-wrap: wrap; }
     .open-seller { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .seller-chip a.current { font-weight: 600; }
@@ -611,11 +652,48 @@ export class BudgetPlanTabComponent implements OnInit, OnDestroy {
     });
   }
 
+  // --- Tutte le offerte di un venditore Card Trader (20/11) ---
+  ctSellerKey = signal<string | null>(null);
+  ctSeller = signal<CardTraderSellerOffers | null>(null);
+  ctSellerLoading = signal(false);
+
+  toggleCtSeller(b: SellerBasket): void {
+    if (this.ctSellerKey() === b.key) {
+      this.ctSellerKey.set(null);
+      return;
+    }
+    this.ctSellerKey.set(b.key);
+    this.loadCtSeller(b.seller);
+  }
+
+  private loadCtSeller(seller: string): void {
+    const id = this.sellerStatus()?.id;
+    if (!id) return;
+    this.ctSeller.set(null);
+    this.ctSellerLoading.set(true);
+    this.purchasing.getCardTraderSeller(id, seller).subscribe({
+      next: r => { this.ctSellerLoading.set(false); this.ctSeller.set(r); },
+      error: err => {
+        this.ctSellerLoading.set(false);
+        this.snackBar.open(err?.error?.message || 'Offerte del venditore non lette', 'OK', { duration: 6000 });
+      }
+    });
+  }
+
+  ctProductUrl(blueprintId?: number): string {
+    return blueprintId ? 'https://www.cardtrader.com/cards/' + blueprintId : '#';
+  }
+
   recomputeSellers(): void {
     const id = this.sellerStatus()?.id;
     if (!id) return;
     this.purchasing.recomputeSellerPlan(id, this.sellerRequest()).subscribe({
-      next: s => this.sellerStatus.set(s),
+      next: s => {
+        this.sellerStatus.set(s);
+        // La scheda aperta si rifà con le regole nuove.
+        const key = this.ctSellerKey();
+        if (key?.startsWith('ct:')) this.loadCtSeller(key.substring(3));
+      },
       error: err => this.error.set(err?.error?.message || 'Ricalcolo non riuscito')
     });
   }
