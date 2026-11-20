@@ -80,6 +80,8 @@ export interface SealedProductAnalysis {
     componentsTrend?: number;
     missingPacks: string[];
     missingDecks: string[];
+    /** Carte Secret Lair contate zero: ne hai già 5 o più copie in magazzino. */
+    overstockedCards?: number;
 }
 
 export interface BulkSellThroughExpansion {

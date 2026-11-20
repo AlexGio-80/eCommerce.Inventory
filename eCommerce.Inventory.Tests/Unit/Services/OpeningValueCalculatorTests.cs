@@ -100,6 +100,27 @@ public class OpeningValueCalculatorTests
     }
 
     [Fact]
+    public void Product_CountsZeroTheCardsAlreadyOverstocked()
+    {
+        // Drop di prova: 2 copie foil della carta del mazzo (20 €) e una mitica (10 €); della carta del mazzo il
+        // magazzino ne ha già abbastanza. Resta coperta da prezzi, ma vale zero.
+        var calculator = new OpeningValueCalculator(PriceOf, NoBulk, new Dictionary<string, List<BoosterConfig>>(),
+            new Dictionary<(string, string), BoosterSheet>(), new Dictionary<string, MtgjsonDeck>(),
+            overstocked: (uuid, foil) => uuid == DeckCard && foil);
+
+        var composition = new PackComposition();
+        composition.AddCard(DeckCard, true, 2);
+        composition.AddCard(Mythic, false, 1);
+
+        var value = calculator.Product(composition);
+
+        value.Gross.Should().Be(10m);
+        value.Coverage.Should().Be(1m);
+        value.Overstocked.Should().Be(2);
+        calculator.CardValue(DeckCard, true).Should().Be(0m);
+    }
+
+    [Fact]
     public void Product_AddsPacksDecksAndFixedCards()
     {
         var deck = new MtgjsonDeck { SetCode = "TST", Name = "Scene", Cards = { new() { CardUuid = DeckCard, Count = 2, IsFoil = true } } };

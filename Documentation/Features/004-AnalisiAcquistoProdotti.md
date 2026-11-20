@@ -566,6 +566,17 @@ conviene", più che "quando comprare".
 > `hub_pending` di Card Trader Zero, doppioni degli ordini "Ct connect" pagati. Solo sugli ordini pagati il bulk
 > venduto è il 20,7% e la fascia 0,25–1 € il 65%; i valori citati sopra in questo documento sono quelli di prima.
 
+**Carte già in magazzino in troppe copie (2026-11-20, pubblicato e verificato).** L'utente chiedeva se escludere dalle
+proposte i Secret Lair di cui ha già molte copie delle carte, per non intasare il magazzino. Le vendite degli ultimi 90
+giorni, per copie in magazzino della stessa carta: 1 copia 12% venduto, 2 copie 17%, 3-4 copie 22%, 5 o più 6%. Fino
+a 4 copie la carta si vende (sono le più richieste), da 5 si ferma. Per questo non si esclude il drop intero: nel valore
+dell'apertura una carta Secret Lair con già 5 o più copie in vendita (foil e non foil insieme) conta zero
+(`Purchasing:Analysis:SecretLairOverstockCopies`, 0 = spento). Vale per Cardmarket e Card Trader, quindi per classifica,
+Opportunità, Budget, avvisi e "Oggi conviene"; un drop che conveniva solo grazie a quelle carte esce da solo. Il
+tooltip del valore CM nell'analisi dell'uscita dice quante carte sono state contate zero. Non tocca la stima dei drop
+nuovi del negozio Wizards: le loro carte non esistono ancora, quindi non se ne hanno copie. Il 20/11 le carte sopra
+soglia abbinate a MTGJSON erano 11 (Fabricate con 9 copie, le altre fra 5 e 7).
+
 Già disponibile: l'import della Fase 0 salva ogni giorno anche i circa 890 prodotti Secret Lair del
 catalogo Cardmarket (categoria "MtG Set"), quindi lo storico di rivendita dei drop si accumula da
 subito.

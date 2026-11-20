@@ -502,6 +502,7 @@ export class PurchasingPageComponent implements OnInit {
     const parts: string[] = [];
     if (coverage != null) parts.push(`Copertura prezzi ${coverage}%`);
     if (missing.length) parts.push(`Senza composizione: ${missing.join(', ')}`);
+    if (d.overstockedCards) parts.push(`${d.overstockedCards} ${d.overstockedCards === 1 ? 'carta contata zero' : 'carte contate zero'}: ne hai già 5 o più copie in magazzino`);
     return parts.join(' · ');
   }
 

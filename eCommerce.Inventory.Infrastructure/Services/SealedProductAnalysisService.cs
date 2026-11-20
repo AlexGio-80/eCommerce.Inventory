@@ -289,6 +289,24 @@ public class SealedProductAnalysisService
         CardKind? KindOf(Guid uuid) =>
             cards.TryGetValue(uuid, out var card) ? CardKinds.Of(card.SetCode, setTypes.GetValueOrDefault(card.SetCode)) : null;
 
+        // Carte Secret Lair di cui il magazzino ha già abbastanza copie in vendita (foil e non foil insieme): un'altra copia
+        // resterebbe ferma, e un drop che conviene solo grazie a quelle non va proposto. 0 = nessun limite.
+        var overstockCopies = _configuration.GetValue("Purchasing:Analysis:SecretLairOverstockCopies", 5);
+        var slScryfallIds = overstockCopies <= 0 ? new List<string>()
+            : cards.Values.Where(c => c.ScryfallId != null && KindOf(c.Uuid) == CardKind.SecretLair).Select(c => c.ScryfallId!).Distinct().ToList();
+        var stock = slScryfallIds.Count == 0 ? new HashSet<string>()
+            : (await _db.InventoryItems.AsNoTracking()
+                    .Where(i => i.Quantity > 0 && i.Blueprint.ScryfallId != null && slScryfallIds.Contains(i.Blueprint.ScryfallId))
+                    .GroupBy(i => i.Blueprint.ScryfallId)
+                    .Select(g => new { ScryfallId = g.Key, Copies = g.Sum(i => i.Quantity) })
+                    .ToListAsync(cancellationToken))
+                .Where(s => s.Copies >= overstockCopies)
+                .Select(s => s.ScryfallId!)
+                .ToHashSet();
+        bool Overstocked(Guid uuid, bool foil) =>
+            stock.Count > 0 && cards.TryGetValue(uuid, out var card) && card.ScryfallId != null
+            && stock.Contains(card.ScryfallId) && KindOf(uuid) == CardKind.SecretLair;
+
         decimal? CtPrice(Guid uuid, bool foil)
         {
             if (!cards.TryGetValue(uuid, out var card) || card.ScryfallId == null) return null;
@@ -297,9 +315,9 @@ public class SealedProductAnalysisService
         }
 
         return new OpeningCalculators(
-            new OpeningValueCalculator(CmPrice, settings, configs, sheets, decks, KindOf),
+            new OpeningValueCalculator(CmPrice, settings, configs, sheets, decks, KindOf, Overstocked),
             // Card Trader è il mercato su cui si vende: il fattore misurato rispetto a Cardmarket non vale.
-            new OpeningValueCalculator(CtPrice, settings.WithoutPriceFactor(), configs, sheets, decks),
+            new OpeningValueCalculator(CtPrice, settings.WithoutPriceFactor(), configs, sheets, decks, overstocked: Overstocked),
             cards,
             ctPrices.Count > 0 ? ctPrices.Values.Max(p => p.UpdatedAt) : null);
     }
@@ -738,7 +756,8 @@ public class SealedProductAnalysisService
             openCt, ctValue is null ? null : Math.Round(ctValue.Coverage * 100m, 1),
             sealedNet, openingRoi, decision, priceMismatch, componentsTrend,
             (cmValue?.MissingPacks ?? new()).Select(k => PackLabel(k, mainSetCode)).ToList(),
-            cmValue?.MissingDecks ?? new());
+            cmValue?.MissingDecks ?? new(),
+            cmValue?.Overstocked ?? 0);
     }
 
     private static string DescribeContents(SealedProduct product, PackComposition composition, List<PackCountDto> packs)
@@ -878,7 +897,8 @@ public record SealedProductAnalysisDto(
     bool PriceMismatch,
     decimal? ComponentsTrend,
     List<string> MissingPacks,
-    List<string> MissingDecks);
+    List<string> MissingDecks,
+    int OverstockedCards = 0);
 
 public record SealedSetAnalysis(
     string Code,

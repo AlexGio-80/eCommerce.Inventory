@@ -18,6 +18,7 @@ public class OpeningValueCalculator
 {
     private readonly Func<Guid, bool, decimal?> _priceOf;
     private readonly Func<Guid, CardKind?>? _kindOf;
+    private readonly Func<Guid, bool, bool>? _overstocked;
     private readonly OpeningValueSettings _settings;
     private readonly Dictionary<(Guid, bool), decimal?> _cardValueCache = new();
     private readonly Dictionary<string, PackValue> _packCache = new();
@@ -30,16 +31,24 @@ public class OpeningValueCalculator
     /// <param name="sheets">Fogli per chiave busta e nome foglio.</param>
     /// <param name="decks">Mazzi per chiave "SET:nome".</param>
     /// <param name="kindOf">Tipo di una carta, per il fattore prezzo realizzato del suo tipo; null = fattore unico.</param>
+    /// <param name="overstocked">
+    /// Carta (uuid, foil) di cui il magazzino ha già abbastanza copie (il chiamante decide se contare insieme foil e non
+    /// foil): un'altra copia non vale niente, perché resterebbe
+    /// ferma. Scelta dell'utente del 20/11 per i Secret Lair: oltre le 4 copie in vendita una carta non si vende quasi più
+    /// (6% in 90 giorni, contro il 12-22% con meno copie). Null = nessun limite.
+    /// </param>
     public OpeningValueCalculator(
         Func<Guid, bool, decimal?> priceOf,
         OpeningValueSettings settings,
         IReadOnlyDictionary<string, List<BoosterConfig>> configs,
         IReadOnlyDictionary<(string PackKey, string Sheet), BoosterSheet> sheets,
         IReadOnlyDictionary<string, MtgjsonDeck> decks,
-        Func<Guid, CardKind?>? kindOf = null)
+        Func<Guid, CardKind?>? kindOf = null,
+        Func<Guid, bool, bool>? overstocked = null)
     {
         _priceOf = priceOf;
         _kindOf = kindOf;
+        _overstocked = overstocked;
         _settings = settings;
         _configs = configs;
         _sheets = sheets;
@@ -52,13 +61,18 @@ public class OpeningValueCalculator
     /// Valore realizzabile di una copia: il bulk vale il suo prezzo per la quota venduta. Le altre
     /// valgono il prezzo corretto dal fattore prezzo realizzato del loro tipo
     /// (<see cref="OpeningValueSettings.FactorFor"/>), meno il costo fisso per carta, per la quota che
-    /// se ne vende in quella fascia di prezzo. Mai meno del bulk.
+    /// se ne vende in quella fascia di prezzo. Mai meno del bulk. Zero se il magazzino ne ha già abbastanza copie.
     /// </summary>
     public decimal? CardValue(Guid uuid, bool foil)
     {
         if (_cardValueCache.TryGetValue((uuid, foil), out var cached)) return cached;
 
         var price = _priceOf(uuid, foil);
+        if (price != null && IsOverstocked(uuid, foil))
+        {
+            _cardValueCache[(uuid, foil)] = 0m;
+            return 0m;
+        }
         var bulkValue = _settings.BulkPrice * _settings.BulkSellThrough;
         var factor = _settings.FactorFor(_kindOf?.Invoke(uuid));
         decimal? value = price switch
@@ -72,6 +86,8 @@ public class OpeningValueCalculator
         _cardValueCache[(uuid, foil)] = value;
         return value;
     }
+
+    public bool IsOverstocked(Guid uuid, bool foil) => _overstocked?.Invoke(uuid, foil) == true;
 
     /// <summary>
     /// Il valore si somma al lordo e i costi di vendita in percentuale si tolgono alla fine
@@ -174,18 +190,20 @@ public class OpeningValueCalculator
 
         // Le carte fisse pesano sulla copertura come uno slot ciascuna, le buste come una busta:
         // non è una media perfetta, ma dice se manca qualcosa di rilevante.
+        var overstocked = 0;
         foreach (var (uuid, foil, count) in deckCards)
         {
             var cardValue = CardValue(uuid, foil);
             weightTotal += count / 15m;
             if (cardValue is null) continue;
+            if (IsOverstocked(uuid, foil)) overstocked += count;
             value += count * cardValue.Value;
             weightPriced += count / 15m;
         }
 
         weightTotal += missingDecks.Count;
 
-        return new ProductValue(value, weightTotal > 0 ? weightPriced / weightTotal : 0, missingPacks, missingDecks);
+        return new ProductValue(value, weightTotal > 0 ? weightPriced / weightTotal : 0, missingPacks, missingDecks, overstocked);
     }
 
     private SheetValue EvaluateSheet(BoosterSheet sheet)
@@ -265,4 +283,5 @@ public record SheetBreakdown(string Name, decimal SlotsPerPack, decimal ValuePer
 /// <param name="Value">Valore realizzabile di una copia (bulk già ridotto).</param>
 public record CardContribution(Guid Uuid, bool Foil, decimal Value, decimal ProbabilityPerSlot, decimal ProbabilityPerPack);
 
-public record ProductValue(decimal Gross, decimal Coverage, List<string> MissingPacks, List<string> MissingDecks);
+/// <param name="Overstocked">Copie delle carte fisse contate zero perché il magazzino ne ha già abbastanza.</param>
+public record ProductValue(decimal Gross, decimal Coverage, List<string> MissingPacks, List<string> MissingDecks, int Overstocked = 0);
