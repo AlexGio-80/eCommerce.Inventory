@@ -11,11 +11,31 @@ public class CardTraderMarketplaceProductDto
     [JsonPropertyName("blueprint_id")]
     public int BlueprintId { get; set; }
 
+    private int _priceCents;
+    private string _priceCurrency = string.Empty;
+
+    /// <summary>
+    /// Prezzo in centesimi. Dal 24/11/2026 l'endpoint marketplace/products non manda più
+    /// "price_cents" ma solo l'oggetto "price": { "cents", "currency" }. Si legge il campo
+    /// vecchio se c'è, altrimenti quello nuovo: senza, ogni offerta valeva 0.
+    /// </summary>
     [JsonPropertyName("price_cents")]
-    public int PriceCents { get; set; }
+    public int PriceCents
+    {
+        get => _priceCents > 0 ? _priceCents : Price?.Cents ?? 0;
+        set => _priceCents = value;
+    }
 
     [JsonPropertyName("price_currency")]
-    public string PriceCurrency { get; set; } = string.Empty;
+    public string PriceCurrency
+    {
+        get => !string.IsNullOrEmpty(_priceCurrency) ? _priceCurrency : Price?.Currency ?? string.Empty;
+        set => _priceCurrency = value ?? string.Empty;
+    }
+
+    /// <summary>Formato del prezzo in uso da Card Trader dal 24/11/2026.</summary>
+    [JsonPropertyName("price")]
+    public CardTraderMarketplacePriceDto? Price { get; set; }
 
     [JsonPropertyName("quantity")]
     public int Quantity { get; set; }
@@ -115,6 +135,15 @@ public class CardTraderMarketplaceProductDto
 
     [JsonPropertyName("user")]
     public CardTraderMarketplaceUserDto User { get; set; } = new();
+}
+
+public class CardTraderMarketplacePriceDto
+{
+    [JsonPropertyName("cents")]
+    public int Cents { get; set; }
+
+    [JsonPropertyName("currency")]
+    public string Currency { get; set; } = string.Empty;
 }
 
 public class CardTraderMarketplacePropertiesDto

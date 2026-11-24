@@ -10,8 +10,22 @@ public class CardTraderProductDto
     [JsonPropertyName("blueprint_id")]
     public int BlueprintId { get; set; }
 
+    private int _priceCents;
+
+    /// <summary>
+    /// Prezzo in centesimi. Il 24/11/2026 Card Trader ha tolto "price_cents" dal marketplace
+    /// lasciando solo "price": { "cents" }; l'export lo ha ancora, ma se cambia anche lui la
+    /// sincronizzazione scriverebbe 0 su ogni inserzione. Si legge l'uno o l'altro.
+    /// </summary>
     [JsonPropertyName("price_cents")]
-    public int PriceCents { get; set; }
+    public int PriceCents
+    {
+        get => _priceCents > 0 ? _priceCents : Price?.Cents ?? 0;
+        set => _priceCents = value;
+    }
+
+    [JsonPropertyName("price")]
+    public CardTraderPriceDto? Price { get; set; }
 
     [JsonPropertyName("quantity")]
     public int Quantity { get; set; }
