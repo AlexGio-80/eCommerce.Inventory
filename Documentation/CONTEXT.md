@@ -9,7 +9,7 @@
 ## Stato Attuale
 
 **Branch principale:** `master`
-**Ultimo aggiornamento:** 2026-11-20
+**Ultimo aggiornamento:** 2026-11-24
 **Fase:** In produzione (uso quotidiano attivo)
 
 ### Cosa funziona adesso
@@ -71,6 +71,7 @@
 
 ### Cosa è in sospeso / da verificare
 
+- **Formato del prezzo Card Trader (24/11):** verso le 22:00 Card Trader ha tolto `price_cents` da `marketplace/products` (ora solo `price: { cents, currency }`): offerte tutte a 0 €, maschera senza prezzi suggeriti, regole a 0,05 €. Fix pubblicato e pushato (b1e27e2): si legge l'uno o l'altro formato, anche sull'export delle inserzioni (che per ora ha ancora `price_cents`). Il 25/11 controllare che la notturna dell'autopricer abbia un delta normale, poi togliere questa voce
 - **Pianificatore del budget in prova dall'utente (dal 17/10):** l'utente lo usa qualche giorno e poi si rivede: sistemazioni e migliorie, taratura delle soglie (traino 50%, altri 33%, netto 20%). "Registra l'acquisto" fatto il 21/10; resta facoltativo il budget che si scala con gli acquisti. Da sapere: durante "Cerca i venditori" la maschera "Nuovo Prodotto" può aspettare una decina di secondi (17/10: due attese di 12 s), perché la lettura lascia alla maschera solo 5 richieste al minuto; "Metti nel carrello Card Trader" aggiunge una copia per offerta; Cardmarket si compra a mano dal sito; i venditori incollati con più di 7 giorni sono in arancione
 - **Avvio del servizio dopo il riavvio del PC (24/10):** Windows l'ha dato due volte per fallito dopo 30 s di attesa (eventi 7009/7000), perché il controllo delle migration in `Program.cs` arriva prima che il servizio risponda. Impostato il riavvio automatico (`sc failure`, 3 tentativi a 1 minuto, `failureflag` attivo). Al prossimo riavvio del PC controllare che riparta da solo; se no, far rispondere il servizio prima delle migration
 - **Confronto Sonnet/Opus sul riconoscimento:** dal 17/10 il riconoscimento usa Sonnet 5.5 e Opus 5.5 gira in confronto (`Scan:CompareModels`, righe `Confronto modelli` nel log). Al 21/10 solo 4 scansioni: 2 uguali e giuste, 1 carta vecchia passata a Opus di riserva come previsto, 1 Iron Star italiana sbagliata da tutti e due in modo diverso (Sonnet FBB, Opus 4ED, era FWB). Opus non ha fatto meglio. Se non ci sono differenze, togliere `Scan:CompareModels` da `appsettings.Production.json` (serve un riavvio)
@@ -94,6 +95,7 @@
 
 | Data | Decisione | Perché |
 |------|-----------|--------|
+| 2026-11-24 | Prezzo Card Trader letto sia da `price_cents` sia dall'oggetto `price`, su mercato ed export | Card Trader ha cambiato il mercato senza preavviso; se cambia anche l'export, la sincronizzazione scriverebbe 0 su ogni inserzione |
 | 2026-11-20 | "Chi lo vende": il prodotto voluto entra sempre, senza traino né netto minimo; venditori per costo effettivo | L'utente compra certi prodotti a prescindere dalla resa: la spedizione la paga quello, e un venditore un po' più caro con altro da rivendere può convenire di più |
 | 2026-11-20 | Carte Secret Lair con 5 o più copie in magazzino contate zero nel valore dell'apertura, invece di escludere il drop | Vendite a 90 giorni: con 1-4 copie se ne vende il 12-22%, con 5 o più il 6%. Escludere il drop intero perderebbe le carte che si vendono |
 | 2026-11-09 | "Oggi conviene" nel registro acquisti per acquisto, sul prezzo pagato: Apri / Vendi sigillato appena ripaga (la strada migliore), altrimenti Tieni | La decisione della classifica confronta solo apertura e rivendita, senza il costo: dava "Apri" sui mazzi Final Fantasy comprati da tenere, che aperti oggi perdono. L'utente guarda questa colonna per sapere cosa fare dei sigillati chiusi |
