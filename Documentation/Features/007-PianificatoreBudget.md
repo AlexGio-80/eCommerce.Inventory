@@ -360,6 +360,24 @@ da rivendere, può convenire di più.
 - Regole, budget e spedizioni dell'ultimo calcolo di "Per venditore". Codice: `SellerPlanService.ForProduct` (testato),
   `GET api/purchasing/budget-plan/product-sellers/{productId}`, `product-sellers-dialog.component.ts`.
 
+### Pulsante "Manda all'app" nei preferiti (2026-11-28, pubblicato e verificato)
+
+Richiesta dell'utente: togliere il copia-incolla delle pagine dei venditori Cardmarket. La lettura automatica resta
+esclusa: anche lanciata a mano e dopo il login dell'utente, Cardmarket vedrebbe il suo account da venditore aprire
+decine di pagine di fila, che è quello che le sue condizioni vietano. Il pulsante legge solo la pagina che l'utente ha
+aperto e sta guardando.
+
+- Nella scheda Budget, sotto "Venditori Cardmarket", il link **"Manda all'app"** da trascinare nella barra dei
+  preferiti. Toccato su una pagina delle offerte di un venditore, apre l'app in una nuova scheda sulla scheda Budget e
+  legge la pagina come un incolla. Su un'altra pagina mostra un avviso.
+- Il testo della pagina (`document.body.innerText`) viaggia nell'indirizzo dopo il `#`, che non arriva a nessun server.
+  L'app lo prende prima del router, lo toglie dall'indirizzo e lo manda all'endpoint dell'incolla con il token
+  dell'utente. Si è scelto così perché una chiamata diretta all'API dalla pagina di Cardmarket, o un messaggio fra
+  finestre, dipenderebbe dalle sue regole di sicurezza (CSP, Cross-Origin-Opener-Policy), che non si sono potute
+  verificare.
+- Il link punta all'indirizzo da cui è stata aperta l'app (`inventory.local` sul PC). Codice: `cardmarket-bookmarklet.ts`,
+  `?tab=budget` nella pagina Acquisti.
+
 ### Fase 2 — Dopo l'acquisto (facoltativa, da rivalutare dopo l'uso)
 
 - **"Registra l'acquisto" (fatto il 2026-10-21, chiesto dall'utente dopo il primo ordine fatto col Budget).**

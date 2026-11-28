@@ -11,6 +11,8 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
+import { cardmarketBookmarklet, takeCardmarketPage } from '../cardmarket-bookmarklet';
 import { RegisterOrderLine, openRegisterPurchase } from './register-purchase-dialog.component';
 import {
   BudgetPlanBasket, BudgetPlanLine, CardTraderSellerOffers, BudgetPlanResult, BudgetPlanStatus, BudgetShipping, PastedSeller, PlanCartItem, PurchasingService,
@@ -199,7 +201,13 @@ const SELLER_REQUEST_KEY = 'budget_plan_seller_request';
                 <button mat-stroked-button [disabled]="!pasteSeller.trim()" (click)="openSellerPage(cat.slug)">{{ cat.label }}</button>
               }
             </div>
-            <p class="muted">Sulla pagina che si apre premi Ctrl+A, Ctrl+C e incolla qui sotto. Una pagina alla volta: pagina 2 e altre categorie
+            <p class="muted bookmarklet">
+              <a class="bookmarklet-link" [href]="bookmarklet" (click)="$event.preventDefault()"
+                 matTooltip="Trascinalo nella barra dei preferiti. Poi, sulla pagina delle offerte di un venditore Cardmarket, toccalo: la pagina arriva qui in una nuova scheda, senza copiare e incollare">
+                <mat-icon class="tiny">bookmark_add</mat-icon> Manda all'app</a>
+              trascinalo nei preferiti e toccalo sulla pagina di Cardmarket al posto di copiare e incollare.
+            </p>
+            <p class="muted">Sulla pagina che si apre premi Ctrl+A, Ctrl+C e incolla qui sotto (o usa il pulsante qui sopra). Una pagina alla volta: pagina 2 e altre categorie
               si aggiungono; reincollando la pagina 1 di una categoria la sostituisci (i prodotti venduti spariscono). I venditori restano
               nell'analisi finché non li togli: tocca il nome per rivederli, la data dice quando li hai incollati.</p>
             <div class="paste">
@@ -589,6 +597,8 @@ const SELLER_REQUEST_KEY = 'budget_plan_seller_request';
     .sellers { display: flex; gap: 8px; flex-wrap: wrap; }
     .open-seller { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .seller-chip a.current { font-weight: 600; }
+    .bookmarklet-link { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border: 1px dashed #1976d2;
+      border-radius: 14px; color: #1976d2; text-decoration: none; cursor: grab; margin-right: 6px; }
     .tiny { font-size: 14px; height: 14px; width: 14px; vertical-align: middle; }
     .seller-chip { display: inline-flex; align-items: center; gap: 4px; background: #f5f5f5; border-radius: 16px; padding: 0 0 0 12px; font-size: 13px; }
   `]
@@ -597,6 +607,7 @@ export class BudgetPlanTabComponent implements OnInit, OnDestroy {
   private purchasing = inject(PurchasingService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
+  private sanitizer = inject(DomSanitizer);
 
   budget = 300;
   openShare = 70;
@@ -840,6 +851,9 @@ export class BudgetPlanTabComponent implements OnInit, OnDestroy {
   pasting = signal(false);
   pasteResult = signal<SellerPasteResult | null>(null);
 
+  /** Codice del pulsante "Manda all'app" da trascinare nei preferiti. */
+  readonly bookmarklet: SafeUrl = this.sanitizer.bypassSecurityTrustUrl(cardmarketBookmarklet(window.location.origin));
+
   /**
    * Il carrello consigliato del solo venditore incollato: un'unità di ogni offerta da aprire o da tenere, una
    * spedizione (quella impostata per Cardmarket: il testo della pagina non la contiene).
@@ -908,6 +922,13 @@ export class BudgetPlanTabComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadSellers();
+    // Pagina mandata dal pulsante nei preferiti: si legge subito, come un incolla.
+    const page = takeCardmarketPage();
+    if (page) {
+      this.showSellers.set(true);
+      this.pasteText = page;
+      this.paste();
+    }
     const savedSellers = localStorage.getItem(SELLER_REQUEST_KEY);
     if (savedSellers) {
       try {

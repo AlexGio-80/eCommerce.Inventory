@@ -601,6 +601,8 @@ export class PurchasingPageComponent implements OnInit {
       }
       if (params.get('tab') === 'avvisi') this.tabIndex = 4;
       if (params.get('tab') === 'secretlair') this.tabIndex = 5;
+      // Dal pulsante "Manda all'app" nei preferiti, sulle pagine delle offerte di un venditore Cardmarket.
+      if (params.get('tab') === 'budget') this.tabIndex = 7;
     });
     this.loadSets();
   }
